@@ -38,3 +38,6 @@ application-secret.yml
 # Database
 *.db
 *.sqlite
+
+# Docs - WIP
+docs/3_NPL프로젝트_딥다이브_가치평가.md
