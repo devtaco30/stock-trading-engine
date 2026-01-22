@@ -1,4 +1,5 @@
 plugins {
+	`java-convention`
 	`java-library`
 }
 

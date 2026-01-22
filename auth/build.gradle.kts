@@ -1,4 +1,5 @@
 plugins {
+	`java-convention`
 	alias(libs.plugins.spring.boot)
 }
 
@@ -12,11 +13,12 @@ dependencies {
 	implementation(libs.auth0.java.jwt)
 	implementation(libs.auth0.jwks.rsa)
 	
-	// JWT (필요시 사용)
-	implementation(libs.bundles.jwt)
-	
 	compileOnly(libs.lombok)
 	annotationProcessor(libs.lombok)
 	
 	testImplementation(libs.spring.boot.starter.test)
+}
+
+tasks.bootJar {
+	enabled = false
 }

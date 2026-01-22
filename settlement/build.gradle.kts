@@ -1,4 +1,5 @@
 plugins {
+	`java-convention`
 	alias(libs.plugins.spring.boot)
 }
 
@@ -14,4 +15,8 @@ dependencies {
 	annotationProcessor(libs.lombok)
 	
 	testImplementation(libs.spring.boot.starter.test)
+}
+
+tasks.bootJar {
+	enabled = false
 }

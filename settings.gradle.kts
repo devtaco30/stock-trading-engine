@@ -5,10 +5,10 @@ pluginManagement {
 		gradlePluginPortal()
 		mavenCentral()
 	}
-	plugins {
-		id("org.springframework.boot") version "3.2.0" apply false
-		id("io.spring.dependency-management") version "1.1.4" apply false
-	}
+}
+
+plugins {
+	id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"
 }
 
 dependencyResolutionManagement {
@@ -18,10 +18,12 @@ dependencyResolutionManagement {
 	}
 }
 
-include("core")
-include("auth")
-include("account")
-include("trading")
-include("settlement")
-include("market")
-include("api")
+include(
+	"core",
+	"auth",
+	"account",
+	"trading",
+	"settlement",
+	"market",
+	"api"
+)

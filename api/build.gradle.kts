@@ -1,4 +1,5 @@
 plugins {
+	`java-convention`
 	alias(libs.plugins.spring.boot)
 }
 
@@ -14,8 +15,8 @@ dependencies {
 	implementation(libs.spring.boot.starter.data.jpa)
 	implementation(libs.spring.boot.starter.validation)
 	
-	// MySQL
-	runtimeOnly(libs.mysql.connector.j)
+	// PostgreSQL
+	runtimeOnly(libs.postgresql)
 	
 	compileOnly(libs.lombok)
 	annotationProcessor(libs.lombok)
