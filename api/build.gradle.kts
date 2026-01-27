@@ -12,7 +12,6 @@ dependencies {
 	implementation(project(":market"))
 	
 	implementation(libs.spring.boot.starter.web)
-	implementation(libs.spring.boot.starter.data.jpa)
 	implementation(libs.spring.boot.starter.validation)
 	
 	// PostgreSQL
@@ -22,4 +21,5 @@ dependencies {
 	annotationProcessor(libs.lombok)
 	
 	testImplementation(libs.spring.boot.starter.test)
+	testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }

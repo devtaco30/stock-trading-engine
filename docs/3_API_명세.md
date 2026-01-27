@@ -7,19 +7,28 @@
 {
   "success": true,
   "data": {...},
-  "message": "string"  // 선택적 - 성공 메시지
+  "code": "SUCCESS",         // 성공 코드 (기본값: "SUCCESS")
+  "message": "string",       // 선택적 - 성공 메시지
+  "timestamp": "long"        // 응답 생성 시간 (13자리 밀리초 epoch timestamp)
 }
 ```
 
-### 리스트 응답
+### 페이지네이션 응답
 ```json
 {
   "success": true,
-  "data": {
-    "items": [...],
-    "totalCount": "int",     // 전체 개수
-    "hasNext": "boolean"     // 다음 페이지 존재 여부
-  }
+  "data": [...],            // 리스트 데이터
+  "pagination": {
+    "page": "int",           // 현재 페이지 번호 (0부터 시작)
+    "size": "int",           // 페이지 크기
+    "totalElements": "long", // 전체 요소 수
+    "totalPages": "int",     // 전체 페이지 수
+    "hasNext": "boolean",    // 다음 페이지 존재 여부
+    "hasPrevious": "boolean" // 이전 페이지 존재 여부
+  },
+  "code": "SUCCESS",         // 성공 코드 (기본값: "SUCCESS")
+  "message": "string",       // 선택적 - 성공 메시지
+  "timestamp": "long"        // 응답 생성 시간 (13자리 밀리초 epoch timestamp)
 }
 ```
 
@@ -27,10 +36,10 @@
 ```json
 {
   "success": false,
-  "error": {
-    "code": "string",        // 에러 코드 (영문 대문자 + 언더스코어 형식, 예: "AUTH_REQUIRED", "ACCOUNT_NOT_FOUND")
-    "message": "string"      // 에러 메시지
-  }
+  "code": "string",          // 에러 코드 (영문 대문자 + 언더스코어 형식, 예: "AUTH_REQUIRED", "ACCOUNT_NOT_FOUND")
+  "message": "string",       // 에러 메시지
+  "details": "any",          // 선택적 - 추가 에러 상세 정보
+  "timestamp": "long"        // 응답 생성 시간 (13자리 밀리초 epoch timestamp)
 }
 ```
 
@@ -55,18 +64,25 @@
 ```json
 {
   "success": true,
-  "data": {
-    "accounts": [                              // 계좌 목록
-      {
-        "accountId": "string",                 // 계좌 ID
-        "balance": "BigDecimal",               // 총 현금 잔액
-        "withdrawableBalance": "BigDecimal",   // 출금 가능 잔액 (총 현금 - 홀딩된 증거금)
-        "marginRate": "int",                   // 증거금률 (40 | 100)
-        "status": "ACTIVE | IN_ARREARS | FROZEN" // 계좌 상태 (ACTIVE: 정상, IN_ARREARS: 미수금 발생, FROZEN: 동결)
-      }
-    ],
-    "totalCount": "int"                        // 전체 계좌 개수
-  }
+  "data": [                                    // 계좌 목록
+    {
+      "accountId": "string",                   // 계좌 ID
+      "balance": "BigDecimal",                 // 총 현금 잔액
+      "withdrawableBalance": "BigDecimal",     // 출금 가능 잔액 (총 현금 - 홀딩된 증거금)
+      "marginRate": "int",                     // 증거금률 (40 | 100)
+      "status": "ACTIVE | IN_ARREARS | FROZEN" // 계좌 상태 (ACTIVE: 정상, IN_ARREARS: 미수금 발생, FROZEN: 동결)
+    }
+  ],
+  "pagination": {
+    "page": "int",                             // 현재 페이지 번호 (0부터 시작)
+    "size": "int",                             // 페이지 크기
+    "totalElements": "long",                    // 전체 요소 수
+    "totalPages": "int",                       // 전체 페이지 수
+    "hasNext": "boolean",                      // 다음 페이지 존재 여부
+    "hasPrevious": "boolean"                   // 이전 페이지 존재 여부
+  },
+  "code": "SUCCESS",
+  "timestamp": "long"
 }
 ```
 
@@ -153,21 +169,28 @@
 ```json
 {
   "success": true,
-  "data": {
-    "holdings": [                            // 보유 주식 목록
-      {
-        "stockCode": "string",               // 종목 코드
-        "stockName": "string",               // 종목명
-        "quantity": "int",                   // 보유 수량
-        "averagePrice": "BigDecimal",        // 평균 매수가
-        "currentPrice": "BigDecimal",        // 현재가
-        "evaluationAmount": "BigDecimal",    // 평가 금액 (현재가 × 수량)
-        "profit": "BigDecimal",              // 손익 (평가 금액 - 매수 금액)
-        "profitRate": "BigDecimal"          // 손익률 (%)
-      }
-    ],
-    "totalCount": "int"                      // 전체 보유 종목 개수
-  }
+  "data": [                                  // 보유 주식 목록
+    {
+      "stockCode": "string",                 // 종목 코드
+      "stockName": "string",                 // 종목명
+      "quantity": "int",                     // 보유 수량
+      "averagePrice": "BigDecimal",          // 평균 매수가
+      "currentPrice": "BigDecimal",          // 현재가
+      "evaluationAmount": "BigDecimal",      // 평가 금액 (현재가 × 수량)
+      "profit": "BigDecimal",                // 손익 (평가 금액 - 매수 금액)
+      "profitRate": "BigDecimal"            // 손익률 (%)
+    }
+  ],
+  "pagination": {
+    "page": "int",
+    "size": "int",
+    "totalElements": "long",
+    "totalPages": "int",
+    "hasNext": "boolean",
+    "hasPrevious": "boolean"
+  },
+  "code": "SUCCESS",
+  "timestamp": "long"
 }
 ```
 
@@ -476,24 +499,30 @@
 ```json
 {
   "success": true,
-  "data": {
-    "orders": [                              // 주문 목록
-      {
-        "orderId": "string",                 // 주문 ID
-        "stockCode": "string",                // 종목 코드
-        "stockName": "string",                // 종목명
-        "side": "BUY | SELL",                 // 매수/매도 구분
-        "orderType": "LIMIT | MARKET",        // 주문 유형 (지정가/시장가)
-        "price": "BigDecimal",               // 주문 가격
-        "quantity": "int",                    // 주문 수량
-        "status": "PENDING | FILLED | CANCELLED", // 주문 상태
-        "orderAt": "long",                    // 주문 일시 (13자리 밀리초 epoch timestamp)
-        "filledAt": "long"                   // 체결 일시 (13자리 밀리초 epoch timestamp, 체결된 경우)
-      }
-    ],
-    "totalCount": "int",                     // 전체 주문 개수
-    "hasNext": "boolean"                     // 다음 페이지 존재 여부
-  }
+  "data": [                                  // 주문 목록
+    {
+      "orderId": "string",                   // 주문 ID
+      "stockCode": "string",                 // 종목 코드
+      "stockName": "string",                 // 종목명
+      "side": "BUY | SELL",                   // 매수/매도 구분
+      "orderType": "LIMIT | MARKET",          // 주문 유형 (지정가/시장가)
+      "price": "BigDecimal",                 // 주문 가격
+      "quantity": "int",                      // 주문 수량
+      "status": "PENDING | FILLED | CANCELLED", // 주문 상태
+      "orderAt": "long",                      // 주문 일시 (13자리 밀리초 epoch timestamp)
+      "filledAt": "long"                     // 체결 일시 (13자리 밀리초 epoch timestamp, 체결된 경우)
+    }
+  ],
+  "pagination": {
+    "page": "int",
+    "size": "int",
+    "totalElements": "long",
+    "totalPages": "int",
+    "hasNext": "boolean",
+    "hasPrevious": "boolean"
+  },
+  "code": "SUCCESS",
+  "timestamp": "long"
 }
 ```
 
@@ -531,21 +560,27 @@
 ```json
 {
   "success": true,
-  "data": {
-    "transactions": [                        // 거래 내역 목록
-      {
-        "transactionAt": "long",             // 거래 일시 (13자리 밀리초 epoch timestamp)
-        "stockCode": "string",               // 종목 코드
-        "stockName": "string",               // 종목명
-        "side": "BUY | SELL",                // 매수/매도 구분
-        "quantity": "int",                    // 거래 수량
-        "executionPrice": "BigDecimal",       // 체결가
-        "transactionAmount": "BigDecimal"    // 거래 금액 (체결가 × 수량)
-      }
-    ],
-    "totalCount": "int",                     // 전체 거래 내역 개수
-    "hasNext": "boolean"                     // 다음 페이지 존재 여부
-  }
+  "data": [                                  // 거래 내역 목록
+    {
+      "transactionAt": "long",               // 거래 일시 (13자리 밀리초 epoch timestamp)
+      "stockCode": "string",                 // 종목 코드
+      "stockName": "string",                 // 종목명
+      "side": "BUY | SELL",                  // 매수/매도 구분
+      "quantity": "int",                      // 거래 수량
+      "executionPrice": "BigDecimal",         // 체결가
+      "transactionAmount": "BigDecimal"      // 거래 금액 (체결가 × 수량)
+    }
+  ],
+  "pagination": {
+    "page": "int",
+    "size": "int",
+    "totalElements": "long",
+    "totalPages": "int",
+    "hasNext": "boolean",
+    "hasPrevious": "boolean"
+  },
+  "code": "SUCCESS",
+  "timestamp": "long"
 }
 ```
 
@@ -583,18 +618,25 @@
 ```json
 {
   "success": true,
-  "data": {
-    "unpaidList": [                         // 미결제 내역 목록
-      {
-        "settlementId": "string",            // 결제 ID
-        "stockCode": "string",               // 종목 코드
-        "settlementDate": "LocalDate",       // 결제 마감 기한 (T+2, 날짜만)
-        "amount": "BigDecimal",              // 결제 금액 (T+2일에 지불해야 할 잔금)
-        "status": "PENDING | SETTLED"        // 결제 상태 (PENDING: 미결제, SETTLED: 결제 완료)
-      }
-    ],
-    "totalCount": "int"                     // 전체 미결제 내역 개수
-  }
+  "data": [                                  // 미결제 내역 목록
+    {
+      "settlementId": "string",              // 결제 ID
+      "stockCode": "string",                 // 종목 코드
+      "settlementDate": "LocalDate",         // 결제 마감 기한 (T+2, 날짜만)
+      "amount": "BigDecimal",                // 결제 금액 (T+2일에 지불해야 할 잔금)
+      "status": "PENDING | SETTLED"          // 결제 상태 (PENDING: 미결제, SETTLED: 결제 완료)
+    }
+  ],
+  "pagination": {
+    "page": "int",
+    "size": "int",
+    "totalElements": "long",
+    "totalPages": "int",
+    "hasNext": "boolean",
+    "hasPrevious": "boolean"
+  },
+  "code": "SUCCESS",
+  "timestamp": "long"
 }
 ```
 
@@ -780,16 +822,23 @@
 ```json
 {
   "success": true,
-  "data": {
-    "stocks": [                      // 종목 목록
-      {
-        "stockCode": "string",       // 종목 코드
-        "stockName": "string",       // 종목명
-        "currentPrice": "BigDecimal" // 현재가
-      }
-    ],
-    "totalCount": "int"              // 검색된 종목 개수 (최대 20개)
-  }
+  "data": [                          // 종목 목록
+    {
+      "stockCode": "string",         // 종목 코드
+      "stockName": "string",         // 종목명
+      "currentPrice": "BigDecimal"   // 현재가
+    }
+  ],
+  "pagination": {
+    "page": "int",
+    "size": "int",
+    "totalElements": "long",
+    "totalPages": "int",
+    "hasNext": "boolean",
+    "hasPrevious": "boolean"
+  },
+  "code": "SUCCESS",
+  "timestamp": "long"
 }
 ```
 
