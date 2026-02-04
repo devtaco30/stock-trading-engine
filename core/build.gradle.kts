@@ -4,12 +4,9 @@ plugins {
 }
 
 dependencies {
-	implementation(libs.spring.boot.starter)
-	implementation(libs.spring.boot.starter.data.jpa)
-	implementation(libs.spring.boot.starter.validation)
+	// Jackson annotations only (compile-time)
+	compileOnly("com.fasterxml.jackson.core:jackson-annotations:2.17.0")
 	
 	compileOnly(libs.lombok)
 	annotationProcessor(libs.lombok)
-	
-	testImplementation(libs.spring.boot.starter.test)
 }
