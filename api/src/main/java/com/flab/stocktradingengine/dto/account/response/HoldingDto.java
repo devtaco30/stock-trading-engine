@@ -1,4 +1,4 @@
-package com.flab.stocktradingengine.dto.account;
+package com.flab.stocktradingengine.dto.account.response;
 
 import lombok.Builder;
 

@@ -1,4 +1,4 @@
-package com.flab.stocktradingengine.dto.account;
+package com.flab.stocktradingengine.dto.account.response;
 
 import lombok.Builder;
 
@@ -9,10 +9,10 @@ import java.math.BigDecimal;
  */
 @Builder
 public record AccountDto(
-    String accountId,
+    Long accountId,
     BigDecimal balance,
-    BigDecimal withdrawableBalance,
-    Integer marginRate,
+    BigDecimal withdrawableBalance, // 출금가능 잔액
+    BigDecimal marginRate, // 증거금률 비율 (0.40, 1.00)
     String status // ACTIVE | IN_ARREARS | FROZEN
 ) {
 }
