@@ -20,7 +20,7 @@ dependencyResolutionManagement {
 
 include(
 	"core",
-	"auth",
+	"user",
 	"account",
 	"trading",
 	"settlement",
