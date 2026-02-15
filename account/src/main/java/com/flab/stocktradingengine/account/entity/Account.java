@@ -2,6 +2,9 @@ package com.flab.stocktradingengine.account.entity;
 
 import java.math.BigDecimal;
 
+import com.flab.stocktradingengine.support.SnowflakeId;
+import com.flab.stocktradingengine.user.entity.User;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -29,10 +32,11 @@ public class Account {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id; // DB 에서의 관리를 위한 sequence 값
+    private Long id;
 
-    @Column(nullable = false, unique = true)
-    private String accountId; // 계좌 고유 id -> 순차적 증가보다는 256 hash 또는 uuid 등으로 생성(?)
+    @SnowflakeId
+    @Column(name = "account_id", nullable = false, updatable = false)
+    private Long accountId;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
@@ -41,12 +45,20 @@ public class Account {
     @Column(nullable = false, precision = 19, scale = 0)
     private BigDecimal balance; // 총 현금 잔액
 
-    @Column(nullable = false)
-    private int marginRate; // 증거금률 (40, 100 %)
+    @Column(nullable = false, precision = 5, scale = 2)
+    private BigDecimal marginRate; // 증거금률 비율 (0.40, 1.00)
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private AccountStatus status;
+
+    /** 더미/초기화용: user, balance, marginRate, status로 생성. accountId는 INSERT 시 Snowflake 생성. */
+    public Account(User user, BigDecimal balance, BigDecimal marginRate, AccountStatus status) {
+        this.user = user;
+        this.balance = balance;
+        this.marginRate = marginRate;
+        this.status = status;
+    }
 
     public void changeStatus(AccountStatus status) {
         this.status = status;
@@ -56,7 +68,14 @@ public class Account {
         this.balance = balance;
     }
 
-    public void changeMarginRate(int marginRate) {
+    public void changeMarginRate(BigDecimal marginRate) {
         this.marginRate = marginRate;
+    }
+
+    /**
+     * 이 계좌의 소유자가 주어진 사용자인지 여부.
+     */
+    public boolean isOwnedBy(Long userId) {
+        return user != null && userId != null && userId.equals(user.getId());
     }
 }

@@ -5,6 +5,7 @@ plugins {
 
 dependencies {
 	implementation(project(":core"))
+	implementation(project(":user"))
 	implementation(project(":market"))
 	
 	implementation(libs.spring.boot.starter.web)
@@ -14,6 +15,7 @@ dependencies {
 	annotationProcessor(libs.lombok)
 	
 	testImplementation(libs.spring.boot.starter.test)
+	testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
 tasks.bootJar {

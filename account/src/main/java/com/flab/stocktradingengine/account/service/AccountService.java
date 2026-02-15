@@ -1,0 +1,139 @@
+package com.flab.stocktradingengine.account.service;
+
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.NoSuchElementException;
+import java.util.Optional;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.flab.stocktradingengine.account.entity.Account;
+import com.flab.stocktradingengine.dto.common.PagedResponse;
+import com.flab.stocktradingengine.account.entity.AccountStatus;
+import com.flab.stocktradingengine.account.entity.AccountStatusHistory;
+import com.flab.stocktradingengine.account.entity.Holding;
+import com.flab.stocktradingengine.account.repository.AccountRepository;
+import com.flab.stocktradingengine.user.entity.User;
+import com.flab.stocktradingengine.account.repository.AccountStatusHistoryRepository;
+import com.flab.stocktradingengine.account.repository.HoldingRepository;
+
+import lombok.RequiredArgsConstructor;
+
+/**
+ * 계좌 도메인 서비스 (account 모듈).
+ * <p>계좌·보유 종목 조회, 상태 변경, 매수 체결 시 보유 반영 등 계좌 도메인 로직을 담당한다.</p>
+ */
+@Service
+@RequiredArgsConstructor
+public class AccountService {
+
+    private final AccountRepository accountRepository;
+    private final HoldingRepository holdingRepository;
+    private final AccountStatusHistoryRepository accountStatusHistoryRepository;
+    
+
+    /** 특정 계좌 조회 */
+    @Transactional(readOnly = true)
+    public Optional<Account> getAccount(Long accountId) {
+        return accountRepository.findByAccountId(accountId);
+    }
+
+    /** 계좌 행 락 (SELECT FOR UPDATE). 주문 접수 등 정합성 필요 시 호출. */
+    @Transactional
+    public Optional<Account> getAccountByIdForUpdate(Long accountPk) {
+        return accountRepository.findByIdForUpdate(accountPk);
+    }
+
+    /** 해당 종목 보유 행 락 (SELECT FOR UPDATE). 매도 주문 접수 시 정합성용. */
+    @Transactional
+    public Optional<Holding> getHoldingForUpdate(Long accountPk, String stockCode) {
+        return holdingRepository.findByAccount_IdAndStockCodeForUpdate(accountPk, stockCode);
+    }
+
+    /** 사용자 소유 계좌 목록 조회. 인증된 사용자의 계좌만 반환. */
+    @Transactional(readOnly = true)
+    public List<Account> getAccountsByUserId(Long userId) {
+        return accountRepository.findByUser_Id(userId);
+    }
+
+    /**
+     * 계좌 상태 변경. 전이 규칙 검증 후 변경하고 이력을 남긴다.
+     *
+     * @param changedByUser null이면 시스템에 의한 변경
+     */
+    @Transactional
+    public void changeStatus(Long accountId, AccountStatus toStatus, User changedByUser, String reason) {
+        Account account = accountRepository.findByAccountId(accountId)
+            .orElseThrow(() -> new NoSuchElementException("Account not found: " + accountId));
+
+        AccountStatus fromStatus = account.getStatus();
+        if (!fromStatus.canTransitionTo(toStatus)) {
+            throw new IllegalStateException(
+                "Invalid status transition: " + fromStatus + " -> " + toStatus);
+        }
+
+        account.changeStatus(toStatus);
+        accountStatusHistoryRepository.save(
+            new AccountStatusHistory(account, fromStatus, toStatus, changedByUser, reason)
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public PagedResponse<Holding> getHoldingsPage(Long accountId, Pageable pageable) {
+        Page<Holding> page = holdingRepository.findByAccount_AccountId(accountId, pageable);
+        return PagedResponse.of(page.getContent(), page.getNumber(), page.getSize(), page.getTotalElements());
+    }
+
+    /**
+     * 입금. 계좌 잔액에 금액을 더한다. 동시 입출금 방지를 위해 비관적 락 사용.
+     * @return 반영 후 잔액
+     */
+    @Transactional
+    public BigDecimal deposit(Long accountId, BigDecimal amount) {
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("입금 금액은 0보다 커야 합니다.");
+        }
+        Account account = accountRepository.findByAccountIdForUpdate(accountId)
+            .orElseThrow(() -> new NoSuchElementException("Account not found: " + accountId));
+        BigDecimal newBalance = account.getBalance().add(amount);
+        account.changeBalance(newBalance);
+        return newBalance;
+    }
+
+    /**
+     * 출금. 계좌 잔액에서 금액을 뺀다. 잔액 부족 시 예외. 동시 입출금 방지를 위해 비관적 락 사용.
+     * @return 반영 후 잔액
+     */
+    @Transactional
+    public BigDecimal withdraw(Long accountId, BigDecimal amount) {
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("출금 금액은 0보다 커야 합니다.");
+        }
+        Account account = accountRepository.findByAccountIdForUpdate(accountId)
+            .orElseThrow(() -> new NoSuchElementException("Account not found: " + accountId));
+        BigDecimal newBalance = account.getBalance().subtract(amount);
+        if (newBalance.compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalStateException("잔액 부족");
+        }
+        account.changeBalance(newBalance);
+        return newBalance;
+    }
+
+    /**
+     * 매수 체결 시 보유 반영. 해당 종목이 없으면 새로 추가, 있으면 수량·평균가 합산.
+     */
+    @Transactional
+    public void addHoldingOrIncreaseQuantity(Long accountId, String stockCode, int quantity, BigDecimal executionPrice) {
+        Account account = accountRepository.findByAccountId(accountId)
+            .orElseThrow(() -> new NoSuchElementException("Account not found: " + accountId));
+
+        holdingRepository.findByAccount_AccountIdAndStockCode(accountId, stockCode)
+            .ifPresentOrElse(
+                holding -> holding.applyExecution(quantity, executionPrice),
+                () -> holdingRepository.save(new Holding(account, stockCode, quantity, executionPrice))
+            );
+    }
+}
