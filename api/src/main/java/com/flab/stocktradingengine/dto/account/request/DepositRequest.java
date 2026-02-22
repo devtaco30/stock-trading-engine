@@ -1,4 +1,4 @@
-package com.flab.stocktradingengine.dto.account;
+package com.flab.stocktradingengine.dto.account.request;
 
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
