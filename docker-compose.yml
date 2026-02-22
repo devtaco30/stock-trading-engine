@@ -1,0 +1,22 @@
+# 로컬 개발용. 운영 배포용 아님.
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: stock-trading-redis
+    ports:
+      - "6379:6379"
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: stock-trading-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: stock_trading
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:

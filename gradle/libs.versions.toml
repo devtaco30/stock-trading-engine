@@ -1,9 +1,13 @@
 [versions]
 spring-boot = "3.4.0"
+slf4j = "2.0.9"
+hibernate = "6.4.1.Final"
 lombok = "1.18.30"
 auth0-java-jwt = "4.4.0"
 auth0-jwks-rsa = "0.21.1"
 postgresql = "42.7.4"
+snowflake = "1.1"
+junit = "5.10.2"
 
 [libraries]
 spring-boot-starter = { module = "org.springframework.boot:spring-boot-starter", version.ref = "spring-boot" }
@@ -15,10 +19,18 @@ spring-boot-starter-test = { module = "org.springframework.boot:spring-boot-star
 
 lombok = { module = "org.projectlombok:lombok", version.ref = "lombok" }
 
+slf4j-api = { module = "org.slf4j:slf4j-api", version.ref = "slf4j" }
+
 auth0-java-jwt = { module = "com.auth0:java-jwt", version.ref = "auth0-java-jwt" }
 auth0-jwks-rsa = { module = "com.auth0:jwks-rsa", version.ref = "auth0-jwks-rsa" }
 
 postgresql = { module = "org.postgresql:postgresql", version.ref = "postgresql" }
+
+hibernate-core = { module = "org.hibernate.orm:hibernate-core", version.ref = "hibernate" }
+
+snowflake = { module = "com.relops:snowflake", version.ref = "snowflake" }
+
+junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit" }
 
 [plugins]
 spring-boot = { id = "org.springframework.boot", version.ref = "spring-boot" }

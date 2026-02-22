@@ -28,6 +28,8 @@
 
 - [1. 주식 거래 기본 개념](docs/1_주식거래_기본개념.md)
 - [2. 4단계 시나리오](docs/2_4단계_시나리오.md)
+- [3. API 명세](docs/3_API_명세.md)
+- [4. PostgreSQL 선정 근거](docs/4_PostgreSQL_선정_근거.md)
 
 ---
 
@@ -35,8 +37,40 @@
 
 - Java 17+
 - Spring Boot 3.x
-- MySQL
+- PostgreSQL
 - Spring Batch (결제일 배치)
+
+---
+
+## 로컬 실행 (Docker + 더미 데이터)
+
+로컬 전용 설정이다. 멘토/동료가 바로 실행해 볼 수 있도록 DB는 Docker로 띄우고, 기동 시 더미 데이터가 자동 생성된다. (운영 배포와는 별개.)
+
+### 1. PostgreSQL 띄우기
+```bash
+docker compose up -d
+```
+
+### 2. 애플리케이션 실행 (프로파일 `local`)
+```bash
+./gradlew :api:bootRun --args='--spring.profiles.active=local'
+```
+
+- **DB**: `localhost:5432`, DB명 `stock_trading`, 사용자/비밀번호 `postgres` / `postgres`
+- **스키마**: JPA `ddl-auto: create` 로 테이블 생성
+- **stocks**: market 모듈 `stocks.sql` 로 종목 데이터 적재
+- **더미 데이터** (profile=local, 최초 1회): `LocalDummyDataInitializer` 가 유저 3명·계좌 3개(잔고 5천만/3천만/2천만, 증거금률 40%)·우량주 보유를 생성. 이미 유저가 있으면 스킵.
+- **시세(quotes)**: 기본은 삼성전자 1종목 placeholder. **오늘자 종가 반영**이 필요하면 프로젝트 루트에서 아래 실행 후 앱 재기동.
+  ```bash
+  pip install -r scripts/requirements.txt
+  python scripts/fetch_quotes.py
+  ```
+  → `market/src/main/resources/quotes.sql` 이 갱신되며, 다음 기동 시 해당 시세가 로드됨.
+
+### 3. DB 중지
+```bash
+docker compose stop
+```
 
 ---
 
