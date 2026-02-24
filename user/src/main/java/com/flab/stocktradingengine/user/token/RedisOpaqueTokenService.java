@@ -7,19 +7,17 @@ import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.HexFormat;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.context.annotation.DependsOn;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Service;
 
+import com.flab.stocktradingengine.user.config.UserTokenProperties;
 import com.flab.stocktradingengine.user.exception.InvalidTokenException;
 
-import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * 불투명 토큰 + Redis 기반 {@link TokenService} 구현체.
@@ -27,31 +25,26 @@ import lombok.RequiredArgsConstructor;
  * <p>{@link org.springframework.data.redis.core.StringRedisTemplate}이 있을 때만 빈 등록되며,
  * 테스트 등 Redis 미사용 시에는 Mock/Stub TokenService 사용.</p>
  */
+@Slf4j
 @Service
 @ConditionalOnBean(StringRedisTemplate.class)
 @DependsOn("stringRedisTemplate")
 @RequiredArgsConstructor
 public class RedisOpaqueTokenService implements TokenService {
 
-	private static final Logger log = LoggerFactory.getLogger(RedisOpaqueTokenService.class);
-
 	private static final String KEY_PREFIX = "auth:token:";
 	private static final int TOKEN_BYTES = 32;
 	private static final Duration DEFAULT_TTL = Duration.ofDays(7);
 
 	private final StringRedisTemplate redisTemplate;
+	private final UserTokenProperties tokenProperties;
 
-	@Value("${user.token.expire-seconds:#{null}}")
-	private Long expireSeconds;
-
-	private Duration ttl = DEFAULT_TTL;
-
-	@PostConstruct
-	void init() {
-		log.info("user.token.expire-seconds = {} (TTL 적용)", expireSeconds);
-		if (expireSeconds != null && expireSeconds > 0) {
-			this.ttl = Duration.ofSeconds(expireSeconds);
+	private Duration getTtl() {
+		Long sec = tokenProperties.getExpireSeconds();
+		if (sec != null && sec > 0) {
+			return Duration.ofSeconds(sec);
 		}
+		return DEFAULT_TTL;
 	}
 
 	@Override
@@ -59,6 +52,7 @@ public class RedisOpaqueTokenService implements TokenService {
 		String token = generateOpaqueToken();
 		String key = keyFromToken(token);
 		String value = String.valueOf(userId);
+		Duration ttl = getTtl();
 		if (key == null || value == null || ttl == null) {
 			throw new IllegalStateException("토큰 저장에 필요한 key, value, ttl이 null일 수 없습니다");
 		}
