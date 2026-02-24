@@ -1,7 +1,8 @@
 package com.flab.stocktradingengine.config;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.data.redis.RedisProperties;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
@@ -13,6 +14,8 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.lang.NonNull;
 
 import lombok.extern.slf4j.Slf4j;
+
+import java.util.Objects;
 
 /**
  * Redis 빈 수동 등록.
@@ -28,20 +31,14 @@ import lombok.extern.slf4j.Slf4j;
 @Configuration
 @Profile("!test")
 @ConditionalOnProperty(prefix = "spring.data.redis", name = "host")
+@EnableConfigurationProperties(RedisProperties.class)
 public class RedisConfig {
 
-	/**
-	 * 
-	 * @param host default 로 localhost 지정
-	 * @param port default 로 6379 지정
-	 * @return
-	 */
 	@Bean
-	public RedisConnectionFactory redisConnectionFactory(
-			@Value("${spring.data.redis.host:localhost}") @NonNull String host,
-			@Value("${spring.data.redis.port:6379}") int port) {
-		log.info("Redis 연결 설정: host = {}, port = {}", host, port);
-		RedisStandaloneConfiguration config = new RedisStandaloneConfiguration(host, port);
+	public RedisConnectionFactory redisConnectionFactory(@NonNull RedisProperties redisProperties) {
+		String host = Objects.requireNonNullElse(redisProperties.getHost(), "localhost");
+		log.info("Redis 연결 설정: host = {}, port = {}", host, redisProperties.getPort());
+		RedisStandaloneConfiguration config = new RedisStandaloneConfiguration(host, redisProperties.getPort());
 		return new LettuceConnectionFactory(config);
 	}
 
