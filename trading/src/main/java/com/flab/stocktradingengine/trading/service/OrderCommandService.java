@@ -129,15 +129,6 @@ public class OrderCommandService {
     }
 
     /**
-     * 주문 소유 계좌 ID 조회. 권한 검증용으로 api에서 사용.
-     */
-    public Long getAccountIdByOrderId(@NonNull Long orderId) {
-        Order order = orderRepository.findByOrderId(orderId)
-            .orElseThrow(() -> new IllegalArgumentException("Order not found: " + orderId));
-        return order.getAccount().getAccountId();
-    }
-
-    /**
      * 주문 취소 (PENDING만 가능, 매수 시 예약 증거금 반환)
      */
     @Transactional

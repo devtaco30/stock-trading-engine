@@ -23,6 +23,15 @@ public class OrderQueryService {
     private final OrderRepository orderRepository;
 
     /**
+     * 주문 소유 계좌 ID 조회. 권한 검증용으로 api에서 사용.
+     */
+    public Long getAccountIdByOrderId(@NonNull Long orderId) {
+        Order order = orderRepository.findByOrderId(orderId)
+            .orElseThrow(() -> new IllegalArgumentException("Order not found: " + orderId));
+        return order.getAccount().getAccountId();
+    }
+
+    /**
      * 계좌별 매수 주문 증거금 홀딩 합계. 계좌 상세(출금가능 등) 계산용.
      */
     public BigDecimal getReservedMarginSumByAccountId(@NonNull Long accountId) {
