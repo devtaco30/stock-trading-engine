@@ -10,6 +10,7 @@ import com.flab.stocktradingengine.dto.settlement.ArrearsDto;
 import com.flab.stocktradingengine.dto.settlement.RepaymentRequest;
 import com.flab.stocktradingengine.dto.settlement.RepaymentResponse;
 import com.flab.stocktradingengine.dto.settlement.UnpaidSettlementDto;
+import com.flab.stocktradingengine.exception.ForbiddenException;
 import com.flab.stocktradingengine.facade.AccountCommandFacade;
 import com.flab.stocktradingengine.resolver.AccountAccessResolver;
 import com.flab.stocktradingengine.settlement.entity.Unpaid;
@@ -31,7 +32,8 @@ public class SettlementApiService {
 
     @Transactional(readOnly = true)
     public List<UnpaidSettlementDto> getUnpaidSettlements(Long userId, Long accountId) {
-        accountAccessResolver.resolveAccountOwnedBy(userId, accountId).orElseThrow();
+        accountAccessResolver.resolveAccountOwnedBy(userId, accountId)
+            .orElseThrow(ForbiddenException::notOwnerOfAccount);
         return unpaidRepository.findByAccount_AccountId(accountId).stream()
             .map(u -> UnpaidSettlementDto.builder()
                 .settlementId(u.getUnpaidId())
@@ -45,7 +47,8 @@ public class SettlementApiService {
 
     @Transactional(readOnly = true)
     public ArrearsDto getArrears(Long userId, Long accountId) {
-        accountAccessResolver.resolveAccountOwnedBy(userId, accountId).orElseThrow();
+        accountAccessResolver.resolveAccountOwnedBy(userId, accountId)
+            .orElseThrow(ForbiddenException::notOwnerOfAccount);
         List<Unpaid> pending = unpaidRepository.findByAccount_AccountIdAndStatus(accountId, UnpaidStatus.PENDING);
         BigDecimal total = pending.stream().map(Unpaid::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
         String arrearsId = pending.isEmpty() ? null : pending.get(0).getUnpaidId();
