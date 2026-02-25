@@ -1,14 +1,17 @@
 package com.flab.stocktradingengine.config;
 
 import com.flab.stocktradingengine.interceptor.AuthenticationInterceptor;
+import com.flab.stocktradingengine.resolver.CurrentUserIdArgumentResolver;
+import java.util.List;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 /**
  * Spring MVC 설정
- * 
- * <p>Interceptor 등록 및 기타 MVC 설정을 관리합니다.
+ *
+ * <p>Interceptor·ArgumentResolver 등록 및 기타 MVC 설정을 관리합니다.
  */
 @Configuration
 public class WebMvcConfig implements WebMvcConfigurer {
@@ -17,6 +20,11 @@ public class WebMvcConfig implements WebMvcConfigurer {
 
     public WebMvcConfig(AuthenticationInterceptor authenticationInterceptor) {
         this.authenticationInterceptor = authenticationInterceptor;
+    }
+
+    @Override
+    public void addArgumentResolvers(List<HandlerMethodArgumentResolver> resolvers) {
+        resolvers.add(new CurrentUserIdArgumentResolver());
     }
 
     @Override

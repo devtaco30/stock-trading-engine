@@ -1,26 +1,33 @@
 package com.flab.stocktradingengine.interceptor;
 
-import com.flab.stocktradingengine.dummy.DummyToken;
-import com.flab.stocktradingengine.exception.AuthenticationException;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.context.annotation.DependsOn;
+import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
 
+import com.flab.stocktradingengine.exception.AuthenticationException;
+import com.flab.stocktradingengine.user.exception.InvalidTokenException;
+import com.flab.stocktradingengine.user.token.TokenService;
+
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import lombok.RequiredArgsConstructor;
+
 /**
  * 인증 헤더 검증 Interceptor
- * 
- * <p>현재는 더미 검증만 수행합니다.
- * 실제 토큰 검증 로직은 auth 모듈 구현 후 추가 예정입니다.
+ * <p>user 모듈의 {@link TokenService}로 토큰 검증 후 request에 userId 설정.</p>
  */
 @Component
+@RequiredArgsConstructor
 public class AuthenticationInterceptor implements HandlerInterceptor {
 
     private static final String AUTHORIZATION_HEADER = "Authorization";
     private static final String BEARER_PREFIX = "Bearer ";
 
+    private final TokenService tokenService;
+
     @Override
-    public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
+    public boolean preHandle(@NonNull HttpServletRequest request, @NonNull HttpServletResponse response, @NonNull Object handler) {
         // OPTIONS 요청은 CORS preflight이므로 통과
         if ("OPTIONS".equals(request.getMethod())) {
             return true;
@@ -39,22 +46,18 @@ public class AuthenticationInterceptor implements HandlerInterceptor {
         }
 
         String token = authorizationHeader.substring(BEARER_PREFIX.length()).trim();
-        
+
         // 토큰이 비어있음
         if (token.isBlank()) {
             throw AuthenticationException.invalidTokenFormat("토큰이 비어있습니다");
         }
 
-        // 더미 토큰 검증
-        if (!DummyToken.isValid(token)) {
-            throw AuthenticationException.invalidTokenFormat("유효하지 않은 토큰입니다");
+        try {
+            long userId = tokenService.validateAndGetUserId(token);
+            request.setAttribute("userId", userId);
+        } catch (InvalidTokenException e) {
+            throw AuthenticationException.invalidTokenFormat(e.getMessage());
         }
-
-        // TODO: 실제 토큰 검증 로직 구현
-        // 1. JWT 토큰 파싱
-        // 2. 토큰 서명 검증
-        // 3. 토큰 만료 시간 확인
-        // 4. 사용자 정보 추출 및 SecurityContext에 저장
 
         return true;
     }
