@@ -1,6 +1,7 @@
 package com.flab.stocktradingengine.trading.repository;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.domain.Page;
@@ -20,24 +21,24 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
      * @param orderId 주문 ID
      * @return 주문
      */
-    Optional<Order> findByOrderId(String orderId);
+    Optional<Order> findByOrderId(Long orderId);
+
+    List<Order> findByAccount_AccountIdAndStatus(Long accountId, OrderStatus status);
+
+    /** 증거금 홀딩 중인 주문 (PENDING/FILLED 공통, T+2 정산 전까지 출금 불가 반영용) */
+    List<Order> findByAccount_AccountIdAndReservedMarginIsNotNull(Long accountId);
 
     /**
      * 계좌 ID와 주문 일시 범위로 주문 조회
-     * @param accountId
-     * @param startAt
-     * @param endAt
-     * @param pageable
-     * @return
      */
-    Page<Order> findByAccount_IdAndOrderAtBetweenOrderByOrderAtDesc(
+    Page<Order> findByAccount_AccountIdAndOrderAtBetweenOrderByOrderAtDesc(
         Long accountId,
         Instant startAt,
         Instant endAt,
         Pageable pageable
     );
 
-    Page<Order> findByAccount_IdAndStatusAndOrderAtBetweenOrderByOrderAtDesc(
+    Page<Order> findByAccount_AccountIdAndStatusAndOrderAtBetweenOrderByOrderAtDesc(
         Long accountId,
         OrderStatus status,
         Instant startAt,
