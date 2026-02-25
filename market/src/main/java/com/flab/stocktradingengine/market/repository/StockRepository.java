@@ -15,5 +15,8 @@ public interface StockRepository extends JpaRepository<Stock, String> {
 
     Optional<Stock> findByStockCode(String stockCode);
 
-    List<Stock> findByStockNameContainingOrStockCodeContaining(String stockName, String stockCode, Pageable pageable);
+    /** 종목명 포함 검색 OR 종목코드 정확 일치 */
+    List<Stock> findByStockNameContainingOrStockCode(String stockName, String stockCode, Pageable pageable);
+
+    long countByStockNameContainingOrStockCode(String stockName, String stockCode);
 }

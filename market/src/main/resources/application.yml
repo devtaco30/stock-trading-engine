@@ -2,6 +2,6 @@ spring:
   sql:
     init:
       mode: embedded
-      data-locations: classpath:data.sql
+      data-locations: classpath:stocks.sql
   jpa:
     defer-datasource-initialization: true
