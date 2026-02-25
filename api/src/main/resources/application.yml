@@ -1,3 +1,34 @@
+# Snowflake ID: 단일 서버 0, 다중 서버 시 서버별 0~1023 고유 값
+snowflake:
+  node-id: 0
+
+# 불투명 토큰 (Redis) TTL. 미설정 시 7일
+user:
+  token:
+    expire-seconds: 604800
+
+# Redis: 자동 설정 대신 api.config.RedisConfig에서 빈 등록 (멀티모듈에서 StringRedisTemplate 생성 순서 이슈 회피)
 spring:
   application:
     name: stock-trading-engine
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+  data:
+    redis:
+      host: localhost
+      port: 6379
+  datasource:
+    url: jdbc:h2:mem:localdb;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: create
+    database-platform: org.hibernate.dialect.H2Dialect
+    defer-datasource-initialization: true
+  sql:
+    init:
+      mode: always
+      data-locations: classpath:data-scenario1-test.sql
