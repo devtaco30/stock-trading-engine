@@ -14,6 +14,7 @@ target/
 # Gradle
 .gradle
 build/
+bin/
 !gradle/wrapper/gradle-wrapper.jar
 !**/src/main/**/build/
 !**/src/test/**/build/
@@ -42,3 +43,4 @@ application-secret.yml
 # Python / 생성 데이터 (로컬만 사용)
 scripts/
 data/
+local-tokens.json

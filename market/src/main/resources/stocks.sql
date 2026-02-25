@@ -2771,4 +2771,5 @@ INSERT INTO stocks (stock_code, stock_name, mrkt_ctg) VALUES
 ('A900120', '씨엑스아이', 'KOSDAQ'),
 ('A900250', '크리스탈신소재', 'KOSDAQ'),
 ('A900070', '글로벌에스엠', 'KOSDAQ'),
-('A900100', '애머릿지', 'KOSDAQ');
+('A900100', '애머릿지', 'KOSDAQ')
+ON CONFLICT (stock_code) DO NOTHING;
