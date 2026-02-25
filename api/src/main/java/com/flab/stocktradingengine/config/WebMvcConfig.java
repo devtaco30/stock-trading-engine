@@ -32,8 +32,9 @@ public class WebMvcConfig implements WebMvcConfigurer {
         registry.addInterceptor(authenticationInterceptor)
             .addPathPatterns("/api/v1/**")  // /api/v1으로 시작하는 모든 경로에 적용
             .excludePathPatterns(
-                "/api/v1/health",  // 헬스체크는 인증 제외 (필요시)
-                "/error"           // 에러 페이지는 인증 제외
+                "/api/v1/health",   // 헬스체크는 인증 제외 (필요시)
+                "/api/v1/stocks/**", // 시세/종목은 공개 API
+                "/error"            // 에러 페이지는 인증 제외
             );
     }
 }
