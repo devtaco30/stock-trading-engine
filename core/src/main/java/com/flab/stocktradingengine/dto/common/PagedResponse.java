@@ -6,8 +6,9 @@ import lombok.Getter;
 import java.util.List;
 
 /**
- * 페이지네이션을 포함한 성공 응답
- * 
+ * 페이지네이션을 포함한 목록 응답.
+ * <p>공통 메타(code, timestamp, success)는 ApiResponse 한 겹에서만 사용하고, 본 DTO는 data + pagination 만 가진다.</p>
+ *
  * @param <T> 리스트 아이템의 타입
  */
 @Getter
@@ -15,25 +16,18 @@ import java.util.List;
 public final class PagedResponse<T> implements BaseResponse {
     private final List<T> data;
     private final PaginationInfo pagination;
-    private final String code;
-    private final String message;
-    private final Long timestamp;
-    private final boolean success = true;
 
-    private PagedResponse(List<T> data, PaginationInfo pagination, String code, String message, Long timestamp) {
+    private PagedResponse(List<T> data, PaginationInfo pagination) {
         this.data = data;
         this.pagination = pagination;
-        this.code = code;
-        this.message = message;
-        this.timestamp = timestamp;
     }
 
     public static <T> PagedResponse<T> of(List<T> data, PaginationInfo pagination) {
-        return new PagedResponse<>(data, pagination, "SUCCESS", null, System.currentTimeMillis());
+        return new PagedResponse<>(data, pagination);
     }
 
     public static <T> PagedResponse<T> of(List<T> data, PaginationInfo pagination, String message) {
-        return new PagedResponse<>(data, pagination, "SUCCESS", message, System.currentTimeMillis());
+        return new PagedResponse<>(data, pagination);
     }
 
     /**
@@ -54,7 +48,7 @@ public final class PagedResponse<T> implements BaseResponse {
                 .hasNext(page < totalPages - 1)
                 .hasPrevious(page > 0)
                 .build();
-        return new PagedResponse<>(data, pagination, "SUCCESS", message, System.currentTimeMillis());
+        return new PagedResponse<>(data, pagination);
     }
 
     /**
