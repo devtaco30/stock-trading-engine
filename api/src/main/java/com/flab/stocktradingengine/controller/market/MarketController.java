@@ -8,8 +8,10 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.flab.stocktradingengine.dto.common.ApiResponse;
 import com.flab.stocktradingengine.dto.common.PagedResponse;
+import com.flab.stocktradingengine.dto.market.OrderbookDto;
 import com.flab.stocktradingengine.dto.market.QuoteDto;
 import com.flab.stocktradingengine.dto.market.StockSearchDto;
+import com.flab.stocktradingengine.service.OrderbookApiService;
 import com.flab.stocktradingengine.service.QuoteApiService;
 import com.flab.stocktradingengine.service.StockSearchApiService;
 
@@ -22,10 +24,16 @@ public class MarketController {
 
     private final QuoteApiService quoteApiService;
     private final StockSearchApiService stockSearchApiService;
+    private final OrderbookApiService orderbookApiService;
 
     @GetMapping("/{stockCode}/quote")
     public ApiResponse<QuoteDto> quote(@PathVariable String stockCode) {
         return ApiResponse.of(quoteApiService.getQuote(stockCode));
+    }
+
+    @GetMapping("/{stockCode}/orderbook")
+    public ApiResponse<OrderbookDto> orderbook(@PathVariable String stockCode) {
+        return ApiResponse.of(orderbookApiService.getOrderbook(stockCode));
     }
 
     @GetMapping("/search")
