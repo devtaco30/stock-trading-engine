@@ -24,6 +24,15 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * 권한 없음 (403)
+     */
+    @ExceptionHandler(ForbiddenException.class)
+    public ResponseEntity<ErrorResponse> handleForbiddenException(ForbiddenException e) {
+        ErrorResponse errorResponse = ErrorResponse.of(e.getErrorCode(), e.getMessage());
+        return ResponseEntity.status(e.getHttpStatus()).body(errorResponse);
+    }
+
+    /**
      * 일반적인 런타임 예외 처리
      */
     @ExceptionHandler(RuntimeException.class)

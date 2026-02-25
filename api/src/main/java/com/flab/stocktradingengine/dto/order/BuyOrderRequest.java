@@ -1,19 +1,19 @@
 package com.flab.stocktradingengine.dto.order;
 
+import java.math.BigDecimal;
+
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import lombok.Builder;
-
-import java.math.BigDecimal;
 
 /**
  * 매수 주문 요청 DTO
  */
 @Builder
 public record BuyOrderRequest(
-    @NotBlank(message = "계좌 ID는 필수입니다")
-    String accountId,
+    @NotNull(message = "계좌 ID는 필수입니다")
+    Long accountId,
 
     @NotBlank(message = "종목 코드는 필수입니다")
     String stockCode,
