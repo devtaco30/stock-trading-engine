@@ -4,8 +4,6 @@ import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.flab.stocktradingengine.settlement.entity.Unpaid;
-import com.flab.stocktradingengine.settlement.entity.UnpaidStatus;
 import com.flab.stocktradingengine.settlement.repository.UnpaidRepository;
 
 import lombok.RequiredArgsConstructor;
@@ -21,19 +19,16 @@ public class UnpaidCommandService {
 
     /**
      * 미결제를 정산 완료(SETTLED) 처리.
-     * 해당 계좌 소유·PENDING 상태만 허용.
+     *
+     * <p>dirty checking 에 의존하지 않고 단일 UPDATE 쿼리로 처리한다.
+     * WHERE 절에 status = PENDING 조건을 포함하므로, 이미 정산된 건이거나 해당 계좌의 건이 아니면
+     * affected rows = 0 이 되어 예외를 던진다. 이를 통해 동시 요청 시 중복 정산도 방지된다.</p>
      */
     @Transactional
-    public Unpaid settleUnpaid(@NonNull String unpaidId, @NonNull Long accountId) {
-        Unpaid unpaid = unpaidRepository.findByUnpaidId(unpaidId)
-            .orElseThrow(() -> new IllegalArgumentException("미결제를 찾을 수 없음: " + unpaidId));
-        if (!String.valueOf(accountId).equals(String.valueOf(unpaid.getAccount().getAccountId()))) {
-            throw new IllegalArgumentException("해당 계좌의 미결제가 아님");
+    public void settleUnpaid(@NonNull String unpaidId, @NonNull Long accountId) {
+        int updated = unpaidRepository.markSettledIfPending(unpaidId, accountId);
+        if (updated == 0) {
+            throw new IllegalStateException("이미 정산됐거나 해당 계좌의 건이 아닙니다.");
         }
-        if (unpaid.getStatus() != UnpaidStatus.PENDING) {
-            throw new IllegalStateException("이미 정산된 건입니다.");
-        }
-        unpaid.markSettled();
-        return unpaidRepository.save(unpaid);
     }
 }
