@@ -17,6 +17,7 @@ dependencies {
 	implementation(libs.spring.boot.starter.data.jpa)
 	implementation(libs.spring.boot.starter.data.redis)
 	implementation(libs.slf4j.api)
+	implementation(libs.spring.kafka)
 
 	// PostgreSQL (운영), H2 (로컬 bootRun 기본)
 	runtimeOnly(libs.postgresql)
