@@ -62,6 +62,14 @@ public class Order {
     @Column(nullable = false)
     private int quantity;
 
+    /**
+     * 누적 체결 수량. 부분 체결이 발생할 때마다 증가하며, quantity 와 같아지면 FILLED.
+     * DB 에 저장되어 서버 재시작 시 호가창 복원(OrderBookInitializer)에 활용된다.
+     */
+    @Builder.Default
+    @Column(nullable = false, columnDefinition = "integer not null default 0")
+    private int filledQuantity = 0;
+
     @Builder.Default
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
@@ -77,10 +85,36 @@ public class Order {
     @Column(precision = 15, scale = 0)
     private BigDecimal reservedMargin;
 
-    /** 체결. 증거금(reservedMargin)은 T+2 정산 전까지 유지(출금 불가). */
+    /** 전량 체결. 기존 수동 체결 흐름(fillOrder REST)과의 호환용으로 유지. */
     public void fill(Instant filledAt) {
+        this.filledQuantity = this.quantity;
         this.status = OrderStatus.FILLED;
         this.filledAt = filledAt;
+    }
+
+    /**
+     * 부분/전량 체결 반영.
+     * <p>매칭 엔진이 인메모리에서 수량을 결정한 뒤, DB 반영 시 이 메서드를 호출한다.
+     * filledQuantity 가 quantity 에 도달하면 자동으로 FILLED 처리.</p>
+     *
+     * @throws IllegalArgumentException fillQty 가 0 이하이거나 남은 수량을 초과할 때
+     */
+    public void addFilled(int fillQty, Instant now) {
+        if (fillQty <= 0 || this.filledQuantity + fillQty > this.quantity) {
+            throw new IllegalArgumentException(
+                "잘못된 체결 수량: fillQty=" + fillQty
+                + ", filled=" + filledQuantity + ", quantity=" + quantity);
+        }
+        this.filledQuantity += fillQty;
+        if (this.filledQuantity >= this.quantity) {
+            this.status = OrderStatus.FILLED;
+            this.filledAt = now;
+        }
+    }
+
+    /** 미체결 잔량. 매칭 루프 종료 조건에 사용. */
+    public int getRemainingQuantity() {
+        return Math.max(0, quantity - filledQuantity);
     }
 
     public void cancel() {
