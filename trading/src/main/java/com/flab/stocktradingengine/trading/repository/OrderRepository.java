@@ -29,6 +29,12 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     List<Order> findByAccount_AccountIdAndReservedMarginIsNotNull(Long accountId);
 
     /**
+     * 파티션 할당 시 특정 종목의 PENDING 주문을 시간 순으로 조회.
+     * 시간 순으로 로드해야 가격·시간 우선순위가 올바르게 복원된다.
+     */
+    List<Order> findByStatusAndStockCodeOrderByOrderAtAsc(OrderStatus status, String stockCode);
+
+    /**
      * 계좌 ID와 주문 일시 범위로 주문 조회
      */
     Page<Order> findByAccount_AccountIdAndOrderAtBetweenOrderByOrderAtDesc(

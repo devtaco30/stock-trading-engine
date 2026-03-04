@@ -141,6 +141,16 @@ public class AccountService {
     }
 
     /**
+     * 매도 체결 시 보유 수량 차감. 보유가 없으면 예외.
+     */
+    @Transactional
+    public void decreaseHolding(Long accountId, String stockCode, int quantity) {
+        Holding holding = holdingRepository.findByAccount_AccountIdAndStockCode(accountId, stockCode)
+            .orElseThrow(() -> new NoSuchElementException("Holding not found: accountId=" + accountId + ", stockCode=" + stockCode));
+        holding.subtractQuantity(quantity);
+    }
+
+    /**
      * 매수 체결 시 보유 반영. 해당 종목이 없으면 새로 추가, 있으면 수량·평균가 합산.
      */
     @Transactional
@@ -148,7 +158,7 @@ public class AccountService {
         Account account = accountRepository.findByAccountId(accountId)
             .orElseThrow(() -> new NoSuchElementException("Account not found: " + accountId));
 
-        holdingRepository.findByAccount_AccountIdAndStockCode(accountId, stockCode)
+        holdingRepository.findByAccount_IdAndStockCodeForUpdate(account.getId(), stockCode)
             .ifPresentOrElse(
                 holding -> holding.applyExecution(quantity, executionPrice),
                 () -> holdingRepository.save(new Holding(account, stockCode, quantity, executionPrice))

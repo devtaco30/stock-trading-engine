@@ -3,8 +3,8 @@ package com.flab.stocktradingengine.trading.service;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
+import java.util.function.Supplier;
 
-import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -34,14 +34,17 @@ public class OrderCommandService {
 
     /**
      * 매수 주문 접수 (증거금 예약). 계좌 행 락 후 잔고/증거금 검증.
-     * @param pendingUnpaidSum 계좌의 미결제 미수금 합계 (호출부에서 조회해 전달).
+     * @param unpaidSumSupplier 계좌의 미결제 미수금 합계 공급자. 락 획득 후 호출돼 TOCTOU를 방지한다.
      */
     @Transactional
-    public PlaceOrderResultView placeBuyOrder(@NonNull BuyOrderCommand command, @NonNull Account account,
-            @NonNull BigDecimal pendingUnpaidSum) {
+    public PlaceOrderResultView placeBuyOrder(BuyOrderCommand command, Account account,
+            Supplier<BigDecimal> unpaidSumSupplier) {
         // BUY price * quantity 로 주문 금액 계산
         Account lockedAccount = accountService.getAccountByIdForUpdate(account.getId())
             .orElseThrow(() -> new IllegalArgumentException("Account not found: " + account.getId()));
+
+        // 락 획득 후 미결제 미수금 조회 — 락 전 조회 시 TOCTOU 발생
+        BigDecimal pendingUnpaidSum = unpaidSumSupplier.get();
 
         // user 가 설정해둔 증거금 마진율 가져오기
         BigDecimal orderAmount = command.price().multiply(BigDecimal.valueOf(command.quantity()));
@@ -99,7 +102,7 @@ public class OrderCommandService {
      * 매도 주문 접수. 해당 종목 보유 행 락 후 보유 수량 검증.
      */
     @Transactional
-    public PlaceOrderResultView placeSellOrder(@NonNull SellOrderCommand command, @NonNull Account account) {
+    public PlaceOrderResultView placeSellOrder(SellOrderCommand command, Account account) {
         var holding = accountService.getHoldingForUpdate(account.getId(), command.stockCode())
             .orElseThrow(() -> new IllegalStateException("보유 종목이 아님: " + command.stockCode()));
 
@@ -132,7 +135,7 @@ public class OrderCommandService {
      * 주문 취소 (PENDING만 가능, 매수 시 예약 증거금 반환)
      */
     @Transactional
-    public CancelOrderResultView cancelOrder(@NonNull Long orderId) {
+    public CancelOrderResultView cancelOrder(Long orderId) {
         Order order = orderRepository.findByOrderId(orderId).orElseThrow(
             () -> new IllegalArgumentException("Order not found: " + orderId));
         if (order.getStatus() != OrderStatus.PENDING) {

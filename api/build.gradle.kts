@@ -16,6 +16,7 @@ dependencies {
 	implementation(libs.spring.boot.starter.validation)
 	implementation(libs.spring.boot.starter.data.jpa)
 	implementation(libs.spring.boot.starter.data.redis)
+	implementation(libs.spring.kafka)
 	implementation(libs.slf4j.api)
 	implementation(libs.spring.kafka)
 
@@ -27,6 +28,7 @@ dependencies {
 	annotationProcessor(libs.lombok)
 	
 	testImplementation(libs.spring.boot.starter.test)
+	testImplementation(libs.spring.kafka.test)
 	testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 	testRuntimeOnly("com.h2database:h2")
 }

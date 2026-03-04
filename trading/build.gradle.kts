@@ -10,11 +10,14 @@ dependencies {
 	
 	implementation(libs.spring.boot.starter.web)
 	implementation(libs.spring.boot.starter.data.jpa)
-	
+	implementation(libs.spring.kafka)
+
 	compileOnly(libs.lombok)
 	annotationProcessor(libs.lombok)
-	
+
 	testImplementation(libs.spring.boot.starter.test)
+	testImplementation(libs.spring.kafka.test)
+	testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
 tasks.bootJar {

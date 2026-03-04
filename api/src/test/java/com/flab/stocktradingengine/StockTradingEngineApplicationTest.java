@@ -1,20 +1,19 @@
 package com.flab.stocktradingengine;
 
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.context.ApplicationContext;
 
+/**
+ * 애플리케이션 컨텍스트 로드 검증.
+ * H2 in-memory DB, Kafka auto-startup 비활성화(실제 브로커 없이 빈 생성만 검증).
+ * SQL 초기화 비활성화(data-scenario1-test.sql 불필요).
+ */
 @SpringBootTest(classes = StockTradingEngineApplication.class,
     properties = {
-        "spring.autoconfigure.exclude="
-        + "org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration,"
-        + "org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration"
+        "spring.sql.init.mode=never",
+        "spring.kafka.listener.auto-startup=false"
     }
 )
-
 public class StockTradingEngineApplicationTest {
 
     @Test

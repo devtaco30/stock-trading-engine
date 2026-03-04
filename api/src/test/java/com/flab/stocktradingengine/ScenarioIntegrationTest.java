@@ -288,7 +288,7 @@ class ScenarioIntegrationTest {
     @DisplayName("매수 주문 - 더미 응답 확인")
     void buyOrder_dummyResponse() throws Exception {
         BuyOrderRequest request = BuyOrderRequest.builder()
-            .accountId("account-001")
+            .accountId(1L)
             .stockCode("005930")
             .orderType("LIMIT")
             .price(new BigDecimal("70500"))
