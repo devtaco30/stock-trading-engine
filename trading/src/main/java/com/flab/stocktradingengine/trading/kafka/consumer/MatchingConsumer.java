@@ -1,25 +1,33 @@
 package com.flab.stocktradingengine.trading.kafka.consumer;
 
+import java.math.BigDecimal;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
-import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.annotation.Profile;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.listener.ConsumerSeekAware;
 import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Component;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import com.flab.stocktradingengine.trading.entity.Order;
+import com.flab.stocktradingengine.trading.kafka.KafkaTopics;
 import com.flab.stocktradingengine.trading.kafka.event.OrderCancelledEvent;
 import com.flab.stocktradingengine.trading.kafka.event.OrderPlacedEvent;
+import com.flab.stocktradingengine.trading.kafka.event.TradeFilledEvent;
 import com.flab.stocktradingengine.trading.matching.FillResult;
 import com.flab.stocktradingengine.trading.matching.OrderBook;
 import com.flab.stocktradingengine.trading.matching.OrderBookRegistry;
 import com.flab.stocktradingengine.trading.matching.OrderEntry;
-import com.flab.stocktradingengine.trading.matching.event.OrderFilledEvent;
+import com.flab.stocktradingengine.trading.redis.RedisKeys;
 import com.flab.stocktradingengine.trading.service.OrderQueryService;
 
 import lombok.RequiredArgsConstructor;
@@ -48,14 +56,17 @@ import lombok.extern.slf4j.Slf4j;
  * <p>at-least-once 환경에서 같은 메시지가 중복 수신될 수 있다.
  * {@code OrderBook.containsOrder()} 로 중복 주문을 감지해 무시한다.</p>
  */
+@Profile("matching")
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class MatchingConsumer implements ConsumerSeekAware {
 
     private final OrderBookRegistry orderBookRegistry;
-    private final ApplicationEventPublisher eventPublisher;
+    private final KafkaTemplate<String, Object> kafkaTemplate;
     private final OrderQueryService orderQueryService;
+    private final StringRedisTemplate stringRedisTemplate;
+    private final ObjectMapper objectMapper;
 
     // ── 파티션 할당/반환 ────────────────────────────────────────────────────
 
@@ -92,6 +103,11 @@ public class MatchingConsumer implements ConsumerSeekAware {
             } else {
                 log.warn("[매칭 컨슈머] 알 수 없는 이벤트 타입: topic={} type={}",
                     record.topic(), event == null ? "null" : event.getClass().getSimpleName());
+                return;
+            }
+            String stockCode = record.key();
+            if (stockCode != null) {
+                writeOrderbookSnapshot(stockCode);
             }
         } finally {
             ack.acknowledge();
@@ -132,7 +148,7 @@ public class MatchingConsumer implements ConsumerSeekAware {
 
     private void runMatch(String stockCode, OrderBook book) {
         while (true) {
-            var result = book.match();
+            java.util.Optional<FillResult> result = book.match();
             if (result.isEmpty()) break;
 
             FillResult fill = result.get();
@@ -141,9 +157,38 @@ public class MatchingConsumer implements ConsumerSeekAware {
                 fill.filledQuantity(), fill.matchPrice());
 
             orderBookRegistry.updateLastTradedPrice(stockCode, fill.matchPrice());
-            eventPublisher.publishEvent(new OrderFilledEvent(stockCode, fill));
+            stringRedisTemplate.opsForValue().set(
+                RedisKeys.ltp(stockCode), fill.matchPrice().toPlainString());
+            kafkaTemplate.send(KafkaTopics.fills(stockCode), stockCode,
+                new TradeFilledEvent(
+                    stockCode,
+                    fill.buyOrderId(), fill.buyAccountId(),
+                    fill.sellOrderId(), fill.sellAccountId(),
+                    fill.filledQuantity(), fill.matchPrice()
+                ));
         }
     }
+
+    private void writeOrderbookSnapshot(String stockCode) {
+        OrderBook book = orderBookRegistry.get(stockCode);
+        if (book == null) return;
+        List<Level> bids = book.getBidLevels(10).stream()
+            .map(e -> new Level(e.getKey().toPlainString(), e.getValue()))
+            .toList();
+        List<Level> asks = book.getAskLevels(10).stream()
+            .map(e -> new Level(e.getKey().toPlainString(), e.getValue()))
+            .toList();
+        try {
+            stringRedisTemplate.opsForValue().set(
+                RedisKeys.orderbook(stockCode),
+                objectMapper.writeValueAsString(new Snapshot(bids, asks)));
+        } catch (JsonProcessingException e) {
+            log.warn("[호가창 직렬화 실패] stockCode={}", stockCode, e);
+        }
+    }
+
+    private record Level(String price, int quantity) {}
+    private record Snapshot(List<Level> bids, List<Level> asks) {}
 
     private static String extractStockCode(String topic) {
         int idx = topic.indexOf('.');

@@ -14,7 +14,7 @@ import lombok.Getter;
  * 매칭 스레드는 DB 세션 밖에서 동작한다. JPA 엔티티를 들고 다니면
  * 지연 로딩(LazyInitializationException)이나 detached 상태 오류가 발생한다.
  * 이 객체는 매칭 판단에 필요한 최소 정보만 담고, DB 반영은
- * {@link FillResult} → {@code MatchingFillHandler} 경로로 위임한다.</p>
+ * {@link FillResult} → Kafka fills 토픽 → {@code SettlementConsumer} 경로로 위임한다.</p>
  *
  * <p><b>패턴: Value Object + Mutable State 분리</b><br>
  * orderId·price·quantity 등 식별/가격 정보는 final 불변,

@@ -27,18 +27,22 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
+import org.springframework.kafka.core.KafkaTemplate;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.kafka.listener.ConsumerSeekAware.ConsumerSeekCallback;
 import org.springframework.kafka.support.Acknowledgment;
 
 import com.flab.stocktradingengine.trading.kafka.event.OrderCancelledEvent;
 import com.flab.stocktradingengine.trading.kafka.event.OrderPlacedEvent;
+import com.flab.stocktradingengine.trading.kafka.event.TradeFilledEvent;
 import com.flab.stocktradingengine.trading.entity.Order;
 import com.flab.stocktradingengine.trading.entity.OrderSide;
 import com.flab.stocktradingengine.trading.matching.OrderBook;
 import com.flab.stocktradingengine.trading.matching.OrderBookRegistry;
 import com.flab.stocktradingengine.trading.matching.OrderEntry;
-import com.flab.stocktradingengine.trading.matching.event.OrderFilledEvent;
 import com.flab.stocktradingengine.trading.service.OrderQueryService;
 
 @ExtendWith(MockitoExtension.class)
@@ -46,8 +50,11 @@ import com.flab.stocktradingengine.trading.service.OrderQueryService;
 class MatchingConsumerTest {
 
     @Mock OrderBookRegistry orderBookRegistry;
-    @Mock ApplicationEventPublisher eventPublisher;
+    @Mock @SuppressWarnings("rawtypes") KafkaTemplate kafkaTemplate;
     @Mock OrderQueryService orderQueryService;
+    @Mock StringRedisTemplate stringRedisTemplate;
+    @Mock @SuppressWarnings("unchecked") ValueOperations<String, String> valueOps;
+    @Mock ObjectMapper objectMapper;
     @Mock Acknowledgment ack;
 
     @InjectMocks
@@ -59,9 +66,11 @@ class MatchingConsumerTest {
     private OrderBook book;
 
     @BeforeEach
-    void setUp() {
+    void setUp() throws Exception {
         book = new OrderBook();
         lenient().when(orderBookRegistry.getOrCreate(STOCK_CODE)).thenReturn(book);
+        lenient().when(stringRedisTemplate.opsForValue()).thenReturn(valueOps);
+        lenient().when(objectMapper.writeValueAsString(any())).thenReturn("{}");
     }
 
     private ConsumerRecord<String, Object> record(Object value) {
@@ -192,24 +201,24 @@ class MatchingConsumerTest {
     // ── 체결 ─────────────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("체결 발생 시 OrderFilledEvent 발행 및 LTP 갱신")
-    void 체결_발생_이벤트_발행_및_LTP_갱신() {
+    @DisplayName("체결 발생 시 TradeFilledEvent Kafka 발행 및 LTP 갱신")
+    void 체결_발생_Kafka_발행_및_LTP_갱신() {
         book.addOrder(new OrderEntry(1L, 200L, STOCK_CODE, OrderSide.SELL,
             new BigDecimal("70000"), 10, Instant.now()));
 
         consumer.consume(record(buyEvent(2L, "70000")), ack);
 
-        verify(eventPublisher).publishEvent(any(OrderFilledEvent.class));
+        verify(kafkaTemplate).send(eq("fills." + STOCK_CODE), eq(STOCK_CODE), any(TradeFilledEvent.class));
         verify(orderBookRegistry).updateLastTradedPrice(eq(STOCK_CODE), eq(new BigDecimal("70000")));
         verify(ack).acknowledge();
     }
 
     @Test
-    @DisplayName("체결 미발생 시 OrderFilledEvent 미발행")
-    void 체결_미발생_이벤트_미발행() {
+    @DisplayName("체결 미발생 시 TradeFilledEvent 미발행")
+    void 체결_미발생_Kafka_미발행() {
         consumer.consume(record(buyEvent(1L, "70000")), ack);
 
-        verify(eventPublisher, never()).publishEvent(any());
+        verify(kafkaTemplate, never()).send(any(), any(), any());
         verify(ack).acknowledge();
     }
 

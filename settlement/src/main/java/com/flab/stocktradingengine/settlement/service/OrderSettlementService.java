@@ -86,7 +86,7 @@ public class OrderSettlementService {
         }
 
         Instant now = Instant.now();
-        order.fillPartially(fillQty, now);
+        order.addFilled(fillQty, now);
         orderRepository.save(order);
 
         Long accountId = order.getAccount().getAccountId();
@@ -120,7 +120,7 @@ public class OrderSettlementService {
         }
 
         Instant now = Instant.now();
-        order.fillPartially(fillQty, now);
+        order.addFilled(fillQty, now);
         orderRepository.save(order);
 
         accountService.decreaseHolding(order.getAccount().getAccountId(), order.getStockCode(), fillQty);

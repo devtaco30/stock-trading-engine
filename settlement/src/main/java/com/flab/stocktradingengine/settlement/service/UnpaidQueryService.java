@@ -4,9 +4,7 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 
-import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import com.flab.stocktradingengine.settlement.entity.Unpaid;
 import com.flab.stocktradingengine.settlement.entity.UnpaidStatus;
@@ -19,7 +17,6 @@ import lombok.RequiredArgsConstructor;
  */
 @Service
 @RequiredArgsConstructor
-@Transactional(readOnly = true)
 public class UnpaidQueryService {
 
     private final UnpaidRepository unpaidRepository;
@@ -27,7 +24,7 @@ public class UnpaidQueryService {
     /**
      * 계좌별 PENDING 미결제 금액 합계. 계좌 상세(미결제 합계) 계산용.
      */
-    public BigDecimal getPendingUnpaidSumByAccountId(@NonNull Long accountId) {
+    public BigDecimal getPendingUnpaidSumByAccountId(Long accountId) {
         return unpaidRepository.findByAccount_AccountIdAndStatus(accountId, UnpaidStatus.PENDING)
             .stream()
             .map(Unpaid::getAmount)
@@ -37,14 +34,14 @@ public class UnpaidQueryService {
     /**
      * 계좌별 PENDING 미결제 목록. API 조회·미수금 집계용.
      */
-    public List<Unpaid> getPendingUnpaidsByAccountId(@NonNull Long accountId) {
+    public List<Unpaid> getPendingUnpaidsByAccountId(Long accountId) {
         return unpaidRepository.findByAccount_AccountIdAndStatus(accountId, UnpaidStatus.PENDING);
     }
 
     /**
      * 미결제 ID로 단건 조회. 변제 시 금액·검증용.
      */
-    public Optional<Unpaid> getUnpaidByUnpaidId(@NonNull String unpaidId) {
+    public Optional<Unpaid> getUnpaidByUnpaidId(String unpaidId) {
         return unpaidRepository.findByUnpaidId(unpaidId);
     }
 }

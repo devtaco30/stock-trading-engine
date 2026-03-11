@@ -4,7 +4,6 @@ import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
-import org.springframework.lang.NonNull;
 
 import com.flab.stocktradingengine.market.entity.Quote;
 
@@ -17,5 +16,5 @@ public interface QuoteRepository extends JpaRepository<Quote, String> {
      * <p>N+1 방지용. stock 정보는 fetch join으로 한 번에 조회.</p>
      */
     @Query("SELECT q FROM Quote q JOIN FETCH q.stock WHERE q.stockCode = :stockCode")
-    Optional<Quote> findByIdWithStock(@NonNull String stockCode);
+    Optional<Quote> findByIdWithStock(String stockCode);
 }

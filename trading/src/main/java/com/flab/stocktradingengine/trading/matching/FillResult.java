@@ -5,7 +5,7 @@ import java.math.BigDecimal;
 /**
  * 단일 체결 결과 값 객체 (Value Object).
  *
- * <p>매칭 스레드(OrderBook)가 생성하고, DB 반영 스레드(MatchingFillHandler)가 소비한다.
+ * <p>매칭 스레드(OrderBook)가 생성하고, Kafka fills 토픽을 통해 SettlementConsumer가 소비한다.
  * record 로 선언해 불변성을 보장하므로 스레드 간 전달 시 별도 동기화가 필요 없다.</p>
  *
  * <p><b>accountId 를 포함하는 이유</b><br>

@@ -53,12 +53,8 @@ public class OrderCommandService {
         // amount * marginRate = reservedMargin (예약 증거금) => 이번 주문에 소요되는 증거금 계산
         BigDecimal reservedMargin = orderAmount.multiply(marginRate).setScale(0, RoundingMode.DOWN);
 
-        // PENDING 상태의 주문 중 매수 주문의 예약 증거금 합계
-        BigDecimal currentReservedMarginSum = orderRepository.findByAccount_AccountIdAndStatus(lockedAccount.getAccountId(), OrderStatus.PENDING)
-            .stream()
-            .filter(o -> o.getSide() == OrderSide.BUY && o.getReservedMargin() != null)
-            .map(Order::getReservedMargin)
-            .reduce(BigDecimal.ZERO, BigDecimal::add);
+        // PENDING 매수 주문의 예약증거금 합계 — DB SUM으로 락 보유 시간 단축
+        BigDecimal currentReservedMarginSum = orderRepository.sumReservedMarginByAccountId(lockedAccount.getAccountId());
 
         // 출금 가능 금액 = 잔고 - 예약 증거금 - 미결제 미수금
         BigDecimal withdrawableBalance = lockedAccount.getBalance()

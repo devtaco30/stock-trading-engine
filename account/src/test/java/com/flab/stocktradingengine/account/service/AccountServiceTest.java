@@ -238,12 +238,12 @@ class AccountServiceTest {
             Account account = mockAccount(SAMPLE_ACCOUNT_ID);
             Holding existing = new Holding(account, "005930", 50, new BigDecimal("68000"));
             when(accountRepository.findByAccountId(SAMPLE_ACCOUNT_ID)).thenReturn(Optional.of(account));
-            when(holdingRepository.findByAccount_AccountIdAndStockCode(SAMPLE_ACCOUNT_ID, "005930"))
+            when(holdingRepository.findByAccount_IdAndStockCodeForUpdate(SAMPLE_ACCOUNT_ID, "005930"))
                 .thenReturn(Optional.of(existing));
 
             accountService.addHoldingOrIncreaseQuantity(SAMPLE_ACCOUNT_ID, "005930", 50, new BigDecimal("70000"));
 
-            verify(holdingRepository).findByAccount_AccountIdAndStockCode(SAMPLE_ACCOUNT_ID, "005930");
+            verify(holdingRepository).findByAccount_IdAndStockCodeForUpdate(SAMPLE_ACCOUNT_ID, "005930");
             assertEquals(100, existing.getQuantity());
             assertEquals(0, new BigDecimal("69000").compareTo(existing.getAveragePrice()));
             verify(holdingRepository, never()).save(any());
@@ -255,7 +255,7 @@ class AccountServiceTest {
         void savesNewHoldingWhenNotExists() {
             Account account = mockAccount(SAMPLE_ACCOUNT_ID);
             when(accountRepository.findByAccountId(SAMPLE_ACCOUNT_ID)).thenReturn(Optional.of(account));
-            when(holdingRepository.findByAccount_AccountIdAndStockCode(SAMPLE_ACCOUNT_ID, "005930")).thenReturn(Optional.empty());
+            when(holdingRepository.findByAccount_IdAndStockCodeForUpdate(SAMPLE_ACCOUNT_ID, "005930")).thenReturn(Optional.empty());
 
             accountService.addHoldingOrIncreaseQuantity(SAMPLE_ACCOUNT_ID, "005930", 100, new BigDecimal("70000"));
 

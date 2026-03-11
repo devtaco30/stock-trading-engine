@@ -1,8 +1,7 @@
-package com.flab.stocktradingengine.config;
+package com.flab.stocktradingengine.support;
 
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
-import com.flab.stocktradingengine.support.SnowflakeIdGenerator;
 
 /**
  * Snowflake 노드 ID(0~1023) 결정.
@@ -41,7 +40,7 @@ public final class SnowflakeNodeIdResolver {
                 host = "";
             }
         }
-        var matcher = TRAILING_DIGITS.matcher(host);
+        Matcher matcher = TRAILING_DIGITS.matcher(host);
         if (matcher.find()) {
             return clamp(Long.parseLong(matcher.group(1)));
         }

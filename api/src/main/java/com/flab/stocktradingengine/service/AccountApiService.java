@@ -88,7 +88,7 @@ public class AccountApiService {
 
         List<HoldingDto> holdings = content.stream()
                 .map(h -> toHoldingDto(h, stockInfoMap.getOrDefault(h.getStockCode(),
-                    new StockInfo(h.getStockCode(), BigDecimal.ZERO))))
+                    new StockInfo(h.getStockCode(), BigDecimal.ZERO, BigDecimal.ZERO))))
                 .collect(Collectors.toList());
 
         return PagedResponse.of(holdings, holdingPaged.getPagination());

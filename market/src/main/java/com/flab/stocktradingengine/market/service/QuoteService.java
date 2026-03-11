@@ -25,7 +25,6 @@ import lombok.RequiredArgsConstructor;
  */
 @Service
 @RequiredArgsConstructor
-@Transactional(readOnly = true)
 public class QuoteService {
 
     private final QuoteRepository quoteRepository;
@@ -54,38 +53,42 @@ public class QuoteService {
      * 종목 코드별 종목명·현재가. 종목이 없으면 empty.
      * 시세만 없으면 currentPrice는 0으로 반환.
      */
+    @Transactional(readOnly = true)
     public Optional<StockInfo> getStockInfo(@NonNull String stockCode) {
-        return stockRepository.findById(stockCode)
-            .map(stock -> {
-                String stockName = stock.getStockName();
-                BigDecimal currentPrice = quoteRepository.findById(stockCode)
-                    .map(Quote::getCurrentPrice)
-                    .orElse(BigDecimal.ZERO);
-                return new StockInfo(stockName, currentPrice);
-            });
+        Optional<Stock> stock = stockRepository.findById(stockCode);
+        if (stock.isEmpty()) {
+            return Optional.empty();
+        }
+        Optional<Quote> quote = quoteRepository.findById(stockCode);
+        BigDecimal currentPrice = quote.map(Quote::getCurrentPrice).orElse(BigDecimal.ZERO);
+        BigDecimal previousClose = quote.map(Quote::getPreviousClose).orElse(BigDecimal.ZERO);
+        return Optional.of(new StockInfo(stock.get().getStockName(), currentPrice, previousClose));
     }
 
     /**
      * 종목 코드 목록별 StockInfo 일괄 조회. N+1 방지용.
      * <p>Stock·Quote 각각 findAllById 1회로 조회 후 조립.</p>
      */
-    public Map<String, StockInfo> getStockInfoBatch(@NonNull List<String> stockCodes) {
+    @Transactional(readOnly = true)
+    public Map<String, StockInfo> getStockInfoBatch(List<String> stockCodes) {
         if (stockCodes.isEmpty()) {
             return Collections.emptyMap();
         }
         Map<String, String> stocks = stockRepository.findAllById(stockCodes).stream()
             .collect(Collectors.toMap(Stock::getStockCode, Stock::getStockName));
-        Map<String, BigDecimal> quotes = quoteRepository.findAllById(stockCodes).stream()
-            .collect(Collectors.toMap(Quote::getStockCode, Quote::getCurrentPrice));
+        Map<String, Quote> quoteMap = quoteRepository.findAllById(stockCodes).stream()
+            .collect(Collectors.toMap(Quote::getStockCode, q -> q));
 
         return stockCodes.stream()
             .distinct()
             .collect(Collectors.toMap(
                 code -> code,
-                code -> new StockInfo(
-                    stocks.getOrDefault(code, code),
-                    quotes.getOrDefault(code, BigDecimal.ZERO)
-                )
+                code -> {
+                    Quote quote = quoteMap.get(code);
+                    BigDecimal currentPrice = quote != null ? quote.getCurrentPrice() : BigDecimal.ZERO;
+                    BigDecimal previousClose = quote != null ? quote.getPreviousClose() : BigDecimal.ZERO;
+                    return new StockInfo(stocks.getOrDefault(code, code), currentPrice, previousClose);
+                }
             ));
     }
 }

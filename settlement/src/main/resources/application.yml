@@ -1,0 +1,27 @@
+spring:
+  main:
+    web-application-type: none
+  datasource:
+    url: jdbc:postgresql://localhost:5432/stock_trading
+    driver-class-name: org.postgresql.Driver
+    username: postgres
+    password: postgres
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: settlement-worker
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "com.flab.stocktradingengine.trading.kafka.event"
+    listener:
+      ack-mode: manual_immediate
+
+snowflake:
+  node-id: 1

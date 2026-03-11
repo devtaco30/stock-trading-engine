@@ -57,6 +57,9 @@ public class OrderBook {
     // orderId → OrderEntry 직접 조회. TreeMap 전체 탐색 없이 O(1) 취소·멱등성 체크 가능.
     private final Map<Long, OrderEntry> orderIndex = new HashMap<>();
 
+    // 전량 체결 완료된 주문 ID. orderIndex에서 제거된 후에도 멱등성 체크(containsOrder)에 사용.
+    private final java.util.Set<Long> filledOrderIds = new java.util.HashSet<>();
+
     /**
      * 주문을 호가창에 추가.
      * BUY → bids, SELL → asks 에 삽입. 동일 가격이면 큐 뒤에 추가(시간 우선 FIFO).
@@ -74,7 +77,7 @@ public class OrderBook {
      * at-least-once 환경에서 같은 OrderPlacedEvent 가 중복 수신될 때 재등록을 방지한다.
      */
     public boolean containsOrder(Long orderId) {
-        return orderIndex.containsKey(orderId);
+        return orderIndex.containsKey(orderId) || filledOrderIds.contains(orderId);
     }
 
     /**
@@ -195,13 +198,14 @@ public class OrderBook {
         }
     }
 
-    /** 전량 체결된 주문을 인덱스와 큐에서 제거. 가격 레벨이 비면 TreeMap 에서도 제거. */
+    /** 전량 체결된 주문을 인덱스와 큐에서 제거. filledOrderIds 에 기록해 멱등성 체크를 유지. */
     private void removeIfFilled(Map.Entry<BigDecimal, Deque<OrderEntry>> level,
                                  OrderEntry entry,
                                  TreeMap<BigDecimal, Deque<OrderEntry>> book) {
         if (entry.isFullyFilled()) {
             level.getValue().pollFirst();
             orderIndex.remove(entry.getOrderId());
+            filledOrderIds.add(entry.getOrderId());
             if (level.getValue().isEmpty()) {
                 book.pollFirstEntry();
             }

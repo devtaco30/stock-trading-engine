@@ -93,7 +93,7 @@ class QuoteServiceTest {
         void returnsStockInfoWhenStockAndQuoteExist() {
             String stockCode = "005930";
             Stock stock = mockStock(stockCode, "삼성전자");
-            Quote quote = mockQuote(stockCode, new BigDecimal("70000"), null, null, null, null, null, null);
+            Quote quote = mockQuote(stockCode, new BigDecimal("70000"), new BigDecimal("69000"), null, null, null, null, null);
             when(stockRepository.findById(stockCode)).thenReturn(Optional.of(stock));
             when(quoteRepository.findById(stockCode)).thenReturn(Optional.of(quote));
 
@@ -102,6 +102,7 @@ class QuoteServiceTest {
             assertTrue(result.isPresent());
             assertEquals("삼성전자", result.get().stockName());
             assertEquals(0, new BigDecimal("70000").compareTo(result.get().currentPrice()));
+            assertEquals(0, new BigDecimal("69000").compareTo(result.get().previousClose()));
             verify(stockRepository).findById(stockCode);
             verify(quoteRepository).findById(stockCode);
         }

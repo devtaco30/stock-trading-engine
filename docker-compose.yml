@@ -19,24 +19,36 @@ services:
       - postgres_data:/var/lib/postgresql/data
 
   kafka:
-    image: bitnami/kafka:3.7
+    image: apache/kafka:latest
     container_name: stock-trading-kafka
     ports:
       - "9092:9092"
     environment:
       # KRaft 모드: ZooKeeper 없이 단일 브로커로 동작
-      - KAFKA_CFG_NODE_ID=1
-      - KAFKA_CFG_PROCESS_ROLES=broker,controller
-      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=1@kafka:9093
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
       # 클라이언트용 리스너(9092) + Raft 내부 통신용 리스너(9093)
-      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093
-      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092
-      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
-      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       # 단일 브로커: replication factor 기본값 3 → 1로 낮추지 않으면 offset 커밋 실패
-      - KAFKA_CFG_OFFSETS_TOPIC_REPLICATION_FACTOR=1
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       # 개발 편의: 토픽 자동 생성 허용
-      - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+
+  kafka-ui:
+    image: ghcr.io/kafbat/kafka-ui:latest
+    container_name: stock-trading-kafka-ui
+    ports:
+      - "9090:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+    depends_on:
+      - kafka
 
 volumes:
   postgres_data:

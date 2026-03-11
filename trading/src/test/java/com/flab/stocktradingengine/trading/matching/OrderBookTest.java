@@ -329,14 +329,14 @@ class OrderBookTest {
         }
 
         @Test
-        @DisplayName("전량 체결 후 containsOrder false — orderIndex에서 제거됨")
-        void 전량체결_후_containsOrder_false() {
+        @DisplayName("전량 체결 후 containsOrder true — filledOrderIds로 멱등성 유지")
+        void 전량체결_후_containsOrder_true() {
             book.addOrder(buy(1L, new BigDecimal("70000"), 10));
             book.addOrder(sell(2L, new BigDecimal("70000"), 10));
             book.match();
 
-            assertThat(book.containsOrder(1L)).isFalse();
-            assertThat(book.containsOrder(2L)).isFalse();
+            assertThat(book.containsOrder(1L)).isTrue();
+            assertThat(book.containsOrder(2L)).isTrue();
         }
     }
 

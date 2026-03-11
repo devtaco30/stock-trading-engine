@@ -22,17 +22,17 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
+
 import com.flab.stocktradingengine.account.entity.Account;
-import com.flab.stocktradingengine.dto.account.AccountDetailData;
 import com.flab.stocktradingengine.dto.order.BuyOrderRequest;
 import com.flab.stocktradingengine.facade.AccountReadFacade;
 import com.flab.stocktradingengine.market.service.QuoteService;
 import com.flab.stocktradingengine.market.view.QuoteView;
-import org.springframework.kafka.core.KafkaTemplate;
-
 import com.flab.stocktradingengine.resolver.AccountAccessResolver;
-import com.flab.stocktradingengine.trading.matching.OrderBookRegistry;
-import com.flab.stocktradingengine.trading.repository.OrderRepository;
+import com.flab.stocktradingengine.trading.redis.RedisKeys;
 import com.flab.stocktradingengine.trading.service.OrderCommandService;
 import com.flab.stocktradingengine.trading.service.OrderQueryService;
 import com.flab.stocktradingengine.trading.view.PlaceOrderResultView;
@@ -44,9 +44,9 @@ class OrderApiServiceTest {
     @Mock AccountAccessResolver accountAccessResolver;
     @Mock OrderCommandService orderCommandService;
     @Mock OrderQueryService orderQueryService;
-    @Mock OrderBookRegistry orderBookRegistry;
-    @Mock @SuppressWarnings("rawtypes") KafkaTemplate kafkaTemplate;
-    @Mock OrderRepository orderRepository;
+    @Mock StringRedisTemplate stringRedisTemplate;
+    @Mock @SuppressWarnings("unchecked") ValueOperations<String, String> valueOps;
+    @Mock ApplicationEventPublisher eventPublisher;
     @Mock AccountReadFacade accountReadFacade;
     @Mock QuoteService quoteService;
 
@@ -70,6 +70,7 @@ class OrderApiServiceTest {
         lenient().when(mockAccount.getAccountId()).thenReturn(ACCOUNT_ID);
         when(accountAccessResolver.resolveAccountOwnedAndActive(USER_ID, ACCOUNT_ID))
             .thenReturn(mockAccount);
+        lenient().when(stringRedisTemplate.opsForValue()).thenReturn(valueOps);
     }
 
     @AfterEach
@@ -95,8 +96,8 @@ class OrderApiServiceTest {
 
         @BeforeEach
         void givenLastTradedPrice() {
-            when(orderBookRegistry.getLastTradedPrice(STOCK_CODE))
-                .thenReturn(Optional.of(REFERENCE_PRICE));
+            when(valueOps.get(RedisKeys.ltp(STOCK_CODE)))
+                .thenReturn(REFERENCE_PRICE.toPlainString());
         }
 
         @Test
@@ -136,7 +137,7 @@ class OrderApiServiceTest {
 
         @BeforeEach
         void givenNoLastTradedPrice() {
-            when(orderBookRegistry.getLastTradedPrice(STOCK_CODE)).thenReturn(Optional.empty());
+            when(valueOps.get(RedisKeys.ltp(STOCK_CODE))).thenReturn(null);
         }
 
         @Test

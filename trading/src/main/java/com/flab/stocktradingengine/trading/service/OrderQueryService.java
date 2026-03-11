@@ -11,7 +11,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.flab.stocktradingengine.trading.entity.Order;
-import com.flab.stocktradingengine.trading.entity.OrderSide;
 import com.flab.stocktradingengine.trading.entity.OrderStatus;
 import com.flab.stocktradingengine.trading.repository.OrderRepository;
 
@@ -29,13 +28,13 @@ public class OrderQueryService {
     /**
      * 주문 단건 조회. 권한 검증·취소 이벤트 발행 등 복수 필드가 필요한 경우 사용.
      */
-    @Transactional(readOnly = true)
     public Order getOrder(Long orderId) {
         return findOrder(orderId);
     }
 
     /**
      * 주문 소유 계좌 ID 조회. 권한 검증용으로 api에서 사용.
+     * account 가 Lazy 로딩이므로 트랜잭션 필요.
      */
     @Transactional(readOnly = true)
     public Long getAccountIdByOrderId(Long orderId) {
@@ -45,7 +44,6 @@ public class OrderQueryService {
     /**
      * 주문 종목코드 조회. 취소 이벤트 Kafka 발행 시 토픽 결정용.
      */
-    @Transactional(readOnly = true)
     public String getStockCodeByOrderId(Long orderId) {
         return findOrder(orderId).getStockCode();
     }
@@ -59,7 +57,6 @@ public class OrderQueryService {
      * 특정 종목의 PENDING 주문을 접수 시각 오름차순으로 조회.
      * Kafka 파티션 할당 시 해당 종목 OrderBook 복원에 사용.
      */
-    @Transactional(readOnly = true)
     public List<Order> getPendingByStockCodeSortedByTime(String stockCode) {
         return orderRepository.findByStatusAndStockCodeOrderByOrderAtAsc(OrderStatus.PENDING, stockCode);
     }
@@ -88,10 +85,6 @@ public class OrderQueryService {
      * 계좌별 매수 주문 증거금 홀딩 합계. 계좌 상세(출금가능 등) 계산용.
      */
     public BigDecimal getReservedMarginSumByAccountId(Long accountId) {
-        return orderRepository.findByAccount_AccountIdAndReservedMarginIsNotNull(accountId)
-            .stream()
-            .filter(o -> o.getSide() == OrderSide.BUY)
-            .map(Order::getReservedMargin)
-            .reduce(BigDecimal.ZERO, BigDecimal::add);
+        return orderRepository.sumReservedMarginByAccountId(accountId);
     }
 }
