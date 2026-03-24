@@ -4,7 +4,6 @@ import java.util.List;
 
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import com.flab.stocktradingengine.dto.common.PagedResponse;
 import com.flab.stocktradingengine.dto.market.StockSearchDto;
@@ -18,7 +17,6 @@ import lombok.RequiredArgsConstructor;
  */
 @Service
 @RequiredArgsConstructor
-@Transactional(readOnly = true)
 public class StockSearchApiService {
 
     private final StockSearchService stockSearchService;

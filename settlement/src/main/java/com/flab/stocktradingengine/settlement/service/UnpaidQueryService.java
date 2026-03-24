@@ -1,11 +1,14 @@
 package com.flab.stocktradingengine.settlement.service;
 
 import java.math.BigDecimal;
+import java.util.List;
+import java.util.Optional;
 
 import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.flab.stocktradingengine.settlement.entity.Unpaid;
 import com.flab.stocktradingengine.settlement.entity.UnpaidStatus;
 import com.flab.stocktradingengine.settlement.repository.UnpaidRepository;
 
@@ -27,7 +30,21 @@ public class UnpaidQueryService {
     public BigDecimal getPendingUnpaidSumByAccountId(@NonNull Long accountId) {
         return unpaidRepository.findByAccount_AccountIdAndStatus(accountId, UnpaidStatus.PENDING)
             .stream()
-            .map(u -> u.getAmount())
+            .map(Unpaid::getAmount)
             .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    /**
+     * 계좌별 PENDING 미결제 목록. API 조회·미수금 집계용.
+     */
+    public List<Unpaid> getPendingUnpaidsByAccountId(@NonNull Long accountId) {
+        return unpaidRepository.findByAccount_AccountIdAndStatus(accountId, UnpaidStatus.PENDING);
+    }
+
+    /**
+     * 미결제 ID로 단건 조회. 변제 시 금액·검증용.
+     */
+    public Optional<Unpaid> getUnpaidByUnpaidId(@NonNull String unpaidId) {
+        return unpaidRepository.findByUnpaidId(unpaidId);
     }
 }

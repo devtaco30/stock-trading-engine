@@ -35,32 +35,43 @@ public class AccountService {
     private final AccountStatusHistoryRepository accountStatusHistoryRepository;
     
 
-    /** 특정 계좌 조회 */
-    @Transactional(readOnly = true)
+    /**
+     * 특정 계좌 조회.
+     * 단일 repository 호출만 하므로 서비스 레벨 트랜잭션 없음(Repository에서 트랜잭션 처리).
+     */
     public Optional<Account> getAccount(Long accountId) {
         return accountRepository.findByAccountId(accountId);
     }
 
-    /** 계좌 행 락 (SELECT FOR UPDATE). 주문 접수 등 정합성 필요 시 호출. */
+    /**
+     * 계좌 행 락 (SELECT FOR UPDATE). 주문 접수 등 정합성 필요 시 호출.
+     * 락은 트랜잭션 종료 시까지 유지되므로 호출자가 같은 트랜잭션 내에서 갱신할 때만 의미 있음.
+     */
     @Transactional
     public Optional<Account> getAccountByIdForUpdate(Long accountPk) {
         return accountRepository.findByIdForUpdate(accountPk);
     }
 
-    /** 해당 종목 보유 행 락 (SELECT FOR UPDATE). 매도 주문 접수 시 정합성용. */
+    /**
+     * 해당 종목 보유 행 락 (SELECT FOR UPDATE). 매도 주문 접수 시 정합성용.
+     * 락 유지를 위해 트랜잭션 필수.
+     */
     @Transactional
     public Optional<Holding> getHoldingForUpdate(Long accountPk, String stockCode) {
         return holdingRepository.findByAccount_IdAndStockCodeForUpdate(accountPk, stockCode);
     }
 
-    /** 사용자 소유 계좌 목록 조회. 인증된 사용자의 계좌만 반환. */
-    @Transactional(readOnly = true)
+    /**
+     * 사용자 소유 계좌 목록 조회. 인증된 사용자의 계좌만 반환.
+     * 단일 repository 호출만 하므로 서비스 레벨 트랜잭션 없음.
+     */
     public List<Account> getAccountsByUserId(Long userId) {
         return accountRepository.findByUser_Id(userId);
     }
 
     /**
      * 계좌 상태 변경. 전이 규칙 검증 후 변경하고 이력을 남긴다.
+     * 계좌 UPDATE와 이력 INSERT가 원자적으로 처리되어야 하므로 트랜잭션 필수.
      *
      * @param changedByUser null이면 시스템에 의한 변경
      */
@@ -81,7 +92,10 @@ public class AccountService {
         );
     }
 
-    @Transactional(readOnly = true)
+    /**
+     * 계좌별 보유 종목 목록 페이징 조회.
+     * 단일 repository 호출만 하므로 서비스 레벨 트랜잭션 없음.
+     */
     public PagedResponse<Holding> getHoldingsPage(Long accountId, Pageable pageable) {
         Page<Holding> page = holdingRepository.findByAccount_AccountId(accountId, pageable);
         return PagedResponse.of(page.getContent(), page.getNumber(), page.getSize(), page.getTotalElements());
@@ -89,6 +103,8 @@ public class AccountService {
 
     /**
      * 입금. 계좌 잔액에 금액을 더한다. 동시 입출금 방지를 위해 비관적 락 사용.
+     * 같은 트랜잭션 내에서 조회(락) → 검증 → 갱신이 원자적으로 이루어져야 하므로 트랜잭션 필수.
+     *
      * @return 반영 후 잔액
      */
     @Transactional
@@ -105,6 +121,8 @@ public class AccountService {
 
     /**
      * 출금. 계좌 잔액에서 금액을 뺀다. 잔액 부족 시 예외. 동시 입출금 방지를 위해 비관적 락 사용.
+     * 같은 트랜잭션 내에서 조회(락) → 검증 → 갱신이 원자적으로 이루어져야 하므로 트랜잭션 필수.
+     *
      * @return 반영 후 잔액
      */
     @Transactional
