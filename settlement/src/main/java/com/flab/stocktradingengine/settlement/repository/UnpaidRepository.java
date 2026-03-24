@@ -24,7 +24,7 @@ public interface UnpaidRepository extends JpaRepository<Unpaid, Long> {
 
     /**
      * status = PENDING 인 경우에만 SETTLED 로 원자적 업데이트.
-     * 체크와 변경을 단일 쿼리로 처리해 dirty checking 의존을 제거하고 동시 요청 시 중복 정산을 방지한다.
+     * 체크와 변경을 단일 쿼리로 처리해 dirty checking 의존을 제거하고 동시 요청 시 중복 정산을 방지.
      *
      * @return 실제로 변경된 행 수 (0 = 이미 정산됐거나 해당 계좌의 건이 아님)
      */

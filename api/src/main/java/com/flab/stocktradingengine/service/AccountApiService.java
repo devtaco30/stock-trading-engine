@@ -36,7 +36,6 @@ import lombok.RequiredArgsConstructor;
  */
 @Service
 @RequiredArgsConstructor
-@Transactional(readOnly = true)
 public class AccountApiService {
 
     private final AccountReadFacade accountReadFacade;
@@ -45,7 +44,9 @@ public class AccountApiService {
 
     /**
      * 계좌 상세 조회. 본인 소유 계좌만 허용하며, 타인 계좌 요청 시 403.
+     * 한 메서드 내 여러 조회가 같은 스냅샷을 보도록 readOnly 트랜잭션 사용.
      */
+    @Transactional(readOnly = true)
     public AccountDetailDto getAccountDetail(Long userId, Long accountId) {
         return accountAccessResolver.resolveAccountOwnedBy(userId, accountId)
                 .map(account -> {
@@ -57,7 +58,9 @@ public class AccountApiService {
 
     /**
      * 계좌 목록 조회 (해당 사용자 소유 계좌만).
+     * 한 메서드 내 여러 조회가 같은 스냅샷을 보도록 readOnly 트랜잭션 사용.
      */
+    @Transactional(readOnly = true)
     public List<AccountDto> getAccounts(Long userId) {
         return accountReadFacade.getAccountsByUserId(userId).stream()
                 .map(account -> {
@@ -69,7 +72,9 @@ public class AccountApiService {
 
     /**
      * 보유 주식 조회 (페이지네이션). 본인 소유 계좌만 허용, 타인 계좌 요청 시 403.
+     * 한 메서드 내 여러 조회가 같은 스냅샷을 보도록 readOnly 트랜잭션 사용.
      */
+    @Transactional(readOnly = true)
     public PagedResponse<HoldingDto> getHoldingsPaged(Long userId, Long accountId, int page, int size) {
         accountAccessResolver.resolveAccountOwnedBy(userId, accountId);
 
@@ -89,8 +94,11 @@ public class AccountApiService {
         return PagedResponse.of(holdings, holdingPaged.getPagination());
     }
 
-    /** 입금. 소유·ACTIVE 검증 후 계좌 쓰기는 퍼사드 경유. */
-    @Transactional(readOnly = false)
+    /**
+     * 입금. 소유·ACTIVE 검증 후 계좌 쓰기는 퍼사드 경유.
+     * Resolver 검증과 쓰기를 한 트랜잭션으로 묶어 정합성(같은 스냅샷)과 효율(커넥션 1회 사용) 확보.
+     */
+    @Transactional
     public TransactionResponse deposit(Long userId, Long accountId, BigDecimal amount) {
         accountAccessResolver.resolveAccountOwnedAndActive(userId, accountId);
         BigDecimal balance = accountCommandFacade.deposit(accountId, amount);
@@ -100,8 +108,11 @@ public class AccountApiService {
             .build();
     }
 
-    /** 출금. 소유·ACTIVE 검증 후 계좌 쓰기는 퍼사드 경유. */
-    @Transactional(readOnly = false)
+    /**
+     * 출금. 소유·ACTIVE 검증 후 계좌 쓰기는 퍼사드 경유.
+     * Resolver 검증과 쓰기를 한 트랜잭션으로 묶어 정합성(같은 스냅샷)과 효율(커넥션 1회 사용) 확보.
+     */
+    @Transactional
     public TransactionResponse withdraw(Long userId, Long accountId, BigDecimal amount) {
         accountAccessResolver.resolveAccountOwnedAndActive(userId, accountId);
         BigDecimal balance = accountCommandFacade.withdraw(accountId, amount);
