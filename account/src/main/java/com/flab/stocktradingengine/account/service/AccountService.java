@@ -2,7 +2,6 @@ package com.flab.stocktradingengine.account.service;
 
 import java.math.BigDecimal;
 import java.util.List;
-import java.util.NoSuchElementException;
 import java.util.Optional;
 
 import org.springframework.data.domain.Page;
@@ -18,7 +17,10 @@ import com.flab.stocktradingengine.account.entity.Holding;
 import com.flab.stocktradingengine.account.repository.AccountRepository;
 import com.flab.stocktradingengine.user.entity.User;
 import com.flab.stocktradingengine.account.repository.AccountStatusHistoryRepository;
+import com.flab.stocktradingengine.account.exception.InsufficientResourceException;
 import com.flab.stocktradingengine.account.repository.HoldingRepository;
+import com.flab.stocktradingengine.exception.ResourceNotFoundException;
+import com.flab.stocktradingengine.exception.InvalidRequestException;
 
 import lombok.RequiredArgsConstructor;
 
@@ -78,11 +80,11 @@ public class AccountService {
     @Transactional
     public void changeStatus(Long accountId, AccountStatus toStatus, User changedByUser, String reason) {
         Account account = accountRepository.findByAccountId(accountId)
-            .orElseThrow(() -> new NoSuchElementException("Account not found: " + accountId));
+            .orElseThrow(() -> new ResourceNotFoundException("Account not found: " + accountId));
 
         AccountStatus fromStatus = account.getStatus();
         if (!fromStatus.canTransitionTo(toStatus)) {
-            throw new IllegalStateException(
+            throw new InvalidRequestException(
                 "Invalid status transition: " + fromStatus + " -> " + toStatus);
         }
 
@@ -110,10 +112,10 @@ public class AccountService {
     @Transactional
     public BigDecimal deposit(Long accountId, BigDecimal amount) {
         if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new IllegalArgumentException("입금 금액은 0보다 커야 합니다.");
+            throw new InvalidRequestException("입금 금액은 0보다 커야 합니다.");
         }
         Account account = accountRepository.findByAccountIdForUpdate(accountId)
-            .orElseThrow(() -> new NoSuchElementException("Account not found: " + accountId));
+            .orElseThrow(() -> new ResourceNotFoundException("Account not found: " + accountId));
         BigDecimal newBalance = account.getBalance().add(amount);
         account.changeBalance(newBalance);
         return newBalance;
@@ -128,13 +130,13 @@ public class AccountService {
     @Transactional
     public BigDecimal withdraw(Long accountId, BigDecimal amount) {
         if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new IllegalArgumentException("출금 금액은 0보다 커야 합니다.");
+            throw new InvalidRequestException("출금 금액은 0보다 커야 합니다.");
         }
         Account account = accountRepository.findByAccountIdForUpdate(accountId)
-            .orElseThrow(() -> new NoSuchElementException("Account not found: " + accountId));
+            .orElseThrow(() -> new ResourceNotFoundException("Account not found: " + accountId));
         BigDecimal newBalance = account.getBalance().subtract(amount);
         if (newBalance.compareTo(BigDecimal.ZERO) < 0) {
-            throw new IllegalStateException("잔액 부족");
+            throw new InsufficientResourceException("잔액 부족");
         }
         account.changeBalance(newBalance);
         return newBalance;
@@ -146,7 +148,7 @@ public class AccountService {
     @Transactional
     public void decreaseHolding(Long accountId, String stockCode, int quantity) {
         Holding holding = holdingRepository.findByAccount_AccountIdAndStockCode(accountId, stockCode)
-            .orElseThrow(() -> new NoSuchElementException("Holding not found: accountId=" + accountId + ", stockCode=" + stockCode));
+            .orElseThrow(() -> new ResourceNotFoundException("Holding not found: accountId=" + accountId + ", stockCode=" + stockCode));
         holding.subtractQuantity(quantity);
     }
 
@@ -156,7 +158,7 @@ public class AccountService {
     @Transactional
     public void addHoldingOrIncreaseQuantity(Long accountId, String stockCode, int quantity, BigDecimal executionPrice) {
         Account account = accountRepository.findByAccountId(accountId)
-            .orElseThrow(() -> new NoSuchElementException("Account not found: " + accountId));
+            .orElseThrow(() -> new ResourceNotFoundException("Account not found: " + accountId));
 
         holdingRepository.findByAccount_IdAndStockCodeForUpdate(account.getId(), stockCode)
             .ifPresentOrElse(

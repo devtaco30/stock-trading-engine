@@ -41,6 +41,9 @@ public class Order {
     @Column(name = "order_id", nullable = false, unique = true, updatable = false)
     private Long orderId;
 
+    @Column(name = "account_id", insertable = false, updatable = false)
+    private Long accountId;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "account_id", nullable = false)
     private Account account;

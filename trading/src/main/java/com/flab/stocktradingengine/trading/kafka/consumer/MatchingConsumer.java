@@ -8,7 +8,8 @@ import java.util.Map;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.springframework.context.annotation.Profile;
-import org.springframework.data.redis.core.StringRedisTemplate;
+import com.flab.stocktradingengine.trading.redis.LtpRedisRepository;
+import com.flab.stocktradingengine.trading.redis.OrderbookRedisRepository;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.listener.ConsumerSeekAware;
@@ -27,7 +28,6 @@ import com.flab.stocktradingengine.trading.matching.FillResult;
 import com.flab.stocktradingengine.trading.matching.OrderBook;
 import com.flab.stocktradingengine.trading.matching.OrderBookRegistry;
 import com.flab.stocktradingengine.trading.matching.OrderEntry;
-import com.flab.stocktradingengine.trading.redis.RedisKeys;
 import com.flab.stocktradingengine.trading.service.OrderQueryService;
 
 import lombok.RequiredArgsConstructor;
@@ -50,6 +50,7 @@ import lombok.extern.slf4j.Slf4j;
  *
  * <h3>호가창 복원 (스케일 아웃 대응)</h3>
  * <p>{@link ConsumerSeekAware#onPartitionsAssigned} 에서 이 인스턴스에 할당된
+ * 
  * 파티션(= 종목코드)의 PENDING 주문만 로드한다.</p>
  *
  * <h3>멱등성</h3>
@@ -62,10 +63,11 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class MatchingConsumer implements ConsumerSeekAware {
 
-    private final OrderBookRegistry orderBookRegistry;
     private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final OrderBookRegistry orderBookRegistry;
     private final OrderQueryService orderQueryService;
-    private final StringRedisTemplate stringRedisTemplate;
+    private final LtpRedisRepository ltpRedisRepository;
+    private final OrderbookRedisRepository orderbookRedisRepository;
     private final ObjectMapper objectMapper;
 
     // ── 파티션 할당/반환 ────────────────────────────────────────────────────
@@ -136,18 +138,24 @@ public class MatchingConsumer implements ConsumerSeekAware {
     // ── 내부 유틸 ───────────────────────────────────────────────────────────
 
     private void loadAndMatch(String stockCode) {
+        // 호가창 조회 또는 생성
         OrderBook book = orderBookRegistry.getOrCreate(stockCode);
+        // db 에 pending 상태인 주문 조회
         List<Order> pending = orderQueryService.getPendingByStockCodeSortedByTime(stockCode);
+        // pending 주문을 호가창에 추가
         pending.forEach(order -> {
             if (!book.containsOrder(order.getOrderId())) {
                 book.addOrder(toEntry(order));
             }
         });
+        // 매칭 실행
         runMatch(stockCode, book);
     }
 
     private void runMatch(String stockCode, OrderBook book) {
+        // 매칭 실행
         while (true) {
+            // 호가창에서 매칭 가능한 주문 조회
             java.util.Optional<FillResult> result = book.match();
             if (result.isEmpty()) break;
 
@@ -157,8 +165,7 @@ public class MatchingConsumer implements ConsumerSeekAware {
                 fill.filledQuantity(), fill.matchPrice());
 
             orderBookRegistry.updateLastTradedPrice(stockCode, fill.matchPrice());
-            stringRedisTemplate.opsForValue().set(
-                RedisKeys.ltp(stockCode), fill.matchPrice().toPlainString());
+            ltpRedisRepository.set(stockCode, fill.matchPrice());
             kafkaTemplate.send(KafkaTopics.fills(stockCode), stockCode,
                 new TradeFilledEvent(
                     stockCode,
@@ -173,21 +180,19 @@ public class MatchingConsumer implements ConsumerSeekAware {
         OrderBook book = orderBookRegistry.get(stockCode);
         if (book == null) return;
         List<Level> bids = book.getBidLevels(10).stream()
-            .map(e -> new Level(e.getKey().toPlainString(), e.getValue()))
+            .map(e -> new Level(e.getKey(), e.getValue()))
             .toList();
         List<Level> asks = book.getAskLevels(10).stream()
-            .map(e -> new Level(e.getKey().toPlainString(), e.getValue()))
+            .map(e -> new Level(e.getKey(), e.getValue()))
             .toList();
         try {
-            stringRedisTemplate.opsForValue().set(
-                RedisKeys.orderbook(stockCode),
-                objectMapper.writeValueAsString(new Snapshot(bids, asks)));
+            orderbookRedisRepository.set(stockCode, objectMapper.writeValueAsString(new Snapshot(bids, asks)));
         } catch (JsonProcessingException e) {
             log.warn("[호가창 직렬화 실패] stockCode={}", stockCode, e);
         }
     }
 
-    private record Level(String price, int quantity) {}
+    private record Level(BigDecimal price, int quantity) {}
     private record Snapshot(List<Level> bids, List<Level> asks) {}
 
     private static String extractStockCode(String topic) {
@@ -210,7 +215,7 @@ public class MatchingConsumer implements ConsumerSeekAware {
     private static OrderEntry toEntry(Order order) {
         OrderEntry entry = new OrderEntry(
             order.getOrderId(),
-            order.getAccount().getAccountId(),
+            order.getAccountId(),
             order.getStockCode(),
             order.getSide(),
             order.getPrice(),

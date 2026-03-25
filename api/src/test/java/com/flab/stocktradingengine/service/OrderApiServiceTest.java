@@ -2,53 +2,44 @@ package com.flab.stocktradingengine.service;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
-import java.time.Instant;
 import java.util.Optional;
 
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-
-import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.data.redis.core.ValueOperations;
+import org.springframework.kafka.core.KafkaTemplate;
 
 import com.flab.stocktradingengine.account.entity.Account;
-import com.flab.stocktradingengine.dto.order.BuyOrderRequest;
-import com.flab.stocktradingengine.facade.AccountReadFacade;
+import com.flab.stocktradingengine.api.dto.order.BuyOrderRequest;
+import com.flab.stocktradingengine.api.redis.LtpRedisRepository;
+import com.flab.stocktradingengine.api.resolver.AccountAccessResolver;
+import com.flab.stocktradingengine.api.service.OrderApiService;
+import com.flab.stocktradingengine.exception.InvalidRequestException;
+import com.flab.stocktradingengine.exception.ResourceNotFoundException;
 import com.flab.stocktradingengine.market.service.QuoteService;
 import com.flab.stocktradingengine.market.view.QuoteView;
-import com.flab.stocktradingengine.resolver.AccountAccessResolver;
-import com.flab.stocktradingengine.trading.redis.RedisKeys;
-import com.flab.stocktradingengine.trading.service.OrderCommandService;
 import com.flab.stocktradingengine.trading.service.OrderQueryService;
-import com.flab.stocktradingengine.trading.view.PlaceOrderResultView;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("OrderApiService - 가격 제한폭 검증 단위 테스트")
 class OrderApiServiceTest {
 
     @Mock AccountAccessResolver accountAccessResolver;
-    @Mock OrderCommandService orderCommandService;
     @Mock OrderQueryService orderQueryService;
-    @Mock StringRedisTemplate stringRedisTemplate;
-    @Mock @SuppressWarnings("unchecked") ValueOperations<String, String> valueOps;
-    @Mock ApplicationEventPublisher eventPublisher;
-    @Mock AccountReadFacade accountReadFacade;
+    @Mock LtpRedisRepository ltpRedisRepository;
     @Mock QuoteService quoteService;
+    @SuppressWarnings("rawtypes")
+    @Mock KafkaTemplate kafkaTemplate;
 
     @InjectMocks
     OrderApiService orderApiService;
@@ -62,20 +53,10 @@ class OrderApiServiceTest {
 
     @BeforeEach
     void setUp() {
-        // registerAfterCommit()이 TransactionSynchronizationManager를 사용하므로 단위 테스트에서 활성화 필요
-        TransactionSynchronizationManager.initSynchronization();
         mockAccount = mock(Account.class);
-        // getAccountId()는 성공 경로에서만 호출됨 (OrderEntry 생성 시점)
-        // 예외 케이스에서는 validatePriceLimit에서 조기 종료되므로 lenient 처리
         lenient().when(mockAccount.getAccountId()).thenReturn(ACCOUNT_ID);
         when(accountAccessResolver.resolveAccountOwnedAndActive(USER_ID, ACCOUNT_ID))
             .thenReturn(mockAccount);
-        lenient().when(stringRedisTemplate.opsForValue()).thenReturn(valueOps);
-    }
-
-    @AfterEach
-    void tearDown() {
-        TransactionSynchronizationManager.clearSynchronization();
     }
 
     private BuyOrderRequest buyRequest(BigDecimal price) {
@@ -96,8 +77,7 @@ class OrderApiServiceTest {
 
         @BeforeEach
         void givenLastTradedPrice() {
-            when(valueOps.get(RedisKeys.ltp(STOCK_CODE)))
-                .thenReturn(REFERENCE_PRICE.toPlainString());
+            when(ltpRedisRepository.get(STOCK_CODE)).thenReturn(Optional.of(REFERENCE_PRICE));
         }
 
         @Test
@@ -105,7 +85,7 @@ class OrderApiServiceTest {
         void 상한_초과_예외() {
             // 70000 * 1.3 = 91000 → 91001은 초과
             assertThatThrownBy(() -> orderApiService.placeBuyOrder(USER_ID, buyRequest(new BigDecimal("91001"))))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(InvalidRequestException.class)
                 .hasMessageContaining("가격 제한폭 초과");
         }
 
@@ -114,7 +94,7 @@ class OrderApiServiceTest {
         void 하한_미달_예외() {
             // 70000 * 0.7 = 49000 → 48999는 미달
             assertThatThrownBy(() -> orderApiService.placeBuyOrder(USER_ID, buyRequest(new BigDecimal("48999"))))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(InvalidRequestException.class)
                 .hasMessageContaining("가격 제한폭 초과");
         }
 
@@ -122,9 +102,6 @@ class OrderApiServiceTest {
         @DisplayName("기준가 ±30% 경계 안 주문은 통과")
         void 유효한_가격_통과() {
             // 70000 기준 → 상한 91000, 하한 49000 → 70000은 유효
-            when(orderCommandService.placeBuyOrder(any(), any(), any()))
-                .thenReturn(new PlaceOrderResultView(1L, "PENDING", Instant.now().toEpochMilli(), BigDecimal.ZERO));
-
             assertDoesNotThrow(() -> orderApiService.placeBuyOrder(USER_ID, buyRequest(REFERENCE_PRICE)));
         }
     }
@@ -137,7 +114,7 @@ class OrderApiServiceTest {
 
         @BeforeEach
         void givenNoLastTradedPrice() {
-            when(valueOps.get(RedisKeys.ltp(STOCK_CODE))).thenReturn(null);
+            when(ltpRedisRepository.get(STOCK_CODE)).thenReturn(Optional.empty());
         }
 
         @Test
@@ -151,7 +128,7 @@ class OrderApiServiceTest {
 
             // 68000 * 1.3 = 88400 → 88401은 초과
             assertThatThrownBy(() -> orderApiService.placeBuyOrder(USER_ID, buyRequest(new BigDecimal("88401"))))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(InvalidRequestException.class)
                 .hasMessageContaining("가격 제한폭 초과");
         }
 
@@ -161,7 +138,7 @@ class OrderApiServiceTest {
             when(quoteService.getQuote(STOCK_CODE)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> orderApiService.placeBuyOrder(USER_ID, buyRequest(new BigDecimal("70000"))))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessageContaining("기준가를 조회할 수 없는 종목");
         }
     }

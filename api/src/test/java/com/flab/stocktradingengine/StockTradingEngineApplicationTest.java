@@ -3,6 +3,8 @@ package com.flab.stocktradingengine;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 
+import com.flab.stocktradingengine.api.StockTradingEngineApplication;
+
 /**
  * 애플리케이션 컨텍스트 로드 검증.
  * H2 in-memory DB, Kafka auto-startup 비활성화(실제 브로커 없이 빈 생성만 검증).

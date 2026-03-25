@@ -107,6 +107,7 @@ public class OrderBook {
      * @return 체결이 발생하면 {@link FillResult}, 체결 불가면 empty
      */
     public Optional<FillResult> match() {
+        
         // Lazy Removal: 매칭 전 각 호가창 앞에 쌓인 무효 엔트리를 제거
         drainInvalid(bids);
         drainInvalid(asks);
