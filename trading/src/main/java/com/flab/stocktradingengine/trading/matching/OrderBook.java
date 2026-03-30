@@ -1,10 +1,13 @@
 package com.flab.stocktradingengine.trading.matching;
 
 import java.math.BigDecimal;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayDeque;
 import java.util.Comparator;
 import java.util.Deque;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -48,7 +51,7 @@ public class OrderBook {
 
     // 매수 호가: 높은 가격 → 낮은 가격 (내림차순)
     private final TreeMap<BigDecimal, Deque<OrderEntry>> bids =
-        new TreeMap<>(Comparator.reverseOrder());
+        new TreeMap<>(Comparator.reverseOrder()); // 내림차순
 
     // 매도 호가: 낮은 가격 → 높은 가격 (오름차순)
     private final TreeMap<BigDecimal, Deque<OrderEntry>> asks =
@@ -57,8 +60,30 @@ public class OrderBook {
     // orderId → OrderEntry 직접 조회. TreeMap 전체 탐색 없이 O(1) 취소·멱등성 체크 가능.
     private final Map<Long, OrderEntry> orderIndex = new HashMap<>();
 
-    // 전량 체결 완료된 주문 ID. orderIndex에서 제거된 후에도 멱등성 체크(containsOrder)에 사용.
-    private final java.util.Set<Long> filledOrderIds = new java.util.HashSet<>();
+    static final int FILLED_ORDER_RETENTION_LIMIT = 5_000;
+    static final Duration FILLED_ORDER_RETENTION_TTL = Duration.ofMinutes(5);
+
+    // 전량 체결 완료된 주문 ID → 체결 시각. LRU bounded + TTL lazy 체크로 메모리 상한 보장.
+    private final Map<Long, Instant> filledOrderTimestamps;
+
+    public OrderBook() {
+        this.filledOrderTimestamps = new LinkedHashMap<>(FILLED_ORDER_RETENTION_LIMIT, 0.75f, false) {
+            @Override
+            protected boolean removeEldestEntry(Map.Entry<Long, Instant> eldest) {
+                return size() > FILLED_ORDER_RETENTION_LIMIT;
+            }
+        };
+    }
+
+    /** 테스트 전용 생성자. retentionLimit 을 작게 지정해 LRU 퇴출 동작을 검증할 때 사용. */
+    OrderBook(int retentionLimit) {
+        this.filledOrderTimestamps = new LinkedHashMap<>(retentionLimit, 0.75f, false) {
+            @Override
+            protected boolean removeEldestEntry(Map.Entry<Long, Instant> eldest) {
+                return size() > retentionLimit;
+            }
+        };
+    }
 
     /**
      * 주문을 호가창에 추가.
@@ -77,7 +102,14 @@ public class OrderBook {
      * at-least-once 환경에서 같은 OrderPlacedEvent 가 중복 수신될 때 재등록을 방지한다.
      */
     public boolean containsOrder(Long orderId) {
-        return orderIndex.containsKey(orderId) || filledOrderIds.contains(orderId);
+        if (orderIndex.containsKey(orderId)) return true;
+        Instant filledAt = filledOrderTimestamps.get(orderId);
+        if (filledAt == null) return false;
+        if (filledAt.isBefore(Instant.now().minus(FILLED_ORDER_RETENTION_TTL))) {
+            filledOrderTimestamps.remove(orderId);
+            return false;
+        }
+        return true;
     }
 
     /**
@@ -205,7 +237,7 @@ public class OrderBook {
         if (entry.isFullyFilled()) {
             level.getValue().pollFirst();
             orderIndex.remove(entry.getOrderId());
-            filledOrderIds.add(entry.getOrderId());
+            filledOrderTimestamps.put(entry.getOrderId(), Instant.now());
             if (level.getValue().isEmpty()) {
                 book.pollFirstEntry();
             }

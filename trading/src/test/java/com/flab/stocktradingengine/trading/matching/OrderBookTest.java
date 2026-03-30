@@ -329,7 +329,7 @@ class OrderBookTest {
         }
 
         @Test
-        @DisplayName("전량 체결 후 containsOrder true — filledOrderIds로 멱등성 유지")
+        @DisplayName("전량 체결 후 containsOrder true — filledOrderTimestamps로 멱등성 유지")
         void 전량체결_후_containsOrder_true() {
             book.addOrder(buy(1L, new BigDecimal("70000"), 10));
             book.addOrder(sell(2L, new BigDecimal("70000"), 10));
@@ -337,6 +337,25 @@ class OrderBookTest {
 
             assertThat(book.containsOrder(1L)).isTrue();
             assertThat(book.containsOrder(2L)).isTrue();
+        }
+
+        @Test
+        @DisplayName("LRU 상한 초과 시 오래된 체결 주문은 containsOrder false")
+        void LRU_상한_초과시_오래된_체결_주문_false() {
+            OrderBook smallBook = new OrderBook(2); // 상한 2개
+
+            smallBook.addOrder(buy(1L, new BigDecimal("70000"), 10));
+            smallBook.addOrder(sell(2L, new BigDecimal("70000"), 10));
+            smallBook.match(); // orderId 1, 2 체결 → filledOrderTimestamps에 2개
+
+            // 상한(2)을 초과하는 3번째 체결 추가 → orderId 1이 LRU로 퇴출
+            smallBook.addOrder(buy(3L, new BigDecimal("70000"), 10));
+            smallBook.addOrder(sell(4L, new BigDecimal("70000"), 10));
+            smallBook.match(); // orderId 3, 4 체결 → 상한 초과로 orderId 1 퇴출
+
+            assertThat(smallBook.containsOrder(1L)).isFalse(); // LRU 퇴출
+            assertThat(smallBook.containsOrder(3L)).isTrue();
+            assertThat(smallBook.containsOrder(4L)).isTrue();
         }
     }
 
