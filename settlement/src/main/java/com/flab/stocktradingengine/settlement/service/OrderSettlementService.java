@@ -53,7 +53,7 @@ public class OrderSettlementService {
         orderRepository.save(order);
 
         accountService.addHoldingOrIncreaseQuantity(
-            order.getAccount().getAccountId(),
+            order.getAccountId(),
             order.getStockCode(),
             order.getQuantity(),
             order.getPrice()
@@ -65,6 +65,20 @@ public class OrderSettlementService {
         LocalDate settlementDate = LocalDate.ofInstant(now, ZoneId.systemDefault()).plusDays(2);
         String unpaidId = String.valueOf(snowflakeIdGenerator.nextId());
         unpaidRepository.save(new Unpaid(unpaidId, order.getAccount(), order, unpaidAmount, settlementDate));
+    }
+
+    /**
+     * 매수·매도 주문 부분 체결을 단일 트랜잭션으로 반영.
+     *
+     * <p>self-invocation이므로 내부 {@code fillBuyOrderPartially}/{@code fillSellOrderPartially}의
+     * {@code @Transactional}은 무시되고 이 메서드의 트랜잭션에 합류한다.
+     * 매수 DB 반영과 매도 DB 반영이 원자적으로 처리된다.</p>
+     */
+    @Transactional
+    public void fillTradePartially(Long buyOrderId, Long sellOrderId,
+                                   int fillQty, BigDecimal matchPrice) {
+        fillBuyOrderPartially(buyOrderId, fillQty, matchPrice);
+        fillSellOrderPartially(sellOrderId, fillQty);
     }
 
     /**
@@ -80,7 +94,7 @@ public class OrderSettlementService {
         Order order = orderRepository.findByOrderId(orderId)
             .orElseThrow(() -> new IllegalArgumentException("Order not found: " + orderId));
 
-        if (order.getSide() != OrderSide.BUY || order.getStatus() == OrderStatus.CANCELLED) {
+        if (order.getSide() != OrderSide.BUY || order.getStatus() != OrderStatus.PENDING) {
             log.warn("[매수 부분 체결 무시] orderId={} side={} status={}", orderId, order.getSide(), order.getStatus());
             return;
         }
@@ -89,8 +103,7 @@ public class OrderSettlementService {
         order.addFilled(fillQty, now);
         orderRepository.save(order);
 
-        Long accountId = order.getAccount().getAccountId();
-        accountService.addHoldingOrIncreaseQuantity(accountId, order.getStockCode(), fillQty, matchPrice);
+        accountService.addHoldingOrIncreaseQuantity(order.getAccountId(), order.getStockCode(), fillQty, matchPrice);
 
         BigDecimal marginRate = order.getAccount().getMarginRate();
         BigDecimal unpaidAmount = matchPrice.multiply(BigDecimal.valueOf(fillQty))
@@ -114,7 +127,7 @@ public class OrderSettlementService {
         Order order = orderRepository.findByOrderId(orderId)
             .orElseThrow(() -> new IllegalArgumentException("Order not found: " + orderId));
 
-        if (order.getSide() != OrderSide.SELL || order.getStatus() == OrderStatus.CANCELLED) {
+        if (order.getSide() != OrderSide.SELL || order.getStatus() != OrderStatus.PENDING) {
             log.warn("[매도 부분 체결 무시] orderId={} side={} status={}", orderId, order.getSide(), order.getStatus());
             return;
         }
@@ -123,6 +136,6 @@ public class OrderSettlementService {
         order.addFilled(fillQty, now);
         orderRepository.save(order);
 
-        accountService.decreaseHolding(order.getAccount().getAccountId(), order.getStockCode(), fillQty);
+        accountService.decreaseHolding(order.getAccountId(), order.getStockCode(), fillQty);
     }
 }

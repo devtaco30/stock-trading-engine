@@ -38,32 +38,22 @@ public class SettlementConsumer {
     @KafkaListener(topicPattern = "fills\\..*", groupId = "settlement-worker")
     public void consume(ConsumerRecord<String, Object> record, Acknowledgment ack) {
         Object event = record.value();
-        try {
-            if (event instanceof TradeFilledEvent fill) {
-                handleFill(fill);
-            } else {
-                log.warn("[정산 컨슈머] 알 수 없는 이벤트 타입: topic={} type={}",
-                    record.topic(), event == null ? "null" : event.getClass().getSimpleName());
-            }
-        } finally {
-            ack.acknowledge();
+        if (event instanceof TradeFilledEvent fill) {
+            handleFill(fill); // DB 실패 시 예외 전파 → ack 미전송 → Kafka 재전달
+        } else {
+            log.warn("[정산 컨슈머] 알 수 없는 이벤트 타입: topic={} type={}",
+                record.topic(), event == null ? "null" : event.getClass().getSimpleName());
         }
+        ack.acknowledge();
     }
 
     private void handleFill(TradeFilledEvent fill) {
-        try {
-            orderSettlementService.fillBuyOrderPartially(
-                fill.buyOrderId(), fill.filledQuantity(), fill.matchPrice());
+        orderSettlementService.fillTradePartially(
+            fill.buyOrderId(), fill.sellOrderId(),
+            fill.filledQuantity(), fill.matchPrice());
 
-            orderSettlementService.fillSellOrderPartially(
-                fill.sellOrderId(), fill.filledQuantity());
-
-            log.info("[체결 DB 반영 완료] 종목={} 매수={} 매도={} 수량={} 가격={}",
-                fill.stockCode(), fill.buyOrderId(), fill.sellOrderId(),
-                fill.filledQuantity(), fill.matchPrice());
-
-        } catch (Exception e) {
-            log.error("[체결 DB 반영 실패] 종목={} fill={}", fill.stockCode(), fill, e);
-        }
+        log.info("[체결 DB 반영 완료] 종목={} 매수={} 매도={} 수량={} 가격={}",
+            fill.stockCode(), fill.buyOrderId(), fill.sellOrderId(),
+            fill.filledQuantity(), fill.matchPrice());
     }
 }
