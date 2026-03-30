@@ -45,6 +45,13 @@ public class Order {
     @JoinColumn(name = "account_id", nullable = false)
     private Account account;
 
+    /**
+     * FK 컬럼 직접 읽기. Lazy 연관을 로드하지 않고 accountId를 조회할 때 사용.
+     * insertable/updatable=false — account 연관이 이 컬럼을 관리한다.
+     */
+    @Column(name = "account_id", insertable = false, updatable = false)
+    private Long accountId;
+
     @Column(nullable = false, length = 10)
     private String stockCode; // 주식 종목 코드
 

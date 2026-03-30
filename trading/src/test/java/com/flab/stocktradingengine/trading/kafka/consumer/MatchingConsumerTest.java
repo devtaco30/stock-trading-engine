@@ -254,12 +254,9 @@ class MatchingConsumerTest {
     // ── 헬퍼 ─────────────────────────────────────────────────────────────────
 
     private Order pendingOrder(long orderId, OrderSide side, String price) {
-        var account = mock(com.flab.stocktradingengine.account.entity.Account.class);
-        when(account.getAccountId()).thenReturn(100L);
-
         Order order = mock(Order.class);
         when(order.getOrderId()).thenReturn(orderId);
-        when(order.getAccount()).thenReturn(account);
+        when(order.getAccountId()).thenReturn(100L);
         when(order.getStockCode()).thenReturn(STOCK_CODE);
         when(order.getSide()).thenReturn(side);
         when(order.getPrice()).thenReturn(new BigDecimal(price));

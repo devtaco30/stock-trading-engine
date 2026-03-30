@@ -210,7 +210,7 @@ public class MatchingConsumer implements ConsumerSeekAware {
     private static OrderEntry toEntry(Order order) {
         OrderEntry entry = new OrderEntry(
             order.getOrderId(),
-            order.getAccount().getAccountId(),
+            order.getAccountId(),
             order.getStockCode(),
             order.getSide(),
             order.getPrice(),
