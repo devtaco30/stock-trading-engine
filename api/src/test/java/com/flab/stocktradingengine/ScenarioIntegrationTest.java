@@ -15,7 +15,7 @@ import org.springframework.web.client.RestClient;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jayway.jsonpath.JsonPath;
-import com.flab.stocktradingengine.dto.order.BuyOrderRequest;
+import com.flab.stocktradingengine.api.dto.order.BuyOrderRequest;
 
 /**
  * 시나리오 통합 테스트

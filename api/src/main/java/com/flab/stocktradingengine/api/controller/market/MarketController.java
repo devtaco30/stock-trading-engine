@@ -1,0 +1,46 @@
+package com.flab.stocktradingengine.api.controller.market;
+
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.flab.stocktradingengine.dto.common.ApiResponse;
+import com.flab.stocktradingengine.dto.common.PagedResponse;
+import com.flab.stocktradingengine.api.dto.market.OrderbookDto;
+import com.flab.stocktradingengine.api.dto.market.QuoteDto;
+import com.flab.stocktradingengine.api.dto.market.StockSearchDto;
+import com.flab.stocktradingengine.api.service.OrderbookApiService;
+import com.flab.stocktradingengine.api.service.QuoteApiService;
+import com.flab.stocktradingengine.api.service.StockSearchApiService;
+
+import lombok.RequiredArgsConstructor;
+
+@RestController
+@RequestMapping("/api/v1/stocks")
+@RequiredArgsConstructor
+public class MarketController {
+
+    private final QuoteApiService quoteApiService;
+    private final StockSearchApiService stockSearchApiService;
+    private final OrderbookApiService orderbookApiService;
+
+    @GetMapping("/{stockCode}/quote")
+    public ApiResponse<QuoteDto> quote(@PathVariable String stockCode) {
+        return ApiResponse.of(quoteApiService.getQuote(stockCode));
+    }
+
+    @GetMapping("/{stockCode}/orderbook")
+    public ApiResponse<OrderbookDto> orderbook(@PathVariable String stockCode) {
+        return ApiResponse.of(orderbookApiService.getOrderbook(stockCode));
+    }
+
+    @GetMapping("/search")
+    public ApiResponse<PagedResponse<StockSearchDto>> search(
+            @RequestParam String keyword,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        return ApiResponse.of(stockSearchApiService.searchStocks(keyword, page, size));
+    }
+}

@@ -27,8 +27,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.kafka.core.KafkaTemplate;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -52,8 +50,8 @@ class MatchingConsumerTest {
     @Mock OrderBookRegistry orderBookRegistry;
     @Mock @SuppressWarnings("rawtypes") KafkaTemplate kafkaTemplate;
     @Mock OrderQueryService orderQueryService;
-    @Mock StringRedisTemplate stringRedisTemplate;
-    @Mock @SuppressWarnings("unchecked") ValueOperations<String, String> valueOps;
+    @Mock com.flab.stocktradingengine.trading.redis.LtpRedisRepository ltpRedisRepository;
+    @Mock com.flab.stocktradingengine.trading.redis.OrderbookRedisRepository orderbookRedisRepository;
     @Mock ObjectMapper objectMapper;
     @Mock Acknowledgment ack;
 
@@ -69,7 +67,6 @@ class MatchingConsumerTest {
     void setUp() throws Exception {
         book = new OrderBook();
         lenient().when(orderBookRegistry.getOrCreate(STOCK_CODE)).thenReturn(book);
-        lenient().when(stringRedisTemplate.opsForValue()).thenReturn(valueOps);
         lenient().when(objectMapper.writeValueAsString(any())).thenReturn("{}");
     }
 

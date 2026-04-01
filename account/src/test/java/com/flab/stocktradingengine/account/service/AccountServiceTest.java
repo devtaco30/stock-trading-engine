@@ -12,8 +12,10 @@ import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
 import java.util.List;
-import java.util.NoSuchElementException;
 import java.util.Optional;
+
+import com.flab.stocktradingengine.exception.InvalidRequestException;
+import com.flab.stocktradingengine.exception.ResourceNotFoundException;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -151,33 +153,33 @@ class AccountServiceTest {
         private static final Long SAMPLE_ACCOUNT_ID = 1L;
 
         @Test
-        @DisplayName("계좌가 없으면 NoSuchElementException")
+        @DisplayName("계좌가 없으면 ResourceNotFoundException")
         void throwsWhenAccountNotFound() {
             when(accountRepository.findByAccountId(NOT_FOUND_ACCOUNT_ID)).thenReturn(Optional.empty());
 
-            assertThrows(NoSuchElementException.class,
+            assertThrows(ResourceNotFoundException.class,
                 () -> accountService.changeStatus(NOT_FOUND_ACCOUNT_ID, AccountStatus.IN_ARREARS, null, "reason"));
             verify(accountRepository).findByAccountId(NOT_FOUND_ACCOUNT_ID);
         }
 
         @Test
-        @DisplayName("동일 상태로 변경 시 IllegalStateException")
+        @DisplayName("동일 상태로 변경 시 InvalidRequestException")
         void throwsWhenSameStatus() {
             Account account = mockAccount(SAMPLE_ACCOUNT_ID, AccountStatus.ACTIVE);
             when(accountRepository.findByAccountId(SAMPLE_ACCOUNT_ID)).thenReturn(Optional.of(account));
 
-            assertThrows(IllegalStateException.class,
+            assertThrows(InvalidRequestException.class,
                 () -> accountService.changeStatus(SAMPLE_ACCOUNT_ID, AccountStatus.ACTIVE, null, "reason"));
             verify(accountRepository).findByAccountId(SAMPLE_ACCOUNT_ID);
         }
 
         @Test
-        @DisplayName("허용되지 않은 전이 시 IllegalStateException (FROZEN -> IN_ARREARS)")
+        @DisplayName("허용되지 않은 전이 시 InvalidRequestException (FROZEN -> IN_ARREARS)")
         void throwsWhenInvalidTransition() {
             Account account = mockAccount(SAMPLE_ACCOUNT_ID, AccountStatus.FROZEN);
             when(accountRepository.findByAccountId(SAMPLE_ACCOUNT_ID)).thenReturn(Optional.of(account));
 
-            assertThrows(IllegalStateException.class,
+            assertThrows(InvalidRequestException.class,
                 () -> accountService.changeStatus(SAMPLE_ACCOUNT_ID, AccountStatus.IN_ARREARS, null, "reason"));
         }
 
@@ -223,11 +225,11 @@ class AccountServiceTest {
         private static final Long SAMPLE_ACCOUNT_ID = 1L;
 
         @Test
-        @DisplayName("계좌가 없으면 NoSuchElementException")
+        @DisplayName("계좌가 없으면 ResourceNotFoundException")
         void throwsWhenAccountNotFound() {
             when(accountRepository.findByAccountId(NOT_FOUND_ACCOUNT_ID)).thenReturn(Optional.empty());
 
-            assertThrows(NoSuchElementException.class,
+            assertThrows(ResourceNotFoundException.class,
                 () -> accountService.addHoldingOrIncreaseQuantity(NOT_FOUND_ACCOUNT_ID, "005930", 10, new BigDecimal("70000")));
             verify(accountRepository).findByAccountId(NOT_FOUND_ACCOUNT_ID);
         }

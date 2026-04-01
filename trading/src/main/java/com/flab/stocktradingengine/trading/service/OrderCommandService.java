@@ -9,7 +9,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.flab.stocktradingengine.account.entity.Account;
+import com.flab.stocktradingengine.account.entity.Holding;
+import com.flab.stocktradingengine.account.exception.InsufficientResourceException;
 import com.flab.stocktradingengine.account.service.AccountService;
+import com.flab.stocktradingengine.exception.ResourceNotFoundException;
+import com.flab.stocktradingengine.exception.InvalidRequestException;
 import com.flab.stocktradingengine.trading.command.BuyOrderCommand;
 import com.flab.stocktradingengine.trading.command.SellOrderCommand;
 import com.flab.stocktradingengine.trading.entity.Order;
@@ -41,7 +45,7 @@ public class OrderCommandService {
             Supplier<BigDecimal> unpaidSumSupplier) {
         // BUY price * quantity 로 주문 금액 계산
         Account lockedAccount = accountService.getAccountByIdForUpdate(account.getId())
-            .orElseThrow(() -> new IllegalArgumentException("Account not found: " + account.getId()));
+            .orElseThrow(() -> new ResourceNotFoundException("Account not found: " + account.getId()));
 
         // 락 획득 후 미결제 미수금 조회 — 락 전 조회 시 TOCTOU 발생
         BigDecimal pendingUnpaidSum = unpaidSumSupplier.get();
@@ -68,7 +72,7 @@ public class OrderCommandService {
         
         // 주문 금액이 매수 가능 금액보다 크면 예외 
         if (orderAmount.compareTo(buyLimit) > 0) {
-            throw new IllegalStateException("매수 가능 금액 초과");
+            throw new InsufficientResourceException("매수 가능 금액 초과");
         }
 
         // 증거금이 충분하면 주문 접수
@@ -99,11 +103,13 @@ public class OrderCommandService {
      */
     @Transactional
     public PlaceOrderResultView placeSellOrder(SellOrderCommand command, Account account) {
-        var holding = accountService.getHoldingForUpdate(account.getId(), command.stockCode())
-            .orElseThrow(() -> new IllegalStateException("보유 종목이 아님: " + command.stockCode()));
+        // 보유 종목 검증
+        Holding holding = accountService.getHoldingForUpdate(account.getId(), command.stockCode())
+            .orElseThrow(() -> new InvalidRequestException("보유 종목이 아님: " + command.stockCode()));
 
+        // 보유 수량 검증
         if (holding.getQuantity() < command.quantity()) {
-            throw new IllegalStateException("매도 수량 초과 (보유: " + holding.getQuantity() + ", 요청: " + command.quantity() + ")");
+            throw new InsufficientResourceException("매도 수량 초과 (보유: " + holding.getQuantity() + ", 요청: " + command.quantity() + ")");
         }
 
         Order order = Order.builder()
@@ -117,6 +123,8 @@ public class OrderCommandService {
             .orderAt(Instant.now())
             .reservedMargin(null)
             .build();
+
+        // 주문 접수
         order = orderRepository.save(order);
 
         return new PlaceOrderResultView(
@@ -133,9 +141,9 @@ public class OrderCommandService {
     @Transactional
     public CancelOrderResultView cancelOrder(Long orderId) {
         Order order = orderRepository.findByOrderId(orderId).orElseThrow(
-            () -> new IllegalArgumentException("Order not found: " + orderId));
+            () -> new ResourceNotFoundException("Order not found: " + orderId));
         if (order.getStatus() != OrderStatus.PENDING) {
-            throw new IllegalStateException("취소 가능한 상태가 아님: " + order.getStatus());
+            throw new InvalidRequestException("취소 가능한 상태가 아님: " + order.getStatus());
         }
         BigDecimal returnedMargin = order.getReservedMargin() != null ? order.getReservedMargin() : BigDecimal.ZERO;
         order.cancel();

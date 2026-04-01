@@ -23,7 +23,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.kafka.core.KafkaTemplate;
 
@@ -84,7 +83,10 @@ class MatchingEngineIntegrationTest {
     KafkaTemplate kafkaTemplate;
 
     @MockBean
-    StringRedisTemplate stringRedisTemplate;
+    com.flab.stocktradingengine.trading.redis.LtpRedisRepository ltpRedisRepository;
+
+    @MockBean
+    com.flab.stocktradingengine.trading.redis.OrderbookRedisRepository orderbookRedisRepository;
 
     @MockBean
     ObjectMapper objectMapper;
@@ -109,9 +111,6 @@ class MatchingEngineIntegrationTest {
             return null;
         }).when(kafkaTemplate).send(anyString(), anyString(), any(TradeFilledEvent.class));
 
-        org.springframework.data.redis.core.ValueOperations<String, String> valueOps =
-            mock(org.springframework.data.redis.core.ValueOperations.class);
-        lenient().when(stringRedisTemplate.opsForValue()).thenReturn(valueOps);
     }
 
     private void submitBuy(long orderId, long accountId, String stock, String price, int qty) {
