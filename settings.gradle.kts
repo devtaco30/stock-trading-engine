@@ -25,5 +25,8 @@ include(
 	"trading",
 	"settlement",
 	"market",
-	"api"
+	"api",
+	"order-engine",
+	"matching-engine",
+	"settlement-engine"
 )

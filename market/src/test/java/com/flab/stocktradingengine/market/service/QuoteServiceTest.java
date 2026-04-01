@@ -3,6 +3,7 @@ package com.flab.stocktradingengine.market.service;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -208,21 +209,21 @@ class QuoteServiceTest {
     private static Quote mockQuote(String stockCode, BigDecimal currentPrice, BigDecimal previousClose,
                                   BigDecimal changeRate, BigDecimal open, BigDecimal high, BigDecimal low, Long volume) {
         Quote quote = org.mockito.Mockito.mock(Quote.class);
-        when(quote.getStockCode()).thenReturn(stockCode);
-        when(quote.getCurrentPrice()).thenReturn(currentPrice);
-        when(quote.getPreviousClose()).thenReturn(previousClose);
-        when(quote.getChangeRate()).thenReturn(changeRate);
-        when(quote.getOpen()).thenReturn(open);
-        when(quote.getHigh()).thenReturn(high);
-        when(quote.getLow()).thenReturn(low);
-        when(quote.getVolume()).thenReturn(volume);
+        lenient().when(quote.getStockCode()).thenReturn(stockCode);
+        lenient().when(quote.getCurrentPrice()).thenReturn(currentPrice);
+        lenient().when(quote.getPreviousClose()).thenReturn(previousClose);
+        lenient().when(quote.getChangeRate()).thenReturn(changeRate);
+        lenient().when(quote.getOpen()).thenReturn(open);
+        lenient().when(quote.getHigh()).thenReturn(high);
+        lenient().when(quote.getLow()).thenReturn(low);
+        lenient().when(quote.getVolume()).thenReturn(volume);
         return quote;
     }
 
     private static Stock mockStock(String stockCode, String stockName) {
         Stock stock = org.mockito.Mockito.mock(Stock.class);
-        when(stock.getStockCode()).thenReturn(stockCode);
-        when(stock.getStockName()).thenReturn(stockName);
+        lenient().when(stock.getStockCode()).thenReturn(stockCode);
+        lenient().when(stock.getStockName()).thenReturn(stockName);
         return stock;
     }
 }

@@ -1,6 +1,6 @@
 plugins {
 	`java-convention`
-	alias(libs.plugins.spring.boot)
+	`java-library`
 }
 
 dependencies {
@@ -8,9 +8,7 @@ dependencies {
 	implementation(project(":account"))
 	implementation(project(":trading"))
 
-	implementation(libs.spring.boot.starter.web)
 	implementation(libs.spring.boot.starter.data.jpa)
-	implementation(libs.spring.kafka)
 
 	runtimeOnly(libs.postgresql)
 
@@ -18,4 +16,5 @@ dependencies {
 	annotationProcessor(libs.lombok)
 
 	testImplementation(libs.spring.boot.starter.test)
+	testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }

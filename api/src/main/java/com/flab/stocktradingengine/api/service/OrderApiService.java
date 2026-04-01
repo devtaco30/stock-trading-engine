@@ -29,9 +29,9 @@ import com.flab.stocktradingengine.market.view.StockInfo;
 import com.flab.stocktradingengine.trading.entity.Order;
 import com.flab.stocktradingengine.trading.entity.OrderSide;
 import com.flab.stocktradingengine.trading.entity.OrderStatus;
-import com.flab.stocktradingengine.trading.kafka.KafkaTopics;
-import com.flab.stocktradingengine.trading.kafka.event.OrderCancelRequestEvent;
-import com.flab.stocktradingengine.trading.kafka.event.OrderRequestEvent;
+import com.flab.stocktradingengine.kafka.KafkaTopics;
+import com.flab.stocktradingengine.kafka.event.OrderCancelRequestEvent;
+import com.flab.stocktradingengine.kafka.event.OrderRequestEvent;
 import com.flab.stocktradingengine.trading.service.OrderQueryService;
 
 import lombok.RequiredArgsConstructor;
