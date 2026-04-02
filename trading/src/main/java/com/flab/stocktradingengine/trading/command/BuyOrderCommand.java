@@ -1,6 +1,7 @@
 package com.flab.stocktradingengine.trading.command;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 
 /**
  * 매수 주문 명령 (trading 도메인 내부용)
@@ -10,6 +11,7 @@ public record BuyOrderCommand(
     String stockCode,
     String orderType,
     BigDecimal price,
-    int quantity
+    int quantity,
+    Instant requestedAt
 ) {
 }

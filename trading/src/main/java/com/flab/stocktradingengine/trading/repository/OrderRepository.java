@@ -26,6 +26,9 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
      */
     Optional<Order> findByOrderId(Long orderId);
 
+    /** Kafka 재전달 중복 감지용. (account_id, requested_at) UNIQUE 제약과 쌍. */
+    Optional<Order> findByAccountIdAndRequestedAt(Long accountId, Instant requestedAt);
+
     List<Order> findByAccount_AccountIdAndStatus(Long accountId, OrderStatus status);
 
     /**

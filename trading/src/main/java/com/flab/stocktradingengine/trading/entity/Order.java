@@ -17,6 +17,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -29,7 +30,9 @@ import lombok.AllArgsConstructor;
 @NoArgsConstructor
 @Getter
 @Entity
-@Table(name = "orders")
+@Table(name = "orders", uniqueConstraints = {
+    @UniqueConstraint(columnNames = {"account_id", "requested_at"})
+})
 @Builder
 public class Order {
 
@@ -84,6 +87,10 @@ public class Order {
 
     @Column(nullable = false)
     private Instant orderAt;
+
+    /** Kafka 재전달 시 중복 주문 방지용. order-requests 발행 시점. account_id와 복합 UNIQUE. */
+    @Column(name = "requested_at")
+    private Instant requestedAt;
 
     @Column
     private Instant filledAt;

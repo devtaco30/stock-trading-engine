@@ -5,6 +5,7 @@ import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.function.Supplier;
 
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -86,9 +87,20 @@ public class OrderCommandService {
             .status(OrderStatus.PENDING)
             .orderAt(Instant.now())
             .reservedMargin(reservedMargin)
+            .requestedAt(command.requestedAt())
             .build();
-            
-        order = orderRepository.save(order);
+
+        try {
+            order = orderRepository.saveAndFlush(order);
+        } catch (DataIntegrityViolationException e) {
+            // Kafka 재전달로 인한 중복 요청 — 기존 주문 반환
+            Order existing = orderRepository
+                .findByAccountIdAndRequestedAt(command.accountId(), command.requestedAt())
+                .orElseThrow(() -> new IllegalStateException("중복 주문 조회 실패: " + e.getMessage()));
+            return new PlaceOrderResultView(
+                existing.getOrderId(), existing.getStatus().name(),
+                existing.getOrderAt().toEpochMilli(), existing.getReservedMargin());
+        }
 
         return new PlaceOrderResultView(
             order.getOrderId(),
@@ -122,10 +134,19 @@ public class OrderCommandService {
             .status(OrderStatus.PENDING)
             .orderAt(Instant.now())
             .reservedMargin(null)
+            .requestedAt(command.requestedAt())
             .build();
 
-        // 주문 접수
-        order = orderRepository.save(order);
+        try {
+            order = orderRepository.saveAndFlush(order);
+        } catch (DataIntegrityViolationException e) {
+            Order existing = orderRepository
+                .findByAccountIdAndRequestedAt(command.accountId(), command.requestedAt())
+                .orElseThrow(() -> new IllegalStateException("중복 주문 조회 실패: " + e.getMessage()));
+            return new PlaceOrderResultView(
+                existing.getOrderId(), existing.getStatus().name(),
+                existing.getOrderAt().toEpochMilli(), null);
+        }
 
         return new PlaceOrderResultView(
             order.getOrderId(),

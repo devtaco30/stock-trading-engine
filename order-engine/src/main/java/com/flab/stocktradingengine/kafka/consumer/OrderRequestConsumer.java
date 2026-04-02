@@ -66,12 +66,13 @@ public class OrderRequestConsumer {
                 log.warn("[주문 접수 컨슈머] 알 수 없는 이벤트 타입: type={}",
                     event == null ? "null" : event.getClass().getSimpleName());
             }
-        } catch (Exception e) {
-            log.error("[주문 접수 컨슈머] 처리 실패: key={} type={}",
-                record.key(), event == null ? "null" : event.getClass().getSimpleName(), e);
-        } finally {
+            ack.acknowledge();
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            // 가격 제한폭 초과·잔고 부족 등 비즈니스 룰 위반 — 재시도해도 결과가 같으므로 폐기
+            log.warn("[주문 접수 컨슈머] 주문 폐기 (비즈니스 룰 위반): {}", e.getMessage());
             ack.acknowledge();
         }
+        // 그 외 RuntimeException(DB 장애 등)은 전파 → ack 미호출 → Kafka 재전달
     }
 
     private void handleOrderRequest(OrderRequestEvent event) {
@@ -82,13 +83,13 @@ public class OrderRequestConsumer {
         if (event.side() == OrderSide.BUY) {
             BuyOrderCommand command = new BuyOrderCommand(
                 event.accountId(), event.stockCode(),
-                event.orderType(), event.price(), event.quantity());
+                event.orderType(), event.price(), event.quantity(), event.requestedAt());
             // unpaidSum: settlement 모듈 접근 불가(모듈 계층 제약) → 0 처리
             result = orderCommandService.placeBuyOrder(command, account, () -> BigDecimal.ZERO);
         } else {
             SellOrderCommand command = new SellOrderCommand(
                 event.accountId(), event.stockCode(),
-                event.orderType(), event.price(), event.quantity());
+                event.orderType(), event.price(), event.quantity(), event.requestedAt());
             result = orderCommandService.placeSellOrder(command, account);
         }
 
