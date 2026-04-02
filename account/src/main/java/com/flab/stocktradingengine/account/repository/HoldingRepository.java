@@ -25,8 +25,13 @@ public interface HoldingRepository extends JpaRepository<Holding, Long> {
 
     List<Holding> findByAccount_AccountId(Long accountId);
 
-    /** 매도 주문 접수 시 보유 수량 정합성용 락 (SELECT FOR UPDATE) */
+    /** 매도 주문 접수 시 보유 수량 정합성용 락 (SELECT FOR UPDATE) — 내부 PK 기반 */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT h FROM Holding h WHERE h.account.id = :accountPk AND h.stockCode = :stockCode")
     Optional<Holding> findByAccount_IdAndStockCodeForUpdate(@Param("accountPk") Long accountPk, @Param("stockCode") String stockCode);
+
+    /** 매도 주문 접수 시 보유 수량 정합성용 락 (SELECT FOR UPDATE) — Snowflake accountId 기반 */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT h FROM Holding h WHERE h.account.accountId = :accountId AND h.stockCode = :stockCode")
+    Optional<Holding> findByAccount_AccountIdAndStockCodeForUpdate(@Param("accountId") Long accountId, @Param("stockCode") String stockCode);
 }

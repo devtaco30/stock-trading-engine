@@ -46,21 +46,21 @@ public class AccountService {
     }
 
     /**
-     * 계좌 행 락 (SELECT FOR UPDATE). 주문 접수 등 정합성 필요 시 호출.
+     * 계좌 행 락 (SELECT FOR UPDATE). Snowflake accountId 기반.
      * 락은 트랜잭션 종료 시까지 유지되므로 호출자가 같은 트랜잭션 내에서 갱신할 때만 의미 있음.
      */
     @Transactional
-    public Optional<Account> getAccountByIdForUpdate(Long accountPk) {
-        return accountRepository.findByIdForUpdate(accountPk);
+    public Optional<Account> getAccountByAccountIdForUpdate(Long accountId) {
+        return accountRepository.findByAccountIdForUpdate(accountId);
     }
 
     /**
-     * 해당 종목 보유 행 락 (SELECT FOR UPDATE). 매도 주문 접수 시 정합성용.
+     * 해당 종목 보유 행 락 (SELECT FOR UPDATE). Snowflake accountId 기반.
      * 락 유지를 위해 트랜잭션 필수.
      */
     @Transactional
-    public Optional<Holding> getHoldingForUpdate(Long accountPk, String stockCode) {
-        return holdingRepository.findByAccount_IdAndStockCodeForUpdate(accountPk, stockCode);
+    public Optional<Holding> getHoldingByAccountIdForUpdate(Long accountId, String stockCode) {
+        return holdingRepository.findByAccount_AccountIdAndStockCodeForUpdate(accountId, stockCode);
     }
 
     /**

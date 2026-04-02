@@ -8,9 +8,8 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Component;
 
-import com.flab.stocktradingengine.account.entity.Account;
-import com.flab.stocktradingengine.account.service.AccountService;
-import com.flab.stocktradingengine.exception.ResourceNotFoundException;
+import com.flab.stocktradingengine.trading.entity.Order;
+import com.flab.stocktradingengine.trading.service.OrderQueryService;
 import com.flab.stocktradingengine.kafka.KafkaTopics;
 import com.flab.stocktradingengine.kafka.event.OrderCancelRequestEvent;
 import com.flab.stocktradingengine.kafka.event.OrderCancelledEvent;
@@ -51,7 +50,7 @@ import lombok.extern.slf4j.Slf4j;
 public class OrderRequestConsumer {
 
     private final OrderCommandService orderCommandService;
-    private final AccountService accountService;
+    private final OrderQueryService orderQueryService;
     private final KafkaTemplate<String, Object> kafkaTemplate;
 
     @KafkaListener(topics = "order-requests", groupId = "order-engine")
@@ -76,21 +75,18 @@ public class OrderRequestConsumer {
     }
 
     private void handleOrderRequest(OrderRequestEvent event) {
-        Account account = accountService.getAccount(event.accountId())
-            .orElseThrow(() -> new ResourceNotFoundException("Account not found: " + event.accountId()));
-
         PlaceOrderResultView result;
         if (event.side() == OrderSide.BUY) {
             BuyOrderCommand command = new BuyOrderCommand(
                 event.accountId(), event.stockCode(),
                 event.orderType(), event.price(), event.quantity(), event.requestedAt());
             // unpaidSum: settlement 모듈 접근 불가(모듈 계층 제약) → 0 처리
-            result = orderCommandService.placeBuyOrder(command, account, () -> BigDecimal.ZERO);
+            result = orderCommandService.placeBuyOrder(command, () -> BigDecimal.ZERO);
         } else {
             SellOrderCommand command = new SellOrderCommand(
                 event.accountId(), event.stockCode(),
                 event.orderType(), event.price(), event.quantity(), event.requestedAt());
-            result = orderCommandService.placeSellOrder(command, account);
+            result = orderCommandService.placeSellOrder(command);
         }
 
         kafkaTemplate.send(
@@ -107,7 +103,8 @@ public class OrderRequestConsumer {
     }
 
     private void handleCancelRequest(OrderCancelRequestEvent event) {
-        orderCommandService.cancelOrder(event.orderId());
+        Order order = orderQueryService.getOrder(event.orderId());
+        orderCommandService.cancelOrder(order);
         kafkaTemplate.send(
             KafkaTopics.orders(event.stockCode()),
             event.stockCode(),

@@ -42,11 +42,11 @@ public class OrderCommandService {
      * @param unpaidSumSupplier 계좌의 미결제 미수금 합계 공급자. 락 획득 후 호출돼 TOCTOU를 방지한다.
      */
     @Transactional
-    public PlaceOrderResultView placeBuyOrder(BuyOrderCommand command, Account account,
+    public PlaceOrderResultView placeBuyOrder(BuyOrderCommand command,
             Supplier<BigDecimal> unpaidSumSupplier) {
         // BUY price * quantity 로 주문 금액 계산
-        Account lockedAccount = accountService.getAccountByIdForUpdate(account.getId())
-            .orElseThrow(() -> new ResourceNotFoundException("Account not found: " + account.getId()));
+        Account lockedAccount = accountService.getAccountByAccountIdForUpdate(command.accountId())
+            .orElseThrow(() -> new ResourceNotFoundException("Account not found: " + command.accountId()));
 
         // 락 획득 후 미결제 미수금 조회 — 락 전 조회 시 TOCTOU 발생
         BigDecimal pendingUnpaidSum = unpaidSumSupplier.get();
@@ -114,9 +114,9 @@ public class OrderCommandService {
      * 매도 주문 접수. 해당 종목 보유 행 락 후 보유 수량 검증.
      */
     @Transactional
-    public PlaceOrderResultView placeSellOrder(SellOrderCommand command, Account account) {
+    public PlaceOrderResultView placeSellOrder(SellOrderCommand command) {
         // 보유 종목 검증
-        Holding holding = accountService.getHoldingForUpdate(account.getId(), command.stockCode())
+        Holding holding = accountService.getHoldingByAccountIdForUpdate(command.accountId(), command.stockCode())
             .orElseThrow(() -> new InvalidRequestException("보유 종목이 아님: " + command.stockCode()));
 
         // 보유 수량 검증
@@ -124,6 +124,7 @@ public class OrderCommandService {
             throw new InsufficientResourceException("매도 수량 초과 (보유: " + holding.getQuantity() + ", 요청: " + command.quantity() + ")");
         }
 
+        Account account = holding.getAccount();
         Order order = Order.builder()
             .account(account)
             .stockCode(command.stockCode())
@@ -157,18 +158,16 @@ public class OrderCommandService {
     }
 
     /**
-     * 주문 취소 (PENDING만 가능, 매수 시 예약 증거금 반환)
+     * 주문 취소 (PENDING만 가능, 매수 시 예약 증거금 반환).
+     * 호출자가 이미 로드한 Order 엔티티를 직접 전달해 이중 조회를 방지한다.
      */
     @Transactional
-    public CancelOrderResultView cancelOrder(Long orderId) {
-        Order order = orderRepository.findByOrderId(orderId).orElseThrow(
-            () -> new ResourceNotFoundException("Order not found: " + orderId));
+    public CancelOrderResultView cancelOrder(Order order) {
         if (order.getStatus() != OrderStatus.PENDING) {
             throw new InvalidRequestException("취소 가능한 상태가 아님: " + order.getStatus());
         }
         BigDecimal returnedMargin = order.getReservedMargin() != null ? order.getReservedMargin() : BigDecimal.ZERO;
         order.cancel();
-        orderRepository.save(order);
         return new CancelOrderResultView(order.getOrderId(), returnedMargin);
     }
 }
