@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
@@ -15,7 +16,6 @@ import org.springframework.stereotype.Component;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-
 import com.flab.stocktradingengine.kafka.KafkaTopics;
 import com.flab.stocktradingengine.kafka.event.OrderCancelledEvent;
 import com.flab.stocktradingengine.kafka.event.OrderPlacedEvent;
@@ -102,15 +102,20 @@ public class MatchingConsumer implements ConsumerSeekAware {
             } else {
                 log.warn("[매칭 컨슈머] 알 수 없는 이벤트 타입: topic={} type={}",
                     record.topic(), event == null ? "null" : event.getClass().getSimpleName());
+                ack.acknowledge();
                 return;
             }
             String stockCode = record.key();
             if (stockCode != null) {
                 writeOrderbookSnapshot(stockCode);
             }
-        } finally {
+            ack.acknowledge();
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            // 비즈니스 룰 위반 — 재시도해도 결과가 같으므로 폐기
+            log.warn("[매칭 컨슈머] 이벤트 폐기 (비즈니스 룰 위반): {}", e.getMessage());
             ack.acknowledge();
         }
+        // 그 외 RuntimeException(Redis 장애, Kafka 발행 실패 등)은 전파 → ack 미호출 → Kafka 재전달
     }
 
     private void handlePlaced(OrderPlacedEvent event) {
@@ -147,7 +152,8 @@ public class MatchingConsumer implements ConsumerSeekAware {
 
     private void runMatch(String stockCode, OrderBook book) {
         while (true) {
-            java.util.Optional<FillResult> result = book.match();
+            // 체결 가능한 쌍을 찾아 매칭 시도.
+            Optional<FillResult> result = book.match();
             if (result.isEmpty()) break;
 
             FillResult fill = result.get();
@@ -155,8 +161,13 @@ public class MatchingConsumer implements ConsumerSeekAware {
                 stockCode, fill.buyOrderId(), fill.sellOrderId(),
                 fill.filledQuantity(), fill.matchPrice());
 
+            // 최근 체결가 갱신
             orderBookRegistry.updateLastTradedPrice(stockCode, fill.matchPrice());
+
+            // 최근 체결가 Redis 저장
             ltpRedisRepository.set(stockCode, fill.matchPrice());
+
+            // 체결 이벤트 발행
             kafkaTemplate.send(KafkaTopics.fills(stockCode), stockCode,
                 new TradeFilledEvent(
                     stockCode,
@@ -167,6 +178,9 @@ public class MatchingConsumer implements ConsumerSeekAware {
         }
     }
 
+    /**
+     * 호가창 스냅샷 저장
+     */
     private void writeOrderbookSnapshot(String stockCode) {
         OrderBook book = orderBookRegistry.get(stockCode);
         if (book == null) return;
@@ -184,6 +198,7 @@ public class MatchingConsumer implements ConsumerSeekAware {
     }
 
     private record Level(BigDecimal price, int quantity) {}
+    
     private record Snapshot(List<Level> bids, List<Level> asks) {}
 
     private static String extractStockCode(String topic) {
