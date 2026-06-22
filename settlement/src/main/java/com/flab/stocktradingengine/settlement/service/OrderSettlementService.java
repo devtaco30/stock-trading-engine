@@ -94,6 +94,7 @@ public class OrderSettlementService {
         Order order = orderRepository.findByOrderId(orderId)
             .orElseThrow(() -> new IllegalArgumentException("Order not found: " + orderId));
 
+        // PENDING·BUY가 아니면 무시
         if (order.getSide() != OrderSide.BUY || order.getStatus() != OrderStatus.PENDING) {
             log.warn("[매수 부분 체결 무시] orderId={} side={} status={}", orderId, order.getSide(), order.getStatus());
             return;

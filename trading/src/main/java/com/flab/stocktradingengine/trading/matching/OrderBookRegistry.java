@@ -27,7 +27,9 @@ import org.springframework.stereotype.Component;
 @Component
 public class OrderBookRegistry {
 
+    // 종목 호가창 저장소
     private final ConcurrentHashMap<String, OrderBook> books = new ConcurrentHashMap<>();
+    // 최근 체결가 저장소
     private final ConcurrentHashMap<String, BigDecimal> lastTradedPrices = new ConcurrentHashMap<>();
 
     /** 종목 호가창 반환. 없으면 새로 생성(원자적). */

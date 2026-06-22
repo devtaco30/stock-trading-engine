@@ -29,6 +29,8 @@ import lombok.RequiredArgsConstructor;
 
 /**
  * 주문 접수·취소 서비스 (trading 도메인)
+ * 
+ * 용어 : TOCTOU(Time Of Check To Time Of Use) : 확인하는 시점과 사용하는 시점 사이에 상태가 바뀌는 문제
  */
 @Service
 @RequiredArgsConstructor
@@ -44,7 +46,7 @@ public class OrderCommandService {
     @Transactional
     public PlaceOrderResultView placeBuyOrder(BuyOrderCommand command,
             Supplier<BigDecimal> unpaidSumSupplier) {
-        // BUY price * quantity 로 주문 금액 계산
+        // BUY price * quantity 로 주문 금액 계산 -> Pessimistic Lock 으로 인해 락
         Account lockedAccount = accountService.getAccountByAccountIdForUpdate(command.accountId())
             .orElseThrow(() -> new ResourceNotFoundException("Account not found: " + command.accountId()));
 
