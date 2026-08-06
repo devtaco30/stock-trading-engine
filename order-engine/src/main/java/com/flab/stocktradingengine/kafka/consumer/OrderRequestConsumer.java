@@ -55,7 +55,7 @@ public class OrderRequestConsumer {
 
     @KafkaListener(topics = "order-requests", groupId = "order-engine")
     public void consume(ConsumerRecord<String, Object> record, Acknowledgment ack) {
-        Object event = record.value();
+        Object event = record.value(); // OrderRequestEvent 또는 OrderCancelRequestEvent
         try {
             if (event instanceof OrderRequestEvent orderRequest) {
                 handleOrderRequest(orderRequest);
@@ -65,6 +65,7 @@ public class OrderRequestConsumer {
                 log.warn("[주문 접수 컨슈머] 알 수 없는 이벤트 타입: type={}",
                     event == null ? "null" : event.getClass().getSimpleName());
             }
+            // 처리 완료 후 ack 호출
             ack.acknowledge();
         } catch (IllegalArgumentException | IllegalStateException e) {
             // 가격 제한폭 초과·잔고 부족 등 비즈니스 룰 위반 — 재시도해도 결과가 같으므로 폐기
