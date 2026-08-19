@@ -33,6 +33,7 @@ import com.flab.stocktradingengine.matching.kafka.consumer.MatchingConsumer;
 import com.flab.stocktradingengine.matching.redis.LtpRedisRepository;
 import com.flab.stocktradingengine.matching.redis.OrderbookRedisRepository;
 import com.flab.stocktradingengine.settlement.service.OrderSettlementService;
+import com.flab.stocktradingengine.support.SnowflakeIdGenerator;
 import com.flab.stocktradingengine.trading.entity.OrderSide;
 import com.flab.stocktradingengine.trading.matching.OrderBookRegistry;
 import com.flab.stocktradingengine.trading.service.OrderQueryService;
@@ -89,6 +90,9 @@ class MatchingEngineIntegrationTest {
 
     @MockBean
     ObjectMapper objectMapper;
+
+    @MockBean
+    SnowflakeIdGenerator snowflakeIdGenerator;
 
     // ── 헬퍼 ─────────────────────────────────────────────────────────────────
 

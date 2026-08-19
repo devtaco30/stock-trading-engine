@@ -8,6 +8,7 @@ import java.math.BigDecimal;
  * <p>matching-engine → settlement-engine 간 Kafka 메시지로 사용된다.</p>
  */
 public record TradeFilledEvent(
+    Long tradeId,
     String stockCode,
     Long buyOrderId,
     Long buyAccountId,

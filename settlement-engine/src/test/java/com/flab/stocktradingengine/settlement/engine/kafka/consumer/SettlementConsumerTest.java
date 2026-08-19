@@ -49,8 +49,10 @@ class SettlementConsumerTest {
         return new ConsumerRecord<>("fills." + STOCK_CODE, 0, 0L, STOCK_CODE, value);
     }
 
+    private static final long TRADE_ID = 9001L;
+
     private TradeFilledEvent sampleFill() {
-        return new TradeFilledEvent(STOCK_CODE, 8801L, 1001L, 8802L, 2002L, 100, new BigDecimal("70000"));
+        return new TradeFilledEvent(TRADE_ID, STOCK_CODE, 8801L, 1001L, 8802L, 2002L, 100, new BigDecimal("70000"));
     }
 
     @Test
@@ -58,7 +60,7 @@ class SettlementConsumerTest {
     void normalFill_ack() {
         settlementConsumer.consume(recordOf(sampleFill()), ack);
 
-        verify(orderSettlementService).fillTradePartially(eq(8801L), eq(8802L), eq(100), any());
+        verify(orderSettlementService).fillTradePartially(eq(TRADE_ID), eq(8801L), eq(8802L), eq(100), any());
         verify(ack, times(1)).acknowledge();
     }
 
@@ -66,7 +68,7 @@ class SettlementConsumerTest {
     @DisplayName("비즈니스 룰 위반(IllegalArgumentException) → ack 후 폐기 (재전달 안 함)")
     void businessException_ackAndDiscard() {
         doThrow(new IllegalArgumentException("체결 수량 초과"))
-            .when(orderSettlementService).fillTradePartially(anyLong(), anyLong(), anyInt(), any());
+            .when(orderSettlementService).fillTradePartially(anyLong(), anyLong(), anyLong(), anyInt(), any());
 
         settlementConsumer.consume(recordOf(sampleFill()), ack);
 
@@ -77,7 +79,7 @@ class SettlementConsumerTest {
     @DisplayName("인프라 오류(RuntimeException) → 예외 전파 + ack 미호출 (재전달 유도)")
     void infraException_propagateNoAck() {
         doThrow(new RuntimeException("DB 일시 장애"))
-            .when(orderSettlementService).fillTradePartially(anyLong(), anyLong(), anyInt(), any());
+            .when(orderSettlementService).fillTradePartially(anyLong(), anyLong(), anyLong(), anyInt(), any());
 
         assertThatThrownBy(() -> settlementConsumer.consume(recordOf(sampleFill()), ack))
             .isInstanceOf(RuntimeException.class);
@@ -91,7 +93,7 @@ class SettlementConsumerTest {
         settlementConsumer.consume(recordOf("알 수 없는 문자열 이벤트"), ack);
 
         verify(orderSettlementService, never())
-            .fillTradePartially(anyLong(), anyLong(), anyInt(), any());
+            .fillTradePartially(anyLong(), anyLong(), anyLong(), anyInt(), any());
         verify(ack, times(1)).acknowledge();
     }
 }

@@ -53,6 +53,7 @@ public class SettlementConsumer {
 
     private void handleFill(TradeFilledEvent fill) {
         orderSettlementService.fillTradePartially(
+            fill.tradeId(),
             fill.buyOrderId(), fill.sellOrderId(),
             fill.filledQuantity(), fill.matchPrice());
 
