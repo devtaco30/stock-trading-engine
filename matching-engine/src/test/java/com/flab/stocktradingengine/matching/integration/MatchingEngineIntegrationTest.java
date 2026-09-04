@@ -23,7 +23,6 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.kafka.core.KafkaTemplate;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.kafka.support.Acknowledgment;
 
 import com.flab.stocktradingengine.kafka.event.OrderCancelledEvent;
@@ -87,9 +86,6 @@ class MatchingEngineIntegrationTest {
 
     @MockBean
     OrderbookRedisRepository orderbookRedisRepository;
-
-    @MockBean
-    ObjectMapper objectMapper;
 
     @MockBean
     SnowflakeIdGenerator snowflakeIdGenerator;

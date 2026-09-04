@@ -1,6 +1,5 @@
 package com.flab.stocktradingengine.matching.kafka.consumer;
 
-import java.math.BigDecimal;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -14,8 +13,6 @@ import org.springframework.kafka.listener.ConsumerSeekAware;
 import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Component;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.flab.stocktradingengine.kafka.KafkaTopics;
 import com.flab.stocktradingengine.kafka.event.OrderCancelledEvent;
 import com.flab.stocktradingengine.kafka.event.OrderPlacedEvent;
@@ -66,7 +63,6 @@ public class MatchingConsumer implements ConsumerSeekAware {
     private final OrderQueryService orderQueryService;
     private final LtpRedisRepository ltpRedisRepository;
     private final OrderbookRedisRepository orderbookRedisRepository;
-    private final ObjectMapper objectMapper;
     private final SnowflakeIdGenerator snowflakeIdGenerator;
 
     // ── 파티션 할당/반환 ────────────────────────────────────────────────────
@@ -188,22 +184,8 @@ public class MatchingConsumer implements ConsumerSeekAware {
     private void writeOrderbookSnapshot(String stockCode) {
         OrderBook book = orderBookRegistry.get(stockCode);
         if (book == null) return;
-        List<Level> bids = book.getBidLevels(10).stream()
-            .map(e -> new Level(e.getKey(), e.getValue()))
-            .toList();
-        List<Level> asks = book.getAskLevels(10).stream()
-            .map(e -> new Level(e.getKey(), e.getValue()))
-            .toList();
-        try {
-            orderbookRedisRepository.set(stockCode, objectMapper.writeValueAsString(new Snapshot(bids, asks)));
-        } catch (JsonProcessingException e) {
-            log.warn("[호가창 직렬화 실패] stockCode={}", stockCode, e);
-        }
+        orderbookRedisRepository.saveSnapshot(stockCode, book.getBidLevels(10), book.getAskLevels(10));
     }
-
-    private record Level(BigDecimal price, int quantity) {}
-    
-    private record Snapshot(List<Level> bids, List<Level> asks) {}
 
     private static String extractStockCode(String topic) {
         int idx = topic.indexOf('.');
