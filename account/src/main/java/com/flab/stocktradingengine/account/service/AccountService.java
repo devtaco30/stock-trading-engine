@@ -147,7 +147,9 @@ public class AccountService {
      */
     @Transactional
     public void decreaseHolding(Long accountId, String stockCode, int quantity) {
-        Holding holding = holdingRepository.findByAccount_AccountIdAndStockCode(accountId, stockCode)
+        // 비관적 락(ForUpdate)으로 조회 — 조회~차감 사이 동시 갱신에 의한 Lost Update 방지.
+        // 다른 보유 갱신 메서드(addHoldingOrIncreaseQuantity)와 락 전략 일관.
+        Holding holding = holdingRepository.findByAccount_AccountIdAndStockCodeForUpdate(accountId, stockCode)
             .orElseThrow(() -> new ResourceNotFoundException("Holding not found: accountId=" + accountId + ", stockCode=" + stockCode));
         holding.subtractQuantity(quantity);
     }
