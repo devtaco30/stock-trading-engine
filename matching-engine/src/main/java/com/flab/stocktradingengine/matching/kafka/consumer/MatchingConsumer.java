@@ -22,6 +22,7 @@ import com.flab.stocktradingengine.kafka.event.OrderPlacedEvent;
 import com.flab.stocktradingengine.kafka.event.TradeFilledEvent;
 import com.flab.stocktradingengine.matching.redis.LtpRedisRepository;
 import com.flab.stocktradingengine.matching.redis.OrderbookRedisRepository;
+import com.flab.stocktradingengine.support.SnowflakeIdGenerator;
 import com.flab.stocktradingengine.trading.entity.Order;
 import com.flab.stocktradingengine.trading.matching.FillResult;
 import com.flab.stocktradingengine.trading.matching.OrderBook;
@@ -66,6 +67,7 @@ public class MatchingConsumer implements ConsumerSeekAware {
     private final LtpRedisRepository ltpRedisRepository;
     private final OrderbookRedisRepository orderbookRedisRepository;
     private final ObjectMapper objectMapper;
+    private final SnowflakeIdGenerator snowflakeIdGenerator;
 
     // ── 파티션 할당/반환 ────────────────────────────────────────────────────
 
@@ -167,9 +169,11 @@ public class MatchingConsumer implements ConsumerSeekAware {
             // 최근 체결가 Redis 저장
             ltpRedisRepository.set(stockCode, fill.matchPrice());
 
-            // 체결 이벤트 발행
+            // 체결 이벤트 발행 (tradeId = 체결 단위 멱등키, settlement 중복 반영 방지)
+            long tradeId = snowflakeIdGenerator.nextId();
             kafkaTemplate.send(KafkaTopics.fills(stockCode), stockCode,
                 new TradeFilledEvent(
+                    tradeId,
                     stockCode,
                     fill.buyOrderId(), fill.buyAccountId(),
                     fill.sellOrderId(), fill.sellAccountId(),

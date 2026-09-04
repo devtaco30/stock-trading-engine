@@ -35,17 +35,25 @@ public class SettlementConsumer {
     @KafkaListener(topicPattern = "fills\\..*", groupId = "settlement-engine")
     public void consume(ConsumerRecord<String, Object> record, Acknowledgment ack) {
         Object event = record.value();
-        if (event instanceof TradeFilledEvent fill) {
-            handleFill(fill); // DB 실패 시 예외 전파 → ack 미전송 → Kafka 재전달
-        } else {
-            log.warn("[정산 컨슈머] 알 수 없는 이벤트 타입: topic={} type={}",
-                record.topic(), event == null ? "null" : event.getClass().getSimpleName());
+        try {
+            if (event instanceof TradeFilledEvent fill) {
+                handleFill(fill);
+            } else {
+                log.warn("[정산 컨슈머] 알 수 없는 이벤트 타입: topic={} type={}",
+                    record.topic(), event == null ? "null" : event.getClass().getSimpleName());
+            }
+            ack.acknowledge();
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            // 비즈니스 룰 위반 — 재시도해도 결과가 같으므로 폐기
+            log.warn("[정산 컨슈머] 이벤트 폐기 (비즈니스 룰 위반): {}", e.getMessage());
+            ack.acknowledge();
         }
-        ack.acknowledge();
+        // 그 외 RuntimeException(DB 장애 등)은 전파 → ack 미호출 → Kafka 재전달
     }
 
     private void handleFill(TradeFilledEvent fill) {
         orderSettlementService.fillTradePartially(
+            fill.tradeId(),
             fill.buyOrderId(), fill.sellOrderId(),
             fill.filledQuantity(), fill.matchPrice());
 

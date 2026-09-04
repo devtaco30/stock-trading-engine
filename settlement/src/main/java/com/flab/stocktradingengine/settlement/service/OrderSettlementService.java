@@ -10,7 +10,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.flab.stocktradingengine.account.service.AccountService;
 import com.flab.stocktradingengine.support.SnowflakeIdGenerator;
+import com.flab.stocktradingengine.settlement.entity.ProcessedFill;
 import com.flab.stocktradingengine.settlement.entity.Unpaid;
+import com.flab.stocktradingengine.settlement.repository.ProcessedFillRepository;
 import com.flab.stocktradingengine.settlement.repository.UnpaidRepository;
 import com.flab.stocktradingengine.trading.entity.Order;
 import com.flab.stocktradingengine.trading.entity.OrderSide;
@@ -32,6 +34,7 @@ public class OrderSettlementService {
     private final AccountService accountService;
     private final OrderRepository orderRepository;
     private final UnpaidRepository unpaidRepository;
+    private final ProcessedFillRepository processedFillRepository;
     private final SnowflakeIdGenerator snowflakeIdGenerator;
 
     /**
@@ -75,10 +78,18 @@ public class OrderSettlementService {
      * 매수 DB 반영과 매도 DB 반영이 원자적으로 처리된다.</p>
      */
     @Transactional
-    public void fillTradePartially(Long buyOrderId, Long sellOrderId,
+    public void fillTradePartially(Long tradeId, Long buyOrderId, Long sellOrderId,
                                    int fillQty, BigDecimal matchPrice) {
+        // 멱등성: 이미 반영한 체결이면 건너뛴다.
+        // fills.{stockCode}는 종목 단위 파티셔닝 → 동일 종목은 단일 컨슈머 스레드에서 직렬 처리되므로
+        // existsById 확인과 마커 저장 사이에 동시 중복이 끼어들지 않는다.
+        if (processedFillRepository.existsById(tradeId)) {
+            log.warn("[체결 중복 무시] tradeId={}", tradeId);
+            return;
+        }
         fillBuyOrderPartially(buyOrderId, fillQty, matchPrice);
         fillSellOrderPartially(sellOrderId, fillQty);
+        processedFillRepository.save(new ProcessedFill(tradeId, Instant.now()));
     }
 
     /**

@@ -40,6 +40,7 @@ public class OrderController {
             @CurrentUserId Long userId,
             @Valid @RequestBody BuyOrderRequest request) {
         orderApiService.placeBuyOrder(userId, request);
+        
         return ResponseEntity.accepted().body(ApiResponse.of(new OrderAcceptedResponse("주문 접수")));
     }
 

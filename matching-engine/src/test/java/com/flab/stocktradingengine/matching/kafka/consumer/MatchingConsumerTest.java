@@ -38,6 +38,7 @@ import com.flab.stocktradingengine.kafka.event.OrderPlacedEvent;
 import com.flab.stocktradingengine.kafka.event.TradeFilledEvent;
 import com.flab.stocktradingengine.matching.redis.LtpRedisRepository;
 import com.flab.stocktradingengine.matching.redis.OrderbookRedisRepository;
+import com.flab.stocktradingengine.support.SnowflakeIdGenerator;
 import com.flab.stocktradingengine.trading.entity.Order;
 import com.flab.stocktradingengine.trading.entity.OrderSide;
 import com.flab.stocktradingengine.trading.matching.OrderBook;
@@ -55,6 +56,7 @@ class MatchingConsumerTest {
     @Mock LtpRedisRepository ltpRedisRepository;
     @Mock OrderbookRedisRepository orderbookRedisRepository;
     @Mock ObjectMapper objectMapper;
+    @Mock SnowflakeIdGenerator snowflakeIdGenerator;
     @Mock Acknowledgment ack;
 
     @InjectMocks
@@ -239,14 +241,14 @@ class MatchingConsumerTest {
     // ── ack 보장 ─────────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("OrderBook 접근 중 예외 발생 시에도 ack 는 항상 호출 (finally 보장)")
-    void 예외_발생_시_ack_항상_호출() {
+    @DisplayName("OrderBook 접근 중 인프라 예외 → 전파 + ack 미호출 (재전달 유도)")
+    void 인프라_예외_전파_ack_미호출() {
         doThrow(new RuntimeException("OrderBook 오류")).when(orderBookRegistry).getOrCreate(any());
 
         assertThatThrownBy(() -> consumer.consume(record(buyEvent(1L, "70000")), ack))
             .isInstanceOf(RuntimeException.class);
 
-        verify(ack).acknowledge();
+        verify(ack, never()).acknowledge();
     }
 
     // ── 헬퍼 ─────────────────────────────────────────────────────────────────

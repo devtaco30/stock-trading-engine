@@ -70,18 +70,19 @@ public class OrderApiService {
      * 매수 주문 접수. 계좌·가격 제한폭 검증 후 order-requests(key=accountId) 발행.
      */
     public void placeBuyOrder(Long userId, BuyOrderRequest request) {
-        
+        // 계좌 소유 및 활성 상태 검증
         Account account = accountAccessResolver.resolveAccountOwnedAndActive(userId, request.accountId());
 
+        // 매수 가격 제한폭 검증
         validatePriceBandLimit(request.stockCode(), request.price());
 
         kafkaTemplate.send(
-                KafkaTopics.orderRequests(),
-                String.valueOf(account.getAccountId()),
+                KafkaTopics.orderRequests(), // topic
+                String.valueOf(account.getAccountId()), // key
                 new OrderRequestEvent(
                         account.getAccountId(), request.stockCode(),
                         OrderSide.BUY, request.orderType(),
-                        request.price(), request.quantity(), Instant.now()));
+                        request.price(), request.quantity(), Instant.now())); // value
 
         log.info("[매수 접수] 종목={} 계좌={}", request.stockCode(), account.getAccountId());
     }

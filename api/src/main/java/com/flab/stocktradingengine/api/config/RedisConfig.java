@@ -36,6 +36,7 @@ public class RedisConfig {
 
 	@Bean
 	public RedisConnectionFactory redisConnectionFactory(@NonNull RedisProperties redisProperties) {
+		// 호스트 이름이 없으면 localhost로 설정
 		String host = Objects.requireNonNullElse(redisProperties.getHost(), "localhost");
 		log.info("Redis 연결 설정: host = {}, port = {}", host, redisProperties.getPort());
 		RedisStandaloneConfiguration config = new RedisStandaloneConfiguration(host, redisProperties.getPort());
