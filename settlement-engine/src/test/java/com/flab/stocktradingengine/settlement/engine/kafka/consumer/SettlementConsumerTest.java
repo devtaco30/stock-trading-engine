@@ -21,6 +21,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.kafka.support.Acknowledgment;
 
+import com.flab.stocktradingengine.exception.ResourceNotFoundException;
 import com.flab.stocktradingengine.kafka.event.TradeFilledEvent;
 import com.flab.stocktradingengine.settlement.service.OrderSettlementService;
 
@@ -68,6 +69,17 @@ class SettlementConsumerTest {
     @DisplayName("비즈니스 룰 위반(IllegalArgumentException) → ack 후 폐기 (재전달 안 함)")
     void businessException_ackAndDiscard() {
         doThrow(new IllegalArgumentException("체결 수량 초과"))
+            .when(orderSettlementService).fillTradePartially(anyLong(), anyLong(), anyLong(), anyInt(), any());
+
+        settlementConsumer.consume(recordOf(sampleFill()), ack);
+
+        verify(ack, times(1)).acknowledge();
+    }
+
+    @Test
+    @DisplayName("비즈니스 예외(BusinessException: 주문/보유 없음) → ack 후 폐기")
+    void businessBaseException_ackAndDiscard() {
+        doThrow(new ResourceNotFoundException("Order not found"))
             .when(orderSettlementService).fillTradePartially(anyLong(), anyLong(), anyLong(), anyInt(), any());
 
         settlementConsumer.consume(recordOf(sampleFill()), ack);

@@ -13,6 +13,7 @@ import org.springframework.kafka.listener.ConsumerSeekAware;
 import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Component;
 
+import com.flab.stocktradingengine.exception.BusinessException;
 import com.flab.stocktradingengine.kafka.KafkaTopics;
 import com.flab.stocktradingengine.kafka.event.OrderCancelledEvent;
 import com.flab.stocktradingengine.kafka.event.OrderPlacedEvent;
@@ -108,8 +109,8 @@ public class MatchingConsumer implements ConsumerSeekAware {
                 writeOrderbookSnapshot(stockCode);
             }
             ack.acknowledge();
-        } catch (IllegalArgumentException | IllegalStateException e) {
-            // 비즈니스 룰 위반 — 재시도해도 결과가 같으므로 폐기
+        } catch (BusinessException | IllegalArgumentException | IllegalStateException e) {
+            // 비즈니스 룰 위반(BusinessException) 및 도메인 불변식 위반(IAE/ISE) — 재시도해도 결과가 같으므로 폐기
             log.warn("[매칭 컨슈머] 이벤트 폐기 (비즈니스 룰 위반): {}", e.getMessage());
             ack.acknowledge();
         }
