@@ -31,7 +31,7 @@ import lombok.AllArgsConstructor;
 @Getter
 @Entity
 @Table(name = "orders", uniqueConstraints = {
-    @UniqueConstraint(columnNames = {"account_id", "requested_at"})
+    @UniqueConstraint(columnNames = {"request_id"})
 })
 @Builder
 public class Order {
@@ -88,7 +88,14 @@ public class Order {
     @Column(nullable = false)
     private Instant orderAt;
 
-    /** Kafka 재전달 시 중복 주문 방지용. order-requests 발행 시점. account_id와 복합 UNIQUE. */
+    /**
+     * 멱등키. 클라이언트가 보내면 그 값, 없으면 API 서버가 UUID 생성.
+     * Kafka 재전달·중복 접수를 막는 전역 UNIQUE 키.
+     */
+    @Column(name = "request_id", nullable = false, unique = true, updatable = false)
+    private String requestId;
+
+    /** order-requests 발행 시점(감사용). 멱등 판별은 requestId 가 담당. */
     @Column(name = "requested_at")
     private Instant requestedAt;
 

@@ -65,7 +65,7 @@ class OrderRequestConsumerTest {
 
     private OrderRequestEvent buyEvent() {
         return new OrderRequestEvent(1001L, STOCK, OrderSide.BUY, "LIMIT",
-            new BigDecimal("70000"), 100, Instant.parse("2026-01-01T00:00:00Z"));
+            new BigDecimal("70000"), 100, Instant.parse("2026-01-01T00:00:00Z"), "req-1001");
     }
 
     @Test

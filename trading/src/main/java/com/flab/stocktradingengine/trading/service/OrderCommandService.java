@@ -1,162 +1,77 @@
 package com.flab.stocktradingengine.trading.service;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.time.Instant;
+import java.util.Optional;
 import java.util.function.Supplier;
 
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.flab.stocktradingengine.account.entity.Account;
-import com.flab.stocktradingengine.account.entity.Holding;
-import com.flab.stocktradingengine.account.exception.InsufficientResourceException;
-import com.flab.stocktradingengine.account.service.AccountService;
-import com.flab.stocktradingengine.exception.ResourceNotFoundException;
 import com.flab.stocktradingengine.exception.InvalidRequestException;
 import com.flab.stocktradingengine.trading.command.BuyOrderCommand;
 import com.flab.stocktradingengine.trading.command.SellOrderCommand;
 import com.flab.stocktradingengine.trading.entity.Order;
-import com.flab.stocktradingengine.trading.entity.OrderSide;
 import com.flab.stocktradingengine.trading.entity.OrderStatus;
-import com.flab.stocktradingengine.trading.entity.OrderType;
-import com.flab.stocktradingengine.trading.repository.OrderRepository;
 import com.flab.stocktradingengine.trading.view.CancelOrderResultView;
 import com.flab.stocktradingengine.trading.view.PlaceOrderResultView;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
- * 주문 접수·취소 서비스 (trading 도메인)
- * 
- * 용어 : TOCTOU(Time Of Check To Time Of Use) : 확인하는 시점과 사용하는 시점 사이에 상태가 바뀌는 문제
+ * 주문 접수·취소 오케스트레이션 (trading 도메인).
+ *
+ * <h3>멱등 처리 (requestId)</h3>
+ * <p>같은 requestId 의 재접수(Kafka 재전달·클라이언트 재전송)를 막는다.</p>
+ * <ol>
+ *   <li>정상 경로: 저장 전에 requestId 로 조회(check-then-act). 이미 있으면 기존 주문을 그대로 반환.</li>
+ *   <li>경쟁 안전망: 그래도 동시 삽입이 겹치면 {@code request_id} UNIQUE 가 뒤늦은 쪽을 막는다.
+ *       이때는 승자 주문을 새 트랜잭션({@link OrderIdempotencyReader})으로 조회해 반환한다.</li>
+ * </ol>
+ * <p>저장은 별도 트랜잭션 빈({@link OrderWriter})이 담당한다. 이 클래스에는 저장 트랜잭션이 없어,
+ * 저장이 롤백되어도 여기서의 복구 조회가 오염된 트랜잭션을 재사용하지 않는다.</p>
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class OrderCommandService {
 
-    private final OrderRepository orderRepository;
-    private final AccountService accountService;
+    private final OrderWriter orderWriter;
+    private final OrderIdempotencyReader idempotencyReader;
 
     /**
-     * 매수 주문 접수 (증거금 예약). 계좌 행 락 후 잔고/증거금 검증.
-     * @param unpaidSumSupplier 계좌의 미결제 미수금 합계 공급자. 락 획득 후 호출돼 TOCTOU를 방지한다.
+     * 매수 주문 접수 (증거금 예약).
+     * @param unpaidSumSupplier 계좌의 미결제 미수금 합계 공급자. 저장 트랜잭션의 락 획득 후 호출된다.
      */
-    @Transactional
     public PlaceOrderResultView placeBuyOrder(BuyOrderCommand command,
             Supplier<BigDecimal> unpaidSumSupplier) {
-        // BUY price * quantity 로 주문 금액 계산 -> Pessimistic Lock 으로 인해 락
-        Account lockedAccount = accountService.getAccountByAccountIdForUpdate(command.accountId())
-            .orElseThrow(() -> new ResourceNotFoundException("Account not found: " + command.accountId()));
-
-        // 락 획득 후 미결제 미수금 조회 — 락 전 조회 시 TOCTOU 발생
-        BigDecimal pendingUnpaidSum = unpaidSumSupplier.get();
-
-        // user 가 설정해둔 증거금 마진율 가져오기
-        BigDecimal orderAmount = command.price().multiply(BigDecimal.valueOf(command.quantity()));
-        BigDecimal marginRate = lockedAccount.getMarginRate();
-
-        // amount * marginRate = reservedMargin (예약 증거금) => 이번 주문에 소요되는 증거금 계산
-        BigDecimal reservedMargin = orderAmount.multiply(marginRate).setScale(0, RoundingMode.DOWN);
-
-        // PENDING 매수 주문의 예약증거금 합계 — DB SUM으로 락 보유 시간 단축
-        BigDecimal currentReservedMarginSum = orderRepository.sumReservedMarginByAccountId(lockedAccount.getAccountId());
-
-        // 출금 가능 금액 = 잔고 - 예약 증거금 - 미결제 미수금
-        BigDecimal withdrawableBalance = lockedAccount.getBalance()
-            .subtract(currentReservedMarginSum)
-            .subtract(pendingUnpaidSum);
-
-    
-        // required amount = orderAmount * marginRate == withdrawableBalance (같거나 작아야 함)
-        // withdrawableBalance / marginRate = buyLimit 
-        BigDecimal buyLimit = withdrawableBalance.divide(marginRate, 0, RoundingMode.DOWN);
-        
-        // 주문 금액이 매수 가능 금액보다 크면 예외 
-        if (orderAmount.compareTo(buyLimit) > 0) {
-            throw new InsufficientResourceException("매수 가능 금액 초과");
+        Optional<Order> duplicate = idempotencyReader.findByRequestId(command.requestId());
+        if (duplicate.isPresent()) {
+            return toView(duplicate.get());
         }
-
-        // 증거금이 충분하면 주문 접수
-        Order order = Order.builder()
-            .account(lockedAccount)
-            .stockCode(command.stockCode())
-            .side(OrderSide.BUY)
-            .orderType(OrderType.valueOf(command.orderType()))
-            .price(command.price())
-            .quantity(command.quantity())
-            .status(OrderStatus.PENDING)
-            .orderAt(Instant.now())
-            .reservedMargin(reservedMargin)
-            .requestedAt(command.requestedAt())
-            .build();
 
         try {
-            order = orderRepository.saveAndFlush(order);
-        } catch (DataIntegrityViolationException e) {
-            // Kafka 재전달로 인한 중복 요청 — 기존 주문 반환
-            Order existing = orderRepository
-                .findByAccountIdAndRequestedAt(command.accountId(), command.requestedAt())
-                .orElseThrow(() -> new IllegalStateException("중복 주문 조회 실패: " + e.getMessage()));
-            return new PlaceOrderResultView(
-                existing.getOrderId(), existing.getStatus().name(),
-                existing.getOrderAt().toEpochMilli(), existing.getReservedMargin());
+            return orderWriter.writeBuyOrder(command, unpaidSumSupplier);
+        } catch (DataIntegrityViolationException race) {
+            return recoverDuplicate(command.requestId(), race);
         }
-
-        return new PlaceOrderResultView(
-            order.getOrderId(),
-            order.getStatus().name(),
-            order.getOrderAt().toEpochMilli(),
-            order.getReservedMargin()
-        );
     }
 
     /**
-     * 매도 주문 접수. 해당 종목 보유 행 락 후 보유 수량 검증.
+     * 매도 주문 접수.
      */
-    @Transactional
     public PlaceOrderResultView placeSellOrder(SellOrderCommand command) {
-        // 보유 종목 검증
-        Holding holding = accountService.getHoldingByAccountIdForUpdate(command.accountId(), command.stockCode())
-            .orElseThrow(() -> new InvalidRequestException("보유 종목이 아님: " + command.stockCode()));
-
-        // 보유 수량 검증
-        if (holding.getQuantity() < command.quantity()) {
-            throw new InsufficientResourceException("매도 수량 초과 (보유: " + holding.getQuantity() + ", 요청: " + command.quantity() + ")");
+        Optional<Order> duplicate = idempotencyReader.findByRequestId(command.requestId());
+        if (duplicate.isPresent()) {
+            return toView(duplicate.get());
         }
-
-        Account account = holding.getAccount();
-        Order order = Order.builder()
-            .account(account)
-            .stockCode(command.stockCode())
-            .side(OrderSide.SELL)
-            .orderType(OrderType.valueOf(command.orderType()))
-            .price(command.price() != null ? command.price() : BigDecimal.ZERO)
-            .quantity(command.quantity())
-            .status(OrderStatus.PENDING)
-            .orderAt(Instant.now())
-            .reservedMargin(null)
-            .requestedAt(command.requestedAt())
-            .build();
 
         try {
-            order = orderRepository.saveAndFlush(order);
-        } catch (DataIntegrityViolationException e) {
-            Order existing = orderRepository
-                .findByAccountIdAndRequestedAt(command.accountId(), command.requestedAt())
-                .orElseThrow(() -> new IllegalStateException("중복 주문 조회 실패: " + e.getMessage()));
-            return new PlaceOrderResultView(
-                existing.getOrderId(), existing.getStatus().name(),
-                existing.getOrderAt().toEpochMilli(), null);
+            return orderWriter.writeSellOrder(command);
+        } catch (DataIntegrityViolationException race) {
+            return recoverDuplicate(command.requestId(), race);
         }
-
-        return new PlaceOrderResultView(
-            order.getOrderId(),
-            order.getStatus().name(),
-            order.getOrderAt().toEpochMilli(),
-            null
-        );
     }
 
     /**
@@ -171,5 +86,21 @@ public class OrderCommandService {
         BigDecimal returnedMargin = order.getReservedMargin() != null ? order.getReservedMargin() : BigDecimal.ZERO;
         order.cancel();
         return new CancelOrderResultView(order.getOrderId(), returnedMargin);
+    }
+
+    /** 동시 삽입 경쟁에서 진 경우 — 먼저 저장된 승자 주문을 새 트랜잭션으로 조회해 반환. */
+    private PlaceOrderResultView recoverDuplicate(String requestId, DataIntegrityViolationException cause) {
+        log.warn("[주문 접수] requestId 중복 저장 경쟁 — 기존 주문 반환: requestId={}", requestId);
+        return idempotencyReader.findByRequestId(requestId)
+            .map(this::toView)
+            .orElseThrow(() -> new IllegalStateException("중복 주문 조회 실패: requestId=" + requestId, cause));
+    }
+
+    private PlaceOrderResultView toView(Order order) {
+        return new PlaceOrderResultView(
+            order.getOrderId(),
+            order.getStatus().name(),
+            order.getOrderAt().toEpochMilli(),
+            order.getReservedMargin());
     }
 }

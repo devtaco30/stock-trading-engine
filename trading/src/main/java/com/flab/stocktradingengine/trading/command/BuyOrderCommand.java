@@ -12,6 +12,7 @@ public record BuyOrderCommand(
     String orderType,
     BigDecimal price,
     int quantity,
-    Instant requestedAt
+    Instant requestedAt,
+    String requestId
 ) {
 }

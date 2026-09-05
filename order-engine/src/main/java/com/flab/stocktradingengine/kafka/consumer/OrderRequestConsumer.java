@@ -82,13 +82,13 @@ public class OrderRequestConsumer {
         if (event.side() == OrderSide.BUY) {
             BuyOrderCommand command = new BuyOrderCommand(
                 event.accountId(), event.stockCode(),
-                event.orderType(), event.price(), event.quantity(), event.requestedAt());
+                event.orderType(), event.price(), event.quantity(), event.requestedAt(), event.requestId());
             // unpaidSum: settlement 모듈 접근 불가(모듈 계층 제약) → 0 처리
             result = orderCommandService.placeBuyOrder(command, () -> BigDecimal.ZERO);
         } else {
             SellOrderCommand command = new SellOrderCommand(
                 event.accountId(), event.stockCode(),
-                event.orderType(), event.price(), event.quantity(), event.requestedAt());
+                event.orderType(), event.price(), event.quantity(), event.requestedAt(), event.requestId());
             result = orderCommandService.placeSellOrder(command);
         }
 
