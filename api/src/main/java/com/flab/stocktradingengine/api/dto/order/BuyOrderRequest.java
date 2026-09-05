@@ -25,6 +25,10 @@ public record BuyOrderRequest(
 
     @NotNull(message = "수량은 필수입니다")
     @Positive(message = "수량은 양수여야 합니다")
-    Integer quantity
+    Integer quantity,
+
+    // 멱등키(선택). 재전송·이중클릭 중복을 막고 싶은 클라이언트가 UUID 등으로 채운다.
+    // 비우면 API 서버가 UUID 를 생성한다.
+    String requestId
 ) {
 }

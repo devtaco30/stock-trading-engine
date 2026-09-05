@@ -1,9 +1,12 @@
 package com.flab.stocktradingengine.service;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
@@ -14,9 +17,11 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import com.flab.stocktradingengine.kafka.event.OrderRequestEvent;
 import org.springframework.kafka.core.KafkaTemplate;
 
 import com.flab.stocktradingengine.account.entity.Account;
@@ -60,13 +65,54 @@ class OrderApiServiceTest {
     }
 
     private BuyOrderRequest buyRequest(BigDecimal price) {
+        return buyRequest(price, null);
+    }
+
+    private BuyOrderRequest buyRequest(BigDecimal price, String requestId) {
         return BuyOrderRequest.builder()
             .accountId(ACCOUNT_ID)
             .stockCode(STOCK_CODE)
             .orderType("LIMIT")
             .price(price)
             .quantity(10)
+            .requestId(requestId)
             .build();
+    }
+
+    // ── 멱등키(requestId) 생성 ────────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("멱등키(requestId) 생성")
+    class RequestIdGeneration {
+
+        @BeforeEach
+        void givenValidPrice() {
+            when(ltpRedisRepository.get(STOCK_CODE)).thenReturn(Optional.of(REFERENCE_PRICE));
+        }
+
+        private OrderRequestEvent capturePublishedEvent() {
+            ArgumentCaptor<OrderRequestEvent> captor = ArgumentCaptor.forClass(OrderRequestEvent.class);
+            verify(kafkaTemplate).send(any(), any(), captor.capture());
+            return captor.getValue();
+        }
+
+        @Test
+        @DisplayName("클라이언트가 requestId 를 보내면 그대로 이벤트에 실린다")
+        void usesClientRequestId() {
+            orderApiService.placeBuyOrder(USER_ID, buyRequest(REFERENCE_PRICE, "client-req-42"));
+
+            OrderRequestEvent event = capturePublishedEvent();
+            assertThat(event.requestId()).isEqualTo("client-req-42");
+        }
+
+        @Test
+        @DisplayName("클라이언트가 requestId 를 안 보내면 서버가 UUID 를 생성한다")
+        void generatesRequestIdWhenAbsent() {
+            orderApiService.placeBuyOrder(USER_ID, buyRequest(REFERENCE_PRICE, null));
+
+            OrderRequestEvent event = capturePublishedEvent();
+            assertThat(event.requestId()).isNotBlank();
+        }
     }
 
     // ── lastTradedPrice 기준 ──────────────────────────────────────────────────

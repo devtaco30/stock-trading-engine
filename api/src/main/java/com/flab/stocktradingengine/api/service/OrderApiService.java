@@ -7,6 +7,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -76,13 +77,16 @@ public class OrderApiService {
         // 매수 가격 제한폭 검증
         validatePriceBandLimit(request.stockCode(), request.price());
 
+        // 멱등키 — 클라이언트가 보내면 그 값, 없으면 서버에서 생성
+        String requestId = resolveRequestId(request.requestId());
+
         kafkaTemplate.send(
                 KafkaTopics.orderRequests(), // topic
                 String.valueOf(account.getAccountId()), // key
                 new OrderRequestEvent(
                         account.getAccountId(), request.stockCode(),
                         OrderSide.BUY, request.orderType(),
-                        request.price(), request.quantity(), Instant.now())); // value
+                        request.price(), request.quantity(), Instant.now(), requestId)); // value
 
         log.info("[매수 접수] 종목={} 계좌={}", request.stockCode(), account.getAccountId());
     }
@@ -94,15 +98,25 @@ public class OrderApiService {
         Account account = accountAccessResolver.resolveAccountOwnedAndActive(userId, request.accountId());
         validatePriceBandLimit(request.stockCode(), request.price());
 
+        String requestId = resolveRequestId(request.requestId());
+
         kafkaTemplate.send(
                 KafkaTopics.orderRequests(),
                 String.valueOf(account.getAccountId()),
                 new OrderRequestEvent(
                         account.getAccountId(), request.stockCode(),
                         OrderSide.SELL, request.orderType(),
-                        request.price(), request.quantity(), Instant.now()));
+                        request.price(), request.quantity(), Instant.now(), requestId));
 
         log.info("[매도 접수] 종목={} 계좌={}", request.stockCode(), account.getAccountId());
+    }
+
+    /** 클라이언트가 멱등키를 보내면 그대로 쓰고, 비었으면 서버에서 UUID 를 생성한다. */
+    private String resolveRequestId(String clientRequestId) {
+        if (clientRequestId != null && !clientRequestId.isBlank()) {
+            return clientRequestId;
+        }
+        return UUID.randomUUID().toString();
     }
 
     /**
