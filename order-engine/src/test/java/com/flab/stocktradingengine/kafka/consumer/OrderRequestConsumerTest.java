@@ -77,7 +77,7 @@ class OrderRequestConsumerTest {
         consumer.consume(record(buyEvent()), ack);
 
         verify(orderCommandService).placeBuyOrder(any(), any());
-        verify(kafkaTemplate).send(eq("orders." + STOCK), eq(STOCK), any(OrderPlacedEvent.class));
+        verify(kafkaTemplate).send(eq("orders"), eq(STOCK), any(OrderPlacedEvent.class));
         verify(ack, times(1)).acknowledge();
     }
 
@@ -114,7 +114,7 @@ class OrderRequestConsumerTest {
         consumer.consume(record(new OrderCancelRequestEvent(1001L, 9001L, STOCK)), ack);
 
         verify(orderCommandService).cancelOrder(order);
-        verify(kafkaTemplate).send(eq("orders." + STOCK), eq(STOCK), any(OrderCancelledEvent.class));
+        verify(kafkaTemplate).send(eq("orders"), eq(STOCK), any(OrderCancelledEvent.class));
         verify(ack, times(1)).acknowledge();
     }
 }

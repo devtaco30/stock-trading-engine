@@ -33,7 +33,7 @@ public class SettlementConsumer {
 
     private final OrderSettlementService orderSettlementService;
 
-    @KafkaListener(topicPattern = "fills\\..*", groupId = "settlement-engine")
+    @KafkaListener(topics = "fills", groupId = "settlement-engine")
     public void consume(ConsumerRecord<String, Object> record, Acknowledgment ack) {
         Object event = record.value();
         try {

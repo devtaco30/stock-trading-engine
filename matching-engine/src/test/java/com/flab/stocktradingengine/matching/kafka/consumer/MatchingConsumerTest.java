@@ -13,12 +13,8 @@ import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
 import java.time.Instant;
-import java.util.Collection;
-import java.util.List;
-import java.util.Map;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.common.TopicPartition;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -29,7 +25,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.kafka.core.KafkaTemplate;
 
-import org.springframework.kafka.listener.ConsumerSeekAware.ConsumerSeekCallback;
 import org.springframework.kafka.support.Acknowledgment;
 
 import com.flab.stocktradingengine.kafka.event.OrderCancelledEvent;
@@ -61,7 +56,7 @@ class MatchingConsumerTest {
     MatchingConsumer consumer;
 
     private static final String STOCK_CODE = "005930";
-    private static final String TOPIC = "orders." + STOCK_CODE;
+    private static final String TOPIC = "orders";
 
     private OrderBook book;
 
@@ -83,82 +78,6 @@ class MatchingConsumerTest {
     private OrderPlacedEvent sellEvent(long orderId, String price) {
         return new OrderPlacedEvent(orderId, 200L, STOCK_CODE, OrderSide.SELL,
             new BigDecimal(price), 10, Instant.now());
-    }
-
-    // ── 파티션 할당/반환 ──────────────────────────────────────────────────────
-
-    @Nested
-    @DisplayName("파티션 할당/반환")
-    class PartitionLifecycle {
-
-        @Test
-        @DisplayName("파티션 할당 시 해당 종목 PENDING 주문을 OrderBook 에 로드")
-        void 파티션_할당_시_PENDING_주문_로드() {
-            Order mockOrder = pendingOrder(1L, OrderSide.BUY, "70000");
-            when(orderQueryService.getPendingByStockCodeSortedByTime(STOCK_CODE))
-                .thenReturn(List.of(mockOrder));
-
-            consumer.onPartitionsAssigned(
-                Map.of(new TopicPartition(TOPIC, 0), 0L),
-                mock(ConsumerSeekCallback.class)
-            );
-
-            assertThat(book.containsOrder(1L)).isTrue();
-        }
-
-        @Test
-        @DisplayName("파티션 할당 시 PENDING 없으면 OrderBook 비어있음")
-        void 파티션_할당_PENDING_없으면_빈_OrderBook() {
-            when(orderQueryService.getPendingByStockCodeSortedByTime(STOCK_CODE))
-                .thenReturn(List.of());
-
-            consumer.onPartitionsAssigned(
-                Map.of(new TopicPartition(TOPIC, 0), 0L),
-                mock(ConsumerSeekCallback.class)
-            );
-
-            assertThat(book.match()).isEmpty();
-        }
-
-        @Test
-        @DisplayName("파티션 할당 시 이미 OrderBook 에 있는 주문은 중복 등록 안 함")
-        void 파티션_할당_중복_주문_스킵() {
-            book.addOrder(new OrderEntry(1L, 100L, STOCK_CODE, OrderSide.BUY,
-                new BigDecimal("70000"), 10, Instant.now()));
-
-            Order mockOrder = mock(Order.class);
-            when(mockOrder.getOrderId()).thenReturn(1L);
-            when(orderQueryService.getPendingByStockCodeSortedByTime(STOCK_CODE))
-                .thenReturn(List.of(mockOrder));
-
-            consumer.onPartitionsAssigned(
-                Map.of(new TopicPartition(TOPIC, 0), 0L),
-                mock(ConsumerSeekCallback.class)
-            );
-
-            assertThat(book.containsOrder(1L)).isTrue();
-        }
-
-        @Test
-        @DisplayName("파티션 반환 시 해당 종목 OrderBook 제거")
-        void 파티션_반환_시_OrderBook_제거() {
-            Collection<TopicPartition> partitions = List.of(new TopicPartition(TOPIC, 0));
-
-            consumer.onPartitionsRevoked(partitions);
-
-            verify(orderBookRegistry).removeBook(STOCK_CODE);
-        }
-
-        @Test
-        @DisplayName("토픽명에 . 없는 파티션은 무시")
-        void 알_수_없는_토픽_파티션_무시() {
-            consumer.onPartitionsAssigned(
-                Map.of(new TopicPartition("unknown", 0), 0L),
-                mock(ConsumerSeekCallback.class)
-            );
-
-            verify(orderBookRegistry, never()).getOrCreate(any());
-        }
     }
 
     // ── 라우팅 ───────────────────────────────────────────────────────────────
@@ -205,7 +124,7 @@ class MatchingConsumerTest {
 
         consumer.consume(record(buyEvent(2L, "70000")), ack);
 
-        verify(kafkaTemplate).send(eq("fills." + STOCK_CODE), eq(STOCK_CODE), any(TradeFilledEvent.class));
+        verify(kafkaTemplate).send(eq("fills"), eq(STOCK_CODE), any(TradeFilledEvent.class));
         verify(orderBookRegistry).updateLastTradedPrice(eq(STOCK_CODE), eq(new BigDecimal("70000")));
         verify(ack).acknowledge();
     }
@@ -246,20 +165,5 @@ class MatchingConsumerTest {
             .isInstanceOf(RuntimeException.class);
 
         verify(ack, never()).acknowledge();
-    }
-
-    // ── 헬퍼 ─────────────────────────────────────────────────────────────────
-
-    private Order pendingOrder(long orderId, OrderSide side, String price) {
-        Order order = mock(Order.class);
-        when(order.getOrderId()).thenReturn(orderId);
-        when(order.getAccountId()).thenReturn(100L);
-        when(order.getStockCode()).thenReturn(STOCK_CODE);
-        when(order.getSide()).thenReturn(side);
-        when(order.getPrice()).thenReturn(new BigDecimal(price));
-        when(order.getQuantity()).thenReturn(10);
-        when(order.getOrderAt()).thenReturn(Instant.now());
-        when(order.getFilledQuantity()).thenReturn(0);
-        return order;
     }
 }

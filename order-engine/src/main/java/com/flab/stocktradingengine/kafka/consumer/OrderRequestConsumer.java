@@ -93,7 +93,7 @@ public class OrderRequestConsumer {
         }
 
         kafkaTemplate.send(
-            KafkaTopics.orders(event.stockCode()),
+            KafkaTopics.orders(),
             event.stockCode(),
             new OrderPlacedEvent(
                 result.orderId(), event.accountId(),
@@ -109,7 +109,7 @@ public class OrderRequestConsumer {
         Order order = orderQueryService.getOrder(event.orderId());
         orderCommandService.cancelOrder(order);
         kafkaTemplate.send(
-            KafkaTopics.orders(event.stockCode()),
+            KafkaTopics.orders(),
             event.stockCode(),
             new OrderCancelledEvent(event.orderId(), event.stockCode())
         );
