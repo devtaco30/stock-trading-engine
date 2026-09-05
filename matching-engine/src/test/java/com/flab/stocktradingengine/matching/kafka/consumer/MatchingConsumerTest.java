@@ -29,7 +29,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.kafka.core.KafkaTemplate;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.kafka.listener.ConsumerSeekAware.ConsumerSeekCallback;
 import org.springframework.kafka.support.Acknowledgment;
 
@@ -55,7 +54,6 @@ class MatchingConsumerTest {
     @Mock OrderQueryService orderQueryService;
     @Mock LtpRedisRepository ltpRedisRepository;
     @Mock OrderbookRedisRepository orderbookRedisRepository;
-    @Mock ObjectMapper objectMapper;
     @Mock SnowflakeIdGenerator snowflakeIdGenerator;
     @Mock Acknowledgment ack;
 
@@ -71,7 +69,6 @@ class MatchingConsumerTest {
     void setUp() throws Exception {
         book = new OrderBook();
         lenient().when(orderBookRegistry.getOrCreate(STOCK_CODE)).thenReturn(book);
-        lenient().when(objectMapper.writeValueAsString(any())).thenReturn("{}");
     }
 
     private ConsumerRecord<String, Object> record(Object value) {

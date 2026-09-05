@@ -271,6 +271,37 @@ class AccountServiceTest {
         }
     }
 
+    @Nested
+    @DisplayName("decreaseHolding")
+    class DecreaseHolding {
+
+        @Test
+        @DisplayName("매도 체결 차감 시 보유 행을 락(ForUpdate)으로 조회하고 수량을 뺀다")
+        void locksHoldingRowAndSubtracts() {
+            Long accountId = 1L;
+            String stockCode = "005930";
+            Holding holding = org.mockito.Mockito.mock(Holding.class);
+            when(holdingRepository.findByAccount_AccountIdAndStockCodeForUpdate(accountId, stockCode))
+                .thenReturn(Optional.of(holding));
+
+            accountService.decreaseHolding(accountId, stockCode, 30);
+
+            verify(holdingRepository).findByAccount_AccountIdAndStockCodeForUpdate(accountId, stockCode);
+            verify(holdingRepository, never()).findByAccount_AccountIdAndStockCode(any(), any());
+            verify(holding).subtractQuantity(30);
+        }
+
+        @Test
+        @DisplayName("보유가 없으면 ResourceNotFoundException")
+        void throwsWhenHoldingMissing() {
+            when(holdingRepository.findByAccount_AccountIdAndStockCodeForUpdate(2L, "005930"))
+                .thenReturn(Optional.empty());
+
+            assertThrows(ResourceNotFoundException.class,
+                () -> accountService.decreaseHolding(2L, "005930", 10));
+        }
+    }
+
     private static Account mockAccount(Long accountId) {
         return mockAccount(accountId, AccountStatus.ACTIVE);
     }
