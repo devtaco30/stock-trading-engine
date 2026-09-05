@@ -60,7 +60,16 @@ public class Holding {
         this.averagePrice = totalAmount.divide(BigDecimal.valueOf(totalQty), 0, java.math.RoundingMode.DOWN);
     }
 
+    /**
+     * 보유 수량 차감(매도 체결 반영). 보유보다 많이 차감하려 하면 예외로 막는다.
+     * 주문 시점의 가용 수량 검증(OrderWriter)이 정상이면 이 가드는 발동하지 않는다.
+     * 그 방어가 뚫렸을 때 음수 보유가 저장되는 것을 마지막에 차단하는 안전망이다.
+     */
     public void subtractQuantity(int subQuantity) {
+        if (subQuantity > this.quantity) {
+            throw new IllegalStateException(
+                "보유 수량 초과 차감: 보유=" + this.quantity + ", 차감=" + subQuantity);
+        }
         this.quantity -= subQuantity;
     }
 }

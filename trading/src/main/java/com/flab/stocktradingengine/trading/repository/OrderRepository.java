@@ -39,6 +39,16 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
            "WHERE o.account.accountId = :accountId AND o.status = 'PENDING' AND o.side = 'BUY'")
     BigDecimal sumReservedMarginByAccountId(@Param("accountId") Long accountId);
 
+    /**
+     * 특정 계좌·종목의 PENDING 매도 주문 잔량(quantity - filledQuantity) 합계.
+     * 매도 주문 시점의 가용 수량(보유 - 이 합계) 계산에 쓴다. 매수 sumReservedMarginByAccountId 와 대칭.
+     * 부분 체결분은 이미 보유 수량에서 차감됐으므로 잔량만 미체결 매도 약정으로 집계한다.
+     */
+    @Query("SELECT COALESCE(SUM(o.quantity - o.filledQuantity), 0) FROM Order o " +
+           "WHERE o.account.accountId = :accountId AND o.stockCode = :stockCode " +
+           "AND o.status = 'PENDING' AND o.side = 'SELL'")
+    long sumPendingSellQuantity(@Param("accountId") Long accountId, @Param("stockCode") String stockCode);
+
     /** 증거금 홀딩 중인 주문 (PENDING/FILLED 공통, T+2 정산 전까지 출금 불가 반영용) */
     List<Order> findByAccount_AccountIdAndReservedMarginIsNotNull(Long accountId);
 

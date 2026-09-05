@@ -101,13 +101,18 @@ public class OrderWriter {
      */
     @Transactional
     public PlaceOrderResultView writeSellOrder(SellOrderCommand command) {
-        // 보유 종목 검증
+        // 보유 종목 검증 (행 락 — 조회~검증 사이 동시 매도 접수 직렬화)
         Holding holding = accountService.getHoldingByAccountIdForUpdate(command.accountId(), command.stockCode())
             .orElseThrow(() -> new InvalidRequestException("보유 종목이 아님: " + command.stockCode()));
 
-        // 보유 수량 검증
-        if (holding.getQuantity() < command.quantity()) {
-            throw new InsufficientResourceException("매도 수량 초과 (보유: " + holding.getQuantity() + ", 요청: " + command.quantity() + ")");
+        // 가용 수량 검증 = 보유 - 이미 접수된 PENDING 매도 잔량.
+        // 보유 수량만 보면 100주로 100주 매도주문을 여러 건 접수하는 over-sell 이 뚫린다(매수 증거금 예약과 대칭).
+        long pendingSellQuantity = orderRepository.sumPendingSellQuantity(command.accountId(), command.stockCode());
+        long availableQuantity = holding.getQuantity() - pendingSellQuantity;
+        if (availableQuantity < command.quantity()) {
+            throw new InsufficientResourceException(
+                "매도 가능 수량 초과 (보유: " + holding.getQuantity()
+                + ", 미체결 매도: " + pendingSellQuantity + ", 요청: " + command.quantity() + ")");
         }
 
         Account account = holding.getAccount();
