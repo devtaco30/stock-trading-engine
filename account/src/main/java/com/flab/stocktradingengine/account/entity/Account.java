@@ -35,7 +35,7 @@ public class Account {
     private Long id;
 
     @SnowflakeId
-    @Column(name = "account_id", nullable = false, updatable = false)
+    @Column(name = "account_id", nullable = false, updatable = false, unique = true)
     private Long accountId;
 
     @ManyToOne(fetch = FetchType.LAZY)

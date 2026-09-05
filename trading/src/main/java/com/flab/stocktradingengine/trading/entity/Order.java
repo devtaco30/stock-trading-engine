@@ -45,11 +45,12 @@ public class Order {
     private Long orderId;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "account_id", nullable = false)
+    @JoinColumn(name = "account_id", nullable = false, referencedColumnName = "account_id")
     private Account account;
 
     /**
      * FK 컬럼 직접 읽기. Lazy 연관을 로드하지 않고 accountId를 조회할 때 사용.
+     * FK가 Account.accountId(Snowflake, UNIQUE)를 참조하므로 이 값도 Snowflake accountId다.
      * insertable/updatable=false — account 연관이 이 컬럼을 관리한다.
      */
     @Column(name = "account_id", insertable = false, updatable = false)
