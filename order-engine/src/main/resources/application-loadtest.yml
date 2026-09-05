@@ -1,0 +1,37 @@
+# 부하 테스트 프로파일 — 공유 Postgres(9702). 시드는 api가 로드하므로 여기선 sql.init 끔.
+# 기동: ./gradlew :order-engine:bootRun --args='--spring.profiles.active=loadtest'
+spring:
+  main:
+    web-application-type: none
+  datasource:
+    url: jdbc:postgresql://localhost:9702/stock_trading
+    driver-class-name: org.postgresql.Driver
+    username: postgres
+    password: postgres
+  jpa:
+    hibernate:
+      ddl-auto: update
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+  sql:
+    init:
+      mode: never
+  kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+    consumer:
+      group-id: order-engine
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "com.flab.stocktradingengine.kafka.event"
+    listener:
+      ack-mode: manual_immediate
+      # order-requests 파티션 수만큼 컨슈머 스레드 → 계좌 분산 시 병렬 처리
+      concurrency: 3
+
+snowflake:
+  node-id: 1
