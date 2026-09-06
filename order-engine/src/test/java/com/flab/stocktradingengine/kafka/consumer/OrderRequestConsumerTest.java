@@ -28,10 +28,8 @@ import com.flab.stocktradingengine.kafka.event.OrderCancelRequestEvent;
 import com.flab.stocktradingengine.kafka.event.OrderCancelledEvent;
 import com.flab.stocktradingengine.kafka.event.OrderPlacedEvent;
 import com.flab.stocktradingengine.kafka.event.OrderRequestEvent;
-import com.flab.stocktradingengine.trading.entity.Order;
 import com.flab.stocktradingengine.trading.entity.OrderSide;
 import com.flab.stocktradingengine.trading.service.OrderCommandService;
-import com.flab.stocktradingengine.trading.service.OrderQueryService;
 import com.flab.stocktradingengine.trading.view.PlaceOrderResultView;
 
 /**
@@ -46,8 +44,6 @@ class OrderRequestConsumerTest {
 
     @Mock
     OrderCommandService orderCommandService;
-    @Mock
-    OrderQueryService orderQueryService;
     @Mock
     @SuppressWarnings("rawtypes")
     KafkaTemplate kafkaTemplate;
@@ -108,12 +104,9 @@ class OrderRequestConsumerTest {
     @Test
     @DisplayName("취소 요청 → cancelOrder 후 OrderCancelledEvent 발행 + ack")
     void cancel_publishesAndAcks() {
-        Order order = org.mockito.Mockito.mock(Order.class);
-        when(orderQueryService.getOrder(9001L)).thenReturn(order);
-
         consumer.consume(record(new OrderCancelRequestEvent(1001L, 9001L, STOCK)), ack);
 
-        verify(orderCommandService).cancelOrder(order);
+        verify(orderCommandService).cancelOrder(9001L);
         verify(kafkaTemplate).send(eq("orders"), eq(STOCK), any(OrderCancelledEvent.class));
         verify(ack, times(1)).acknowledge();
     }

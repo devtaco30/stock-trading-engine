@@ -9,8 +9,6 @@ import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Component;
 
 import com.flab.stocktradingengine.exception.BusinessException;
-import com.flab.stocktradingengine.trading.entity.Order;
-import com.flab.stocktradingengine.trading.service.OrderQueryService;
 import com.flab.stocktradingengine.kafka.KafkaTopics;
 import com.flab.stocktradingengine.kafka.event.OrderCancelRequestEvent;
 import com.flab.stocktradingengine.kafka.event.OrderCancelledEvent;
@@ -51,7 +49,6 @@ import lombok.extern.slf4j.Slf4j;
 public class OrderRequestConsumer {
 
     private final OrderCommandService orderCommandService;
-    private final OrderQueryService orderQueryService;
     private final KafkaTemplate<String, Object> kafkaTemplate;
 
     @KafkaListener(topics = "order-requests", groupId = "order-engine")
@@ -106,8 +103,7 @@ public class OrderRequestConsumer {
     }
 
     private void handleCancelRequest(OrderCancelRequestEvent event) {
-        Order order = orderQueryService.getOrder(event.orderId());
-        orderCommandService.cancelOrder(order);
+        orderCommandService.cancelOrder(event.orderId());
         kafkaTemplate.send(
             KafkaTopics.orders(),
             event.stockCode(),
