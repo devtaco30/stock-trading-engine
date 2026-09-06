@@ -47,7 +47,7 @@ class SettlementConsumerTest {
     private static final String STOCK_CODE = "005930";
 
     private ConsumerRecord<String, Object> recordOf(Object value) {
-        return new ConsumerRecord<>("fills." + STOCK_CODE, 0, 0L, STOCK_CODE, value);
+        return new ConsumerRecord<>("fills", 0, 0L, STOCK_CODE, value);
     }
 
     private static final long TRADE_ID = 9001L;

@@ -128,7 +128,7 @@ class MatchingEngineIntegrationTest {
     }
 
     private ConsumerRecord<String, Object> record(String stockCode, Object value) {
-        return new ConsumerRecord<>("orders." + stockCode, 0, 0L, stockCode, value);
+        return new ConsumerRecord<>("orders", 0, 0L, stockCode, value);
     }
 
     // ── 전량 체결 ─────────────────────────────────────────────────────────────

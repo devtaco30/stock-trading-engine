@@ -90,7 +90,7 @@ public class MatchingConsumer implements ConsumerSeekAware {
 
     // ── 메시지 처리 ─────────────────────────────────────────────────────────
 
-    @KafkaListener(topicPattern = "orders\\..*", groupId = "matching-engine")
+    @KafkaListener(topics = "orders", groupId = "matching-engine")
     public void consume(ConsumerRecord<String, Object> record, Acknowledgment ack) {
         Object event = record.value();
         try {
@@ -168,7 +168,7 @@ public class MatchingConsumer implements ConsumerSeekAware {
 
             // 체결 이벤트 발행 (tradeId = 체결 단위 멱등키, settlement 중복 반영 방지)
             long tradeId = snowflakeIdGenerator.nextId();
-            kafkaTemplate.send(KafkaTopics.fills(stockCode), stockCode,
+            kafkaTemplate.send(KafkaTopics.fills(), stockCode,
                 new TradeFilledEvent(
                     tradeId,
                     stockCode,
