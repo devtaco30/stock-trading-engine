@@ -13,6 +13,7 @@ import com.flab.stocktradingengine.trading.command.BuyOrderCommand;
 import com.flab.stocktradingengine.trading.command.SellOrderCommand;
 import com.flab.stocktradingengine.trading.entity.Order;
 import com.flab.stocktradingengine.trading.entity.OrderStatus;
+import com.flab.stocktradingengine.trading.repository.OrderRepository;
 import com.flab.stocktradingengine.trading.view.CancelOrderResultView;
 import com.flab.stocktradingengine.trading.view.PlaceOrderResultView;
 
@@ -39,6 +40,7 @@ public class OrderCommandService {
 
     private final OrderWriter orderWriter;
     private final OrderIdempotencyReader idempotencyReader;
+    private final OrderRepository orderRepository;
 
     /**
      * 매수 주문 접수 (증거금 예약).
@@ -76,10 +78,14 @@ public class OrderCommandService {
 
     /**
      * 주문 취소 (PENDING만 가능, 매수 시 예약 증거금 반환).
-     * 호출자가 이미 로드한 Order 엔티티를 직접 전달해 이중 조회를 방지한다.
+     * 쓰기 경로이므로 이 트랜잭션 안에서 orderId 로 직접 로드해 managed 상태로 만든다.
+     * 그래야 order.cancel() 의 상태 변경이 dirty checking 으로 DB 에 반영된다.
+     * (조회 결과를 넘겨받으면 detached 라 상태 변경이 flush 되지 않는다.)
      */
     @Transactional
-    public CancelOrderResultView cancelOrder(Order order) {
+    public CancelOrderResultView cancelOrder(Long orderId) {
+        Order order = orderRepository.findByOrderId(orderId)
+            .orElseThrow(() -> new IllegalArgumentException("Order not found: " + orderId));
         if (order.getStatus() != OrderStatus.PENDING) {
             throw new InvalidRequestException("취소 가능한 상태가 아님: " + order.getStatus());
         }
