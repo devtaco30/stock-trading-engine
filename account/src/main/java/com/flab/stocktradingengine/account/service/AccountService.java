@@ -3,6 +3,7 @@ package com.flab.stocktradingengine.account.service;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Supplier;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -122,22 +123,41 @@ public class AccountService {
     }
 
     /**
-     * 출금. 계좌 잔액에서 금액을 뺀다. 잔액 부족 시 예외. 동시 입출금 방지를 위해 비관적 락 사용.
-     * 같은 트랜잭션 내에서 조회(락) → 검증 → 갱신이 원자적으로 이루어져야 하므로 트랜잭션 필수.
+     * 출금(시스템 차감용, 예: 정산 시 실제 대금 결제). 예약증거금·미결제를 고려하지 않고
+     * 잔고 전액을 가용으로 본다. 이미 성립한 체결의 결제이므로 예약으로 막으면 안 된다.
      *
      * @return 반영 후 잔액
      */
     @Transactional
     public BigDecimal withdraw(Long accountId, BigDecimal amount) {
+        return withdraw(accountId, amount, () -> BigDecimal.ZERO);
+    }
+
+    /**
+     * 유저 출금. 가용잔고(잔고 - committed) 기준으로 검증한다.
+     * committed = 예약증거금(PENDING 매수) + 미결제 미수금 합. 매수 접수와 대칭으로
+     * 계좌 락을 보유한 채 committedSupplier 를 호출해 가용을 계산하므로 검증~차감이 원자적이다.
+     * 예약·미결제에 묶인 현금은 출금할 수 없다.
+     *
+     * @param committedSupplier 락 획득 후 호출되는 예약증거금+미결제 합계 공급자
+     * @return 반영 후 잔액
+     */
+    @Transactional
+    public BigDecimal withdraw(Long accountId, BigDecimal amount, Supplier<BigDecimal> committedSupplier) {
         if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
             throw new InvalidRequestException("출금 금액은 0보다 커야 합니다.");
         }
         Account account = accountRepository.findByAccountIdForUpdate(accountId)
             .orElseThrow(() -> new ResourceNotFoundException("Account not found: " + accountId));
-        BigDecimal newBalance = account.getBalance().subtract(amount);
-        if (newBalance.compareTo(BigDecimal.ZERO) < 0) {
-            throw new InsufficientResourceException("잔액 부족");
+        BigDecimal committed = committedSupplier.get();
+        if (committed == null) {
+            committed = BigDecimal.ZERO;
         }
+        BigDecimal available = account.getBalance().subtract(committed);
+        if (amount.compareTo(available) > 0) {
+            throw new InsufficientResourceException("가용잔고 초과: 요청=" + amount + " 가용=" + available);
+        }
+        BigDecimal newBalance = account.getBalance().subtract(amount);
         account.changeBalance(newBalance);
         return newBalance;
     }
