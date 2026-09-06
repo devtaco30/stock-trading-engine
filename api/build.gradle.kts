@@ -33,11 +33,6 @@ dependencies {
 	testRuntimeOnly("com.h2database:h2")
 }
 
-tasks.named<Test>("test") {
-	// ScenarioIntegrationTest는 DataSource/JPA 제외한 컨텍스트를 쓰며 현재 앱 구조와 맞지 않아 기본 test에서 제외
-	exclude("**/ScenarioIntegrationTest.class")
-}
-
 // 단위 테스트만 실행 (Mock 사용, Spring/H2 미사용). 서비스 패키지의 *Test만 포함.
 tasks.register<Test>("unitTest") {
 	group = "verification"
