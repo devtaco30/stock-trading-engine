@@ -117,7 +117,15 @@ public class AccountApiService {
     @Transactional
     public TransactionResponse withdraw(Long userId, Long accountId, BigDecimal amount) {
         accountAccessResolver.resolveAccountOwnedAndActive(userId, accountId);
-        BigDecimal balance = accountService.withdraw(accountId, amount);
+        // 가용잔고 = 잔고 - 예약증거금(PENDING 매수) - 미결제 미수금.
+        // 예약·미결제에 묶인 현금은 출금 불가. 계좌 락 보유 중 합산되도록 supplier 로 전달한다.
+        BigDecimal balance = accountService.withdraw(accountId, amount, () -> {
+            BigDecimal reserved = orderQueryService.getReservedMarginSumByAccountId(accountId);
+            BigDecimal unpaid = unpaidQueryService.getPendingUnpaidSumByAccountId(accountId);
+            BigDecimal reservedOrZero = reserved != null ? reserved : BigDecimal.ZERO;
+            BigDecimal unpaidOrZero = unpaid != null ? unpaid : BigDecimal.ZERO;
+            return reservedOrZero.add(unpaidOrZero);
+        });
         return TransactionResponse.builder()
             .balance(balance)
             .respondedAt(System.currentTimeMillis())
