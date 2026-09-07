@@ -10,6 +10,7 @@ snowflake = "1.1"
 junit = "5.10.2"
 spring-kafka = "3.3.4"
 disruptor = "4.0.0"
+jmh = "1.37"
 
 [libraries]
 spring-boot-starter = { module = "org.springframework.boot:spring-boot-starter", version.ref = "spring-boot" }
@@ -38,6 +39,9 @@ spring-kafka = { module = "org.springframework.kafka:spring-kafka", version.ref 
 spring-kafka-test = { module = "org.springframework.kafka:spring-kafka-test", version.ref = "spring-kafka" }
 
 disruptor = { module = "com.lmax:disruptor", version.ref = "disruptor" }
+
+jmh-core = { module = "org.openjdk.jmh:jmh-core", version.ref = "jmh" }
+jmh-generator-annprocess = { module = "org.openjdk.jmh:jmh-generator-annprocess", version.ref = "jmh" }
 
 [plugins]
 spring-boot = { id = "org.springframework.boot", version.ref = "spring-boot" }
