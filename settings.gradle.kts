@@ -29,5 +29,6 @@ include(
 	"order-engine",
 	"matching-engine",
 	"matching-disruptor",
+	"account-disruptor",
 	"settlement-engine"
 )
