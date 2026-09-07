@@ -25,27 +25,28 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
 
     @Override
     public void onEvent(AccountEvent event, long sequence, boolean endOfBatch) {
+        long orderId = event.getOrderId();
         long accountId = event.getAccountId();
         String requestId = event.getRequestId();
         try {
             AccountState state = accounts.get(accountId);
             if (state == null) {
                 // 워커가 소유하지 않은 계좌 — 라우팅이 잘못됐거나 시드 누락
-                listener.onRejected(accountId, requestId, RejectReason.ACCOUNT_NOT_FOUND);
+                listener.onRejected(accountId, orderId, requestId, RejectReason.ACCOUNT_NOT_FOUND);
                 return;
             }
             BigDecimal price = event.getPrice();
             if (event.getQuantity() <= 0 || price == null || price.signum() <= 0) {
-                listener.onRejected(accountId, requestId, RejectReason.INVALID_QUANTITY);
+                listener.onRejected(accountId, orderId, requestId, RejectReason.INVALID_QUANTITY);
                 return;
             }
 
             BigDecimal orderAmount = price.multiply(BigDecimal.valueOf(event.getQuantity()));
-            ReserveResult result = state.tryReserve(orderAmount);
+            ReserveResult result = state.tryReserve(orderId, orderAmount);
             if (result.accepted()) {
-                listener.onAccepted(accountId, requestId, result.reservedMargin());
+                listener.onAccepted(accountId, orderId, requestId, result.reservedMargin());
             } else {
-                listener.onRejected(accountId, requestId, result.reason());
+                listener.onRejected(accountId, orderId, requestId, result.reason());
             }
         } finally {
             // 슬롯 재사용 대비: 마지막 소비자이므로 처리 후 비운다.

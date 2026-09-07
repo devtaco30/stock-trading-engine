@@ -12,8 +12,8 @@ import java.math.BigDecimal;
 public interface AccountResultListener {
 
     /** 검증 통과 — reservedMargin 은 이번 주문에 예약된 증거금. */
-    void onAccepted(long accountId, String requestId, BigDecimal reservedMargin);
+    void onAccepted(long accountId, long orderId, String requestId, BigDecimal reservedMargin);
 
     /** 검증 거부 — reason 은 거부 사유. */
-    void onRejected(long accountId, String requestId, RejectReason reason);
+    void onRejected(long accountId, long orderId, String requestId, RejectReason reason);
 }

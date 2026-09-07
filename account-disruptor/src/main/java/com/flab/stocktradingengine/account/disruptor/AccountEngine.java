@@ -74,11 +74,11 @@ public class AccountEngine {
      * <p>빈 슬롯을 예약({@code next})하고 값을 채운 뒤 발행({@code publish})한다.
      * publish 를 finally 에 둬, 값 채우는 중 예외가 나도 예약한 자리가 막히지 않게 한다.</p>
      */
-    public void publishBuy(long accountId, String stockCode, BigDecimal price, int quantity, String requestId) {
+    public void publishBuy(long orderId, long accountId, String stockCode, BigDecimal price, int quantity, String requestId) {
         long sequence = ringBuffer.next();
         try {
             AccountEvent event = ringBuffer.get(sequence);
-            event.setBuy(accountId, stockCode, price, quantity, requestId);
+            event.setBuy(orderId, accountId, stockCode, price, quantity, requestId);
         } finally {
             ringBuffer.publish(sequence);
         }

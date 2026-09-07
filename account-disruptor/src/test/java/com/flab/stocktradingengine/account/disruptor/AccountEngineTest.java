@@ -54,7 +54,7 @@ class AccountEngineTest {
         engine.seed(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
         engine.start();
 
-        engine.publishBuy(1L, STOCK, new BigDecimal("10000"), 10, "r1"); // 100000
+        engine.publishBuy(1001L, 1L, STOCK, new BigDecimal("10000"), 10, "r1"); // 100000
         awaitResults();
 
         assertEquals(1, events.size());
@@ -70,7 +70,7 @@ class AccountEngineTest {
         engine.seed(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
         engine.start();
 
-        engine.publishBuy(99L, STOCK, new BigDecimal("10000"), 10, "r1");
+        engine.publishBuy(1001L, 99L, STOCK, new BigDecimal("10000"), 10, "r1");
         awaitResults();
 
         assertEquals(1, events.size());
@@ -85,7 +85,7 @@ class AccountEngineTest {
         engine.seed(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
         engine.start();
 
-        engine.publishBuy(1L, STOCK, new BigDecimal("10000"), 0, "r1");
+        engine.publishBuy(1001L, 1L, STOCK, new BigDecimal("10000"), 0, "r1");
         awaitResults();
 
         assertEquals(1, events.size());
@@ -99,7 +99,7 @@ class AccountEngineTest {
         engine.seed(1L, new BigDecimal("30000"), new BigDecimal("0.40")); // buyLimit = 75000
         engine.start();
 
-        engine.publishBuy(1L, STOCK, new BigDecimal("10000"), 10, "r1"); // 100000 > 75000
+        engine.publishBuy(1001L, 1L, STOCK, new BigDecimal("10000"), 10, "r1"); // 100000 > 75000
         awaitResults();
 
         assertEquals(1, events.size());
@@ -113,8 +113,8 @@ class AccountEngineTest {
         engine.seed(1L, new BigDecimal("1000000"), new BigDecimal("1.00")); // buyLimit = 가용
         engine.start();
 
-        engine.publishBuy(1L, STOCK, new BigDecimal("60000"), 10, "r1"); // 600000 → 통과
-        engine.publishBuy(1L, STOCK, new BigDecimal("60000"), 10, "r2"); // 가용 400000 → 거부
+        engine.publishBuy(1001L, 1L, STOCK, new BigDecimal("60000"), 10, "r1"); // 600000 → 통과
+        engine.publishBuy(1002L, 1L, STOCK, new BigDecimal("60000"), 10, "r2"); // 가용 400000 → 거부
         awaitResults();
 
         assertEquals(2, events.size());
@@ -134,19 +134,19 @@ class AccountEngineTest {
         }
 
         @Override
-        public void onAccepted(long accountId, String requestId, BigDecimal reservedMargin) {
-            events.add(new Recorded(accountId, requestId, true, reservedMargin, null));
+        public void onAccepted(long accountId, long orderId, String requestId, BigDecimal reservedMargin) {
+            events.add(new Recorded(accountId, orderId, requestId, true, reservedMargin, null));
             latch.countDown();
         }
 
         @Override
-        public void onRejected(long accountId, String requestId, RejectReason reason) {
-            events.add(new Recorded(accountId, requestId, false, null, reason));
+        public void onRejected(long accountId, long orderId, String requestId, RejectReason reason) {
+            events.add(new Recorded(accountId, orderId, requestId, false, null, reason));
             latch.countDown();
         }
     }
 
-    private record Recorded(long accountId, String requestId, boolean accepted,
+    private record Recorded(long accountId, long orderId, String requestId, boolean accepted,
                             BigDecimal reservedMargin, RejectReason reason) {
     }
 }
