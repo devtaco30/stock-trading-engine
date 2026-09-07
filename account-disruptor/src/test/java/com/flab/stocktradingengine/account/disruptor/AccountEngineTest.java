@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -13,6 +14,9 @@ import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import com.lmax.disruptor.BlockingWaitStrategy;
+import com.lmax.disruptor.dsl.ProducerType;
 
 /**
  * Disruptor 하네스를 통과하는 매수 검증·예약의 종단 동작.
@@ -181,6 +185,20 @@ class AccountEngineTest {
     }
 
     @Test
+    @DisplayName("초기 보유를 시드하면 매수 체결 없이도 바로 매도 검증을 통과시킨다")
+    void 초기보유_시드하면_바로_매도가능() throws InterruptedException {
+        prepare(1);
+        engine.seed(1L, new BigDecimal("1000000"), new BigDecimal("0.40"), Map.of(STOCK, 10));
+        engine.start();
+
+        engine.publishSell(2001L, 1L, STOCK, 4, "r1");
+        awaitResults();
+
+        assertTrue(events.get(0).accepted());
+        assertEquals(4, events.get(0).reservedQuantity());
+    }
+
+    @Test
     @DisplayName("보유 수량을 넘는 매도는 INSUFFICIENT_HOLDING 으로 거부한다")
     void 매도예약_보유초과하면_거부() throws InterruptedException {
         prepare(1);
@@ -225,6 +243,35 @@ class AccountEngineTest {
         assertEquals(3, events.size());
         assertTrue(events.get(1).applied());
         assertFalse(events.get(2).applied());
+    }
+
+    // ---------- ProducerType 주입 (order-manager 준비) ----------
+
+    @Test
+    @DisplayName("ProducerType.MULTI로 생성하면 두 스레드가 동시에 발행해도 전부 처리된다")
+    void 멀티프로듀서_동시발행_전부처리() throws InterruptedException {
+        int perThread = 200;
+        int total = perThread * 2;
+        latch = new CountDownLatch(total);
+        engine = new AccountEngine(4096, new BlockingWaitStrategy(), ProducerType.MULTI, new Recorder(events, latch));
+        engine.seed(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
+        engine.start();
+
+        Thread t1 = new Thread(() -> publishBuys(1_000, perThread));
+        Thread t2 = new Thread(() -> publishBuys(100_000, perThread));
+        t1.start();
+        t2.start();
+        t1.join();
+        t2.join();
+
+        assertTrue(latch.await(2, TimeUnit.SECONDS), "2초 안에 결과가 모두 도착해야 한다");
+        assertEquals(total, events.size());
+    }
+
+    private void publishBuys(long orderIdStart, int count) {
+        for (int i = 0; i < count; i++) {
+            engine.publishBuy(orderIdStart + i, 1L, STOCK, new BigDecimal("1"), 1, "r");
+        }
     }
 
     /** 소비자 스레드가 낸 결과를 모으고 래치를 내리는 테스트용 리스너. */

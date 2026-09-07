@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.math.BigDecimal;
+import java.util.Map;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -13,6 +14,17 @@ import org.junit.jupiter.api.Test;
 class AccountStateTest {
 
     private static final String STOCK = "005930";
+
+    // ---------- 초기 보유 시드 ----------
+
+    @Test
+    @DisplayName("초기 보유를 시드하면 그 종목의 보유 수량으로 바로 조회된다")
+    void 초기보유_시드하면_바로_조회된다() {
+        AccountState state = new AccountState(1L, new BigDecimal("1000000"), new BigDecimal("0.40"),
+            Map.of(STOCK, 10));
+
+        assertEquals(10, state.holding(STOCK));
+    }
 
     // ---------- 검증·예약 (B2) ----------
 

@@ -37,6 +37,12 @@ public final class AccountState {
         this.marginRate = marginRate;
     }
 
+    /** 초기 보유(종목코드 → 수량)를 함께 시드한다. DB 없이 기존 보유를 미리 넣을 때 쓴다. */
+    public AccountState(long accountId, BigDecimal balance, BigDecimal marginRate, Map<String, Integer> initialHoldings) {
+        this(accountId, balance, marginRate);
+        holdings.putAll(initialHoldings);
+    }
+
     /**
      * 매수 주문을 검증하고, 통과하면 그 주문의 예약(가격·수량)을 장부에 기록한다.
      *

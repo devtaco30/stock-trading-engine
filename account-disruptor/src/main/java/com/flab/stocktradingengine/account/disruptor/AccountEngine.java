@@ -23,8 +23,12 @@ import com.lmax.disruptor.util.DaemonThreadFactory;
  * <p>계좌 상태는 DB 없이 {@link #seed} 로 미리 넣는다. 시드는 소비자 스레드가 뜨기 전
  * ({@link #start} 이전) 설정 스레드에서만 호출해야 한다 — 기동 후 시드하면 소비자와 경쟁한다.</p>
  *
- * <h3>ProducerType.SINGLE</h3>
- * <p>B2 는 피더(테스트/이후 Aeron 수신 스레드)가 하나다. 여러 프로듀서가 필요해지면 MULTI 로 바꾼다.</p>
+ * <h3>ProducerType</h3>
+ * <p>피더(발행자)가 하나뿐이면(테스트, Aeron 수신 스레드 하나) {@link ProducerType#SINGLE}로 충분하다.
+ * 발행자가 둘 이상이면(예: order-manager — 주문 접수 스레드와 매칭의 체결 콜백 스레드가 각각
+ * publishBuy/Sell 과 publishBuyFill/SellFill 로 같은 링버퍼에 쓴다) {@link ProducerType#MULTI}가 필요하다.
+ * 소비자(계좌 상태를 실제로 만지는 쪽)는 이 값과 무관하게 항상 {@link AccountEventHandler} 하나뿐이다 —
+ * ProducerType 은 "누가 넣는지"에만 영향을 주고 "누가 처리하는지"는 안 바꾼다.</p>
  */
 public class AccountEngine {
 
@@ -32,13 +36,13 @@ public class AccountEngine {
     private final Map<Long, AccountState> accounts = new HashMap<>();
     private RingBuffer<AccountEvent> ringBuffer;
 
-    public AccountEngine(int bufferSize, WaitStrategy waitStrategy, AccountResultListener listener) {
+    public AccountEngine(int bufferSize, WaitStrategy waitStrategy, ProducerType producerType, AccountResultListener listener) {
         ThreadFactory threadFactory = DaemonThreadFactory.INSTANCE;
         this.disruptor = new Disruptor<>(
             AccountEvent::new,
             bufferSize,
             threadFactory,
-            ProducerType.SINGLE,
+            producerType,
             waitStrategy
         );
         // 예상 못한 예외는 fail-fast(handleEventsWith 배선 전에 설정해야 적용됨).
@@ -46,9 +50,14 @@ public class AccountEngine {
         this.disruptor.handleEventsWith(new AccountEventHandler(accounts, listener));
     }
 
-    /** 기본 대기 전략({@link BlockingWaitStrategy})으로 생성한다. */
+    /** 발행자가 하나뿐인 경우({@link ProducerType#SINGLE})로 생성한다. */
+    public AccountEngine(int bufferSize, WaitStrategy waitStrategy, AccountResultListener listener) {
+        this(bufferSize, waitStrategy, ProducerType.SINGLE, listener);
+    }
+
+    /** 발행자 하나 + 기본 대기 전략({@link BlockingWaitStrategy})으로 생성한다. */
     public AccountEngine(int bufferSize, AccountResultListener listener) {
-        this(bufferSize, new BlockingWaitStrategy(), listener);
+        this(bufferSize, new BlockingWaitStrategy(), ProducerType.SINGLE, listener);
     }
 
     /**
@@ -56,6 +65,11 @@ public class AccountEngine {
      */
     public void seed(long accountId, BigDecimal balance, BigDecimal marginRate) {
         accounts.put(accountId, new AccountState(accountId, balance, marginRate));
+    }
+
+    /** 초기 보유(종목코드 → 수량)까지 함께 미리 넣는다. 반드시 {@link #start} 전에 호출한다. */
+    public void seed(long accountId, BigDecimal balance, BigDecimal marginRate, Map<String, Integer> initialHoldings) {
+        accounts.put(accountId, new AccountState(accountId, balance, marginRate, initialHoldings));
     }
 
     /** 소비자 스레드를 기동하고 링버퍼를 준비한다. */
