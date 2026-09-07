@@ -17,6 +17,10 @@ dependencies {
 
 	implementation(libs.disruptor)
 
+	// Aeron: 주문 경로 저지연 통신(임베디드 MediaDriver + 클라이언트). Unit 4.
+	implementation(libs.aeron.driver)
+	implementation(libs.aeron.client)
+
 	compileOnly(libs.lombok)
 	annotationProcessor(libs.lombok)
 
@@ -26,6 +30,15 @@ dependencies {
 	// JMH 코어(런타임)와 벤치 클래스 생성용 애노테이션 프로세서
 	"jmhImplementation"(libs.jmh.core)
 	"jmhAnnotationProcessor"(libs.jmh.generator.annprocess)
+}
+
+// Aeron/Agrona 는 JDK 17 에서 내부 클래스 jdk.internal.misc.Unsafe 와 sun.nio.ch 에 접근한다.
+// 모듈 시스템이 기본으로 막으므로 테스트 JVM 에 개방 플래그를 준다(Real Logic 권장).
+tasks.withType<Test>().configureEach {
+	jvmArgs(
+		"--add-opens", "java.base/jdk.internal.misc=ALL-UNNAMED",
+		"--add-opens", "java.base/sun.nio.ch=ALL-UNNAMED"
+	)
 }
 
 // jmh 소스셋이 main 의 컴파일 산출물(MatchingEngine 등)을 참조하도록 classpath 에 더한다.

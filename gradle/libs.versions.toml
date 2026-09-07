@@ -11,6 +11,7 @@ junit = "5.10.2"
 spring-kafka = "3.3.4"
 disruptor = "4.0.0"
 jmh = "1.37"
+aeron = "1.48.0"
 
 [libraries]
 spring-boot-starter = { module = "org.springframework.boot:spring-boot-starter", version.ref = "spring-boot" }
@@ -42,6 +43,9 @@ disruptor = { module = "com.lmax:disruptor", version.ref = "disruptor" }
 
 jmh-core = { module = "org.openjdk.jmh:jmh-core", version.ref = "jmh" }
 jmh-generator-annprocess = { module = "org.openjdk.jmh:jmh-generator-annprocess", version.ref = "jmh" }
+
+aeron-driver = { module = "io.aeron:aeron-driver", version.ref = "aeron" }
+aeron-client = { module = "io.aeron:aeron-client", version.ref = "aeron" }
 
 [plugins]
 spring-boot = { id = "org.springframework.boot", version.ref = "spring-boot" }
