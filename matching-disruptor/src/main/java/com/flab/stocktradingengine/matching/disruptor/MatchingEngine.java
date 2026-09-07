@@ -17,7 +17,9 @@ import com.flab.stocktradingengine.trading.entity.OrderSide;
  * Disruptor 매칭 코어의 진입점.
  *
  * <p>링버퍼 생명주기(start/shutdown)와 주문 발행(프로듀서)을 한곳에 모은다.
- * 내부에 소비자로 {@link MatchingEventHandler} 하나를 붙여 단일 스레드 매칭을 구성한다.</p>
+ * 소비자를 {@code handleEventsWith(journal).then(matcher)} 로 배선해,
+ * {@link JournalEventHandler}(기록)가 먼저 돌고 그 뒤에만 {@link MatchingEventHandler}(매칭)가 돈다.
+ * 매칭은 단일 스레드로 처리된다.</p>
  *
  * <h3>ProducerType.SINGLE</h3>
  * <p>Unit 1 에서는 주문을 넣는 피더 스레드가 하나다. 프로듀서가 하나임을 알려주면
@@ -31,9 +33,11 @@ import com.flab.stocktradingengine.trading.entity.OrderSide;
 public class MatchingEngine {
 
     private final Disruptor<OrderEvent> disruptor;
+    private final Journal journal;
     private RingBuffer<OrderEvent> ringBuffer;
 
-    public MatchingEngine(int bufferSize, WaitStrategy waitStrategy, MatchListener listener) {
+    public MatchingEngine(int bufferSize, WaitStrategy waitStrategy, MatchListener listener, Journal journal) {
+        this.journal = journal;
         ThreadFactory threadFactory = DaemonThreadFactory.INSTANCE;
         this.disruptor = new Disruptor<>(
             OrderEvent::new,
@@ -42,10 +46,20 @@ public class MatchingEngine {
             ProducerType.SINGLE,
             waitStrategy
         );
-        this.disruptor.handleEventsWith(new MatchingEventHandler(listener));
+        // 예상 못한 예외(NPE 등 버그·상태 오염)는 fail-fast 로 소비자를 멈춘다.
+        // handleEventsWith 배선 전에 설정해야 이후 등록되는 모든 핸들러에 적용된다.
+        this.disruptor.setDefaultExceptionHandler(new MatchingExceptionHandler());
+        // 저널러가 먼저 기록 → 매처가 그 뒤에 매칭 (SequenceBarrier 로 게이팅)
+        this.disruptor.handleEventsWith(new JournalEventHandler(journal))
+            .then(new MatchingEventHandler(listener));
     }
 
-    /** 기본 대기 전략({@link BlockingWaitStrategy})으로 생성한다. */
+    /** 기본 저널({@link InMemoryJournal})로 생성한다. */
+    public MatchingEngine(int bufferSize, WaitStrategy waitStrategy, MatchListener listener) {
+        this(bufferSize, waitStrategy, listener, new InMemoryJournal());
+    }
+
+    /** 기본 대기 전략({@link BlockingWaitStrategy}) + 기본 저널({@link InMemoryJournal})로 생성한다. */
     public MatchingEngine(int bufferSize, MatchListener listener) {
         this(bufferSize, new BlockingWaitStrategy(), listener);
     }
@@ -58,6 +72,11 @@ public class MatchingEngine {
     /** 남은 이벤트를 처리하고 소비자 스레드를 종료한다. */
     public void shutdown() {
         disruptor.shutdown();
+    }
+
+    /** 저널을 반환한다. 테스트·복구 검증용. */
+    public Journal journal() {
+        return journal;
     }
 
     /**
