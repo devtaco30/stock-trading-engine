@@ -25,7 +25,8 @@ public final class AccountState {
     private final long accountId;
     private final BigDecimal balance;      // 총 현금 잔액
     private final BigDecimal marginRate;   // 증거금률 (0.40 ~ 1.00, 시드값 전제)
-    private final Map<Long, Reservation> reservations = new HashMap<>(); // orderId → 예약(가격·잔량) 장부
+    private final Map<Long, Reservation> reservations = new HashMap<>();         // orderId → 매수 예약(가격·잔량) 장부
+    private final Map<Long, SellReservation> sellReservations = new HashMap<>(); // orderId → 매도 예약(종목·잔량) 장부
     private final Map<String, Integer> holdings = new HashMap<>();      // 종목코드 → 보유 수량
     private final Set<Long> processedTradeIds = new HashSet<>();        // 이미 반영한 체결(tradeId), 멱등용
     private BigDecimal unpaid = BigDecimal.ZERO;                        // 미결제 미수금
@@ -96,14 +97,47 @@ public final class AccountState {
     }
 
     /**
-     * 매도 전량 체결 반영: 보유를 줄인다.
+     * 매도 주문을 검증하고, 통과하면 그 주문의 매도 예약(보유 수량 담보)을 장부에 기록한다.
+     * 매수의 {@link #tryReserve}와 대칭이지만 담보가 돈이 아니라 보유 수량이다.
+     *
+     * @param orderId  주문 신원(장부 키) — 나중에 체결 시 이 키로 예약을 푼다
+     * @param quantity 매도 수량
+     * @return 통과면 accepted(예약 수량), 초과면 rejected(INSUFFICIENT_HOLDING)
+     */
+    public SellReserveResult trySellReserve(long orderId, String stockCode, int quantity) {
+        int available = holding(stockCode) - reservedSellQuantity(stockCode);
+        if (quantity > available) {
+            return SellReserveResult.rejected(RejectReason.INSUFFICIENT_HOLDING);
+        }
+        sellReservations.put(orderId, new SellReservation(stockCode, quantity));
+        return SellReserveResult.accepted(quantity);
+    }
+
+    /**
+     * 매도 체결 반영(전량·부분 공통): 체결된 수량만큼 그 주문의 매도 예약을 줄이고 보유를 줄인다.
+     * 잔량이 남으면 예약을 유지하고, 0이 되면 장부에서 지운다.
      *
      * @param tradeId 체결 신원(멱등키) — 이미 반영한 tradeId 면 아무것도 하지 않고 무시한다
+     * @throws IllegalStateException 그 orderId 로 매도 예약된 게 없거나, 체결 수량이 남은 예약 수량을 초과하면
      * @return 이번 호출로 실제 반영했으면 true, 이미 반영한 tradeId 라 무시했으면 false
      */
-    public boolean applySellFill(long tradeId, String stockCode, int fillQty) {
+    public boolean applySellFill(long tradeId, long orderId, String stockCode, int fillQty) {
         if (!processedTradeIds.add(tradeId)) {
             return false; // 이미 반영한 체결 재도착 — 무시
+        }
+        SellReservation reservation = sellReservations.get(orderId);
+        if (reservation == null) {
+            throw new IllegalStateException("매도 예약되지 않은 주문에 대한 체결입니다: orderId=" + orderId);
+        }
+        int remainingQuantity = reservation.remainingQuantity() - fillQty;
+        if (remainingQuantity < 0) {
+            throw new IllegalStateException("체결 수량이 남은 매도 예약 수량을 초과합니다: orderId=" + orderId
+                + " 남은수량=" + reservation.remainingQuantity() + " 체결수량=" + fillQty);
+        }
+        if (remainingQuantity == 0) {
+            sellReservations.remove(orderId);
+        } else {
+            sellReservations.put(orderId, new SellReservation(reservation.stockCode(), remainingQuantity));
         }
         holdings.merge(stockCode, -fillQty, Integer::sum);
         return true;
@@ -123,6 +157,21 @@ public final class AccountState {
 
     /** 주문 예약 장부 한 줄 — 가격과 남은(미체결) 수량. 예약 증거금은 이 둘로 매번 다시 계산한다. */
     private record Reservation(BigDecimal price, int remainingQuantity) {
+    }
+
+    /** 특정 종목의 현재 매도 예약 수량 총합(장부 값의 합). */
+    public int reservedSellQuantity(String stockCode) {
+        int sum = 0;
+        for (SellReservation reservation : sellReservations.values()) {
+            if (reservation.stockCode().equals(stockCode)) {
+                sum += reservation.remainingQuantity();
+            }
+        }
+        return sum;
+    }
+
+    /** 매도 예약 장부 한 줄 — 종목코드와 남은(미체결) 수량. */
+    private record SellReservation(String stockCode, int remainingQuantity) {
     }
 
     public long accountId() {

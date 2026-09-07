@@ -88,8 +88,9 @@ class AccountStateTest {
         AccountState state = new AccountState(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
         state.tryReserve(1L, new BigDecimal("10000"), 10);
         state.applyBuyFill(101L, 1L, STOCK, new BigDecimal("10000"), 10); // 보유 10 확보
+        state.trySellReserve(2L, STOCK, 4);
 
-        state.applySellFill(102L, STOCK, 4);
+        state.applySellFill(102L, 2L, STOCK, 4);
 
         assertEquals(6, state.holding(STOCK));
     }
@@ -115,9 +116,10 @@ class AccountStateTest {
         AccountState state = new AccountState(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
         state.tryReserve(1L, new BigDecimal("10000"), 10);
         state.applyBuyFill(101L, 1L, STOCK, new BigDecimal("10000"), 10); // 보유 10 확보
+        state.trySellReserve(2L, STOCK, 4);
 
-        state.applySellFill(102L, STOCK, 4);
-        state.applySellFill(102L, STOCK, 4); // 같은 tradeId 재도착
+        state.applySellFill(102L, 2L, STOCK, 4);
+        state.applySellFill(102L, 2L, STOCK, 4); // 같은 tradeId 재도착
 
         assertEquals(6, state.holding(STOCK));
     }
@@ -169,5 +171,93 @@ class AccountStateTest {
 
         assertThrows(IllegalStateException.class,
             () -> state.applyBuyFill(101L, 999L, STOCK, new BigDecimal("10000"), 1));
+    }
+
+    // ---------- 매도 보유예약 ----------
+
+    private static AccountState withHolding(int quantity) {
+        AccountState state = new AccountState(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
+        state.tryReserve(1L, new BigDecimal("10000"), quantity);
+        state.applyBuyFill(101L, 1L, STOCK, new BigDecimal("10000"), quantity);
+        return state;
+    }
+
+    @Test
+    @DisplayName("보유 수량 안이면 매도 예약을 통과시킨다")
+    void 매도예약_보유안이면_통과() {
+        AccountState state = withHolding(10);
+
+        SellReserveResult result = state.trySellReserve(2L, STOCK, 4);
+
+        assertTrue(result.accepted());
+        assertEquals(4, result.reservedQuantity());
+    }
+
+    @Test
+    @DisplayName("보유 수량을 넘는 매도는 INSUFFICIENT_HOLDING 으로 거부한다")
+    void 매도예약_보유초과하면_거부() {
+        AccountState state = withHolding(10);
+
+        SellReserveResult result = state.trySellReserve(2L, STOCK, 11);
+
+        assertFalse(result.accepted());
+        assertEquals(RejectReason.INSUFFICIENT_HOLDING, result.reason());
+    }
+
+    @Test
+    @DisplayName("연속 매도 주문에서 둘째는 첫째의 예약을 뺀 가용으로 검증된다 (장부 합)")
+    void 매도_러닝예약_둘째는_첫째_예약뺀_가용으로_검증() {
+        AccountState state = withHolding(10);
+
+        SellReserveResult first = state.trySellReserve(2L, STOCK, 6);  // 가용 10 → 통과, 남은 가용 4
+        SellReserveResult second = state.trySellReserve(3L, STOCK, 6); // 가용 4 → 거부
+
+        assertTrue(first.accepted());
+        assertFalse(second.accepted());
+        assertEquals(RejectReason.INSUFFICIENT_HOLDING, second.reason());
+    }
+
+    @Test
+    @DisplayName("부분 매도 체결: 체결된 수량만큼만 예약을 줄이고, 남은 수량은 계속 예약해 둔다")
+    void 매도_부분체결_체결분만큼만_예약감소() {
+        AccountState state = withHolding(10);
+        state.trySellReserve(2L, STOCK, 10); // 10주 전부 예약
+
+        state.applySellFill(102L, 2L, STOCK, 4); // 4주만 체결
+
+        assertEquals(6, state.reservedSellQuantity(STOCK));
+        assertEquals(6, state.holding(STOCK)); // 10 - 4
+    }
+
+    @Test
+    @DisplayName("부분 매도 체결이 이어져 잔량이 0이 되면 예약을 완전히 지운다")
+    void 매도_부분체결_잔량0되면_예약완전소진() {
+        AccountState state = withHolding(10);
+        state.trySellReserve(2L, STOCK, 10);
+
+        state.applySellFill(102L, 2L, STOCK, 4); // 잔량 6
+        state.applySellFill(103L, 2L, STOCK, 6); // 잔량 0
+
+        assertEquals(0, state.reservedSellQuantity(STOCK));
+        assertEquals(0, state.holding(STOCK));
+    }
+
+    @Test
+    @DisplayName("매도 체결 수량이 남은 예약 수량을 초과하면 예외를 던진다")
+    void 매도_체결수량_남은예약초과하면_예외() {
+        AccountState state = withHolding(10);
+        state.trySellReserve(2L, STOCK, 5);
+
+        assertThrows(IllegalStateException.class,
+            () -> state.applySellFill(102L, 2L, STOCK, 6));
+    }
+
+    @Test
+    @DisplayName("예약이 없는 매도 주문에 체결이 오면 예외를 던진다")
+    void 매도_예약없는주문에_체결오면_예외() {
+        AccountState state = withHolding(10);
+
+        assertThrows(IllegalStateException.class,
+            () -> state.applySellFill(102L, 999L, STOCK, 1));
     }
 }

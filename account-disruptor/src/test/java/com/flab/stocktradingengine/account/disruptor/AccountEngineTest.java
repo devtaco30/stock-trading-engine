@@ -145,17 +145,54 @@ class AccountEngineTest {
     @Test
     @DisplayName("매도 체결이 하네스를 통과하면 반영하고 onFillApplied(applied=true) 로 알린다")
     void 매도체결_반영하고_통지() throws InterruptedException {
-        prepare(1);
+        prepare(4); // 매수 접수·체결로 보유 확보(2) + 매도 예약(1) + 매도 체결(1)
         engine.seed(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
         engine.start();
 
+        engine.publishBuy(1001L, 1L, STOCK, new BigDecimal("10000"), 10, "r1");
+        engine.publishBuyFill(9001L, 1001L, 1L, STOCK, new BigDecimal("10000"), 10); // 보유 10 확보
+        engine.publishSell(2001L, 1L, STOCK, 4, "r2");
         engine.publishSellFill(9002L, 2001L, 1L, STOCK, 4);
         awaitResults();
 
-        assertEquals(1, events.size());
-        Recorded fillEvent = events.get(0);
+        assertEquals(4, events.size());
+        Recorded fillEvent = events.get(3);
         assertEquals(9002L, fillEvent.tradeId());
         assertTrue(fillEvent.applied());
+    }
+
+    // ---------- 매도 보유예약 하네스 배선 ----------
+
+    @Test
+    @DisplayName("보유 수량 안이면 매도 검증을 통과시키고 onSellAccepted 로 알린다")
+    void 매도예약_보유안이면_통과_통지() throws InterruptedException {
+        prepare(3); // 매수 접수·체결로 보유 확보(2) + 매도 예약(1)
+        engine.seed(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
+        engine.start();
+
+        engine.publishBuy(1001L, 1L, STOCK, new BigDecimal("10000"), 10, "r1");
+        engine.publishBuyFill(9001L, 1001L, 1L, STOCK, new BigDecimal("10000"), 10); // 보유 10 확보
+        engine.publishSell(2001L, 1L, STOCK, 4, "r2");
+        awaitResults();
+
+        Recorded sellEvent = events.get(2);
+        assertTrue(sellEvent.accepted());
+        assertEquals(4, sellEvent.reservedQuantity());
+    }
+
+    @Test
+    @DisplayName("보유 수량을 넘는 매도는 INSUFFICIENT_HOLDING 으로 거부한다")
+    void 매도예약_보유초과하면_거부() throws InterruptedException {
+        prepare(1);
+        engine.seed(1L, new BigDecimal("1000000"), new BigDecimal("0.40")); // 보유 0
+        engine.start();
+
+        engine.publishSell(2001L, 1L, STOCK, 1, "r1");
+        awaitResults();
+
+        assertEquals(1, events.size());
+        assertFalse(events.get(0).accepted());
+        assertEquals(RejectReason.INSUFFICIENT_HOLDING, events.get(0).reason());
     }
 
     @Test
@@ -202,25 +239,31 @@ class AccountEngineTest {
 
         @Override
         public void onAccepted(long accountId, long orderId, String requestId, BigDecimal reservedMargin) {
-            events.add(new Recorded(accountId, orderId, requestId, true, reservedMargin, null, null, null));
+            events.add(new Recorded(accountId, orderId, requestId, true, reservedMargin, null, null, null, null));
+            latch.countDown();
+        }
+
+        @Override
+        public void onSellAccepted(long accountId, long orderId, String requestId, int reservedQuantity) {
+            events.add(new Recorded(accountId, orderId, requestId, true, null, null, null, null, reservedQuantity));
             latch.countDown();
         }
 
         @Override
         public void onRejected(long accountId, long orderId, String requestId, RejectReason reason) {
-            events.add(new Recorded(accountId, orderId, requestId, false, null, reason, null, null));
+            events.add(new Recorded(accountId, orderId, requestId, false, null, reason, null, null, null));
             latch.countDown();
         }
 
         @Override
         public void onFillApplied(long accountId, long orderId, long tradeId, boolean applied) {
-            events.add(new Recorded(accountId, orderId, null, false, null, null, tradeId, applied));
+            events.add(new Recorded(accountId, orderId, null, false, null, null, tradeId, applied, null));
             latch.countDown();
         }
     }
 
     private record Recorded(long accountId, long orderId, String requestId, boolean accepted,
                             BigDecimal reservedMargin, RejectReason reason,
-                            Long tradeId, Boolean applied) {
+                            Long tradeId, Boolean applied, Integer reservedQuantity) {
     }
 }

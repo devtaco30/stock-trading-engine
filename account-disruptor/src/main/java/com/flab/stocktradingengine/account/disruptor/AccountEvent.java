@@ -7,7 +7,7 @@ import java.math.BigDecimal;
  *
  * <p>matching-disruptor 의 {@code OrderEvent} 와 같은 이유로 가변 컨테이너다.
  * 링버퍼가 슬롯을 미리 만들어 재사용하므로, 발행마다 새 객체를 만들지 않는다.
- * {@link EventType} 에 따라 BUY(검증·예약) / BUY_FILL·SELL_FILL(체결 반영) 셋을 구분한다.</p>
+ * {@link EventType} 에 따라 BUY·SELL(검증·예약) / BUY_FILL·SELL_FILL(체결 반영) 넷을 구분한다.</p>
  */
 public class AccountEvent {
 
@@ -27,6 +27,16 @@ public class AccountEvent {
         this.accountId = accountId;
         this.stockCode = stockCode;
         this.price = price;
+        this.quantity = quantity;
+        this.requestId = requestId;
+    }
+
+    /** 매도 검증·예약 명령으로 슬롯을 채운다. 담보가 돈이 아니라 보유 수량이라 price 는 없다. */
+    public void setSell(long orderId, long accountId, String stockCode, int quantity, String requestId) {
+        this.type = EventType.SELL;
+        this.orderId = orderId;
+        this.accountId = accountId;
+        this.stockCode = stockCode;
         this.quantity = quantity;
         this.requestId = requestId;
     }

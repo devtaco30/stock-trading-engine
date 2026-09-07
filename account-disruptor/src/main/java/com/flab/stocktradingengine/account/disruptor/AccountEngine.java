@@ -84,6 +84,17 @@ public class AccountEngine {
         }
     }
 
+    /** 매도 검증·예약을 링버퍼에 발행한다. 담보가 돈이 아니라 보유 수량이라 price 는 없다. */
+    public void publishSell(long orderId, long accountId, String stockCode, int quantity, String requestId) {
+        long sequence = ringBuffer.next();
+        try {
+            AccountEvent event = ringBuffer.get(sequence);
+            event.setSell(orderId, accountId, stockCode, quantity, requestId);
+        } finally {
+            ringBuffer.publish(sequence);
+        }
+    }
+
     /** 매수 체결 반영을 링버퍼에 발행한다. tradeId 는 체결 신원(멱등키). */
     public void publishBuyFill(long tradeId, long orderId, long accountId, String stockCode, BigDecimal matchPrice, int quantity) {
         long sequence = ringBuffer.next();

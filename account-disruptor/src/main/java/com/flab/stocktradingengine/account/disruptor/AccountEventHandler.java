@@ -28,6 +28,7 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
         try {
             switch (event.getType()) {
                 case BUY -> handleBuy(event);
+                case SELL -> handleSell(event);
                 case BUY_FILL -> handleBuyFill(event);
                 case SELL_FILL -> handleSellFill(event);
             }
@@ -62,6 +63,29 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
         }
     }
 
+    private void handleSell(AccountEvent event) {
+        long orderId = event.getOrderId();
+        long accountId = event.getAccountId();
+        String requestId = event.getRequestId();
+
+        AccountState state = accounts.get(accountId);
+        if (state == null) {
+            listener.onRejected(accountId, orderId, requestId, RejectReason.ACCOUNT_NOT_FOUND);
+            return;
+        }
+        if (event.getQuantity() <= 0) {
+            listener.onRejected(accountId, orderId, requestId, RejectReason.INVALID_QUANTITY);
+            return;
+        }
+
+        SellReserveResult result = state.trySellReserve(orderId, event.getStockCode(), event.getQuantity());
+        if (result.accepted()) {
+            listener.onSellAccepted(accountId, orderId, requestId, result.reservedQuantity());
+        } else {
+            listener.onRejected(accountId, orderId, requestId, result.reason());
+        }
+    }
+
     private void handleBuyFill(AccountEvent event) {
         long accountId = event.getAccountId();
         long orderId = event.getOrderId();
@@ -86,7 +110,7 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
             listener.onRejected(accountId, orderId, event.getRequestId(), RejectReason.ACCOUNT_NOT_FOUND);
             return;
         }
-        boolean applied = state.applySellFill(tradeId, event.getStockCode(), event.getQuantity());
+        boolean applied = state.applySellFill(tradeId, orderId, event.getStockCode(), event.getQuantity());
         listener.onFillApplied(accountId, orderId, tradeId, applied);
     }
 }
