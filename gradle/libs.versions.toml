@@ -9,6 +9,7 @@ postgresql = "42.7.4"
 snowflake = "1.1"
 junit = "5.10.2"
 spring-kafka = "3.3.4"
+disruptor = "4.0.0"
 
 [libraries]
 spring-boot-starter = { module = "org.springframework.boot:spring-boot-starter", version.ref = "spring-boot" }
@@ -35,6 +36,8 @@ junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "jun
 
 spring-kafka = { module = "org.springframework.kafka:spring-kafka", version.ref = "spring-kafka" }
 spring-kafka-test = { module = "org.springframework.kafka:spring-kafka-test", version.ref = "spring-kafka" }
+
+disruptor = { module = "com.lmax:disruptor", version.ref = "disruptor" }
 
 [plugins]
 spring-boot = { id = "org.springframework.boot", version.ref = "spring-boot" }
