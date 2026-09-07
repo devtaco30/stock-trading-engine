@@ -83,4 +83,26 @@ public class AccountEngine {
             ringBuffer.publish(sequence);
         }
     }
+
+    /** 매수 체결 반영을 링버퍼에 발행한다. tradeId 는 체결 신원(멱등키). */
+    public void publishBuyFill(long tradeId, long orderId, long accountId, String stockCode, BigDecimal matchPrice, int quantity) {
+        long sequence = ringBuffer.next();
+        try {
+            AccountEvent event = ringBuffer.get(sequence);
+            event.setBuyFill(tradeId, orderId, accountId, stockCode, matchPrice, quantity);
+        } finally {
+            ringBuffer.publish(sequence);
+        }
+    }
+
+    /** 매도 체결 반영을 링버퍼에 발행한다. tradeId 는 체결 신원(멱등키). */
+    public void publishSellFill(long tradeId, long orderId, long accountId, String stockCode, int quantity) {
+        long sequence = ringBuffer.next();
+        try {
+            AccountEvent event = ringBuffer.get(sequence);
+            event.setSellFill(tradeId, orderId, accountId, stockCode, quantity);
+        } finally {
+            ringBuffer.publish(sequence);
+        }
+    }
 }

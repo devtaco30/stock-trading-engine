@@ -25,32 +25,69 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
 
     @Override
     public void onEvent(AccountEvent event, long sequence, boolean endOfBatch) {
-        long orderId = event.getOrderId();
-        long accountId = event.getAccountId();
-        String requestId = event.getRequestId();
         try {
-            AccountState state = accounts.get(accountId);
-            if (state == null) {
-                // 워커가 소유하지 않은 계좌 — 라우팅이 잘못됐거나 시드 누락
-                listener.onRejected(accountId, orderId, requestId, RejectReason.ACCOUNT_NOT_FOUND);
-                return;
-            }
-            BigDecimal price = event.getPrice();
-            if (event.getQuantity() <= 0 || price == null || price.signum() <= 0) {
-                listener.onRejected(accountId, orderId, requestId, RejectReason.INVALID_QUANTITY);
-                return;
-            }
-
-            BigDecimal orderAmount = price.multiply(BigDecimal.valueOf(event.getQuantity()));
-            ReserveResult result = state.tryReserve(orderId, orderAmount);
-            if (result.accepted()) {
-                listener.onAccepted(accountId, orderId, requestId, result.reservedMargin());
-            } else {
-                listener.onRejected(accountId, orderId, requestId, result.reason());
+            switch (event.getType()) {
+                case BUY -> handleBuy(event);
+                case BUY_FILL -> handleBuyFill(event);
+                case SELL_FILL -> handleSellFill(event);
             }
         } finally {
             // 슬롯 재사용 대비: 마지막 소비자이므로 처리 후 비운다.
             event.clear();
         }
+    }
+
+    private void handleBuy(AccountEvent event) {
+        long orderId = event.getOrderId();
+        long accountId = event.getAccountId();
+        String requestId = event.getRequestId();
+
+        AccountState state = accounts.get(accountId);
+        if (state == null) {
+            // 워커가 소유하지 않은 계좌 — 라우팅이 잘못됐거나 시드 누락
+            listener.onRejected(accountId, orderId, requestId, RejectReason.ACCOUNT_NOT_FOUND);
+            return;
+        }
+        BigDecimal price = event.getPrice();
+        if (event.getQuantity() <= 0 || price == null || price.signum() <= 0) {
+            listener.onRejected(accountId, orderId, requestId, RejectReason.INVALID_QUANTITY);
+            return;
+        }
+
+        BigDecimal orderAmount = price.multiply(BigDecimal.valueOf(event.getQuantity()));
+        ReserveResult result = state.tryReserve(orderId, orderAmount);
+        if (result.accepted()) {
+            listener.onAccepted(accountId, orderId, requestId, result.reservedMargin());
+        } else {
+            listener.onRejected(accountId, orderId, requestId, result.reason());
+        }
+    }
+
+    private void handleBuyFill(AccountEvent event) {
+        long accountId = event.getAccountId();
+        long orderId = event.getOrderId();
+        long tradeId = event.getTradeId();
+
+        AccountState state = accounts.get(accountId);
+        if (state == null) {
+            listener.onRejected(accountId, orderId, event.getRequestId(), RejectReason.ACCOUNT_NOT_FOUND);
+            return;
+        }
+        boolean applied = state.applyBuyFill(tradeId, orderId, event.getStockCode(), event.getPrice(), event.getQuantity());
+        listener.onFillApplied(accountId, orderId, tradeId, applied);
+    }
+
+    private void handleSellFill(AccountEvent event) {
+        long accountId = event.getAccountId();
+        long orderId = event.getOrderId();
+        long tradeId = event.getTradeId();
+
+        AccountState state = accounts.get(accountId);
+        if (state == null) {
+            listener.onRejected(accountId, orderId, event.getRequestId(), RejectReason.ACCOUNT_NOT_FOUND);
+            return;
+        }
+        boolean applied = state.applySellFill(tradeId, event.getStockCode(), event.getQuantity());
+        listener.onFillApplied(accountId, orderId, tradeId, applied);
     }
 }

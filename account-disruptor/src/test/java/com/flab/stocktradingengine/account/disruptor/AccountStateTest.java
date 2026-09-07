@@ -71,7 +71,7 @@ class AccountStateTest {
         AccountState state = new AccountState(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
         state.tryReserve(1L, new BigDecimal("100000")); // 예약 40000
 
-        state.applyBuyFill(1L, STOCK, new BigDecimal("10000"), 10);
+        state.applyBuyFill(101L, 1L, STOCK, new BigDecimal("10000"), 10);
 
         // 예약 풀림
         assertEquals(0, state.reservedMargin().compareTo(BigDecimal.ZERO));
@@ -86,9 +86,37 @@ class AccountStateTest {
     void 매도체결_보유감소() {
         AccountState state = new AccountState(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
         state.tryReserve(1L, new BigDecimal("100000"));
-        state.applyBuyFill(1L, STOCK, new BigDecimal("10000"), 10); // 보유 10 확보
+        state.applyBuyFill(101L, 1L, STOCK, new BigDecimal("10000"), 10); // 보유 10 확보
 
-        state.applySellFill(STOCK, 4);
+        state.applySellFill(102L, STOCK, 4);
+
+        assertEquals(6, state.holding(STOCK));
+    }
+
+    // ---------- tradeId 멱등 (B3b) ----------
+
+    @Test
+    @DisplayName("같은 tradeId로 매수 체결이 두 번 오면 둘째는 무시한다 (보유·미수금 불변)")
+    void 매수체결_같은tradeId_둘째는_무시() {
+        AccountState state = new AccountState(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
+        state.tryReserve(1L, new BigDecimal("100000"));
+
+        state.applyBuyFill(101L, 1L, STOCK, new BigDecimal("10000"), 10);
+        state.applyBuyFill(101L, 1L, STOCK, new BigDecimal("10000"), 10); // 같은 tradeId 재도착
+
+        assertEquals(10, state.holding(STOCK));
+        assertEquals(0, state.unpaid().compareTo(new BigDecimal("60000")));
+    }
+
+    @Test
+    @DisplayName("같은 tradeId로 매도 체결이 두 번 오면 둘째는 무시한다 (보유 불변)")
+    void 매도체결_같은tradeId_둘째는_무시() {
+        AccountState state = new AccountState(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
+        state.tryReserve(1L, new BigDecimal("100000"));
+        state.applyBuyFill(101L, 1L, STOCK, new BigDecimal("10000"), 10); // 보유 10 확보
+
+        state.applySellFill(102L, STOCK, 4);
+        state.applySellFill(102L, STOCK, 4); // 같은 tradeId 재도착
 
         assertEquals(6, state.holding(STOCK));
     }

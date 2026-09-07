@@ -16,4 +16,10 @@ public interface AccountResultListener {
 
     /** 검증 거부 — reason 은 거부 사유. */
     void onRejected(long accountId, long orderId, String requestId, RejectReason reason);
+
+    /**
+     * 체결 반영 처리를 통지한다 — applied=true 면 이번 호출로 실제 반영, false 면 같은 tradeId
+     * 재도착이라 무시(멱등)했다는 뜻.
+     */
+    void onFillApplied(long accountId, long orderId, long tradeId, boolean applied);
 }

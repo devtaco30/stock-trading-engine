@@ -123,6 +123,73 @@ class AccountEngineTest {
         assertEquals(RejectReason.INSUFFICIENT, events.get(1).reason());
     }
 
+    // ---------- 체결 반영 하네스 배선 (B3b) ----------
+
+    @Test
+    @DisplayName("매수 체결이 하네스를 통과하면 반영하고 onFillApplied(applied=true) 로 알린다")
+    void 매수체결_반영하고_통지() throws InterruptedException {
+        prepare(2); // 매수 접수(1) + 체결 반영(1)
+        engine.seed(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
+        engine.start();
+
+        engine.publishBuy(1001L, 1L, STOCK, new BigDecimal("10000"), 10, "r1");
+        engine.publishBuyFill(9001L, 1001L, 1L, STOCK, new BigDecimal("10000"), 10);
+        awaitResults();
+
+        assertEquals(2, events.size());
+        Recorded fillEvent = events.get(1);
+        assertEquals(9001L, fillEvent.tradeId());
+        assertTrue(fillEvent.applied());
+    }
+
+    @Test
+    @DisplayName("매도 체결이 하네스를 통과하면 반영하고 onFillApplied(applied=true) 로 알린다")
+    void 매도체결_반영하고_통지() throws InterruptedException {
+        prepare(1);
+        engine.seed(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
+        engine.start();
+
+        engine.publishSellFill(9002L, 2001L, 1L, STOCK, 4);
+        awaitResults();
+
+        assertEquals(1, events.size());
+        Recorded fillEvent = events.get(0);
+        assertEquals(9002L, fillEvent.tradeId());
+        assertTrue(fillEvent.applied());
+    }
+
+    @Test
+    @DisplayName("체결 대상 계좌를 워커가 소유하지 않으면 ACCOUNT_NOT_FOUND 로 거부한다")
+    void 체결_모르는계좌면_거부() throws InterruptedException {
+        prepare(1);
+        engine.seed(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
+        engine.start();
+
+        engine.publishBuyFill(9001L, 1001L, 99L, STOCK, new BigDecimal("10000"), 10);
+        awaitResults();
+
+        assertEquals(1, events.size());
+        assertFalse(events.get(0).accepted());
+        assertEquals(RejectReason.ACCOUNT_NOT_FOUND, events.get(0).reason());
+    }
+
+    @Test
+    @DisplayName("같은 tradeId 로 매수 체결이 하네스에 두 번 오면 둘째는 applied=false 로 알린다")
+    void 매수체결_같은tradeId_둘째는_applied_false() throws InterruptedException {
+        prepare(3); // 매수 접수(1) + 체결(1) + 중복 체결(1)
+        engine.seed(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
+        engine.start();
+
+        engine.publishBuy(1001L, 1L, STOCK, new BigDecimal("10000"), 10, "r1");
+        engine.publishBuyFill(9001L, 1001L, 1L, STOCK, new BigDecimal("10000"), 10);
+        engine.publishBuyFill(9001L, 1001L, 1L, STOCK, new BigDecimal("10000"), 10); // 같은 tradeId 재도착
+        awaitResults();
+
+        assertEquals(3, events.size());
+        assertTrue(events.get(1).applied());
+        assertFalse(events.get(2).applied());
+    }
+
     /** 소비자 스레드가 낸 결과를 모으고 래치를 내리는 테스트용 리스너. */
     private static final class Recorder implements AccountResultListener {
         private final List<Recorded> events;
@@ -135,18 +202,25 @@ class AccountEngineTest {
 
         @Override
         public void onAccepted(long accountId, long orderId, String requestId, BigDecimal reservedMargin) {
-            events.add(new Recorded(accountId, orderId, requestId, true, reservedMargin, null));
+            events.add(new Recorded(accountId, orderId, requestId, true, reservedMargin, null, null, null));
             latch.countDown();
         }
 
         @Override
         public void onRejected(long accountId, long orderId, String requestId, RejectReason reason) {
-            events.add(new Recorded(accountId, orderId, requestId, false, null, reason));
+            events.add(new Recorded(accountId, orderId, requestId, false, null, reason, null, null));
+            latch.countDown();
+        }
+
+        @Override
+        public void onFillApplied(long accountId, long orderId, long tradeId, boolean applied) {
+            events.add(new Recorded(accountId, orderId, null, false, null, null, tradeId, applied));
             latch.countDown();
         }
     }
 
     private record Recorded(long accountId, long orderId, String requestId, boolean accepted,
-                            BigDecimal reservedMargin, RejectReason reason) {
+                            BigDecimal reservedMargin, RejectReason reason,
+                            Long tradeId, Boolean applied) {
     }
 }

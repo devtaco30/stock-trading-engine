@@ -3,7 +3,9 @@ package com.flab.stocktradingengine.account.disruptor;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 계좌 하나의 인메모리 상태.
@@ -23,6 +25,7 @@ public final class AccountState {
     private final BigDecimal marginRate;   // 증거금률 (0.40 ~ 1.00, 시드값 전제)
     private final Map<Long, BigDecimal> reservations = new HashMap<>(); // orderId → 예약 증거금 (장부)
     private final Map<String, Integer> holdings = new HashMap<>();      // 종목코드 → 보유 수량
+    private final Set<Long> processedTradeIds = new HashSet<>();        // 이미 반영한 체결(tradeId), 멱등용
     private BigDecimal unpaid = BigDecimal.ZERO;                        // 미결제 미수금
 
     public AccountState(long accountId, BigDecimal balance, BigDecimal marginRate) {
@@ -54,8 +57,14 @@ public final class AccountState {
     /**
      * 매수 전량 체결 반영: 그 주문의 예약을 풀고, 보유를 늘리고, 미수금을 만든다.
      * (balance 는 안 뺀다 — 나머지는 미수금으로 T+2 결제.)
+     *
+     * @param tradeId 체결 신원(멱등키) — 이미 반영한 tradeId 면 아무것도 하지 않고 무시한다
+     * @return 이번 호출로 실제 반영했으면 true, 이미 반영한 tradeId 라 무시했으면 false
      */
-    public void applyBuyFill(long orderId, String stockCode, BigDecimal matchPrice, int fillQty) {
+    public boolean applyBuyFill(long tradeId, long orderId, String stockCode, BigDecimal matchPrice, int fillQty) {
+        if (!processedTradeIds.add(tradeId)) {
+            return false; // 이미 반영한 체결 재도착 — 무시
+        }
         // 예약 풀기 (전량이므로 그 주문 줄을 통째로 지운다)
         reservations.remove(orderId);
         // 보유 추가
@@ -64,11 +73,21 @@ public final class AccountState {
         BigDecimal fillAmount = matchPrice.multiply(BigDecimal.valueOf(fillQty));
         BigDecimal unpaidThis = fillAmount.multiply(BigDecimal.ONE.subtract(marginRate)).setScale(0, RoundingMode.DOWN);
         unpaid = unpaid.add(unpaidThis);
+        return true;
     }
 
-    /** 매도 전량 체결 반영: 보유를 줄인다. */
-    public void applySellFill(String stockCode, int fillQty) {
+    /**
+     * 매도 전량 체결 반영: 보유를 줄인다.
+     *
+     * @param tradeId 체결 신원(멱등키) — 이미 반영한 tradeId 면 아무것도 하지 않고 무시한다
+     * @return 이번 호출로 실제 반영했으면 true, 이미 반영한 tradeId 라 무시했으면 false
+     */
+    public boolean applySellFill(long tradeId, String stockCode, int fillQty) {
+        if (!processedTradeIds.add(tradeId)) {
+            return false; // 이미 반영한 체결 재도착 — 무시
+        }
         holdings.merge(stockCode, -fillQty, Integer::sum);
+        return true;
     }
 
     private BigDecimal totalReserved() {
