@@ -54,8 +54,7 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
             return;
         }
 
-        BigDecimal orderAmount = price.multiply(BigDecimal.valueOf(event.getQuantity()));
-        ReserveResult result = state.tryReserve(orderId, orderAmount);
+        ReserveResult result = state.tryReserve(orderId, price, event.getQuantity());
         if (result.accepted()) {
             listener.onAccepted(accountId, orderId, requestId, result.reservedMargin());
         } else {
