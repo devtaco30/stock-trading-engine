@@ -1,4 +1,4 @@
-package com.flab.stocktradingengine.wire;
+package com.flab.stocktradingengine.codec;
 
 import java.math.BigDecimal;
 import java.time.Instant;

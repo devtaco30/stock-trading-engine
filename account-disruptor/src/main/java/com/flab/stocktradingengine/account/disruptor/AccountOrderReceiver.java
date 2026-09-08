@@ -11,8 +11,8 @@ import io.aeron.logbuffer.FragmentHandler;
 import io.aeron.logbuffer.Header;
 
 import com.flab.stocktradingengine.trading.entity.OrderSide;
-import com.flab.stocktradingengine.wire.AccountOrderCodec;
-import com.flab.stocktradingengine.wire.DecodedAccountOrder;
+import com.flab.stocktradingengine.codec.AccountOrderCodec;
+import com.flab.stocktradingengine.codec.DecodedAccountOrder;
 
 /**
  * C5-1b — Aeron으로 들어온 매수·매도 주문을 계좌 엔진에 넣는 수신 게이트웨이.

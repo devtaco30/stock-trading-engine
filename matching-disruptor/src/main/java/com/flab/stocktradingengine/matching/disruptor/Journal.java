@@ -2,7 +2,7 @@ package com.flab.stocktradingengine.matching.disruptor;
 
 import java.util.List;
 
-import com.flab.stocktradingengine.wire.JournaledOrder;
+import com.flab.stocktradingengine.codec.JournaledOrder;
 
 /**
  * 주문 기록 저장소.

@@ -11,7 +11,7 @@ import com.lmax.disruptor.EventHandler;
 import com.flab.stocktradingengine.trading.matching.FillResult;
 import com.flab.stocktradingengine.trading.matching.OrderBook;
 import com.flab.stocktradingengine.trading.matching.OrderEntry;
-import com.flab.stocktradingengine.wire.EventType;
+import com.flab.stocktradingengine.codec.EventType;
 
 /**
  * 링버퍼를 소비하는 단일 매칭 핸들러.

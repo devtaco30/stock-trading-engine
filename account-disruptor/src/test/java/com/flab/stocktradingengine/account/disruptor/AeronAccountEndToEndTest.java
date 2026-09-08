@@ -21,8 +21,8 @@ import io.aeron.Subscription;
 import io.aeron.driver.MediaDriver;
 
 import com.flab.stocktradingengine.trading.entity.OrderSide;
-import com.flab.stocktradingengine.wire.AccountOrderCodec;
-import com.flab.stocktradingengine.wire.DecodedAccountOrder;
+import com.flab.stocktradingengine.codec.AccountOrderCodec;
+import com.flab.stocktradingengine.codec.DecodedAccountOrder;
 
 /**
  * C5-1b — Aeron을 실제로 통과한 매수·매도 주문이 검증·예약까지 되는지 검증(end-to-end).

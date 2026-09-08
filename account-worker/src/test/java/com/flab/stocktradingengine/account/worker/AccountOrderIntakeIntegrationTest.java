@@ -20,8 +20,8 @@ import org.springframework.test.annotation.DirtiesContext;
 import com.flab.stocktradingengine.account.disruptor.AccountResultListener;
 import com.flab.stocktradingengine.account.disruptor.RejectReason;
 import com.flab.stocktradingengine.trading.entity.OrderSide;
-import com.flab.stocktradingengine.wire.AccountOrderCodec;
-import com.flab.stocktradingengine.wire.DecodedAccountOrder;
+import com.flab.stocktradingengine.codec.AccountOrderCodec;
+import com.flab.stocktradingengine.codec.DecodedAccountOrder;
 
 import io.aeron.Aeron;
 import io.aeron.Publication;

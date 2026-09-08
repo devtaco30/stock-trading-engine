@@ -22,9 +22,9 @@ import io.aeron.driver.MediaDriver;
 
 import com.flab.stocktradingengine.trading.entity.OrderSide;
 import com.flab.stocktradingengine.trading.matching.FillResult;
-import com.flab.stocktradingengine.wire.EventType;
-import com.flab.stocktradingengine.wire.JournaledOrder;
-import com.flab.stocktradingengine.wire.OrderCodec;
+import com.flab.stocktradingengine.codec.EventType;
+import com.flab.stocktradingengine.codec.JournaledOrder;
+import com.flab.stocktradingengine.codec.OrderCodec;
 
 /**
  * Unit 4c — Aeron 을 실제로 통과한 주문이 매칭돼 체결이 나오는지 검증(end-to-end).

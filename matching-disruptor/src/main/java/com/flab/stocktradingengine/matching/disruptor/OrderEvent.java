@@ -4,7 +4,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 
 import com.flab.stocktradingengine.trading.entity.OrderSide;
-import com.flab.stocktradingengine.wire.EventType;
+import com.flab.stocktradingengine.codec.EventType;
 
 /**
  * 링버퍼의 슬롯 객체 (가변).

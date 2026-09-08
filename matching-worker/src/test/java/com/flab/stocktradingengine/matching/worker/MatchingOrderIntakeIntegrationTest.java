@@ -25,9 +25,9 @@ import org.springframework.test.annotation.DirtiesContext;
 import com.flab.stocktradingengine.kafka.KafkaTopics;
 import com.flab.stocktradingengine.kafka.event.TradeFilledEvent;
 import com.flab.stocktradingengine.trading.entity.OrderSide;
-import com.flab.stocktradingengine.wire.EventType;
-import com.flab.stocktradingengine.wire.JournaledOrder;
-import com.flab.stocktradingengine.wire.OrderCodec;
+import com.flab.stocktradingengine.codec.EventType;
+import com.flab.stocktradingengine.codec.JournaledOrder;
+import com.flab.stocktradingengine.codec.OrderCodec;
 
 import io.aeron.Aeron;
 import io.aeron.Publication;

@@ -1,4 +1,4 @@
-package com.flab.stocktradingengine.wire;
+package com.flab.stocktradingengine.codec;
 
 /**
  * 매칭 인테이크 와이어가 담는 명령 종류.
