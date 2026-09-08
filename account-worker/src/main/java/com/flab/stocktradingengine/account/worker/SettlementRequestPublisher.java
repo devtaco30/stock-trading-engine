@@ -2,7 +2,7 @@ package com.flab.stocktradingengine.account.worker;
 
 import java.math.BigDecimal;
 import java.time.Clock;
-import java.time.LocalDate;
+import java.time.Duration;
 
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
@@ -56,8 +56,8 @@ public class SettlementRequestPublisher implements AccountResultListener {
 
     @Override
     public void onUnpaidRecorded(long accountId, long tradeId, BigDecimal amount) {
-        LocalDate dueDate = LocalDate.now(clock).plusDays(SETTLEMENT_DAYS);
-        SettlementRequestEvent event = new SettlementRequestEvent(tradeId, accountId, amount, dueDate);
+        long dueAtEpochMillis = clock.instant().plus(Duration.ofDays(SETTLEMENT_DAYS)).toEpochMilli();
+        SettlementRequestEvent event = new SettlementRequestEvent(tradeId, accountId, amount, dueAtEpochMillis);
         kafkaTemplate.send(TOPIC, String.valueOf(accountId), event);
     }
 }
