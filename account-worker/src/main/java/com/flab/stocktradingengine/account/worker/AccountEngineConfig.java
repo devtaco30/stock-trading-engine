@@ -1,6 +1,5 @@
 package com.flab.stocktradingengine.account.worker;
 
-import java.time.Clock;
 import java.util.List;
 
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -20,12 +19,6 @@ import com.lmax.disruptor.dsl.ProducerType;
 public class AccountEngineConfig {
 
     private static final int BUFFER_SIZE = 1024;
-
-    /** T+2 만기 계산에 쓰는 시각 소스. 테스트에서 고정 시각으로 교체할 수 있도록 빈으로 분리한다. */
-    @Bean
-    public Clock clock() {
-        return Clock.systemDefaultZone();
-    }
 
     /**
      * {@link AccountResultListener} 구현체(로깅·정산 요청 발행 등)를 전부 묶어 하나의 리스너로 만든다.

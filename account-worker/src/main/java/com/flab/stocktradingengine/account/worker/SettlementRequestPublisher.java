@@ -1,8 +1,8 @@
 package com.flab.stocktradingengine.account.worker;
 
 import java.math.BigDecimal;
-import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
 
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
@@ -30,9 +30,9 @@ public class SettlementRequestPublisher implements AccountResultListener {
 
     private static final String TOPIC = KafkaTopics.settlementRequests();
     private static final int SETTLEMENT_DAYS = 2; // T+2, 영업일 미고려(단순화 — 의도적)
+    private static final long SETTLEMENT_MILLIS = Duration.ofDays(SETTLEMENT_DAYS).toMillis();
 
     private final KafkaTemplate<String, Object> kafkaTemplate;
-    private final Clock clock;
 
     @Override
     public void onAccepted(long accountId, long orderId, String requestId, BigDecimal reservedMargin) {
@@ -56,9 +56,14 @@ public class SettlementRequestPublisher implements AccountResultListener {
 
     @Override
     public void onUnpaidRecorded(long accountId, long tradeId, BigDecimal amount) {
-        long dueAtEpochMillis = clock.instant().plus(Duration.ofDays(SETTLEMENT_DAYS)).toEpochMilli();
+        long dueAtEpochMillis = dueAtEpochMillis(Instant.now().toEpochMilli());
         SettlementRequestEvent event = new SettlementRequestEvent(tradeId, accountId, amount, dueAtEpochMillis);
         kafkaTemplate.send(TOPIC, String.valueOf(accountId), event);
+    }
+
+    /** T+2 만기 계산(순수 함수) — 영업일 미고려(단순화 — 의도적). */
+    static long dueAtEpochMillis(long nowEpochMillis) {
+        return nowEpochMillis + SETTLEMENT_MILLIS;
     }
 
     @Override

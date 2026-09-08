@@ -1,6 +1,6 @@
 package com.flab.stocktradingengine.settlement.worker;
 
-import java.time.Clock;
+import java.time.Instant;
 
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -18,11 +18,10 @@ import lombok.extern.slf4j.Slf4j;
 public class SettlementScanScheduler {
 
     private final SettlementDispatcher settlementDispatcher;
-    private final Clock clock;
 
     @Scheduled(fixedDelayString = "${settlement-worker.scan-interval-ms:60000}")
     public void scan() {
-        int dispatched = settlementDispatcher.dispatchDue(clock.millis());
+        int dispatched = settlementDispatcher.dispatchDue(Instant.now().toEpochMilli());
         if (dispatched > 0) {
             log.info("[정산 워커] T+2 스캔 완료: {}건 발행", dispatched);
         }
