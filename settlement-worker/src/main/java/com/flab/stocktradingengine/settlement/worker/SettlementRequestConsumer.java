@@ -3,33 +3,27 @@ package com.flab.stocktradingengine.settlement.worker;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
 import com.flab.stocktradingengine.kafka.event.SettlementRequestEvent;
 
 import lombok.RequiredArgsConstructor;
 
 /**
- * {@code settlement-requests} 토픽을 소비해 미수금을 PENDING으로 저장한다(a2-2).
+ * {@code settlement-requests} 토픽을 소비해 {@link PendingSettlementRecorder}로 저장을 위임한다.
  *
- * <p>at-least-once 재전달에 대비해 저장 전에 존재 여부부터 조회한다(check-then-act) — 이미
- * 있으면 저장을 건너뛴다. settlementRef가 PK라 동시 삽입 경쟁 상태에서도 DB 유니크 제약이
- * 최후 안전망이 된다.</p>
+ * <p>ack는 반드시 저장(=커밋)이 끝난 뒤에 보낸다 — 이 리스너 자체는 트랜잭션이 아니다.
+ * 커밋 전에 ack가 나가면(트랜잭션과 ack가 같은 메서드에 있으면 ack가 커밋보다 먼저 실행된다)
+ * 커밋 실패 시 오프셋만 넘어가 정산 요청이 유실된다(at-most-once로 새는 경로).</p>
  */
 @Component
 @RequiredArgsConstructor
 public class SettlementRequestConsumer {
 
-    private final PendingSettlementRepository pendingSettlementRepository;
+    private final PendingSettlementRecorder pendingSettlementRecorder;
 
     @KafkaListener(topics = "settlement-requests", groupId = "settlement-worker")
-    @Transactional
     public void consume(SettlementRequestEvent event, Acknowledgment ack) {
-        if (!pendingSettlementRepository.existsById(event.settlementRef())) {
-            PendingSettlement pendingSettlement = new PendingSettlement(
-                event.settlementRef(), event.accountId(), event.amount(), event.dueAtEpochMillis());
-            pendingSettlementRepository.save(pendingSettlement);
-        }
+        pendingSettlementRecorder.record(event);
         ack.acknowledge();
     }
 }

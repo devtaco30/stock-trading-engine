@@ -1,58 +1,34 @@
 package com.flab.stocktradingengine.settlement.worker;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
 
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.springframework.kafka.support.Acknowledgment;
 
 import com.flab.stocktradingengine.kafka.event.SettlementRequestEvent;
 
 /**
- * settlement-requests 이벤트를 받아 PENDING 행으로 저장하는지, 같은 settlementRef 재도착은
- * 저장하지 않고 무시(멱등)하는지 검증한다.
+ * ack가 저장(=커밋)보다 먼저 나가지 않는지 검증한다. 커밋 전에 ack가 나가면 커밋 실패 시
+ * 오프셋만 넘어가 정산 요청이 유실된다 — 그래서 record()가 ack.acknowledge()보다 먼저
+ * 호출되는 순서 자체가 이 컨슈머의 핵심 계약이다.
  */
 class SettlementRequestConsumerTest {
 
     @Test
-    void 새_정산요청이면_PENDING으로_저장하고_커밋한다() {
-        PendingSettlementRepository repository = mock(PendingSettlementRepository.class);
-        when(repository.existsById(9001L)).thenReturn(false);
+    void 저장을_끝낸_뒤에_ack를_보낸다() {
+        PendingSettlementRecorder recorder = mock(PendingSettlementRecorder.class);
         Acknowledgment ack = mock(Acknowledgment.class);
-        SettlementRequestConsumer consumer = new SettlementRequestConsumer(repository);
+        SettlementRequestConsumer consumer = new SettlementRequestConsumer(recorder);
 
         SettlementRequestEvent event = new SettlementRequestEvent(9001L, 1L, new BigDecimal("60000"), 123L);
         consumer.consume(event, ack);
 
-        ArgumentCaptor<PendingSettlement> saved = ArgumentCaptor.forClass(PendingSettlement.class);
-        verify(repository).save(saved.capture());
-        PendingSettlement pendingSettlement = saved.getValue();
-        assertThat(pendingSettlement.getSettlementRef()).isEqualTo(9001L);
-        assertThat(pendingSettlement.getAccountId()).isEqualTo(1L);
-        assertThat(pendingSettlement.getAmount()).isEqualByComparingTo(new BigDecimal("60000"));
-        assertThat(pendingSettlement.getDueAtEpochMillis()).isEqualTo(123L);
-        assertThat(pendingSettlement.getStatus()).isEqualTo(SettlementStatus.PENDING);
-        verify(ack).acknowledge();
-    }
-
-    @Test
-    void 같은_settlementRef가_재도착하면_저장하지_않고_커밋만_한다() {
-        PendingSettlementRepository repository = mock(PendingSettlementRepository.class);
-        when(repository.existsById(9001L)).thenReturn(true);
-        Acknowledgment ack = mock(Acknowledgment.class);
-        SettlementRequestConsumer consumer = new SettlementRequestConsumer(repository);
-
-        SettlementRequestEvent event = new SettlementRequestEvent(9001L, 1L, new BigDecimal("60000"), 123L);
-        consumer.consume(event, ack);
-
-        verify(repository, never()).save(any());
-        verify(ack).acknowledge();
+        InOrder order = inOrder(recorder, ack);
+        order.verify(recorder).record(event);
+        order.verify(ack).acknowledge();
     }
 }
