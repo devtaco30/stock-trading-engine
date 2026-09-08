@@ -31,5 +31,6 @@ include(
 	"matching-disruptor",
 	"account-disruptor",
 	"account-worker",
+	"matching-worker",
 	"settlement-engine"
 )
