@@ -127,6 +127,59 @@ class AccountEngineTest {
         assertEquals(RejectReason.INSUFFICIENT, events.get(1).reason());
     }
 
+    // ---------- requestId 재전송 멱등 하네스 배선 (C5-1a) ----------
+
+    @Test
+    @DisplayName("같은 requestId로 매수가 두 번 오면 둘째는 재예약 없이 onDuplicateRequest로 알린다")
+    void 매수_같은requestId_재전송하면_중복통지() throws InterruptedException {
+        prepare(2); // 매수 접수(1) + 재전송(1)
+        engine.seed(1L, new BigDecimal("1000000"), new BigDecimal("1.00")); // buyLimit = 가용(재예약됐다면 둘째가 거부됐을 금액)
+        engine.start();
+
+        engine.publishBuy(1001L, 1L, STOCK, new BigDecimal("60000"), 10, "r1"); // 600000, 가용 400000 남음
+        engine.publishBuy(1002L, 1L, STOCK, new BigDecimal("60000"), 10, "r1"); // 같은 requestId 재전송(600000 > 400000이라 재예약됐다면 거부)
+        awaitResults();
+
+        assertEquals(2, events.size());
+        assertTrue(events.get(0).accepted());
+        assertTrue(events.get(1).duplicate());
+    }
+
+    @Test
+    @DisplayName("같은 requestId로 매도가 두 번 오면 둘째는 재예약 없이 onDuplicateRequest로 알린다")
+    void 매도_같은requestId_재전송하면_중복통지() throws InterruptedException {
+        prepare(4); // 매수 접수·체결로 보유 확보(2) + 매도 예약(1) + 재전송(1)
+        engine.seed(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
+        engine.start();
+
+        engine.publishBuy(1001L, 1L, STOCK, new BigDecimal("10000"), 10, "r1");
+        engine.publishBuyFill(9001L, 1001L, 1L, STOCK, new BigDecimal("10000"), 10); // 보유 10 확보
+        engine.publishSell(2001L, 1L, STOCK, 4, "r2");
+        engine.publishSell(2002L, 1L, STOCK, 4, "r2"); // 같은 requestId 재전송
+        awaitResults();
+
+        assertEquals(4, events.size());
+        assertTrue(events.get(2).accepted());
+        assertTrue(events.get(3).duplicate());
+    }
+
+    @Test
+    @DisplayName("거부됐던 requestId가 재전송돼도 재처리하지 않고 onDuplicateRequest로 알린다")
+    void 거부된requestId_재전송해도_재처리안함() throws InterruptedException {
+        prepare(2); // 거부(1) + 재전송(1)
+        engine.seed(1L, new BigDecimal("30000"), new BigDecimal("0.40")); // buyLimit = 75000
+        engine.start();
+
+        engine.publishBuy(1001L, 1L, STOCK, new BigDecimal("10000"), 10, "r1"); // 100000 > 75000 → 거부
+        engine.publishBuy(1002L, 1L, STOCK, new BigDecimal("10000"), 10, "r1"); // 같은 requestId 재전송
+        awaitResults();
+
+        assertEquals(2, events.size());
+        assertFalse(events.get(0).accepted());
+        assertEquals(RejectReason.INSUFFICIENT, events.get(0).reason());
+        assertTrue(events.get(1).duplicate());
+    }
+
     // ---------- 체결 반영 하네스 배선 (B3b) ----------
 
     @Test
@@ -306,41 +359,47 @@ class AccountEngineTest {
 
         @Override
         public void onAccepted(long accountId, long orderId, String requestId, BigDecimal reservedMargin) {
-            events.add(new Recorded(accountId, orderId, requestId, true, reservedMargin, null, null, null, null));
+            events.add(new Recorded(accountId, orderId, requestId, true, reservedMargin, null, null, null, null, false));
             latch.countDown();
         }
 
         @Override
         public void onSellAccepted(long accountId, long orderId, String requestId, int reservedQuantity) {
-            events.add(new Recorded(accountId, orderId, requestId, true, null, null, null, null, reservedQuantity));
+            events.add(new Recorded(accountId, orderId, requestId, true, null, null, null, null, reservedQuantity, false));
             latch.countDown();
         }
 
         @Override
         public void onRejected(long accountId, long orderId, String requestId, RejectReason reason) {
-            events.add(new Recorded(accountId, orderId, requestId, false, null, reason, null, null, null));
+            events.add(new Recorded(accountId, orderId, requestId, false, null, reason, null, null, null, false));
             latch.countDown();
         }
 
         @Override
         public void onFillApplied(long accountId, long orderId, long tradeId, boolean applied) {
-            events.add(new Recorded(accountId, orderId, null, false, null, null, tradeId, applied, null));
+            events.add(new Recorded(accountId, orderId, null, false, null, null, tradeId, applied, null, false));
             latch.countDown();
         }
 
         @Override
         public void onSettlementApplied(long accountId, long settlementRef, boolean applied) {
-            events.add(new Recorded(accountId, 0L, null, false, null, null, settlementRef, applied, null));
+            events.add(new Recorded(accountId, 0L, null, false, null, null, settlementRef, applied, null, false));
             latch.countDown();
         }
 
         @Override
         public void onUnpaidRecorded(long accountId, long tradeId, BigDecimal amount) {
         }
+
+        @Override
+        public void onDuplicateRequest(long accountId, long orderId, String requestId) {
+            events.add(new Recorded(accountId, orderId, requestId, false, null, null, null, null, null, true));
+            latch.countDown();
+        }
     }
 
     private record Recorded(long accountId, long orderId, String requestId, boolean accepted,
                             BigDecimal reservedMargin, RejectReason reason,
-                            Long tradeId, Boolean applied, Integer reservedQuantity) {
+                            Long tradeId, Boolean applied, Integer reservedQuantity, boolean duplicate) {
     }
 }

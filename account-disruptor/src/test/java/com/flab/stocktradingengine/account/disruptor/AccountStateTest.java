@@ -76,6 +76,25 @@ class AccountStateTest {
         assertFalse(overLimit.tryReserve(20L, new BigDecimal("100001"), 1).accepted());
     }
 
+    // ---------- requestId 재전송 멱등 (C5-1a) ----------
+
+    @Test
+    @DisplayName("처음 보는 requestId면 true를 돌려주고 마킹한다")
+    void 처음보는requestId_true() {
+        AccountState state = new AccountState(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
+
+        assertTrue(state.tryMarkRequest("r1"));
+    }
+
+    @Test
+    @DisplayName("같은 requestId가 다시 오면 false를 돌려준다")
+    void 같은requestId_재도착하면_false() {
+        AccountState state = new AccountState(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
+        state.tryMarkRequest("r1");
+
+        assertFalse(state.tryMarkRequest("r1"));
+    }
+
     // ---------- 체결 반영 (B3a, 전량) ----------
 
     @Test

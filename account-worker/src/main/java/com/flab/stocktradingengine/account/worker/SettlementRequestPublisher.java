@@ -60,4 +60,8 @@ public class SettlementRequestPublisher implements AccountResultListener {
         SettlementRequestEvent event = new SettlementRequestEvent(tradeId, accountId, amount, dueAtEpochMillis);
         kafkaTemplate.send(TOPIC, String.valueOf(accountId), event);
     }
+
+    @Override
+    public void onDuplicateRequest(long accountId, long orderId, String requestId) {
+    }
 }

@@ -171,6 +171,10 @@ class AccountFillIntegrationTest {
         public void onUnpaidRecorded(long accountId, long tradeId, BigDecimal amount) {
         }
 
+        @Override
+        public void onDuplicateRequest(long accountId, long orderId, String requestId) {
+        }
+
         record FillEvent(long accountId, long tradeId, boolean applied) {
         }
     }

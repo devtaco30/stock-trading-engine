@@ -37,4 +37,10 @@ public interface AccountResultListener {
      * amount 는 이번 체결로 새로 생긴 미수금(누적 아님). tradeId 는 그 미수금의 멱등키(settlementRef)로 쓰인다.
      */
     void onUnpaidRecorded(long accountId, long tradeId, BigDecimal amount);
+
+    /**
+     * 매수·매도 접수 재전송을 통지한다 — 같은 requestId 가 이미 처리된 적이 있어(accept·reject
+     * 무관) 재예약 없이 무시했다는 뜻. 클라이언트는 requestId 로 원래 결과를 폴링해서 본다.
+     */
+    void onDuplicateRequest(long accountId, long orderId, String requestId);
 }

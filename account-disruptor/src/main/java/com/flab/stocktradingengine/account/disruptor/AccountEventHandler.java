@@ -50,6 +50,10 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
             listener.onRejected(accountId, orderId, requestId, RejectReason.ACCOUNT_NOT_FOUND);
             return;
         }
+        if (!state.tryMarkRequest(requestId)) {
+            listener.onDuplicateRequest(accountId, orderId, requestId);
+            return;
+        }
         BigDecimal price = event.getPrice();
         if (event.getQuantity() <= 0 || price == null || price.signum() <= 0) {
             listener.onRejected(accountId, orderId, requestId, RejectReason.INVALID_QUANTITY);
@@ -72,6 +76,10 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
         AccountState state = accounts.get(accountId);
         if (state == null) {
             listener.onRejected(accountId, orderId, requestId, RejectReason.ACCOUNT_NOT_FOUND);
+            return;
+        }
+        if (!state.tryMarkRequest(requestId)) {
+            listener.onDuplicateRequest(accountId, orderId, requestId);
             return;
         }
         if (event.getQuantity() <= 0) {

@@ -49,4 +49,9 @@ public class CompositeAccountResultListener implements AccountResultListener {
     public void onUnpaidRecorded(long accountId, long tradeId, BigDecimal amount) {
         delegates.forEach(delegate -> delegate.onUnpaidRecorded(accountId, tradeId, amount));
     }
+
+    @Override
+    public void onDuplicateRequest(long accountId, long orderId, String requestId) {
+        delegates.forEach(delegate -> delegate.onDuplicateRequest(accountId, orderId, requestId));
+    }
 }

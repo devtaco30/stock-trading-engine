@@ -34,6 +34,7 @@ public final class AccountState {
     private final Map<String, Integer> holdings = new HashMap<>();      // 종목코드 → 보유 수량
     private final Set<Long> processedTradeIds = new HashSet<>();        // 이미 반영한 체결(tradeId), 멱등용
     private final Set<Long> processedSettlementRefs = new HashSet<>();  // 이미 반영한 정산(settlementRef), 멱등용
+    private final Set<String> processedRequestIds = new HashSet<>();    // 이미 처리한 매수·매도 요청(requestId), 재전송 멱등용
     private BigDecimal unpaid = BigDecimal.ZERO;                        // 미결제 미수금
 
     public AccountState(long accountId, BigDecimal balance, BigDecimal marginRate) {
@@ -46,6 +47,19 @@ public final class AccountState {
     public AccountState(long accountId, BigDecimal balance, BigDecimal marginRate, Map<String, Integer> initialHoldings) {
         this(accountId, balance, marginRate);
         holdings.putAll(initialHoldings);
+    }
+
+    /**
+     * 이 requestId를 처음 보는지 확인하고, 처음이면 마킹한다(재전송 멱등 게이트).
+     *
+     * <p>매수·매도 접수(handleBuy·handleSell) 맨 앞에서 호출한다 — accept·reject 결과와
+     * 무관하게 첫 등장에서만 true를 반환해 이후 검증·예약을 진행시킨다. 재전송(같은 requestId
+     * 재도착)은 재예약하지 않고 무시한다(클라이언트는 requestId로 원래 결과를 폴링해서 본다).</p>
+     *
+     * @return 처음 보는 requestId면 true(처리 진행), 이미 처리한 적 있으면 false(재전송, 무시)
+     */
+    public boolean tryMarkRequest(String requestId) {
+        return processedRequestIds.add(requestId);
     }
 
     /**

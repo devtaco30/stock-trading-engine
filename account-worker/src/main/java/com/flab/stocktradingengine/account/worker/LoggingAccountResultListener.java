@@ -48,4 +48,9 @@ public class LoggingAccountResultListener implements AccountResultListener {
     public void onUnpaidRecorded(long accountId, long tradeId, BigDecimal amount) {
         log.info("[계좌 워커] 미수금 발생: accountId={} tradeId={} amount={}", accountId, tradeId, amount);
     }
+
+    @Override
+    public void onDuplicateRequest(long accountId, long orderId, String requestId) {
+        log.warn("[계좌 워커] 요청 재전송 무시: accountId={} orderId={} requestId={}", accountId, orderId, requestId);
+    }
 }

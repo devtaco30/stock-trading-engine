@@ -145,5 +145,9 @@ class AccountSettlementIntegrationTest {
         @Override
         public void onUnpaidRecorded(long accountId, long tradeId, BigDecimal amount) {
         }
+
+        @Override
+        public void onDuplicateRequest(long accountId, long orderId, String requestId) {
+        }
     }
 }
