@@ -1,21 +1,24 @@
-package com.flab.stocktradingengine.account.disruptor;
+package com.flab.stocktradingengine.wire;
 
 import java.math.BigDecimal;
 
 import org.agrona.DirectBuffer;
 import org.agrona.MutableDirectBuffer;
 
+import com.flab.stocktradingengine.trading.entity.OrderSide;
+
 /**
  * C5-1b — 매수·매도 주문을 Aeron 이 나를 바이트로 바꾸는 수동 코덱.
  *
- * <p>matching-disruptor의 {@code OrderCodec}과 같은 결(가변길이 필드는 맨 뒤, enum은 ordinal,
+ * <p>matching(wire)의 {@link OrderCodec}과 같은 결(가변길이 필드는 맨 뒤, enum은 ordinal,
  * 네이티브 바이트 순서, BigDecimal은 unscaledValue+scale) — 그대로 재사용하지 않고 새로 둔 이유는
- * 계좌 인테이크가 requestId(재전송 멱등키, C5-1a — {@link AccountState#tryMarkRequest})를
- * 추가로 실어야 하는데, 매칭 쪽 {@code JournaledOrder}에는 그 필드가 없어서다.</p>
+ * 계좌 인테이크가 requestId(재전송 멱등키)를 추가로 실어야 하는데, 매칭 쪽 {@code JournaledOrder}에는
+ * 그 필드가 없어서다.</p>
  *
  * <h3>메시지 레이아웃 (running offset, 앞에서 뒤로)</h3>
  * <p>orderId는 없다(C5-2a) — 발신자(게이트웨이)가 주문 신원을 정하지 않고, 계좌 워커가 requestId
- * 첫 접수 시점에 직접 발급한다. 매도는 담보가 보유 수량이라 price가 없다
+ * 첫 접수 시점에 직접 발급한다. 맨 앞 1바이트는 {@link OrderSide}(BUY/SELL)를 구분한다 — 매칭의
+ * {@link EventType}(PLACE/CANCEL)과는 다른 명령 종류다. 매도는 담보가 보유 수량이라 price가 없다
  * ({@code AccountEngine.publishSell} 참고) — 그래서 BUY만 가격 필드를 싣는다. stockCode·requestId는
  * 둘 다 가변 길이라 맨 뒤에 순서대로 두고(Agrona {@code putStringAscii}: 4바이트 길이 + ASCII 바이트),
  * 디코딩 때 각자의 길이 접두어로 다음 필드 오프셋을 계산한다.</p>
@@ -39,7 +42,7 @@ public final class AccountOrderCodec {
         buffer.putLong(position, order.accountId());
         position += Long.BYTES;
 
-        if (order.type() == EventType.BUY) {
+        if (order.type() == OrderSide.BUY) {
             BigDecimal price = order.price();
             long unscaledPrice = price.unscaledValue().longValueExact();
             buffer.putLong(position, unscaledPrice);
@@ -60,13 +63,13 @@ public final class AccountOrderCodec {
     public DecodedAccountOrder decode(DirectBuffer buffer, int offset) {
         int position = offset;
 
-        EventType type = EventType.values()[buffer.getByte(position)];
+        OrderSide type = OrderSide.values()[buffer.getByte(position)];
         position += Byte.BYTES;
         long accountId = buffer.getLong(position);
         position += Long.BYTES;
 
         BigDecimal price = null;
-        if (type == EventType.BUY) {
+        if (type == OrderSide.BUY) {
             long unscaledPrice = buffer.getLong(position);
             position += Long.BYTES;
             int priceScale = buffer.getInt(position);

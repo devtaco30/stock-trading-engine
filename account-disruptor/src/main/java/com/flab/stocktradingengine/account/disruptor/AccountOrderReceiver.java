@@ -10,6 +10,10 @@ import io.aeron.Subscription;
 import io.aeron.logbuffer.FragmentHandler;
 import io.aeron.logbuffer.Header;
 
+import com.flab.stocktradingengine.trading.entity.OrderSide;
+import com.flab.stocktradingengine.wire.AccountOrderCodec;
+import com.flab.stocktradingengine.wire.DecodedAccountOrder;
+
 /**
  * C5-1b — Aeron으로 들어온 매수·매도 주문을 계좌 엔진에 넣는 수신 게이트웨이.
  *
@@ -58,7 +62,7 @@ public final class AccountOrderReceiver implements AutoCloseable {
 
     private void onFragment(DirectBuffer buffer, int offset, int length, Header header) {
         DecodedAccountOrder order = codec.decode(buffer, offset);
-        if (order.type() == EventType.BUY) {
+        if (order.type() == OrderSide.BUY) {
             engine.publishBuy(
                 order.accountId(), order.stockCode(),
                 order.price(), order.quantity(), order.requestId());

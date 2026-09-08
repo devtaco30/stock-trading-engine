@@ -1,4 +1,4 @@
-package com.flab.stocktradingengine.account.disruptor;
+package com.flab.stocktradingengine.wire;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -8,6 +8,8 @@ import java.math.BigDecimal;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import com.flab.stocktradingengine.trading.entity.OrderSide;
 
 class AccountOrderCodecTest {
 
@@ -19,12 +21,12 @@ class AccountOrderCodecTest {
     void 매수_라운드트립() {
         UnsafeBuffer buffer = new UnsafeBuffer(new byte[256]);
         DecodedAccountOrder order = new DecodedAccountOrder(
-            EventType.BUY, 1L, STOCK, new BigDecimal("10000.50"), 10, "req-1");
+            OrderSide.BUY, 1L, STOCK, new BigDecimal("10000.50"), 10, "req-1");
 
         int length = codec.encode(buffer, 0, order);
         DecodedAccountOrder decoded = codec.decode(buffer, 0);
 
-        assertEquals(EventType.BUY, decoded.type());
+        assertEquals(OrderSide.BUY, decoded.type());
         assertEquals(1L, decoded.accountId());
         assertEquals(STOCK, decoded.stockCode());
         assertEquals(0, new BigDecimal("10000.50").compareTo(decoded.price()));
@@ -38,12 +40,12 @@ class AccountOrderCodecTest {
     void 매도_라운드트립_price는_null() {
         UnsafeBuffer buffer = new UnsafeBuffer(new byte[256]);
         DecodedAccountOrder order = new DecodedAccountOrder(
-            EventType.SELL, 1L, STOCK, null, 4, "req-2");
+            OrderSide.SELL, 1L, STOCK, null, 4, "req-2");
 
         codec.encode(buffer, 0, order);
         DecodedAccountOrder decoded = codec.decode(buffer, 0);
 
-        assertEquals(EventType.SELL, decoded.type());
+        assertEquals(OrderSide.SELL, decoded.type());
         assertEquals(1L, decoded.accountId());
         assertEquals(STOCK, decoded.stockCode());
         assertNull(decoded.price());
@@ -56,7 +58,7 @@ class AccountOrderCodecTest {
     void 오프셋_있어도_라운드트립() {
         UnsafeBuffer buffer = new UnsafeBuffer(new byte[256]);
         DecodedAccountOrder order = new DecodedAccountOrder(
-            EventType.BUY, 1L, STOCK, new BigDecimal("10000"), 10, "req-3");
+            OrderSide.BUY, 1L, STOCK, new BigDecimal("10000"), 10, "req-3");
 
         codec.encode(buffer, 13, order);
         DecodedAccountOrder decoded = codec.decode(buffer, 13);

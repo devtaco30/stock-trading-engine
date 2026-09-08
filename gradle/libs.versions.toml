@@ -12,6 +12,7 @@ spring-kafka = "3.3.4"
 disruptor = "4.0.0"
 jmh = "1.37"
 aeron = "1.48.0"
+agrona = "2.2.1"
 
 [libraries]
 spring-boot-starter = { module = "org.springframework.boot:spring-boot-starter", version.ref = "spring-boot" }
@@ -46,6 +47,7 @@ jmh-generator-annprocess = { module = "org.openjdk.jmh:jmh-generator-annprocess"
 
 aeron-driver = { module = "io.aeron:aeron-driver", version.ref = "aeron" }
 aeron-client = { module = "io.aeron:aeron-client", version.ref = "aeron" }
+agrona = { module = "org.agrona:agrona", version.ref = "agrona" }
 
 [plugins]
 spring-boot = { id = "org.springframework.boot", version.ref = "spring-boot" }

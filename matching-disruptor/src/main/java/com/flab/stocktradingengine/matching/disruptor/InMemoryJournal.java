@@ -3,6 +3,8 @@ package com.flab.stocktradingengine.matching.disruptor;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
+import com.flab.stocktradingengine.wire.JournaledOrder;
+
 /**
  * 인메모리 저널.
  *

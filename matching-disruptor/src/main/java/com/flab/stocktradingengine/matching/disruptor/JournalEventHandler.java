@@ -2,6 +2,8 @@ package com.flab.stocktradingengine.matching.disruptor;
 
 import com.lmax.disruptor.EventHandler;
 
+import com.flab.stocktradingengine.wire.JournaledOrder;
+
 /**
  * 링버퍼를 소비해 주문을 저널에 기록하는 핸들러.
  *
@@ -24,6 +26,9 @@ public class JournalEventHandler implements EventHandler<OrderEvent> {
 
     @Override
     public void onEvent(OrderEvent event, long sequence, boolean endOfBatch) {
-        journal.append(JournaledOrder.from(event));
+        // JournaledOrder(core.wire)는 OrderEvent(매칭 코어 전용 가변 슬롯)를 모르므로 여기서 직접 옮겨 담는다.
+        journal.append(new JournaledOrder(
+            event.getType(), event.getOrderId(), event.getAccountId(), event.getStockCode(),
+            event.getSide(), event.getPrice(), event.getQuantity(), event.getOrderAt()));
     }
 }

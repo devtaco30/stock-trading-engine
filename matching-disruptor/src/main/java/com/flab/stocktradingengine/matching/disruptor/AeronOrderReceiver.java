@@ -10,6 +10,10 @@ import io.aeron.Subscription;
 import io.aeron.logbuffer.FragmentHandler;
 import io.aeron.logbuffer.Header;
 
+import com.flab.stocktradingengine.wire.EventType;
+import com.flab.stocktradingengine.wire.JournaledOrder;
+import com.flab.stocktradingengine.wire.OrderCodec;
+
 /**
  * Unit 4c — Aeron 으로 들어온 주문을 매칭엔진에 넣는 수신 게이트웨이.
  *

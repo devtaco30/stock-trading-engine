@@ -14,6 +14,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import com.flab.stocktradingengine.trading.entity.OrderSide;
+import com.flab.stocktradingengine.wire.JournaledOrder;
 
 /**
  * Unit 2 저널 게이팅 검증.

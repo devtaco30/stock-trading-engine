@@ -17,11 +17,11 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.annotation.DirtiesContext;
 
-import com.flab.stocktradingengine.account.disruptor.AccountOrderCodec;
 import com.flab.stocktradingengine.account.disruptor.AccountResultListener;
-import com.flab.stocktradingengine.account.disruptor.DecodedAccountOrder;
-import com.flab.stocktradingengine.account.disruptor.EventType;
 import com.flab.stocktradingengine.account.disruptor.RejectReason;
+import com.flab.stocktradingengine.trading.entity.OrderSide;
+import com.flab.stocktradingengine.wire.AccountOrderCodec;
+import com.flab.stocktradingengine.wire.DecodedAccountOrder;
 
 import io.aeron.Aeron;
 import io.aeron.Publication;
@@ -64,7 +64,7 @@ class AccountOrderIntakeIntegrationTest {
         try {
             awaitConnected(publication);
             send(publication, new DecodedAccountOrder(
-                EventType.BUY, 1L, STOCK, new BigDecimal("10000"), 10, "r1"));
+                OrderSide.BUY, 1L, STOCK, new BigDecimal("10000"), 10, "r1"));
 
             assertThat(recorder.await()).as("5초 안에 결과가 도착해야 한다").isTrue();
             assertThat(recorder.rejections()).isEmpty();

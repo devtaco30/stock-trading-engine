@@ -20,6 +20,10 @@ import io.aeron.Publication;
 import io.aeron.Subscription;
 import io.aeron.driver.MediaDriver;
 
+import com.flab.stocktradingengine.trading.entity.OrderSide;
+import com.flab.stocktradingengine.wire.AccountOrderCodec;
+import com.flab.stocktradingengine.wire.DecodedAccountOrder;
+
 /**
  * C5-1b — Aeron을 실제로 통과한 매수·매도 주문이 검증·예약까지 되는지 검증(end-to-end).
  *
@@ -58,7 +62,7 @@ class AeronAccountEndToEndTest {
             awaitConnected(publication);
 
             send(publication, new DecodedAccountOrder(
-                EventType.BUY, 1L, STOCK, new BigDecimal("10000"), 10, "req-1"));
+                OrderSide.BUY, 1L, STOCK, new BigDecimal("10000"), 10, "req-1"));
 
             assertTrue(latch.await(5, TimeUnit.SECONDS), "5초 안에 결과가 도착해야 한다");
             assertEquals(1, events.size());
@@ -97,9 +101,9 @@ class AeronAccountEndToEndTest {
             awaitConnected(publication);
 
             send(publication, new DecodedAccountOrder(
-                EventType.BUY, 1L, STOCK, new BigDecimal("10000"), 10, "req-dup"));
+                OrderSide.BUY, 1L, STOCK, new BigDecimal("10000"), 10, "req-dup"));
             send(publication, new DecodedAccountOrder(
-                EventType.BUY, 1L, STOCK, new BigDecimal("10000"), 10, "req-dup")); // 같은 requestId 재전송
+                OrderSide.BUY, 1L, STOCK, new BigDecimal("10000"), 10, "req-dup")); // 같은 requestId 재전송
 
             assertTrue(latch.await(5, TimeUnit.SECONDS), "5초 안에 결과 2개가 도착해야 한다");
             assertEquals(2, events.size());
