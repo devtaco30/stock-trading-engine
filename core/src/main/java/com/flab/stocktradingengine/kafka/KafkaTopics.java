@@ -19,4 +19,10 @@ public final class KafkaTopics {
      * accountId만 다르게 키잉). v1 {@code fills} 토픽과는 별개이며 v1 파이프라인에 영향을 주지 않는다.
      */
     public static String accountFills() { return "account-fills"; }
+
+    /**
+     * v2 정산 되돌림 토픽. settlement(T+2)가 account-worker에 "실제 잔고를 차감하라"고
+     * 보내는 명령 경로다(v1엔 없던 경로 — v1은 DB 직접 차감이었다). accountId 가 파티션 키다.
+     */
+    public static String accountSettlements() { return "account-settlements"; }
 }
