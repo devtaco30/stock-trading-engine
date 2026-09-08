@@ -193,6 +193,48 @@ class AccountStateTest {
             () -> state.applyBuyFill(101L, 999L, STOCK, new BigDecimal("10000"), 1));
     }
 
+    // ---------- 미수금 발행 트리거 (a2-1) ----------
+
+    @Test
+    @DisplayName("매수 체결이 반영되면 이번 체결로 새로 생긴 미수금을 결과로 돌려준다")
+    void 매수체결_결과로_이번_미수금을_돌려준다() {
+        AccountState state = new AccountState(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
+        state.tryReserve(1L, new BigDecimal("10000"), 10);
+
+        BuyFillResult result = state.applyBuyFill(101L, 1L, STOCK, new BigDecimal("10000"), 10);
+
+        assertTrue(result.applied());
+        // 미수금 = 체결액 × (1 − 증거금률) = 100000 × 0.60 = 60000
+        assertEquals(0, result.unpaidThis().compareTo(new BigDecimal("60000")));
+    }
+
+    @Test
+    @DisplayName("같은 tradeId로 매수 체결이 두 번 오면 둘째 결과는 applied=false, unpaidThis=0이다")
+    void 매수체결_같은tradeId_둘째결과는_미적용() {
+        AccountState state = new AccountState(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
+        state.tryReserve(1L, new BigDecimal("10000"), 10);
+        state.applyBuyFill(101L, 1L, STOCK, new BigDecimal("10000"), 10);
+
+        BuyFillResult result = state.applyBuyFill(101L, 1L, STOCK, new BigDecimal("10000"), 10); // 같은 tradeId 재도착
+
+        assertFalse(result.applied());
+        assertEquals(0, result.unpaidThis().compareTo(BigDecimal.ZERO));
+    }
+
+    @Test
+    @DisplayName("부분 체결의 미수금 결과는 이번 체결분만이다 (누적이 아니다)")
+    void 부분체결_미수금결과는_이번체결분만() {
+        AccountState state = new AccountState(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
+        state.tryReserve(1L, new BigDecimal("10000"), 10); // 10주 예약
+
+        BuyFillResult first = state.applyBuyFill(101L, 1L, STOCK, new BigDecimal("10000"), 4); // 4주 체결
+        BuyFillResult second = state.applyBuyFill(102L, 1L, STOCK, new BigDecimal("10000"), 6); // 나머지 6주 체결
+
+        // 1차 미수금 = 40000 × 0.60 = 24000, 2차 미수금 = 60000 × 0.60 = 36000 (누적 아님)
+        assertEquals(0, first.unpaidThis().compareTo(new BigDecimal("24000")));
+        assertEquals(0, second.unpaidThis().compareTo(new BigDecimal("36000")));
+    }
+
     // ---------- 매도 보유예약 ----------
 
     private static AccountState withHolding(int quantity) {

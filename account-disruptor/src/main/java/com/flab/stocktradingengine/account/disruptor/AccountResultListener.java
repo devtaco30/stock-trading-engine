@@ -31,4 +31,10 @@ public interface AccountResultListener {
      * settlementRef 재도착이라 무시(멱등)했다는 뜻.
      */
     void onSettlementApplied(long accountId, long settlementRef, boolean applied);
+
+    /**
+     * 매수 체결이 미수금을 남겼을 때 통지한다 — settlement-requests 발행 트리거다.
+     * amount 는 이번 체결로 새로 생긴 미수금(누적 아님). tradeId 는 그 미수금의 멱등키(settlementRef)로 쓰인다.
+     */
+    void onUnpaidRecorded(long accountId, long tradeId, BigDecimal amount);
 }

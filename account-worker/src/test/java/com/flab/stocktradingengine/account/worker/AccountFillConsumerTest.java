@@ -119,6 +119,10 @@ class AccountFillConsumerTest {
             events.add(new Recorded(accountId, 0L, applied, settlementRef, null));
             latch.countDown();
         }
+
+        @Override
+        public void onUnpaidRecorded(long accountId, long tradeId, BigDecimal amount) {
+        }
     }
 
     private record Recorded(long accountId, long orderId, boolean success, Long tradeId, RejectReason reason) {

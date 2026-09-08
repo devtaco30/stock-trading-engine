@@ -43,4 +43,9 @@ public class LoggingAccountResultListener implements AccountResultListener {
     public void onSettlementApplied(long accountId, long settlementRef, boolean applied) {
         log.info("[계좌 워커] 정산 반영: accountId={} settlementRef={} applied={}", accountId, settlementRef, applied);
     }
+
+    @Override
+    public void onUnpaidRecorded(long accountId, long tradeId, BigDecimal amount) {
+        log.info("[계좌 워커] 미수금 발생: accountId={} tradeId={} amount={}", accountId, tradeId, amount);
+    }
 }

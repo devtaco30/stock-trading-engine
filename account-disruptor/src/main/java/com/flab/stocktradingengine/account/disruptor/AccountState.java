@@ -80,9 +80,9 @@ public final class AccountState {
      *                                (매칭이 검증 안 된 주문을 체결시킨 것이므로 도메인 불변식 위반)
      * @return 이번 호출로 실제 반영했으면 true, 이미 반영한 tradeId 라 무시했으면 false
      */
-    public boolean applyBuyFill(long tradeId, long orderId, String stockCode, BigDecimal matchPrice, int fillQty) {
+    public BuyFillResult applyBuyFill(long tradeId, long orderId, String stockCode, BigDecimal matchPrice, int fillQty) {
         if (!processedTradeIds.add(tradeId)) {
-            return false; // 이미 반영한 체결 재도착 — 무시
+            return BuyFillResult.notApplied(); // 이미 반영한 체결 재도착 — 무시
         }
         Reservation reservation = reservations.get(orderId);
         if (reservation == null) {
@@ -120,7 +120,7 @@ public final class AccountState {
         BigDecimal unpaidThis = fillAmount.subtract(marginPaid);
         balance = balance.subtract(marginPaid);
         unpaid = unpaid.add(unpaidThis);
-        return true;
+        return new BuyFillResult(true, unpaidThis);
     }
 
     /**

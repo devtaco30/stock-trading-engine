@@ -333,6 +333,10 @@ class AccountEngineTest {
             events.add(new Recorded(accountId, 0L, null, false, null, null, settlementRef, applied, null));
             latch.countDown();
         }
+
+        @Override
+        public void onUnpaidRecorded(long accountId, long tradeId, BigDecimal amount) {
+        }
     }
 
     private record Recorded(long accountId, long orderId, String requestId, boolean accepted,

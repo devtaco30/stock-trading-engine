@@ -97,5 +97,9 @@ class AccountEngineConfigTest {
             events.add(new Recorded(accountId, 0L, applied));
             latch.countDown();
         }
+
+        @Override
+        public void onUnpaidRecorded(long accountId, long tradeId, BigDecimal amount) {
+        }
     }
 }

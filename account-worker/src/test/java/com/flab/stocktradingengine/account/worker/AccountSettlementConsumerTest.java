@@ -101,6 +101,10 @@ class AccountSettlementConsumerTest {
             events.add(new Recorded(accountId, applied, settlementRef));
             latch.countDown();
         }
+
+        @Override
+        public void onUnpaidRecorded(long accountId, long tradeId, BigDecimal amount) {
+        }
     }
 
     private record Recorded(long accountId, boolean applied, Long settlementRef) {

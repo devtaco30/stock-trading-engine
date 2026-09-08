@@ -97,8 +97,11 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
             listener.onRejected(accountId, orderId, event.getRequestId(), RejectReason.ACCOUNT_NOT_FOUND);
             return;
         }
-        boolean applied = state.applyBuyFill(tradeId, orderId, event.getStockCode(), event.getPrice(), event.getQuantity());
-        listener.onFillApplied(accountId, orderId, tradeId, applied);
+        BuyFillResult result = state.applyBuyFill(tradeId, orderId, event.getStockCode(), event.getPrice(), event.getQuantity());
+        listener.onFillApplied(accountId, orderId, tradeId, result.applied());
+        if (result.applied() && result.unpaidThis().signum() > 0) {
+            listener.onUnpaidRecorded(accountId, tradeId, result.unpaidThis());
+        }
     }
 
     private void handleSellFill(AccountEvent event) {

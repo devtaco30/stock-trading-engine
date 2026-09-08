@@ -160,6 +160,10 @@ class AccountFillIntegrationTest {
             latch.countDown();
         }
 
+        @Override
+        public void onUnpaidRecorded(long accountId, long tradeId, BigDecimal amount) {
+        }
+
         record FillEvent(long accountId, long tradeId, boolean applied) {
         }
     }
