@@ -180,6 +180,56 @@ class AccountEngineTest {
         assertTrue(events.get(1).duplicate());
     }
 
+    // ---------- requestId 빈값 가드 (C5-1c) ----------
+
+    @Test
+    @DisplayName("빈 requestId 매수는 INVALID_REQUEST_ID 로 거부하고, 같은 빈 requestId 둘째도 세트 오염 없이 다시 거부한다")
+    void 빈_requestId_매수_INVALID_거부_세트오염없음() throws InterruptedException {
+        prepare(2);
+        engine.seed(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
+        engine.start();
+
+        engine.publishBuy(1001L, 1L, STOCK, new BigDecimal("10000"), 10, "");
+        engine.publishBuy(1002L, 1L, STOCK, new BigDecimal("10000"), 10, ""); // 서로 다른 주문, requestId만 우연히 같은 빈 값
+        awaitResults();
+
+        assertEquals(2, events.size());
+        assertFalse(events.get(0).accepted());
+        assertEquals(RejectReason.INVALID_REQUEST_ID, events.get(0).reason());
+        assertFalse(events.get(1).accepted());
+        assertEquals(RejectReason.INVALID_REQUEST_ID, events.get(1).reason()); // 재전송(duplicate)이 아니라 또 INVALID_REQUEST_ID여야 오염 없음
+    }
+
+    @Test
+    @DisplayName("null requestId 매수는 INVALID_REQUEST_ID 로 거부한다")
+    void null_requestId_매수는_거부() throws InterruptedException {
+        prepare(1);
+        engine.seed(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
+        engine.start();
+
+        engine.publishBuy(1001L, 1L, STOCK, new BigDecimal("10000"), 10, null);
+        awaitResults();
+
+        assertEquals(1, events.size());
+        assertFalse(events.get(0).accepted());
+        assertEquals(RejectReason.INVALID_REQUEST_ID, events.get(0).reason());
+    }
+
+    @Test
+    @DisplayName("빈 requestId 매도는 INVALID_REQUEST_ID 로 거부한다")
+    void 빈_requestId_매도는_거부() throws InterruptedException {
+        prepare(1);
+        engine.seed(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
+        engine.start();
+
+        engine.publishSell(2001L, 1L, STOCK, 1, "");
+        awaitResults();
+
+        assertEquals(1, events.size());
+        assertFalse(events.get(0).accepted());
+        assertEquals(RejectReason.INVALID_REQUEST_ID, events.get(0).reason());
+    }
+
     // ---------- 체결 반영 하네스 배선 (B3b) ----------
 
     @Test

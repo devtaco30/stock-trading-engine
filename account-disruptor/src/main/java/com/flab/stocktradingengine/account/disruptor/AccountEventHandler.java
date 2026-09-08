@@ -44,6 +44,13 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
         long accountId = event.getAccountId();
         String requestId = event.getRequestId();
 
+        if (requestId == null || requestId.isBlank()) {
+            // 재전송 멱등키가 없으면 processedRequestIds에 빈 키가 들어가 서로 다른 주문의
+            // 둘째가 재전송으로 오인될 수 있다 — 검증 전에 거부한다.
+            listener.onRejected(accountId, orderId, requestId, RejectReason.INVALID_REQUEST_ID);
+            return;
+        }
+
         AccountState state = accounts.get(accountId);
         if (state == null) {
             // 워커가 소유하지 않은 계좌 — 라우팅이 잘못됐거나 시드 누락
@@ -72,6 +79,11 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
         long orderId = event.getOrderId();
         long accountId = event.getAccountId();
         String requestId = event.getRequestId();
+
+        if (requestId == null || requestId.isBlank()) {
+            listener.onRejected(accountId, orderId, requestId, RejectReason.INVALID_REQUEST_ID);
+            return;
+        }
 
         AccountState state = accounts.get(accountId);
         if (state == null) {
