@@ -76,12 +76,19 @@ class AccountFillIntegrationTest {
         assertThat(recorder.await()).as("예약 콜백이 1초 안에 도착해야 한다").isTrue();
         assertThat(recorder.rejections()).as("매수·매도 예약이 전부 통과해야 한다").isEmpty();
 
-        recorder.prepare(2); // 체결 반영(매수)(1) + 체결 반영(매도)(1)
+        // fan-out 메시지 2개(같은 체결, accountId 키만 다름)를 이 컨슈머가 매번 매수·매도 양쪽 다
+        // AccountEngine에 넣는다(AccountFillConsumer 참고) — 이 테스트는 계좌 1·2를 워커 하나가
+        // 같이 소유하므로 진짜 반영 2개 + 같은 tradeId 재도착으로 무시된 중복 2개, 총 4개가
+        // 결정론적으로 온다. 2개만 기다렸다가 단언하면 "그 2개가 진짜인지 중복인지"가 경쟁이 된다.
+        recorder.prepare(4);
         TradeFilledEvent fill = new TradeFilledEvent(9001L, STOCK, 1001L, 1L, 2001L, 2L, 4, new BigDecimal("10000"));
         publishFanOut(fill);
 
-        assertThat(recorder.await()).as("체결 반영 콜백이 5초 안에 도착해야 한다").isTrue();
-        assertThat(recorder.fillEvents()).containsExactlyInAnyOrder(
+        assertThat(recorder.await()).as("체결 반영 콜백 4개(반영 2 + 중복무시 2)가 도착해야 한다").isTrue();
+        List<Recorder.FillEvent> appliedEvents = recorder.fillEvents().stream()
+            .filter(Recorder.FillEvent::applied)
+            .toList();
+        assertThat(appliedEvents).containsExactlyInAnyOrder(
             new Recorder.FillEvent(1L, 9001L, true),
             new Recorder.FillEvent(2L, 9001L, true)
         );
