@@ -18,6 +18,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.kafka.support.serializer.JsonDeserializer;
+import org.springframework.test.annotation.DirtiesContext;
 
 import com.flab.stocktradingengine.kafka.KafkaTopics;
 import com.flab.stocktradingengine.kafka.event.TradeFilledEvent;
@@ -30,8 +31,16 @@ import com.flab.stocktradingengine.trading.entity.OrderSide;
  * 실제 발행되는지 확인하는 end-to-end 테스트.
  *
  * <p>사전 조건: {@code docker compose up -d} 로 로컬 Kafka(9092)가 떠 있어야 한다.</p>
+ *
+ * <p>{@code @DirtiesContext} — 이 테스트가 직접 {@code engine.publishPlace}를 테스트 스레드에서
+ * 호출한다. Spring 테스트 컨텍스트 캐싱으로 이 컨텍스트가 살아남으면, 같은 설정으로 뜨는 다른
+ * {@code @SpringBootTest}(예: {@code MatchingOrderIntakeIntegrationTest})가 캐시를 재사용해 같은
+ * {@code MatchingEngine} 빈을 공유하게 되고, 그 빈의 링버퍼(ProducerType.SINGLE)가 "첫 발행 스레드"로
+ * 이 테스트 스레드를 이미 기억한 상태라 Aeron 수신 스레드가 처음 발행할 때
+ * {@code AssertionError: Accessed by two threads}로 깨진다(실제로 겪은 문제) — 컨텍스트를 남기지 않는다.</p>
  */
 @SpringBootTest(classes = MatchingWorkerApplication.class)
+@DirtiesContext
 class MatchingFillIntegrationTest {
 
     private static final String STOCK = "005930";
