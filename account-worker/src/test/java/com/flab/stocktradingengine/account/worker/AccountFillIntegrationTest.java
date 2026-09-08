@@ -24,6 +24,7 @@ import org.springframework.kafka.support.serializer.JsonSerializer;
 import com.flab.stocktradingengine.account.disruptor.AccountEngine;
 import com.flab.stocktradingengine.account.disruptor.AccountResultListener;
 import com.flab.stocktradingengine.account.disruptor.RejectReason;
+import com.flab.stocktradingengine.kafka.KafkaTopics;
 import com.flab.stocktradingengine.kafka.event.TradeFilledEvent;
 
 /**
@@ -85,9 +86,9 @@ class AccountFillIntegrationTest {
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, BOOTSTRAP_SERVERS);
         try (KafkaProducer<String, TradeFilledEvent> producer =
                  new KafkaProducer<>(props, new StringSerializer(), new JsonSerializer<>())) {
-            producer.send(new ProducerRecord<>("account-fills", String.valueOf(fill.buyAccountId()), fill))
+            producer.send(new ProducerRecord<>(KafkaTopics.accountFills(), String.valueOf(fill.buyAccountId()), fill))
                 .get(5, TimeUnit.SECONDS);
-            producer.send(new ProducerRecord<>("account-fills", String.valueOf(fill.sellAccountId()), fill))
+            producer.send(new ProducerRecord<>(KafkaTopics.accountFills(), String.valueOf(fill.sellAccountId()), fill))
                 .get(5, TimeUnit.SECONDS);
         }
     }

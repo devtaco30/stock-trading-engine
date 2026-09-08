@@ -3,6 +3,7 @@ package com.flab.stocktradingengine.matching.worker;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 
+import com.flab.stocktradingengine.kafka.KafkaTopics;
 import com.flab.stocktradingengine.kafka.event.TradeFilledEvent;
 import com.flab.stocktradingengine.matching.disruptor.MatchListener;
 import com.flab.stocktradingengine.support.SnowflakeIdGenerator;
@@ -35,7 +36,7 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class AccountFillPublisher implements MatchListener {
 
-    private static final String TOPIC = "account-fills";
+    private static final String TOPIC = KafkaTopics.accountFills();
 
     private final KafkaTemplate<String, Object> kafkaTemplate;
     private final SnowflakeIdGenerator snowflakeIdGenerator;

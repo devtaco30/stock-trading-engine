@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.kafka.core.KafkaTemplate;
 
+import com.flab.stocktradingengine.kafka.KafkaTopics;
 import com.flab.stocktradingengine.kafka.event.TradeFilledEvent;
 import com.flab.stocktradingengine.support.SnowflakeIdGenerator;
 import com.flab.stocktradingengine.trading.matching.FillResult;
@@ -25,7 +26,7 @@ import com.flab.stocktradingengine.trading.matching.FillResult;
 class AccountFillPublisherTest {
 
     private static final String STOCK = "005930";
-    private static final String TOPIC = "account-fills";
+    private static final String TOPIC = KafkaTopics.accountFills();
 
     @Test
     void 체결하나를_매수_매도_accountId_키로_같은_tradeId로_두번_발행한다() {

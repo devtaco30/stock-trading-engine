@@ -19,6 +19,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.kafka.support.serializer.JsonDeserializer;
 
+import com.flab.stocktradingengine.kafka.KafkaTopics;
 import com.flab.stocktradingengine.kafka.event.TradeFilledEvent;
 import com.flab.stocktradingengine.matching.disruptor.MatchingEngine;
 import com.flab.stocktradingengine.trading.entity.OrderSide;
@@ -34,48 +35,57 @@ import com.flab.stocktradingengine.trading.entity.OrderSide;
 class MatchingFillIntegrationTest {
 
     private static final String STOCK = "005930";
-    private static final String TOPIC = "account-fills";
+    private static final String TOPIC = KafkaTopics.accountFills();
     private static final String BOOTSTRAP_SERVERS = "localhost:9092";
-    private static final long BUY_ACCOUNT_ID = 9100L;
-    private static final long SELL_ACCOUNT_ID = 9200L;
 
     @Autowired
     private MatchingEngine engine;
 
     @Test
     void 교차주문이_체결되면_account_fills에_매수_매도_같은_tradeId로_두건_발행된다() throws Exception {
-        Instant now = Instant.now();
-        engine.publishPlace(7001L, BUY_ACCOUNT_ID, STOCK, OrderSide.BUY, new BigDecimal("10000"), 4, now);
-        engine.publishPlace(7002L, SELL_ACCOUNT_ID, STOCK, OrderSide.SELL, new BigDecimal("10000"), 4, now.plusMillis(1));
+        // 계좌·주문 ID를 실행마다 새로 뽑는다 — 상수로 고정하면 이전 실행이 이 토픽에 남긴
+        // 레코드까지 조건에 걸려서, 이번 실행이 실제로 발행 안 해도 옛 레코드로 테스트가
+        // 통과해버린다(리뷰 발견: 검증이 아니라 우연히 가려짐).
+        long runId = System.nanoTime();
+        long buyAccountId = runId;
+        long sellAccountId = runId + 1;
+        long buyOrderId = runId + 2;
+        long sellOrderId = runId + 3;
 
-        List<ConsumerRecord<String, TradeFilledEvent>> matched = consumeUntilBothSidesArrive();
+        Instant now = Instant.now();
+        engine.publishPlace(buyOrderId, buyAccountId, STOCK, OrderSide.BUY, new BigDecimal("10000"), 4, now);
+        engine.publishPlace(sellOrderId, sellAccountId, STOCK, OrderSide.SELL, new BigDecimal("10000"), 4, now.plusMillis(1));
+
+        List<ConsumerRecord<String, TradeFilledEvent>> matched = consumeUntilBothSidesArrive(buyAccountId, sellAccountId);
 
         assertThat(matched).hasSize(2);
         ConsumerRecord<String, TradeFilledEvent> buySide = matched.get(0);
         ConsumerRecord<String, TradeFilledEvent> sellSide = matched.get(1);
 
-        assertThat(buySide.key()).isEqualTo(String.valueOf(BUY_ACCOUNT_ID));
-        assertThat(sellSide.key()).isEqualTo(String.valueOf(SELL_ACCOUNT_ID));
+        assertThat(buySide.key()).isEqualTo(String.valueOf(buyAccountId));
+        assertThat(sellSide.key()).isEqualTo(String.valueOf(sellAccountId));
         assertThat(buySide.value().tradeId()).isEqualTo(sellSide.value().tradeId());
         assertThat(buySide.value()).isEqualTo(sellSide.value()); // 같은 TradeFilledEvent(양쪽 다 담김)
 
         TradeFilledEvent event = buySide.value();
         assertThat(event.stockCode()).isEqualTo(STOCK);
-        assertThat(event.buyOrderId()).isEqualTo(7001L);
-        assertThat(event.buyAccountId()).isEqualTo(BUY_ACCOUNT_ID);
-        assertThat(event.sellOrderId()).isEqualTo(7002L);
-        assertThat(event.sellAccountId()).isEqualTo(SELL_ACCOUNT_ID);
+        assertThat(event.buyOrderId()).isEqualTo(buyOrderId);
+        assertThat(event.buyAccountId()).isEqualTo(buyAccountId);
+        assertThat(event.sellOrderId()).isEqualTo(sellOrderId);
+        assertThat(event.sellAccountId()).isEqualTo(sellAccountId);
         assertThat(event.filledQuantity()).isEqualTo(4);
         assertThat(event.matchPrice()).isEqualByComparingTo("10000");
     }
 
-    /** 이 테스트의 accountId 키를 가진 레코드 두 개(매수·매도)가 도착할 때까지 폴링한다. */
-    private List<ConsumerRecord<String, TradeFilledEvent>> consumeUntilBothSidesArrive() {
+    /** 이 실행의 accountId 키를 가진 레코드 두 개(매수·매도)가 도착할 때까지 폴링한다. */
+    private List<ConsumerRecord<String, TradeFilledEvent>> consumeUntilBothSidesArrive(long buyAccountId, long sellAccountId) {
         Properties props = new Properties();
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, BOOTSTRAP_SERVERS);
         props.put(ConsumerConfig.GROUP_ID_CONFIG, "matching-fill-integration-test-" + System.nanoTime());
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
+        String buyKey = String.valueOf(buyAccountId);
+        String sellKey = String.valueOf(sellAccountId);
         List<ConsumerRecord<String, TradeFilledEvent>> found = new ArrayList<>();
         try (KafkaConsumer<String, TradeFilledEvent> consumer =
                  new KafkaConsumer<>(props, new StringDeserializer(), new JsonDeserializer<>(TradeFilledEvent.class, false))) {
@@ -85,16 +95,13 @@ class MatchingFillIntegrationTest {
             while (found.size() < 2 && System.currentTimeMillis() < deadline) {
                 ConsumerRecords<String, TradeFilledEvent> records = consumer.poll(Duration.ofMillis(500));
                 for (ConsumerRecord<String, TradeFilledEvent> record : records) {
-                    if (found.size() >= 2) {
-                        break; // 이전 테스트 실행이 같은 토픽에 남긴 레코드까지 더 읽지 않는다
-                    }
-                    if (String.valueOf(BUY_ACCOUNT_ID).equals(record.key()) || String.valueOf(SELL_ACCOUNT_ID).equals(record.key())) {
+                    if (buyKey.equals(record.key()) || sellKey.equals(record.key())) {
                         found.add(record);
                     }
                 }
             }
         }
-        found.sort((a, b) -> Long.compare(Long.parseLong(a.key()), Long.parseLong(b.key()))); // 매수(9100) 키가 먼저 오게 정렬(검증 편의)
+        found.sort((a, b) -> Long.compare(Long.parseLong(a.key()), Long.parseLong(b.key()))); // 매수 키가 먼저 오게 정렬(검증 편의)
         return found;
     }
 }
