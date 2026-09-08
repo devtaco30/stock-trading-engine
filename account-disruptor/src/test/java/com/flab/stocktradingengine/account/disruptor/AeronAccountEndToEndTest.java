@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 
 import org.agrona.concurrent.UnsafeBuffer;
 import org.junit.jupiter.api.Test;
@@ -43,7 +44,7 @@ class AeronAccountEndToEndTest {
 
         List<Recorded> events = new CopyOnWriteArrayList<>();
         CountDownLatch latch = new CountDownLatch(1);
-        AccountEngine engine = new AccountEngine(BUFFER_SIZE, new Recorder(events, latch));
+        AccountEngine engine = new AccountEngine(BUFFER_SIZE, new AtomicLong(0)::incrementAndGet, new Recorder(events, latch));
         engine.seed(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
         engine.start();
 
@@ -57,13 +58,14 @@ class AeronAccountEndToEndTest {
             awaitConnected(publication);
 
             send(publication, new DecodedAccountOrder(
-                EventType.BUY, 1001L, 1L, STOCK, new BigDecimal("10000"), 10, "req-1"));
+                EventType.BUY, 1L, STOCK, new BigDecimal("10000"), 10, "req-1"));
 
             assertTrue(latch.await(5, TimeUnit.SECONDS), "5초 안에 결과가 도착해야 한다");
             assertEquals(1, events.size());
             Recorded event = events.get(0);
             assertTrue(event.accepted());
             assertEquals(0, event.reservedMargin().compareTo(new BigDecimal("40000")));
+            assertEquals(1L, event.orderId()); // 발신자는 orderId를 안 보냈는데도 계좌 워커가 발급해 돌려준다(C5-2a)
         } finally {
             publication.close();
             receiver.close();
@@ -81,7 +83,7 @@ class AeronAccountEndToEndTest {
 
         List<Recorded> events = new CopyOnWriteArrayList<>();
         CountDownLatch latch = new CountDownLatch(2);
-        AccountEngine engine = new AccountEngine(BUFFER_SIZE, new Recorder(events, latch));
+        AccountEngine engine = new AccountEngine(BUFFER_SIZE, new AtomicLong(0)::incrementAndGet, new Recorder(events, latch));
         engine.seed(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
         engine.start();
 
@@ -95,14 +97,15 @@ class AeronAccountEndToEndTest {
             awaitConnected(publication);
 
             send(publication, new DecodedAccountOrder(
-                EventType.BUY, 1001L, 1L, STOCK, new BigDecimal("10000"), 10, "req-dup"));
+                EventType.BUY, 1L, STOCK, new BigDecimal("10000"), 10, "req-dup"));
             send(publication, new DecodedAccountOrder(
-                EventType.BUY, 1002L, 1L, STOCK, new BigDecimal("10000"), 10, "req-dup")); // 같은 requestId 재전송
+                EventType.BUY, 1L, STOCK, new BigDecimal("10000"), 10, "req-dup")); // 같은 requestId 재전송
 
             assertTrue(latch.await(5, TimeUnit.SECONDS), "5초 안에 결과 2개가 도착해야 한다");
             assertEquals(2, events.size());
             assertTrue(events.get(0).accepted());
             assertTrue(events.get(1).duplicate());
+            assertEquals(events.get(0).orderId(), events.get(1).orderId()); // 재전송도 같은 orderId(C5-2a)
         } finally {
             publication.close();
             receiver.close();
@@ -142,7 +145,7 @@ class AeronAccountEndToEndTest {
         }
     }
 
-    private record Recorded(boolean accepted, BigDecimal reservedMargin, boolean duplicate) {
+    private record Recorded(boolean accepted, long orderId, BigDecimal reservedMargin, boolean duplicate) {
     }
 
     private static final class Recorder implements AccountResultListener {
@@ -156,19 +159,19 @@ class AeronAccountEndToEndTest {
 
         @Override
         public void onAccepted(long accountId, long orderId, String requestId, BigDecimal reservedMargin) {
-            events.add(new Recorded(true, reservedMargin, false));
+            events.add(new Recorded(true, orderId, reservedMargin, false));
             latch.countDown();
         }
 
         @Override
         public void onSellAccepted(long accountId, long orderId, String requestId, int reservedQuantity) {
-            events.add(new Recorded(true, null, false));
+            events.add(new Recorded(true, orderId, null, false));
             latch.countDown();
         }
 
         @Override
         public void onRejected(long accountId, long orderId, String requestId, RejectReason reason) {
-            events.add(new Recorded(false, null, false));
+            events.add(new Recorded(false, orderId, null, false));
             latch.countDown();
         }
 
@@ -186,7 +189,7 @@ class AeronAccountEndToEndTest {
 
         @Override
         public void onDuplicateRequest(long accountId, long orderId, String requestId) {
-            events.add(new Recorded(false, null, true));
+            events.add(new Recorded(false, orderId, null, true));
             latch.countDown();
         }
     }

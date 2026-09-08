@@ -25,7 +25,7 @@ class AccountEngineConfigTest {
     private static final String STOCK = "005930";
 
     private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
-        .withUserConfiguration(AccountEngineConfig.class)
+        .withUserConfiguration(AccountEngineConfig.class, SnowflakeConfig.class)
         .withPropertyValues(
             "account-worker.seed-accounts[0].account-id=1",
             "account-worker.seed-accounts[0].balance=1000000",
@@ -42,11 +42,12 @@ class AccountEngineConfigTest {
             .run(context -> {
                 AccountEngine engine = context.getBean(AccountEngine.class);
 
-                engine.publishBuy(1001L, 1L, STOCK, new BigDecimal("10000"), 10, "r1");
+                engine.publishBuy(1L, STOCK, new BigDecimal("10000"), 10, "r1");
                 assertThat(latch.await(1, TimeUnit.SECONDS)).as("1초 안에 결과가 도착해야 한다").isTrue();
 
                 assertThat(events).hasSize(1);
                 assertThat(events.get(0).accepted()).isTrue();
+                assertThat(events.get(0).orderId()).as("Snowflake가 발급한 orderId는 0이 아니어야 한다").isNotZero();
 
                 assertShutsDownCleanly(context);
             });

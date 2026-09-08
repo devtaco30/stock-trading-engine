@@ -2,6 +2,7 @@ package com.flab.stocktradingengine.account.disruptor;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -76,23 +77,23 @@ class AccountStateTest {
         assertFalse(overLimit.tryReserve(20L, new BigDecimal("100001"), 1).accepted());
     }
 
-    // ---------- requestId 재전송 멱등 (C5-1a) ----------
+    // ---------- requestId 재전송 멱등 + orderId 발급 조회 (C5-1a, C5-2a) ----------
 
     @Test
-    @DisplayName("처음 보는 requestId면 true를 돌려주고 마킹한다")
-    void 처음보는requestId_true() {
+    @DisplayName("처음 보는 requestId면 null을 돌려준다")
+    void 처음보는requestId_null() {
         AccountState state = new AccountState(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
 
-        assertTrue(state.tryMarkRequest("r1"));
+        assertNull(state.orderIdFor("r1"));
     }
 
     @Test
-    @DisplayName("같은 requestId가 다시 오면 false를 돌려준다")
-    void 같은requestId_재도착하면_false() {
+    @DisplayName("기억한 requestId는 발급했던 orderId를 그대로 돌려준다")
+    void 기억한requestId_발급했던orderId_반환() {
         AccountState state = new AccountState(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
-        state.tryMarkRequest("r1");
+        state.rememberRequest("r1", 42L);
 
-        assertFalse(state.tryMarkRequest("r1"));
+        assertEquals(42L, state.orderIdFor("r1"));
     }
 
     // ---------- 체결 반영 (B3a, 전량) ----------

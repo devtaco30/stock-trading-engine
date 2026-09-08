@@ -60,11 +60,11 @@ public final class AccountOrderReceiver implements AutoCloseable {
         DecodedAccountOrder order = codec.decode(buffer, offset);
         if (order.type() == EventType.BUY) {
             engine.publishBuy(
-                order.orderId(), order.accountId(), order.stockCode(),
+                order.accountId(), order.stockCode(),
                 order.price(), order.quantity(), order.requestId());
         } else {
             engine.publishSell(
-                order.orderId(), order.accountId(), order.stockCode(),
+                order.accountId(), order.stockCode(),
                 order.quantity(), order.requestId());
         }
     }

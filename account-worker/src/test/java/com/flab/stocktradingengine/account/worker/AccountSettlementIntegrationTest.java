@@ -61,10 +61,15 @@ class AccountSettlementIntegrationTest {
 
     @Test
     void 실제_카프카로_받은_정산을_반영하고_재도착은_멱등하게_무시한다() throws Exception {
-        recorder.prepare(2); // 매수 접수(1) + 매수 체결(1, 미수금 60000 생김)
-        engine.publishBuy(1001L, ACCOUNT_ID, STOCK, new BigDecimal("10000"), 10, "r1");
-        engine.publishBuyFill(9001L, 1001L, ACCOUNT_ID, STOCK, new BigDecimal("10000"), 10);
-        assertThat(recorder.await()).as("예약·체결 콜백이 도착해야 한다").isTrue();
+        recorder.prepare(1); // 매수 접수(1)
+        engine.publishBuy(ACCOUNT_ID, STOCK, new BigDecimal("10000"), 10, "r1");
+        assertThat(recorder.await()).as("매수 접수 콜백이 도착해야 한다").isTrue();
+        // 계좌 워커가 발급한 실제 orderId(C5-2a) — 클라이언트가 정하지 않으므로 accept 콜백에서 꺼내 쓴다.
+        long orderId = recorder.lastAcceptedOrderId();
+
+        recorder.prepare(1); // 매수 체결(1, 미수금 60000 생김)
+        engine.publishBuyFill(9001L, orderId, ACCOUNT_ID, STOCK, new BigDecimal("10000"), 10);
+        assertThat(recorder.await()).as("매수 체결 콜백이 도착해야 한다").isTrue();
 
         long settlementRef = System.nanoTime(); // 실행마다 새 값 — 이전 실행 재도착과 안 헷갈리게
 
@@ -103,6 +108,7 @@ class AccountSettlementIntegrationTest {
     static class Recorder implements AccountResultListener {
         private final List<Boolean> applied = new CopyOnWriteArrayList<>();
         private volatile CountDownLatch latch;
+        private volatile long lastAcceptedOrderId;
 
         void prepare(int expectedResults) {
             latch = new CountDownLatch(expectedResults);
@@ -116,8 +122,14 @@ class AccountSettlementIntegrationTest {
             return applied;
         }
 
+        /** 계좌 워커가 마지막으로 발급한 매수 orderId(C5-2a) — 클라이언트가 정하지 않아 체결 발행 때 여기서 꺼내 쓴다. */
+        long lastAcceptedOrderId() {
+            return lastAcceptedOrderId;
+        }
+
         @Override
         public void onAccepted(long accountId, long orderId, String requestId, BigDecimal reservedMargin) {
+            lastAcceptedOrderId = orderId;
             latch.countDown();
         }
 

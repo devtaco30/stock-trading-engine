@@ -11,6 +11,7 @@ import org.springframework.context.annotation.Primary;
 
 import com.flab.stocktradingengine.account.disruptor.AccountEngine;
 import com.flab.stocktradingengine.account.disruptor.AccountResultListener;
+import com.flab.stocktradingengine.support.SnowflakeIdGenerator;
 import com.lmax.disruptor.BlockingWaitStrategy;
 import com.lmax.disruptor.dsl.ProducerType;
 
@@ -45,8 +46,9 @@ public class AccountEngineConfig {
      * 링버퍼 시퀀스가 깨진다.</p>
      */
     @Bean
-    public AccountEngine accountEngine(AccountWorkerProperties properties, AccountResultListener listener) {
-        AccountEngine engine = new AccountEngine(BUFFER_SIZE, new BlockingWaitStrategy(), ProducerType.MULTI, listener);
+    public AccountEngine accountEngine(AccountWorkerProperties properties, SnowflakeIdGenerator snowflakeIdGenerator, AccountResultListener listener) {
+        AccountEngine engine = new AccountEngine(
+            BUFFER_SIZE, new BlockingWaitStrategy(), ProducerType.MULTI, snowflakeIdGenerator::nextId, listener);
         for (AccountWorkerProperties.SeedAccount seed : properties.seedAccounts()) {
             if (seed.holdings() == null || seed.holdings().isEmpty()) {
                 engine.seed(seed.accountId(), seed.balance(), seed.marginRate());

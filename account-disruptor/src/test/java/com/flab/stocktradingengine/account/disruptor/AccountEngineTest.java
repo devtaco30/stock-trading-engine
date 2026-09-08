@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
@@ -24,6 +25,11 @@ import com.lmax.disruptor.dsl.ProducerType;
  * <p>프로듀서(테스트)와 소비자(계좌 핸들러)가 다른 스레드라, 발행 직후 결과가 준비돼 있지 않다.
  * {@link CountDownLatch} 로 기대한 콜백 수가 도착할 때까지 기다린 뒤 검증한다
  * (matching-disruptor 테스트와 동일한 방식).</p>
+ *
+ * <h3>orderId 예측 (C5-2a)</h3>
+ * <p>{@link #prepare}가 매번 새 {@link AtomicLong}(0에서 시작하는 {@code incrementAndGet})을
+ * orderId 발급 시드로 엔진에 주입한다 — requestId가 비어있지 않고 처음 등장할 때만(계좌·accept·reject
+ * 무관) 소비되므로, 테스트가 그 호출 순서만 세면 발급될 orderId를 그대로 예측해 하드코딩할 수 있다.</p>
  */
 class AccountEngineTest {
 
@@ -44,7 +50,7 @@ class AccountEngineTest {
     /** 기대 콜백 수만큼 래치를 걸고 엔진을 만든다. 시드·start 는 테스트가 이어서 한다. */
     private void prepare(int expectedResults) {
         latch = new CountDownLatch(expectedResults);
-        engine = new AccountEngine(BUFFER_SIZE, new Recorder(events, latch));
+        engine = new AccountEngine(BUFFER_SIZE, new AtomicLong(0)::incrementAndGet, new Recorder(events, latch));
     }
 
     private void awaitResults() throws InterruptedException {
@@ -58,7 +64,7 @@ class AccountEngineTest {
         engine.seed(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
         engine.start();
 
-        engine.publishBuy(1001L, 1L, STOCK, new BigDecimal("10000"), 10, "r1"); // 100000
+        engine.publishBuy(1L, STOCK, new BigDecimal("10000"), 10, "r1"); // 100000
         awaitResults();
 
         assertEquals(1, events.size());
@@ -74,7 +80,7 @@ class AccountEngineTest {
         engine.seed(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
         engine.start();
 
-        engine.publishBuy(1001L, 99L, STOCK, new BigDecimal("10000"), 10, "r1");
+        engine.publishBuy(99L, STOCK, new BigDecimal("10000"), 10, "r1");
         awaitResults();
 
         assertEquals(1, events.size());
@@ -89,7 +95,7 @@ class AccountEngineTest {
         engine.seed(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
         engine.start();
 
-        engine.publishBuy(1001L, 1L, STOCK, new BigDecimal("10000"), 0, "r1");
+        engine.publishBuy(1L, STOCK, new BigDecimal("10000"), 0, "r1");
         awaitResults();
 
         assertEquals(1, events.size());
@@ -103,7 +109,7 @@ class AccountEngineTest {
         engine.seed(1L, new BigDecimal("30000"), new BigDecimal("0.40")); // buyLimit = 75000
         engine.start();
 
-        engine.publishBuy(1001L, 1L, STOCK, new BigDecimal("10000"), 10, "r1"); // 100000 > 75000
+        engine.publishBuy(1L, STOCK, new BigDecimal("10000"), 10, "r1"); // 100000 > 75000
         awaitResults();
 
         assertEquals(1, events.size());
@@ -117,8 +123,8 @@ class AccountEngineTest {
         engine.seed(1L, new BigDecimal("1000000"), new BigDecimal("1.00")); // buyLimit = 가용
         engine.start();
 
-        engine.publishBuy(1001L, 1L, STOCK, new BigDecimal("60000"), 10, "r1"); // 600000 → 통과
-        engine.publishBuy(1002L, 1L, STOCK, new BigDecimal("60000"), 10, "r2"); // 가용 400000 → 거부
+        engine.publishBuy(1L, STOCK, new BigDecimal("60000"), 10, "r1"); // 600000 → 통과
+        engine.publishBuy(1L, STOCK, new BigDecimal("60000"), 10, "r2"); // 가용 400000 → 거부
         awaitResults();
 
         assertEquals(2, events.size());
@@ -130,19 +136,20 @@ class AccountEngineTest {
     // ---------- requestId 재전송 멱등 하네스 배선 (C5-1a) ----------
 
     @Test
-    @DisplayName("같은 requestId로 매수가 두 번 오면 둘째는 재예약 없이 onDuplicateRequest로 알린다")
+    @DisplayName("같은 requestId로 매수가 두 번 오면 둘째는 재예약 없이 onDuplicateRequest로 알리고 첫째와 같은 orderId를 돌려준다")
     void 매수_같은requestId_재전송하면_중복통지() throws InterruptedException {
         prepare(2); // 매수 접수(1) + 재전송(1)
         engine.seed(1L, new BigDecimal("1000000"), new BigDecimal("1.00")); // buyLimit = 가용(재예약됐다면 둘째가 거부됐을 금액)
         engine.start();
 
-        engine.publishBuy(1001L, 1L, STOCK, new BigDecimal("60000"), 10, "r1"); // 600000, 가용 400000 남음
-        engine.publishBuy(1002L, 1L, STOCK, new BigDecimal("60000"), 10, "r1"); // 같은 requestId 재전송(600000 > 400000이라 재예약됐다면 거부)
+        engine.publishBuy(1L, STOCK, new BigDecimal("60000"), 10, "r1"); // 600000, 가용 400000 남음
+        engine.publishBuy(1L, STOCK, new BigDecimal("60000"), 10, "r1"); // 같은 requestId 재전송(600000 > 400000이라 재예약됐다면 거부)
         awaitResults();
 
         assertEquals(2, events.size());
         assertTrue(events.get(0).accepted());
         assertTrue(events.get(1).duplicate());
+        assertEquals(events.get(0).orderId(), events.get(1).orderId()); // 재전송은 새 orderId를 발급하지 않고 원래 값을 돌려준다(C5-2a)
     }
 
     @Test
@@ -152,82 +159,107 @@ class AccountEngineTest {
         engine.seed(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
         engine.start();
 
-        engine.publishBuy(1001L, 1L, STOCK, new BigDecimal("10000"), 10, "r1");
-        engine.publishBuyFill(9001L, 1001L, 1L, STOCK, new BigDecimal("10000"), 10); // 보유 10 확보
-        engine.publishSell(2001L, 1L, STOCK, 4, "r2");
-        engine.publishSell(2002L, 1L, STOCK, 4, "r2"); // 같은 requestId 재전송
+        engine.publishBuy(1L, STOCK, new BigDecimal("10000"), 10, "r1"); // orderId=1
+        engine.publishBuyFill(9001L, 1L, 1L, STOCK, new BigDecimal("10000"), 10); // 보유 10 확보
+        engine.publishSell(1L, STOCK, 4, "r2"); // orderId=2
+        engine.publishSell(1L, STOCK, 4, "r2"); // 같은 requestId 재전송
         awaitResults();
 
         assertEquals(4, events.size());
         assertTrue(events.get(2).accepted());
         assertTrue(events.get(3).duplicate());
+        assertEquals(events.get(2).orderId(), events.get(3).orderId());
     }
 
     @Test
-    @DisplayName("거부됐던 requestId가 재전송돼도 재처리하지 않고 onDuplicateRequest로 알린다")
+    @DisplayName("거부됐던 requestId가 재전송돼도 재처리하지 않고 같은 orderId로 onDuplicateRequest 알린다")
     void 거부된requestId_재전송해도_재처리안함() throws InterruptedException {
         prepare(2); // 거부(1) + 재전송(1)
         engine.seed(1L, new BigDecimal("30000"), new BigDecimal("0.40")); // buyLimit = 75000
         engine.start();
 
-        engine.publishBuy(1001L, 1L, STOCK, new BigDecimal("10000"), 10, "r1"); // 100000 > 75000 → 거부
-        engine.publishBuy(1002L, 1L, STOCK, new BigDecimal("10000"), 10, "r1"); // 같은 requestId 재전송
+        engine.publishBuy(1L, STOCK, new BigDecimal("10000"), 10, "r1"); // 100000 > 75000 → 거부(orderId=1 발급·기억은 됨)
+        engine.publishBuy(1L, STOCK, new BigDecimal("10000"), 10, "r1"); // 같은 requestId 재전송
         awaitResults();
 
         assertEquals(2, events.size());
         assertFalse(events.get(0).accepted());
         assertEquals(RejectReason.INSUFFICIENT, events.get(0).reason());
         assertTrue(events.get(1).duplicate());
+        assertEquals(events.get(0).orderId(), events.get(1).orderId()); // 거부된 주문도 orderId는 발급·기억되어 재전송 시 같은 값을 돌려준다(C5-2a)
     }
 
     // ---------- requestId 빈값 가드 (C5-1c) ----------
 
     @Test
-    @DisplayName("빈 requestId 매수는 INVALID_REQUEST_ID 로 거부하고, 같은 빈 requestId 둘째도 세트 오염 없이 다시 거부한다")
+    @DisplayName("빈 requestId 매수는 orderId 미발급(0)으로 INVALID_REQUEST_ID 거부하고, 같은 빈 requestId 둘째도 오염 없이 다시 거부하며, 뒤이은 유효 요청은 시퀀스가 안 밀린 orderId를 받는다")
     void 빈_requestId_매수_INVALID_거부_세트오염없음() throws InterruptedException {
-        prepare(2);
+        prepare(3);
         engine.seed(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
         engine.start();
 
-        engine.publishBuy(1001L, 1L, STOCK, new BigDecimal("10000"), 10, "");
-        engine.publishBuy(1002L, 1L, STOCK, new BigDecimal("10000"), 10, ""); // 서로 다른 주문, requestId만 우연히 같은 빈 값
+        engine.publishBuy(1L, STOCK, new BigDecimal("10000"), 10, "");
+        engine.publishBuy(1L, STOCK, new BigDecimal("10000"), 10, ""); // 서로 다른 주문, requestId만 우연히 같은 빈 값
+        engine.publishBuy(1L, STOCK, new BigDecimal("10000"), 10, "r-valid");
         awaitResults();
 
-        assertEquals(2, events.size());
+        assertEquals(3, events.size());
         assertFalse(events.get(0).accepted());
         assertEquals(RejectReason.INVALID_REQUEST_ID, events.get(0).reason());
+        assertEquals(0L, events.get(0).orderId()); // 발급 안 됨(NO_ORDER_ID)
         assertFalse(events.get(1).accepted());
         assertEquals(RejectReason.INVALID_REQUEST_ID, events.get(1).reason()); // 재전송(duplicate)이 아니라 또 INVALID_REQUEST_ID여야 오염 없음
+        assertEquals(0L, events.get(1).orderId());
+        assertTrue(events.get(2).accepted());
+        assertEquals(1L, events.get(2).orderId()); // 빈 requestId 둘이 시퀀스를 안 먹었다면 첫 발급값은 1
     }
 
     @Test
-    @DisplayName("null requestId 매수는 INVALID_REQUEST_ID 로 거부한다")
+    @DisplayName("null requestId 매수는 orderId 미발급(0)으로 INVALID_REQUEST_ID 로 거부한다")
     void null_requestId_매수는_거부() throws InterruptedException {
         prepare(1);
         engine.seed(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
         engine.start();
 
-        engine.publishBuy(1001L, 1L, STOCK, new BigDecimal("10000"), 10, null);
+        engine.publishBuy(1L, STOCK, new BigDecimal("10000"), 10, null);
         awaitResults();
 
         assertEquals(1, events.size());
         assertFalse(events.get(0).accepted());
         assertEquals(RejectReason.INVALID_REQUEST_ID, events.get(0).reason());
+        assertEquals(0L, events.get(0).orderId());
     }
 
     @Test
-    @DisplayName("빈 requestId 매도는 INVALID_REQUEST_ID 로 거부한다")
+    @DisplayName("빈 requestId 매도는 orderId 미발급(0)으로 INVALID_REQUEST_ID 로 거부한다")
     void 빈_requestId_매도는_거부() throws InterruptedException {
         prepare(1);
         engine.seed(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
         engine.start();
 
-        engine.publishSell(2001L, 1L, STOCK, 1, "");
+        engine.publishSell(1L, STOCK, 1, "");
         awaitResults();
 
         assertEquals(1, events.size());
         assertFalse(events.get(0).accepted());
         assertEquals(RejectReason.INVALID_REQUEST_ID, events.get(0).reason());
+        assertEquals(0L, events.get(0).orderId());
+    }
+
+    // ---------- orderId 발급 (C5-2a) ----------
+
+    @Test
+    @DisplayName("매수 첫 접수는 발급된 orderId를 onAccepted로 돌려준다")
+    void 매수_첫접수_발급된_orderId_반환() throws InterruptedException {
+        prepare(1);
+        engine.seed(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
+        engine.start();
+
+        engine.publishBuy(1L, STOCK, new BigDecimal("10000"), 10, "r1");
+        awaitResults();
+
+        assertTrue(events.get(0).accepted());
+        assertEquals(1L, events.get(0).orderId()); // 이 엔진에서 처음 발급되는 orderId
     }
 
     // ---------- 체결 반영 하네스 배선 (B3b) ----------
@@ -239,8 +271,8 @@ class AccountEngineTest {
         engine.seed(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
         engine.start();
 
-        engine.publishBuy(1001L, 1L, STOCK, new BigDecimal("10000"), 10, "r1");
-        engine.publishBuyFill(9001L, 1001L, 1L, STOCK, new BigDecimal("10000"), 10);
+        engine.publishBuy(1L, STOCK, new BigDecimal("10000"), 10, "r1"); // orderId=1
+        engine.publishBuyFill(9001L, 1L, 1L, STOCK, new BigDecimal("10000"), 10);
         awaitResults();
 
         assertEquals(2, events.size());
@@ -256,10 +288,10 @@ class AccountEngineTest {
         engine.seed(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
         engine.start();
 
-        engine.publishBuy(1001L, 1L, STOCK, new BigDecimal("10000"), 10, "r1");
-        engine.publishBuyFill(9001L, 1001L, 1L, STOCK, new BigDecimal("10000"), 10); // 보유 10 확보
-        engine.publishSell(2001L, 1L, STOCK, 4, "r2");
-        engine.publishSellFill(9002L, 2001L, 1L, STOCK, 4);
+        engine.publishBuy(1L, STOCK, new BigDecimal("10000"), 10, "r1"); // orderId=1
+        engine.publishBuyFill(9001L, 1L, 1L, STOCK, new BigDecimal("10000"), 10); // 보유 10 확보
+        engine.publishSell(1L, STOCK, 4, "r2"); // orderId=2
+        engine.publishSellFill(9002L, 2L, 1L, STOCK, 4);
         awaitResults();
 
         assertEquals(4, events.size());
@@ -277,9 +309,9 @@ class AccountEngineTest {
         engine.seed(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
         engine.start();
 
-        engine.publishBuy(1001L, 1L, STOCK, new BigDecimal("10000"), 10, "r1");
-        engine.publishBuyFill(9001L, 1001L, 1L, STOCK, new BigDecimal("10000"), 10); // 보유 10 확보
-        engine.publishSell(2001L, 1L, STOCK, 4, "r2");
+        engine.publishBuy(1L, STOCK, new BigDecimal("10000"), 10, "r1"); // orderId=1
+        engine.publishBuyFill(9001L, 1L, 1L, STOCK, new BigDecimal("10000"), 10); // 보유 10 확보
+        engine.publishSell(1L, STOCK, 4, "r2"); // orderId=2
         awaitResults();
 
         Recorded sellEvent = events.get(2);
@@ -294,7 +326,7 @@ class AccountEngineTest {
         engine.seed(1L, new BigDecimal("1000000"), new BigDecimal("0.40"), Map.of(STOCK, 10));
         engine.start();
 
-        engine.publishSell(2001L, 1L, STOCK, 4, "r1");
+        engine.publishSell(1L, STOCK, 4, "r1");
         awaitResults();
 
         assertTrue(events.get(0).accepted());
@@ -308,7 +340,7 @@ class AccountEngineTest {
         engine.seed(1L, new BigDecimal("1000000"), new BigDecimal("0.40")); // 보유 0
         engine.start();
 
-        engine.publishSell(2001L, 1L, STOCK, 1, "r1");
+        engine.publishSell(1L, STOCK, 1, "r1");
         awaitResults();
 
         assertEquals(1, events.size());
@@ -338,9 +370,9 @@ class AccountEngineTest {
         engine.seed(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
         engine.start();
 
-        engine.publishBuy(1001L, 1L, STOCK, new BigDecimal("10000"), 10, "r1");
-        engine.publishBuyFill(9001L, 1001L, 1L, STOCK, new BigDecimal("10000"), 10);
-        engine.publishBuyFill(9001L, 1001L, 1L, STOCK, new BigDecimal("10000"), 10); // 같은 tradeId 재도착
+        engine.publishBuy(1L, STOCK, new BigDecimal("10000"), 10, "r1"); // orderId=1
+        engine.publishBuyFill(9001L, 1L, 1L, STOCK, new BigDecimal("10000"), 10);
+        engine.publishBuyFill(9001L, 1L, 1L, STOCK, new BigDecimal("10000"), 10); // 같은 tradeId 재도착
         awaitResults();
 
         assertEquals(3, events.size());
@@ -357,8 +389,8 @@ class AccountEngineTest {
         engine.seed(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
         engine.start();
 
-        engine.publishBuy(1001L, 1L, STOCK, new BigDecimal("10000"), 10, "r1");
-        engine.publishBuyFill(9001L, 1001L, 1L, STOCK, new BigDecimal("10000"), 10); // 미수금 60000 생김
+        engine.publishBuy(1L, STOCK, new BigDecimal("10000"), 10, "r1"); // orderId=1
+        engine.publishBuyFill(9001L, 1L, 1L, STOCK, new BigDecimal("10000"), 10); // 미수금 60000 생김
         engine.publishSettlement(7001L, 1L, new BigDecimal("60000"));
         awaitResults();
 
@@ -376,12 +408,13 @@ class AccountEngineTest {
         int perThread = 200;
         int total = perThread * 2;
         latch = new CountDownLatch(total);
-        engine = new AccountEngine(4096, new BlockingWaitStrategy(), ProducerType.MULTI, new Recorder(events, latch));
+        engine = new AccountEngine(4096, new BlockingWaitStrategy(), ProducerType.MULTI,
+            new AtomicLong(0)::incrementAndGet, new Recorder(events, latch));
         engine.seed(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
         engine.start();
 
-        Thread t1 = new Thread(() -> publishBuys(1_000, perThread));
-        Thread t2 = new Thread(() -> publishBuys(100_000, perThread));
+        Thread t1 = new Thread(() -> publishBuys(perThread));
+        Thread t2 = new Thread(() -> publishBuys(perThread));
         t1.start();
         t2.start();
         t1.join();
@@ -391,9 +424,9 @@ class AccountEngineTest {
         assertEquals(total, events.size());
     }
 
-    private void publishBuys(long orderIdStart, int count) {
+    private void publishBuys(int count) {
         for (int i = 0; i < count; i++) {
-            engine.publishBuy(orderIdStart + i, 1L, STOCK, new BigDecimal("1"), 1, "r");
+            engine.publishBuy(1L, STOCK, new BigDecimal("1"), 1, "r"); // 전부 같은 requestId — 첫 건만 accept, 나머지는 duplicate
         }
     }
 

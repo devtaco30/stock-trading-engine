@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ThreadFactory;
+import java.util.function.LongSupplier;
 
 import com.lmax.disruptor.BlockingWaitStrategy;
 import com.lmax.disruptor.RingBuffer;
@@ -36,7 +37,12 @@ public class AccountEngine {
     private final Map<Long, AccountState> accounts = new HashMap<>();
     private RingBuffer<AccountEvent> ringBuffer;
 
-    public AccountEngine(int bufferSize, WaitStrategy waitStrategy, ProducerType producerType, AccountResultListener listener) {
+    /**
+     * @param orderIdSupplier 매수·매도 첫 접수(requestId 첫 등장)마다 호출해 orderId를 발급하는 시드(C5-2a).
+     *                        실제 배선은 Snowflake({@code SnowflakeIdGenerator::nextId}), 테스트는 결정론적
+     *                        시퀀스(예: {@code AtomicLong::incrementAndGet})를 넣는다.
+     */
+    public AccountEngine(int bufferSize, WaitStrategy waitStrategy, ProducerType producerType, LongSupplier orderIdSupplier, AccountResultListener listener) {
         ThreadFactory threadFactory = DaemonThreadFactory.INSTANCE;
         this.disruptor = new Disruptor<>(
             AccountEvent::new,
@@ -47,17 +53,17 @@ public class AccountEngine {
         );
         // 예상 못한 예외는 fail-fast(handleEventsWith 배선 전에 설정해야 적용됨).
         this.disruptor.setDefaultExceptionHandler(new AccountExceptionHandler());
-        this.disruptor.handleEventsWith(new AccountEventHandler(accounts, listener));
+        this.disruptor.handleEventsWith(new AccountEventHandler(accounts, orderIdSupplier, listener));
     }
 
     /** 발행자가 하나뿐인 경우({@link ProducerType#SINGLE})로 생성한다. */
-    public AccountEngine(int bufferSize, WaitStrategy waitStrategy, AccountResultListener listener) {
-        this(bufferSize, waitStrategy, ProducerType.SINGLE, listener);
+    public AccountEngine(int bufferSize, WaitStrategy waitStrategy, LongSupplier orderIdSupplier, AccountResultListener listener) {
+        this(bufferSize, waitStrategy, ProducerType.SINGLE, orderIdSupplier, listener);
     }
 
     /** 발행자 하나 + 기본 대기 전략({@link BlockingWaitStrategy})으로 생성한다. */
-    public AccountEngine(int bufferSize, AccountResultListener listener) {
-        this(bufferSize, new BlockingWaitStrategy(), ProducerType.SINGLE, listener);
+    public AccountEngine(int bufferSize, LongSupplier orderIdSupplier, AccountResultListener listener) {
+        this(bufferSize, new BlockingWaitStrategy(), ProducerType.SINGLE, orderIdSupplier, listener);
     }
 
     /**
@@ -88,22 +94,22 @@ public class AccountEngine {
      * <p>빈 슬롯을 예약({@code next})하고 값을 채운 뒤 발행({@code publish})한다.
      * publish 를 finally 에 둬, 값 채우는 중 예외가 나도 예약한 자리가 막히지 않게 한다.</p>
      */
-    public void publishBuy(long orderId, long accountId, String stockCode, BigDecimal price, int quantity, String requestId) {
+    public void publishBuy(long accountId, String stockCode, BigDecimal price, int quantity, String requestId) {
         long sequence = ringBuffer.next();
         try {
             AccountEvent event = ringBuffer.get(sequence);
-            event.setBuy(orderId, accountId, stockCode, price, quantity, requestId);
+            event.setBuy(accountId, stockCode, price, quantity, requestId);
         } finally {
             ringBuffer.publish(sequence);
         }
     }
 
     /** 매도 검증·예약을 링버퍼에 발행한다. 담보가 돈이 아니라 보유 수량이라 price 는 없다. */
-    public void publishSell(long orderId, long accountId, String stockCode, int quantity, String requestId) {
+    public void publishSell(long accountId, String stockCode, int quantity, String requestId) {
         long sequence = ringBuffer.next();
         try {
             AccountEvent event = ringBuffer.get(sequence);
-            event.setSell(orderId, accountId, stockCode, quantity, requestId);
+            event.setSell(accountId, stockCode, quantity, requestId);
         } finally {
             ringBuffer.publish(sequence);
         }

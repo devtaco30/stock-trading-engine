@@ -11,6 +11,7 @@ import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
@@ -46,7 +47,7 @@ class AccountFillConsumerTest {
 
     private void prepare(int expectedResults) {
         latch = new CountDownLatch(expectedResults);
-        engine = new AccountEngine(BUFFER_SIZE, new Recorder(events, latch));
+        engine = new AccountEngine(BUFFER_SIZE, new AtomicLong(0)::incrementAndGet, new Recorder(events, latch));
     }
 
     private void awaitResults() throws InterruptedException {
@@ -63,10 +64,12 @@ class AccountFillConsumerTest {
 
         AccountFillConsumer consumer = new AccountFillConsumer(engine);
         Acknowledgment ack = mock(Acknowledgment.class);
-        TradeFilledEvent fill = new TradeFilledEvent(9001L, STOCK, 1001L, 1L, 2001L, 2L, 4, new BigDecimal("10000"));
+        // orderId(1, 2)는 engine이 이번 테스트에서 발급할 순번을 예측한 값이다(prepare()가 매번 새
+        // AtomicLong(0)을 시드로 주입 — 매수 접수가 1번째, 매도 접수가 2번째 BUY/SELL 호출).
+        TradeFilledEvent fill = new TradeFilledEvent(9001L, STOCK, 1L, 1L, 2L, 2L, 4, new BigDecimal("10000"));
 
-        engine.publishBuy(1001L, 1L, STOCK, new BigDecimal("10000"), 4, "r1");
-        engine.publishSell(2001L, 2L, STOCK, 4, "r2");
+        engine.publishBuy(1L, STOCK, new BigDecimal("10000"), 4, "r1"); // orderId=1
+        engine.publishSell(2L, STOCK, 4, "r2"); // orderId=2
         consumer.consume(fill, ack); // 매수·매도 예약이 처리될 스레드가 같아 순서가 보장된다
         awaitResults();
 

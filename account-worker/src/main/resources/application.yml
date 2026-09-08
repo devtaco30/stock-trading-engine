@@ -25,3 +25,6 @@ spring:
       retries: 3
     listener:
       ack-mode: manual_immediate
+
+snowflake:
+  node-id: 3

@@ -2,6 +2,7 @@ package com.flab.stocktradingengine.account.disruptor;
 
 import java.math.BigDecimal;
 import java.util.Map;
+import java.util.function.LongSupplier;
 
 import com.lmax.disruptor.EventHandler;
 
@@ -12,14 +13,25 @@ import com.lmax.disruptor.EventHandler;
  * 둔다 — 단일 스레드만 접근해 락·동시성 맵이 필요 없다. matching-disruptor 의 {@code books} 와 같은 이유다.
  * 검증·예약 규칙은 {@link AccountState} 가 책임하고, 이 핸들러는 이벤트를 계좌에 넘기고 결과를
  * {@link AccountResultListener} 로 내보내는 얇은 껍데기다.</p>
+ *
+ * <h3>orderId 발급 (C5-2a)</h3>
+ * <p>v2 핫패스엔 DB가 없어 orderId(주문 신원) 발급 위치를 계좌 워커(single-writer)로 뒀다.
+ * requestId가 처음 등장하면 {@link #orderIdSupplier}로 orderId를 발급해 {@link AccountState}에
+ * 기억시키고, 재전송이면 기억해둔 orderId를 그대로 돌려준다 — accept·reject 결과와 무관하게 발급
+ * 자체는 첫 등장에서 한 번뿐이다.</p>
  */
 public class AccountEventHandler implements EventHandler<AccountEvent> {
 
+    /** orderId가 발급되지 못했을 때(requestId 빈값·null, 모르는 계좌) 리스너에 싣는 값 — Snowflake는 0을 내지 않는다. */
+    private static final long NO_ORDER_ID = 0L;
+
     private final Map<Long, AccountState> accounts;
+    private final LongSupplier orderIdSupplier;
     private final AccountResultListener listener;
 
-    public AccountEventHandler(Map<Long, AccountState> accounts, AccountResultListener listener) {
+    public AccountEventHandler(Map<Long, AccountState> accounts, LongSupplier orderIdSupplier, AccountResultListener listener) {
         this.accounts = accounts;
+        this.orderIdSupplier = orderIdSupplier;
         this.listener = listener;
     }
 
@@ -40,27 +52,30 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
     }
 
     private void handleBuy(AccountEvent event) {
-        long orderId = event.getOrderId();
         long accountId = event.getAccountId();
         String requestId = event.getRequestId();
 
         if (requestId == null || requestId.isBlank()) {
-            // 재전송 멱등키가 없으면 processedRequestIds에 빈 키가 들어가 서로 다른 주문의
-            // 둘째가 재전송으로 오인될 수 있다 — 검증 전에 거부한다.
-            listener.onRejected(accountId, orderId, requestId, RejectReason.INVALID_REQUEST_ID);
+            // 재전송 멱등키가 없으면 requestIdToOrderId에 빈 키가 들어가 서로 다른 주문의
+            // 둘째가 재전송으로 오인될 수 있다 — orderId를 발급하지 않고 검증 전에 거부한다.
+            listener.onRejected(accountId, NO_ORDER_ID, requestId, RejectReason.INVALID_REQUEST_ID);
             return;
         }
 
         AccountState state = accounts.get(accountId);
         if (state == null) {
             // 워커가 소유하지 않은 계좌 — 라우팅이 잘못됐거나 시드 누락
-            listener.onRejected(accountId, orderId, requestId, RejectReason.ACCOUNT_NOT_FOUND);
+            listener.onRejected(accountId, NO_ORDER_ID, requestId, RejectReason.ACCOUNT_NOT_FOUND);
             return;
         }
-        if (!state.tryMarkRequest(requestId)) {
-            listener.onDuplicateRequest(accountId, orderId, requestId);
+        Long existingOrderId = state.orderIdFor(requestId);
+        if (existingOrderId != null) {
+            listener.onDuplicateRequest(accountId, existingOrderId, requestId);
             return;
         }
+        long orderId = orderIdSupplier.getAsLong();
+        state.rememberRequest(requestId, orderId);
+
         BigDecimal price = event.getPrice();
         if (event.getQuantity() <= 0 || price == null || price.signum() <= 0) {
             listener.onRejected(accountId, orderId, requestId, RejectReason.INVALID_QUANTITY);
@@ -76,24 +91,27 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
     }
 
     private void handleSell(AccountEvent event) {
-        long orderId = event.getOrderId();
         long accountId = event.getAccountId();
         String requestId = event.getRequestId();
 
         if (requestId == null || requestId.isBlank()) {
-            listener.onRejected(accountId, orderId, requestId, RejectReason.INVALID_REQUEST_ID);
+            listener.onRejected(accountId, NO_ORDER_ID, requestId, RejectReason.INVALID_REQUEST_ID);
             return;
         }
 
         AccountState state = accounts.get(accountId);
         if (state == null) {
-            listener.onRejected(accountId, orderId, requestId, RejectReason.ACCOUNT_NOT_FOUND);
+            listener.onRejected(accountId, NO_ORDER_ID, requestId, RejectReason.ACCOUNT_NOT_FOUND);
             return;
         }
-        if (!state.tryMarkRequest(requestId)) {
-            listener.onDuplicateRequest(accountId, orderId, requestId);
+        Long existingOrderId = state.orderIdFor(requestId);
+        if (existingOrderId != null) {
+            listener.onDuplicateRequest(accountId, existingOrderId, requestId);
             return;
         }
+        long orderId = orderIdSupplier.getAsLong();
+        state.rememberRequest(requestId, orderId);
+
         if (event.getQuantity() <= 0) {
             listener.onRejected(accountId, orderId, requestId, RejectReason.INVALID_QUANTITY);
             return;

@@ -20,10 +20,13 @@ public class AccountEvent {
     private String requestId;
     private long tradeId;
 
-    /** 매수 검증·예약 명령으로 슬롯을 채운다. orderId 는 접수 시 부여된 주문 신원(장부 키). */
-    public void setBuy(long orderId, long accountId, String stockCode, BigDecimal price, int quantity, String requestId) {
+    /**
+     * 매수 검증·예약 명령으로 슬롯을 채운다. orderId 는 아직 없다(C5-2a) — 핸들러가 첫 접수
+     * 시점에 직접 발급하므로, 슬롯 재사용으로 이전 명령의 orderId 가 남지 않게 명시적으로 비운다.
+     */
+    public void setBuy(long accountId, String stockCode, BigDecimal price, int quantity, String requestId) {
         this.type = EventType.BUY;
-        this.orderId = orderId;
+        this.orderId = 0L;
         this.accountId = accountId;
         this.stockCode = stockCode;
         this.price = price;
@@ -31,10 +34,10 @@ public class AccountEvent {
         this.requestId = requestId;
     }
 
-    /** 매도 검증·예약 명령으로 슬롯을 채운다. 담보가 돈이 아니라 보유 수량이라 price 는 없다. */
-    public void setSell(long orderId, long accountId, String stockCode, int quantity, String requestId) {
+    /** 매도 검증·예약 명령으로 슬롯을 채운다. 담보가 돈이 아니라 보유 수량이라 price 는 없다. orderId 는 {@link #setBuy}와 같은 이유로 비운다. */
+    public void setSell(long accountId, String stockCode, int quantity, String requestId) {
         this.type = EventType.SELL;
-        this.orderId = orderId;
+        this.orderId = 0L;
         this.accountId = accountId;
         this.stockCode = stockCode;
         this.quantity = quantity;
