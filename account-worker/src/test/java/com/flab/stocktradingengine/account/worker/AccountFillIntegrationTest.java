@@ -18,7 +18,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
-import org.springframework.context.annotation.Primary;
 import org.springframework.kafka.support.serializer.JsonSerializer;
 import org.springframework.test.annotation.DirtiesContext;
 
@@ -102,8 +101,9 @@ class AccountFillIntegrationTest {
     }
 
     static class RecorderConfig {
+        // @Primary가 아니다 — CompositeAccountResultListener(AccountEngineConfig)가
+        // 이 Recorder도 delegate로 포함해 fan-out 하므로, Composite 쪽이 유일한 @Primary여야 한다.
         @Bean
-        @Primary
         Recorder recorder() {
             return new Recorder();
         }

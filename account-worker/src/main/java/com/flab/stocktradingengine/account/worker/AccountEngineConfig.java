@@ -1,9 +1,13 @@
 package com.flab.stocktradingengine.account.worker;
 
+import java.time.Clock;
+import java.util.List;
+
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.SmartLifecycle;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 
 import com.flab.stocktradingengine.account.disruptor.AccountEngine;
 import com.flab.stocktradingengine.account.disruptor.AccountResultListener;
@@ -15,6 +19,22 @@ import com.lmax.disruptor.dsl.ProducerType;
 public class AccountEngineConfig {
 
     private static final int BUFFER_SIZE = 1024;
+
+    /** T+2 만기 계산에 쓰는 시각 소스. 테스트에서 고정 시각으로 교체할 수 있도록 빈으로 분리한다. */
+    @Bean
+    public Clock clock() {
+        return Clock.systemDefaultZone();
+    }
+
+    /**
+     * {@link AccountResultListener} 구현체(로깅·정산 요청 발행 등)를 전부 묶어 하나의 리스너로 만든다.
+     * {@link #accountEngine}은 리스너를 하나만 받으므로, 이 빈을 {@link Primary}로 두어 그 자리에 주입되게 한다.
+     */
+    @Bean
+    @Primary
+    public CompositeAccountResultListener compositeAccountResultListener(List<AccountResultListener> delegates) {
+        return new CompositeAccountResultListener(delegates);
+    }
 
     /**
      * 설정된 계좌들을 시드한 {@link AccountEngine}을 만든다. 아직 start() 는 안 부른다 — 생명주기 빈이 담당.

@@ -25,4 +25,11 @@ public final class KafkaTopics {
      * 보내는 명령 경로다(v1엔 없던 경로 — v1은 DB 직접 차감이었다). accountId 가 파티션 키다.
      */
     public static String accountSettlements() { return "account-settlements"; }
+
+    /**
+     * v2 미수금 발생 통지 토픽. account-worker가 매수 체결로 새로 생긴 미수금을 settlement에
+     * "이 계좌에 이만큼, 언제까지 정산하라"고 보내는 경로다(v1엔 없던 경로 — v1은 T+2 스케줄러 없이
+     * 수동 repay API였다). accountId 가 파티션 키다.
+     */
+    public static String settlementRequests() { return "settlement-requests"; }
 }
