@@ -34,12 +34,17 @@ public class AccountEvent {
         this.requestId = requestId;
     }
 
-    /** 매도 검증·예약 명령으로 슬롯을 채운다. 담보가 돈이 아니라 보유 수량이라 price 는 없다. orderId 는 {@link #setBuy}와 같은 이유로 비운다. */
-    public void setSell(long accountId, String stockCode, int quantity, String requestId) {
+    /**
+     * 매도 검증·예약 명령으로 슬롯을 채운다. price 는 계좌 예약(담보=보유 수량)엔 안 쓰이지만,
+     * 매칭 전달용으로 실어 둔다(②-a — 매칭은 지정가 엔진이라 호가창 가격레벨에 필요하다).
+     * orderId 는 {@link #setBuy}와 같은 이유로 비운다.
+     */
+    public void setSell(long accountId, String stockCode, BigDecimal price, int quantity, String requestId) {
         this.type = EventType.SELL;
         this.orderId = 0L;
         this.accountId = accountId;
         this.stockCode = stockCode;
+        this.price = price;
         this.quantity = quantity;
         this.requestId = requestId;
     }

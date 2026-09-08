@@ -5,9 +5,9 @@ import java.math.BigDecimal;
 import com.flab.stocktradingengine.trading.entity.OrderSide;
 
 /**
- * {@link AccountOrderCodec}가 디코딩한 매수·매도 주문 스냅샷. type=BUY일 때만 price가 있고
- * (매도는 담보가 보유 수량이라 price가 없다 — {@code AccountEngine.publishSell} 참고),
- * type=SELL이면 price는 null이다.
+ * {@link AccountOrderCodec}가 디코딩한 매수·매도 주문 스냅샷. price는 매수·매도 둘 다 있다(②-a) —
+ * 매칭이 지정가 엔진이라 호가창 가격레벨에 필요해서다. 계좌 예약(트리거)은 매도 price를 안 쓰지만,
+ * 매칭으로 전달할 값이라 인바운드 와이어에는 항상 싣는다.
  *
  * <p>orderId는 없다(C5-2a) — 인바운드는 requestId만 싣고, orderId는 계좌 워커가 첫 접수 시점에
  * 발급한다. type은 계좌 엔진 내부 도메인({@code account.disruptor.EventType} — BUY_FILL·SETTLEMENT

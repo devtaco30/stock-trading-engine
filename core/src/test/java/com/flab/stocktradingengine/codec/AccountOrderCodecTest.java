@@ -1,7 +1,6 @@
 package com.flab.stocktradingengine.codec;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
 
 import java.math.BigDecimal;
 
@@ -36,11 +35,11 @@ class AccountOrderCodecTest {
     }
 
     @Test
-    @DisplayName("매도 주문을 인코딩·디코딩하면 price는 null로 복원된다")
-    void 매도_라운드트립_price는_null() {
+    @DisplayName("매도 주문도 price가 그대로 왕복한다(②-a, 매칭 전달용)")
+    void 매도_라운드트립_price도_왕복() {
         UnsafeBuffer buffer = new UnsafeBuffer(new byte[256]);
         DecodedAccountOrder order = new DecodedAccountOrder(
-            OrderSide.SELL, 1L, STOCK, null, 4, "req-2");
+            OrderSide.SELL, 1L, STOCK, new BigDecimal("10000.50"), 4, "req-2");
 
         codec.encode(buffer, 0, order);
         DecodedAccountOrder decoded = codec.decode(buffer, 0);
@@ -48,7 +47,7 @@ class AccountOrderCodecTest {
         assertEquals(OrderSide.SELL, decoded.type());
         assertEquals(1L, decoded.accountId());
         assertEquals(STOCK, decoded.stockCode());
-        assertNull(decoded.price());
+        assertEquals(0, new BigDecimal("10000.50").compareTo(decoded.price()));
         assertEquals(4, decoded.quantity());
         assertEquals("req-2", decoded.requestId());
     }

@@ -69,7 +69,7 @@ public final class AccountOrderReceiver implements AutoCloseable {
         } else {
             engine.publishSell(
                 order.accountId(), order.stockCode(),
-                order.quantity(), order.requestId());
+                order.price(), order.quantity(), order.requestId());
         }
     }
 

@@ -72,7 +72,7 @@ class AccountFillIntegrationTest {
     void 실제_카프카로_받은_체결을_매수_매도_양쪽에_반영한다() throws Exception {
         recorder.prepare(2); // 매수 예약(1) + 매도 예약(1)
         engine.publishBuy(1L, STOCK, new BigDecimal("10000"), 4, "r1");
-        engine.publishSell(2L, STOCK, 4, "r2");
+        engine.publishSell(2L, STOCK, new BigDecimal("10000"), 4, "r2");
         assertThat(recorder.await()).as("예약 콜백이 1초 안에 도착해야 한다").isTrue();
         assertThat(recorder.rejections()).as("매수·매도 예약이 전부 통과해야 한다").isEmpty();
         // 계좌 워커가 발급한 실제 orderId(C5-2a) — 클라이언트가 정하지 않으므로 accept 콜백에서 꺼내 쓴다.

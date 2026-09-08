@@ -69,7 +69,7 @@ class AccountFillConsumerTest {
         TradeFilledEvent fill = new TradeFilledEvent(9001L, STOCK, 1L, 1L, 2L, 2L, 4, new BigDecimal("10000"));
 
         engine.publishBuy(1L, STOCK, new BigDecimal("10000"), 4, "r1"); // orderId=1
-        engine.publishSell(2L, STOCK, 4, "r2"); // orderId=2
+        engine.publishSell(2L, STOCK, new BigDecimal("10000"), 4, "r2"); // orderId=2
         consumer.consume(fill, ack); // 매수·매도 예약이 처리될 스레드가 같아 순서가 보장된다
         awaitResults();
 

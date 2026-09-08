@@ -161,8 +161,8 @@ class AccountEngineTest {
 
         engine.publishBuy(1L, STOCK, new BigDecimal("10000"), 10, "r1"); // orderId=1
         engine.publishBuyFill(9001L, 1L, 1L, STOCK, new BigDecimal("10000"), 10); // 보유 10 확보
-        engine.publishSell(1L, STOCK, 4, "r2"); // orderId=2
-        engine.publishSell(1L, STOCK, 4, "r2"); // 같은 requestId 재전송
+        engine.publishSell(1L, STOCK, new BigDecimal("10000"), 4, "r2"); // orderId=2
+        engine.publishSell(1L, STOCK, new BigDecimal("10000"), 4, "r2"); // 같은 requestId 재전송
         awaitResults();
 
         assertEquals(4, events.size());
@@ -237,7 +237,7 @@ class AccountEngineTest {
         engine.seed(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
         engine.start();
 
-        engine.publishSell(1L, STOCK, 1, "");
+        engine.publishSell(1L, STOCK, new BigDecimal("10000"), 1, "");
         awaitResults();
 
         assertEquals(1, events.size());
@@ -290,7 +290,7 @@ class AccountEngineTest {
 
         engine.publishBuy(1L, STOCK, new BigDecimal("10000"), 10, "r1"); // orderId=1
         engine.publishBuyFill(9001L, 1L, 1L, STOCK, new BigDecimal("10000"), 10); // 보유 10 확보
-        engine.publishSell(1L, STOCK, 4, "r2"); // orderId=2
+        engine.publishSell(1L, STOCK, new BigDecimal("10000"), 4, "r2"); // orderId=2
         engine.publishSellFill(9002L, 2L, 1L, STOCK, 4);
         awaitResults();
 
@@ -311,7 +311,7 @@ class AccountEngineTest {
 
         engine.publishBuy(1L, STOCK, new BigDecimal("10000"), 10, "r1"); // orderId=1
         engine.publishBuyFill(9001L, 1L, 1L, STOCK, new BigDecimal("10000"), 10); // 보유 10 확보
-        engine.publishSell(1L, STOCK, 4, "r2"); // orderId=2
+        engine.publishSell(1L, STOCK, new BigDecimal("10000"), 4, "r2"); // orderId=2
         awaitResults();
 
         Recorded sellEvent = events.get(2);
@@ -326,7 +326,7 @@ class AccountEngineTest {
         engine.seed(1L, new BigDecimal("1000000"), new BigDecimal("0.40"), Map.of(STOCK, 10));
         engine.start();
 
-        engine.publishSell(1L, STOCK, 4, "r1");
+        engine.publishSell(1L, STOCK, new BigDecimal("10000"), 4, "r1");
         awaitResults();
 
         assertTrue(events.get(0).accepted());
@@ -340,12 +340,30 @@ class AccountEngineTest {
         engine.seed(1L, new BigDecimal("1000000"), new BigDecimal("0.40")); // 보유 0
         engine.start();
 
-        engine.publishSell(1L, STOCK, 1, "r1");
+        engine.publishSell(1L, STOCK, new BigDecimal("10000"), 1, "r1");
         awaitResults();
 
         assertEquals(1, events.size());
         assertFalse(events.get(0).accepted());
         assertEquals(RejectReason.INSUFFICIENT_HOLDING, events.get(0).reason());
+    }
+
+    @Test
+    @DisplayName("매도 price가 없거나 0 이하면 INVALID_QUANTITY 로 거부한다(②-a, 매수와 대칭)")
+    void 매도_price가_잘못되면_거부() throws InterruptedException {
+        prepare(2);
+        engine.seed(1L, new BigDecimal("1000000"), new BigDecimal("0.40"), Map.of(STOCK, 10));
+        engine.start();
+
+        engine.publishSell(1L, STOCK, null, 4, "r1");
+        engine.publishSell(1L, STOCK, new BigDecimal("0"), 4, "r2");
+        awaitResults();
+
+        assertEquals(2, events.size());
+        assertFalse(events.get(0).accepted());
+        assertEquals(RejectReason.INVALID_QUANTITY, events.get(0).reason());
+        assertFalse(events.get(1).accepted());
+        assertEquals(RejectReason.INVALID_QUANTITY, events.get(1).reason());
     }
 
     @Test

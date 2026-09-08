@@ -104,12 +104,15 @@ public class AccountEngine {
         }
     }
 
-    /** 매도 검증·예약을 링버퍼에 발행한다. 담보가 돈이 아니라 보유 수량이라 price 는 없다. */
-    public void publishSell(long accountId, String stockCode, int quantity, String requestId) {
+    /**
+     * 매도 검증·예약을 링버퍼에 발행한다. 담보는 보유 수량이라 예약 자체엔 price 를 안 쓰지만,
+     * 매칭 전달용으로 함께 싣는다(②-a).
+     */
+    public void publishSell(long accountId, String stockCode, BigDecimal price, int quantity, String requestId) {
         long sequence = ringBuffer.next();
         try {
             AccountEvent event = ringBuffer.get(sequence);
-            event.setSell(accountId, stockCode, quantity, requestId);
+            event.setSell(accountId, stockCode, price, quantity, requestId);
         } finally {
             ringBuffer.publish(sequence);
         }

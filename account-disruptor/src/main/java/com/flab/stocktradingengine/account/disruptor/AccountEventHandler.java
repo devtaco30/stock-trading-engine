@@ -112,7 +112,9 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
         long orderId = orderIdSupplier.getAsLong();
         state.rememberRequest(requestId, orderId);
 
-        if (event.getQuantity() <= 0) {
+        // 예약(트리거)엔 price를 안 쓰지만, 매칭 전달용 필드라 여기서도 매수와 대칭으로 검증한다(②-a).
+        BigDecimal price = event.getPrice();
+        if (event.getQuantity() <= 0 || price == null || price.signum() <= 0) {
             listener.onRejected(accountId, orderId, requestId, RejectReason.INVALID_QUANTITY);
             return;
         }
