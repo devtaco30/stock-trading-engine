@@ -1,11 +1,17 @@
+# 테스트용 datasource. 공유 loadtest Postgres(9702) — Testcontainers 안 씀(Jack 확정).
+# 사전 조건: docker compose -f docker-compose.yml -f docker-compose.loadtest.yml up -d
 spring:
   main:
     web-application-type: none
-  # 정산=내구성 경계라 H2(인메모리, 재시작 시 소멸) 안 씀 — Postgres 필수(application-local.yml,
-  # Jack이 직접 관리하는 gitignore 대상). datasource는 프로파일에서 채워야 하므로 여기 기본값 없음.
+  datasource:
+    url: jdbc:postgresql://localhost:9702/stock_trading
+    driver-class-name: org.postgresql.Driver
+    username: postgres
+    password: postgres
   jpa:
     hibernate:
       ddl-auto: update
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
   kafka:
     bootstrap-servers: localhost:9092
     consumer:

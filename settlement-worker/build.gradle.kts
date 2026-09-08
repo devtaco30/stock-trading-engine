@@ -12,8 +12,8 @@ dependencies {
 	implementation(libs.spring.kafka)
 	implementation("com.fasterxml.jackson.core:jackson-databind") // Spring Kafka JsonSerializer/Deserializer 런타임 필요(버전은 Spring Boot BOM)
 
+	// H2 없음 — 정산=내구성 경계라 인메모리 DB를 쓰지 않는다(Postgres 필수, Jack 확정).
 	runtimeOnly(libs.postgresql)
-	runtimeOnly("com.h2database:h2")
 
 	compileOnly(libs.lombok)
 	annotationProcessor(libs.lombok)
