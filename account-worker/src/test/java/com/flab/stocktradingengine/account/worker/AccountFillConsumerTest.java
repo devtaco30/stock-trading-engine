@@ -113,6 +113,12 @@ class AccountFillConsumerTest {
             events.add(new Recorded(accountId, orderId, applied, tradeId, null));
             latch.countDown();
         }
+
+        @Override
+        public void onSettlementApplied(long accountId, long settlementRef, boolean applied) {
+            events.add(new Recorded(accountId, 0L, applied, settlementRef, null));
+            latch.countDown();
+        }
     }
 
     private record Recorded(long accountId, long orderId, boolean success, Long tradeId, RejectReason reason) {

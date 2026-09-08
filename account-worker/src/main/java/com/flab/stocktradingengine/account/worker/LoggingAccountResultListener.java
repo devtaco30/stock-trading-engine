@@ -38,4 +38,9 @@ public class LoggingAccountResultListener implements AccountResultListener {
     public void onFillApplied(long accountId, long orderId, long tradeId, boolean applied) {
         log.info("[계좌 워커] 체결 반영: accountId={} orderId={} tradeId={} applied={}", accountId, orderId, tradeId, applied);
     }
+
+    @Override
+    public void onSettlementApplied(long accountId, long settlementRef, boolean applied) {
+        log.info("[계좌 워커] 정산 반영: accountId={} settlementRef={} applied={}", accountId, settlementRef, applied);
+    }
 }

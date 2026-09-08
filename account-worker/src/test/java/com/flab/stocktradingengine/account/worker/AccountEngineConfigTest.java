@@ -91,5 +91,11 @@ class AccountEngineConfigTest {
             events.add(new Recorded(accountId, orderId, applied));
             latch.countDown();
         }
+
+        @Override
+        public void onSettlementApplied(long accountId, long settlementRef, boolean applied) {
+            events.add(new Recorded(accountId, 0L, applied));
+            latch.countDown();
+        }
     }
 }

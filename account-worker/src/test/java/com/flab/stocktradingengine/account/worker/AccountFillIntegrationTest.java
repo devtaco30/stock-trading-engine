@@ -20,6 +20,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.kafka.support.serializer.JsonSerializer;
+import org.springframework.test.annotation.DirtiesContext;
 
 import com.flab.stocktradingengine.account.disruptor.AccountEngine;
 import com.flab.stocktradingengine.account.disruptor.AccountResultListener;
@@ -36,6 +37,12 @@ import com.flab.stocktradingengine.kafka.event.TradeFilledEvent;
  * 도착한다"는 전제를 흉내낸다.</p>
  *
  * <p>사전 조건: {@code docker compose up -d} 로 로컬 Kafka(9092)가 떠 있어야 한다.</p>
+ *
+ * <p>{@code @DirtiesContext} — 이 컨텍스트를 Spring 테스트 캐시에 남겨두지 않는다. 캐시에 남으면
+ * account-fills·account-settlements 두 컨슈머가 다른 테스트 클래스가 도는 동안에도 group.id
+ * "account-worker"의 멤버로 계속 붙어 있어, 그 다른 테스트가 컨슈머를 새로 join/leave 할 때마다
+ * 이 컨슈머까지 같이 리밸런스에 휘말린다 — 실제로 겪은 문제(제너레이션이 계속 올라가며
+ * 폴링이 지연돼 타임아웃).</p>
  */
 @SpringBootTest(
     classes = AccountWorkerApplication.class,
@@ -49,6 +56,7 @@ import com.flab.stocktradingengine.kafka.event.TradeFilledEvent;
         "account-worker.seed-accounts[1].holdings[005930]=10"
     }
 )
+@DirtiesContext
 @Import(AccountFillIntegrationTest.RecorderConfig.class)
 class AccountFillIntegrationTest {
 
@@ -144,6 +152,11 @@ class AccountFillIntegrationTest {
         @Override
         public void onFillApplied(long accountId, long orderId, long tradeId, boolean applied) {
             events.add(new FillEvent(accountId, tradeId, applied));
+            latch.countDown();
+        }
+
+        @Override
+        public void onSettlementApplied(long accountId, long settlementRef, boolean applied) {
             latch.countDown();
         }
 
