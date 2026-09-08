@@ -23,8 +23,10 @@ import java.util.Set;
 public final class AccountState {
 
     private final long accountId;
-    // 총 현금 잔액. seed·정산(applySettlement, T+2)에서만 바뀐다 — 체결(applyBuyFill/applySellFill)은
-    // balance를 안 건드리고 미수금(unpaid)만 쌓는다(T+2까지 이연). single-writer라 락 없이 안전.
+    // 총 현금 잔액. seed·매수체결(증거금분)·정산(applySettlement, 미수금분, T+2)에서 바뀐다.
+    // 증거금 미수거래 모델: 체결 때 증거금분(fillAmount×marginRate)은 바로 지불(balance 차감)되고,
+    // 나머지(1-marginRate)만 미수금으로 남아 T+2에 정산된다 — 매도(applySellFill)는 증거금 개념이
+    // 없어 balance를 안 건드린다. single-writer라 락 없이 안전.
     private BigDecimal balance;
     private final BigDecimal marginRate;   // 증거금률 (0.40 ~ 1.00, 시드값 전제)
     private final Map<Long, Reservation> reservations = new HashMap<>();         // orderId → 매수 예약(가격·잔량) 장부
@@ -70,8 +72,8 @@ public final class AccountState {
 
     /**
      * 매수 체결 반영(전량·부분 공통): 체결된 수량만큼 그 주문의 예약을 줄이고, 보유를 늘리고,
-     * 미수금을 만든다. 잔량이 남으면 예약을 유지하고, 0이 되면 장부에서 지운다.
-     * (balance 는 안 뺀다 — 나머지는 미수금으로 T+2 결제.)
+     * 증거금분을 balance에서 차감하고, 나머지를 미수금으로 쌓는다. 잔량이 남으면 예약을 유지하고,
+     * 0이 되면 장부에서 지운다. (미수금분은 T+2 결제 — {@link #applySettlement} 참고.)
      *
      * @param tradeId 체결 신원(멱등키) — 이미 반영한 tradeId 면 아무것도 하지 않고 무시한다
      * @throws IllegalStateException 그 orderId 로 예약된 게 없거나, 체결 수량이 남은 예약 수량을 초과하면
@@ -98,9 +100,14 @@ public final class AccountState {
         }
         // 보유 추가
         holdings.merge(stockCode, fillQty, Integer::sum);
-        // 미수금 = 체결액 × (1 − 증거금률). balance 는 안 뺀다 (T+2 결제).
+        // 증거금 미수거래 모델: 체결액 중 증거금분은 이 시점에 실제로 지불되고(balance 차감),
+        // 나머지(1-marginRate)만 미수금으로 남아 T+2(applySettlement)에 정산된다.
+        // marginPaid는 fillAmount에서 unpaidThis를 뺀 나머지로 구해 반올림 잔돈까지 정확히
+        // fillAmount = marginPaid + unpaidThis 가 되게 한다(따로따로 반올림하면 1원 어긋날 수 있음).
         BigDecimal fillAmount = matchPrice.multiply(BigDecimal.valueOf(fillQty));
         BigDecimal unpaidThis = fillAmount.multiply(BigDecimal.ONE.subtract(marginRate)).setScale(0, RoundingMode.DOWN);
+        BigDecimal marginPaid = fillAmount.subtract(unpaidThis);
+        balance = balance.subtract(marginPaid);
         unpaid = unpaid.add(unpaidThis);
         return true;
     }

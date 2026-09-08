@@ -92,6 +92,8 @@ class AccountStateTest {
         assertEquals(10, state.holding(STOCK));
         // 미수금 = 체결액 × (1 − 증거금률) = 100000 × 0.60 = 60000
         assertEquals(0, state.unpaid().compareTo(new BigDecimal("60000")));
+        // 잔고 = 시드 − 증거금분(체결액 × 증거금률 = 100000 × 0.40 = 40000)
+        assertEquals(0, state.balance().compareTo(new BigDecimal("960000")));
     }
 
     @Test
@@ -120,6 +122,8 @@ class AccountStateTest {
 
         assertEquals(10, state.holding(STOCK));
         assertEquals(0, state.unpaid().compareTo(new BigDecimal("60000")));
+        // 잔고도 한 번만 깎여야 한다(둘 다 반영되면 920000이 됨)
+        assertEquals(0, state.balance().compareTo(new BigDecimal("960000")));
     }
 
     @Test
@@ -151,6 +155,8 @@ class AccountStateTest {
         assertEquals(4, state.holding(STOCK));
         // 미수금 = 체결액 × (1 − 증거금률) = 40000 × 0.60 = 24000
         assertEquals(0, state.unpaid().compareTo(new BigDecimal("24000")));
+        // 잔고 = 시드 − 이번 체결분 증거금(40000 × 0.40 = 16000)
+        assertEquals(0, state.balance().compareTo(new BigDecimal("984000")));
     }
 
     @Test
@@ -164,6 +170,8 @@ class AccountStateTest {
 
         assertEquals(0, state.reservedMargin().compareTo(BigDecimal.ZERO));
         assertEquals(10, state.holding(STOCK));
+        // 두 부분체결의 증거금분이 누적 차감됨 = 전체 체결액(100000) × 0.40 = 40000
+        assertEquals(0, state.balance().compareTo(new BigDecimal("960000")));
     }
 
     @Test
@@ -285,7 +293,8 @@ class AccountStateTest {
         boolean applied = state.applySettlement(9001L, new BigDecimal("60000"));
 
         assertTrue(applied);
-        assertEquals(0, state.balance().compareTo(new BigDecimal("940000"))); // 1000000 - 60000
+        // 체결 때 증거금분(40000) 먼저 깎이고, 정산이 미수금분(60000) 마저 깎아 체결액 전액(100000)이 빠진다
+        assertEquals(0, state.balance().compareTo(new BigDecimal("900000"))); // 1000000 - 40000 - 60000
         assertEquals(0, state.unpaid().compareTo(BigDecimal.ZERO));
     }
 
@@ -300,7 +309,7 @@ class AccountStateTest {
         boolean secondApplied = state.applySettlement(9001L, new BigDecimal("60000")); // 같은 settlementRef 재도착
 
         assertFalse(secondApplied);
-        assertEquals(0, state.balance().compareTo(new BigDecimal("940000"))); // 한 번만 깎임
+        assertEquals(0, state.balance().compareTo(new BigDecimal("900000"))); // 정산은 한 번만 깎임(체결분 40000 + 정산분 60000)
         assertEquals(0, state.unpaid().compareTo(BigDecimal.ZERO));
     }
 
