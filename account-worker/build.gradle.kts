@@ -10,6 +10,12 @@ dependencies {
 	implementation(project(":account-disruptor"))  // AccountEngine(순수 라이브러리)
 	implementation(libs.disruptor)                 // ProducerType 등 AccountEngine 생성자 타입
 
+	// Aeron: 주문 인테이크 IPC 수신 배선(C5-1b). MediaDriver·Aeron·Subscription 타입이 이 모듈
+	// 코드(AccountOrderIntakeConfig)에 직접 등장해 implementation 재선언이 필요하다
+	// (account-disruptor의 implementation 의존은 여기로 전이되지 않는다).
+	implementation(libs.aeron.driver)
+	implementation(libs.aeron.client)
+
 	implementation(libs.spring.boot.starter)
 	implementation(libs.spring.kafka)
 	implementation("com.fasterxml.jackson.core:jackson-databind") // Spring Kafka JsonSerializer/Deserializer 런타임 필요(버전은 Spring Boot BOM)
@@ -19,4 +25,13 @@ dependencies {
 
 	testImplementation(libs.spring.boot.starter.test)
 	testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+}
+
+// Aeron/Agrona는 JDK 17에서 내부 클래스 jdk.internal.misc.Unsafe와 sun.nio.ch에 접근한다.
+// 모듈 시스템이 기본으로 막으므로 테스트 JVM에 개방 플래그를 준다(account-disruptor와 동일 이유).
+tasks.withType<Test>().configureEach {
+	jvmArgs(
+		"--add-opens", "java.base/jdk.internal.misc=ALL-UNNAMED",
+		"--add-opens", "java.base/sun.nio.ch=ALL-UNNAMED"
+	)
 }
