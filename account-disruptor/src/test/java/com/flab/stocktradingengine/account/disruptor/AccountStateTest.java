@@ -323,4 +323,25 @@ class AccountStateTest {
         assertThrows(IllegalStateException.class,
             () -> state.applySettlement(9001L, new BigDecimal("60001")));
     }
+
+    // ---------- 부분체결 반올림 누적 (Jack 지적: 리뷰가 "무시해도 됨"이라 했던 것 재검증) ----------
+
+    @Test
+    @DisplayName("가격×수량×증거금률이 딱 안 떨어져도, 부분체결 두 번의 증거금 합은 최초 예약액과 원 단위까지 정확히 같다")
+    void 부분체결_증거금합이_최초예약액과_정확히_같다() {
+        // 101 × 10 × 0.45 = 454.5 — 정수로 안 떨어지는 조합을 일부러 골랐다.
+        AccountState state = new AccountState(1L, new BigDecimal("1000000"), new BigDecimal("0.45"));
+        ReserveResult reserveResult = state.tryReserve(1L, new BigDecimal("101"), 10);
+        BigDecimal initialReservedMargin = reserveResult.reservedMargin();
+
+        state.applyBuyFill(101L, 1L, STOCK, new BigDecimal("101"), 3); // 3주 체결, 잔량 7
+        state.applyBuyFill(102L, 1L, STOCK, new BigDecimal("101"), 7); // 나머지 7주 체결, 잔량 0
+
+        BigDecimal totalMarginPaid = new BigDecimal("1000000").subtract(state.balance());
+        // 두 부분체결이 balance에서 뺀 증거금 합이, 애초에 예약했던 금액과 원 단위까지 정확히 같아야 한다.
+        // 어긋나면 "검증(tryReserve)한 적 없는 금액"이 조용히 더 빠져나간 것이다(회계 사고).
+        assertEquals(0, totalMarginPaid.compareTo(initialReservedMargin));
+        // 증거금 + 미수금 = 체결액 전액(101 × 10 = 1010)이어야 한다.
+        assertEquals(0, totalMarginPaid.add(state.unpaid()).compareTo(new BigDecimal("1010")));
+    }
 }

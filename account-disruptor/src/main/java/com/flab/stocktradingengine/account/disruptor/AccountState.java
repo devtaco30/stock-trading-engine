@@ -93,20 +93,31 @@ public final class AccountState {
             throw new IllegalStateException("체결 수량이 남은 예약 수량을 초과합니다: orderId=" + orderId
                 + " 남은수량=" + reservation.remainingQuantity() + " 체결수량=" + fillQty);
         }
+        // 이 체결로 예약이 얼마나 줄어드는지를 먼저 스냅샷 찍는다(반올림 전/후 값의 차).
+        // 증거금분(marginPaid)을 fillAmount×marginRate로 따로 계산하지 않고 이 차이로 구하는 이유:
+        // 부분체결이 여러 번 이어지면 각 체결의 "예약액 감소분"들을 다 더한 값이 최초 예약액과
+        // 원 단위까지 정확히 같아야 한다(텔레스코핑) — 따로 계산하면 반올림이 어긋나 누적된다.
+        BigDecimal reservedBefore = reservedAmount(reservation.price(), reservation.remainingQuantity());
+        BigDecimal reservedAfter;
         if (remainingQuantity == 0) {
             reservations.remove(orderId);
+            reservedAfter = BigDecimal.ZERO;
         } else {
             reservations.put(orderId, new Reservation(reservation.price(), remainingQuantity));
+            reservedAfter = reservedAmount(reservation.price(), remainingQuantity);
         }
         // 보유 추가
         holdings.merge(stockCode, fillQty, Integer::sum);
         // 증거금 미수거래 모델: 체결액 중 증거금분은 이 시점에 실제로 지불되고(balance 차감),
-        // 나머지(1-marginRate)만 미수금으로 남아 T+2(applySettlement)에 정산된다.
-        // marginPaid는 fillAmount에서 unpaidThis를 뺀 나머지로 구해 반올림 잔돈까지 정확히
-        // fillAmount = marginPaid + unpaidThis 가 되게 한다(따로따로 반올림하면 1원 어긋날 수 있음).
+        // 나머지는 미수금으로 남아 T+2(applySettlement)에 정산된다.
         BigDecimal fillAmount = matchPrice.multiply(BigDecimal.valueOf(fillQty));
-        BigDecimal unpaidThis = fillAmount.multiply(BigDecimal.ONE.subtract(marginRate)).setScale(0, RoundingMode.DOWN);
-        BigDecimal marginPaid = fillAmount.subtract(unpaidThis);
+        BigDecimal marginPaid = reservedBefore.subtract(reservedAfter);
+        if (marginPaid.compareTo(fillAmount) > 0) {
+            // matchPrice가 예약 당시 price와 달라 이론상 역전될 수 있는 극단값 방어(돈 관련 안전장치) —
+            // 증거금분이 체결액 전체를 넘을 순 없다.
+            marginPaid = fillAmount;
+        }
+        BigDecimal unpaidThis = fillAmount.subtract(marginPaid);
         balance = balance.subtract(marginPaid);
         unpaid = unpaid.add(unpaidThis);
         return true;
@@ -189,8 +200,14 @@ public final class AccountState {
         return sum;
     }
 
+    /**
+     * UP(올림)으로 반올림한다 — DOWN이면 부분체결이 여러 번 이어질 때 {@link #applyBuyFill}이
+     * "이번 체결로 줄어든 예약액"만큼만 증거금을 떼는데, 그 예약액 자체가 매번 DOWN으로 깎여
+     * 나와서 실제로 뗀 증거금 합이 최초 예약액보다 커질 수 있었다(검증 안 된 만큼 더 빠져나감).
+     * UP으로 두면 예약이 항상 "이후 실제로 뗄 금액" 이상이 되어 이 역전이 안 생긴다.
+     */
     private BigDecimal reservedAmount(BigDecimal price, int quantity) {
-        return price.multiply(BigDecimal.valueOf(quantity)).multiply(marginRate).setScale(0, RoundingMode.DOWN);
+        return price.multiply(BigDecimal.valueOf(quantity)).multiply(marginRate).setScale(0, RoundingMode.UP);
     }
 
     /** 주문 예약 장부 한 줄 — 가격과 남은(미체결) 수량. 예약 증거금은 이 둘로 매번 다시 계산한다. */
