@@ -272,4 +272,46 @@ class AccountStateTest {
         assertThrows(IllegalStateException.class,
             () -> state.applySellFill(102L, 999L, STOCK, 1));
     }
+
+    // ---------- 정산 되돌림 (settlement, a1) ----------
+
+    @Test
+    @DisplayName("정산이 오면 잔고를 깎고 미수금을 줄인다")
+    void 정산오면_잔고깎고_미수금줄인다() {
+        AccountState state = new AccountState(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
+        state.tryReserve(1L, new BigDecimal("10000"), 10);
+        state.applyBuyFill(101L, 1L, STOCK, new BigDecimal("10000"), 10); // 미수금 60000 생김
+
+        boolean applied = state.applySettlement(9001L, new BigDecimal("60000"));
+
+        assertTrue(applied);
+        assertEquals(0, state.balance().compareTo(new BigDecimal("940000"))); // 1000000 - 60000
+        assertEquals(0, state.unpaid().compareTo(BigDecimal.ZERO));
+    }
+
+    @Test
+    @DisplayName("같은 settlementRef가 다시 오면 무시하고 잔고를 두 번 안 깎는다")
+    void 같은settlementRef_재도착하면_무시() {
+        AccountState state = new AccountState(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
+        state.tryReserve(1L, new BigDecimal("10000"), 10);
+        state.applyBuyFill(101L, 1L, STOCK, new BigDecimal("10000"), 10);
+
+        state.applySettlement(9001L, new BigDecimal("60000"));
+        boolean secondApplied = state.applySettlement(9001L, new BigDecimal("60000")); // 같은 settlementRef 재도착
+
+        assertFalse(secondApplied);
+        assertEquals(0, state.balance().compareTo(new BigDecimal("940000"))); // 한 번만 깎임
+        assertEquals(0, state.unpaid().compareTo(BigDecimal.ZERO));
+    }
+
+    @Test
+    @DisplayName("정산 금액이 미수금을 초과하면 예외를 던진다")
+    void 정산금액이_미수금초과하면_예외() {
+        AccountState state = new AccountState(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
+        state.tryReserve(1L, new BigDecimal("10000"), 10);
+        state.applyBuyFill(101L, 1L, STOCK, new BigDecimal("10000"), 10); // 미수금 60000
+
+        assertThrows(IllegalStateException.class,
+            () -> state.applySettlement(9001L, new BigDecimal("60001")));
+    }
 }

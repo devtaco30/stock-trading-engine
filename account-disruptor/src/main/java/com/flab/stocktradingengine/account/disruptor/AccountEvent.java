@@ -62,6 +62,18 @@ public class AccountEvent {
         this.quantity = quantity;
     }
 
+    /**
+     * 정산 되돌림 명령으로 슬롯을 채운다. settlementRef 는 정산 신원(멱등키) — tradeId 필드를 그대로
+     * 재사용한다(둘 다 "이 EventType에서의 멱등키" 역할이라 필드를 늘리지 않는다). amount 는
+     * price 필드를 재사용한다(둘 다 금액이고, BUY_FILL 에서 matchPrice 를 price 필드에 담는 것과 같은 결).
+     */
+    public void setSettlement(long settlementRef, long accountId, BigDecimal amount) {
+        this.type = EventType.SETTLEMENT;
+        this.tradeId = settlementRef;
+        this.accountId = accountId;
+        this.price = amount;
+    }
+
     /** 소비 직후 참조 필드를 비워 이전 명령을 붙들지 않게 한다. */
     public void clear() {
         this.type = null;

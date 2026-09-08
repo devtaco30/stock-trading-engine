@@ -31,6 +31,7 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
                 case SELL -> handleSell(event);
                 case BUY_FILL -> handleBuyFill(event);
                 case SELL_FILL -> handleSellFill(event);
+                case SETTLEMENT -> handleSettlement(event);
             }
         } finally {
             // 슬롯 재사용 대비: 마지막 소비자이므로 처리 후 비운다.
@@ -112,5 +113,18 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
         }
         boolean applied = state.applySellFill(tradeId, orderId, event.getStockCode(), event.getQuantity());
         listener.onFillApplied(accountId, orderId, tradeId, applied);
+    }
+
+    private void handleSettlement(AccountEvent event) {
+        long accountId = event.getAccountId();
+        long settlementRef = event.getTradeId(); // settlementRef 는 tradeId 필드 재사용(AccountEvent 참고)
+
+        AccountState state = accounts.get(accountId);
+        if (state == null) {
+            listener.onRejected(accountId, 0L, event.getRequestId(), RejectReason.ACCOUNT_NOT_FOUND);
+            return;
+        }
+        boolean applied = state.applySettlement(settlementRef, event.getPrice());
+        listener.onSettlementApplied(accountId, settlementRef, applied);
     }
 }

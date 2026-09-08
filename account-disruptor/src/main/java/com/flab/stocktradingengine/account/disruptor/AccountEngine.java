@@ -130,4 +130,15 @@ public class AccountEngine {
             ringBuffer.publish(sequence);
         }
     }
+
+    /** 정산(T+2) 되돌림을 링버퍼에 발행한다. settlementRef 는 정산 신원(멱등키). */
+    public void publishSettlement(long settlementRef, long accountId, BigDecimal amount) {
+        long sequence = ringBuffer.next();
+        try {
+            AccountEvent event = ringBuffer.get(sequence);
+            event.setSettlement(settlementRef, accountId, amount);
+        } finally {
+            ringBuffer.publish(sequence);
+        }
+    }
 }

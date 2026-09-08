@@ -245,6 +245,26 @@ class AccountEngineTest {
         assertFalse(events.get(2).applied());
     }
 
+    // ---------- 정산 되돌림 하네스 배선 (settlement, a1) ----------
+
+    @Test
+    @DisplayName("정산이 하네스를 통과하면 반영하고 onSettlementApplied(applied=true) 로 알린다")
+    void 정산_반영하고_통지() throws InterruptedException {
+        prepare(3); // 매수 접수(1) + 매수 체결(1) + 정산(1)
+        engine.seed(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
+        engine.start();
+
+        engine.publishBuy(1001L, 1L, STOCK, new BigDecimal("10000"), 10, "r1");
+        engine.publishBuyFill(9001L, 1001L, 1L, STOCK, new BigDecimal("10000"), 10); // 미수금 60000 생김
+        engine.publishSettlement(7001L, 1L, new BigDecimal("60000"));
+        awaitResults();
+
+        assertEquals(3, events.size());
+        Recorded settlementEvent = events.get(2);
+        assertEquals(7001L, settlementEvent.tradeId());
+        assertTrue(settlementEvent.applied());
+    }
+
     // ---------- ProducerType 주입 (order-manager 준비) ----------
 
     @Test
@@ -305,6 +325,12 @@ class AccountEngineTest {
         @Override
         public void onFillApplied(long accountId, long orderId, long tradeId, boolean applied) {
             events.add(new Recorded(accountId, orderId, null, false, null, null, tradeId, applied, null));
+            latch.countDown();
+        }
+
+        @Override
+        public void onSettlementApplied(long accountId, long settlementRef, boolean applied) {
+            events.add(new Recorded(accountId, 0L, null, false, null, null, settlementRef, applied, null));
             latch.countDown();
         }
     }

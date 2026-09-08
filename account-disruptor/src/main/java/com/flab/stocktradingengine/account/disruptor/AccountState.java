@@ -23,12 +23,15 @@ import java.util.Set;
 public final class AccountState {
 
     private final long accountId;
-    private final BigDecimal balance;      // 총 현금 잔액
+    // 총 현금 잔액. seed·정산(applySettlement, T+2)에서만 바뀐다 — 체결(applyBuyFill/applySellFill)은
+    // balance를 안 건드리고 미수금(unpaid)만 쌓는다(T+2까지 이연). single-writer라 락 없이 안전.
+    private BigDecimal balance;
     private final BigDecimal marginRate;   // 증거금률 (0.40 ~ 1.00, 시드값 전제)
     private final Map<Long, Reservation> reservations = new HashMap<>();         // orderId → 매수 예약(가격·잔량) 장부
     private final Map<Long, SellReservation> sellReservations = new HashMap<>(); // orderId → 매도 예약(종목·잔량) 장부
     private final Map<String, Integer> holdings = new HashMap<>();      // 종목코드 → 보유 수량
     private final Set<Long> processedTradeIds = new HashSet<>();        // 이미 반영한 체결(tradeId), 멱등용
+    private final Set<Long> processedSettlementRefs = new HashSet<>();  // 이미 반영한 정산(settlementRef), 멱등용
     private BigDecimal unpaid = BigDecimal.ZERO;                        // 미결제 미수금
 
     public AccountState(long accountId, BigDecimal balance, BigDecimal marginRate) {
@@ -149,6 +152,28 @@ public final class AccountState {
         return true;
     }
 
+    /**
+     * 정산(T+2) 되돌림을 반영한다: 잔고를 amount 만큼 깎고 미수금을 같은 만큼 줄인다.
+     * v2 신규 경로 — settlement가 "실제 잔고를 차감하라"고 보내는 명령이다(v1엔 없었다).
+     *
+     * @param settlementRef 정산 신원(멱등키) — 이미 반영한 settlementRef 면 아무것도 하지 않고 무시한다
+     * @throws IllegalStateException amount 가 남은 미수금을 초과하면(정상 흐름이면 일어날 수 없는
+     *                                도메인 불변식 위반 — ADR-015와 같은 원칙으로 fail-fast)
+     * @return 이번 호출로 실제 반영했으면 true, 이미 반영한 settlementRef 라 무시했으면 false
+     */
+    public boolean applySettlement(long settlementRef, BigDecimal amount) {
+        if (!processedSettlementRefs.add(settlementRef)) {
+            return false; // 이미 반영한 정산 재도착 — 무시
+        }
+        if (amount.compareTo(unpaid) > 0) {
+            throw new IllegalStateException("정산 금액이 미수금을 초과합니다: settlementRef=" + settlementRef
+                + " 미수금=" + unpaid + " 정산금액=" + amount);
+        }
+        balance = balance.subtract(amount);
+        unpaid = unpaid.subtract(amount);
+        return true;
+    }
+
     private BigDecimal totalReserved() {
         BigDecimal sum = BigDecimal.ZERO;
         for (Reservation reservation : reservations.values()) {
@@ -195,5 +220,9 @@ public final class AccountState {
 
     public BigDecimal unpaid() {
         return unpaid;
+    }
+
+    public BigDecimal balance() {
+        return balance;
     }
 }
