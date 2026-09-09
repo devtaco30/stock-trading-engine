@@ -16,8 +16,8 @@ import com.lmax.disruptor.util.DaemonThreadFactory;
  * 계좌 축 워커의 진입점.
  *
  * <p>accountId 로 소유한 계좌들을 단일 소비자 스레드가 만진다(single writer). 매칭 코어처럼
- * 링버퍼 하나 + 소비자 하나이며, 계좌 검증·예약을 여기서 직렬 처리한다. 매칭과 다른 축(계좌)이라
- * 별도 링버퍼다. B2 는 저널 없이 검증·예약만 한다.</p>
+ * 링버퍼 하나 + 저널(2b-1)·비즈니스 두 단계 소비자이며, 계좌 검증·예약·체결·정산 반영을
+ * 여기서 직렬 처리한다. 매칭과 다른 축(계좌)이라 별도 링버퍼다.</p>
  *
  * <h3>시드 후 기동</h3>
  * <p>계좌 상태는 DB 없이 {@link #seed} 로 미리 넣는다. 시드는 소비자 스레드가 뜨기 전
@@ -34,6 +34,7 @@ public class AccountEngine {
 
     private final Disruptor<AccountEvent> disruptor;
     private final Map<Long, AccountState> accounts = new HashMap<>();
+    private final AccountJournal journal;
     private RingBuffer<AccountEvent> ringBuffer;
 
     /**
@@ -43,9 +44,13 @@ public class AccountEngine {
      * @param matchingOrderSender accept한 매수·매도를 매칭으로 넘기는 발신 포트(②-b). 실제 배선은
      *                             Aeron 발신(예: {@code AeronMatchingOrderSender}), 매칭 연동이 필요 없는
      *                             테스트는 no-op을 넣는다.
+     * @param journal 계좌 상태를 만드는 모든 입력을 처리 순서대로 기록하는 저널(2b-1) — matching과
+     *                같은 결로 {@code handleEventsWith(journal).then(business)}로 배선해, 기록이
+     *                끝난 이벤트만 비즈니스 핸들러가 본다.
      */
-    public AccountEngine(int bufferSize, WaitStrategy waitStrategy, ProducerType producerType,
-                         long nodeId, MatchingOrderSender matchingOrderSender, AccountResultListener listener) {
+    public AccountEngine(int bufferSize, WaitStrategy waitStrategy, ProducerType producerType, long nodeId,
+                         MatchingOrderSender matchingOrderSender, AccountResultListener listener, AccountJournal journal) {
+        this.journal = journal;
         ThreadFactory threadFactory = DaemonThreadFactory.INSTANCE;
         this.disruptor = new Disruptor<>(
             AccountEvent::new,
@@ -56,18 +61,31 @@ public class AccountEngine {
         );
         // 예상 못한 예외는 fail-fast(handleEventsWith 배선 전에 설정해야 적용됨).
         this.disruptor.setDefaultExceptionHandler(new AccountExceptionHandler());
-        this.disruptor.handleEventsWith(new AccountEventHandler(accounts, new AccountOrderIdGenerator(nodeId), matchingOrderSender, listener));
+        // 저널러가 먼저 기록 → 비즈니스 핸들러가 그 뒤에 반영(SequenceBarrier로 게이팅, matching과 같은 결).
+        this.disruptor.handleEventsWith(new AccountJournalEventHandler(journal))
+            .then(new AccountEventHandler(accounts, new AccountOrderIdGenerator(nodeId), matchingOrderSender, listener));
     }
 
-    /** 발행자가 하나뿐인 경우({@link ProducerType#SINGLE})로 생성한다. */
+    /** 기본 저널({@link InMemoryAccountJournal})로 생성한다. */
+    public AccountEngine(int bufferSize, WaitStrategy waitStrategy, ProducerType producerType, long nodeId,
+                         MatchingOrderSender matchingOrderSender, AccountResultListener listener) {
+        this(bufferSize, waitStrategy, producerType, nodeId, matchingOrderSender, listener, new InMemoryAccountJournal());
+    }
+
+    /** 발행자가 하나뿐인 경우({@link ProducerType#SINGLE}) + 기본 저널로 생성한다. */
     public AccountEngine(int bufferSize, WaitStrategy waitStrategy, long nodeId,
                          MatchingOrderSender matchingOrderSender, AccountResultListener listener) {
         this(bufferSize, waitStrategy, ProducerType.SINGLE, nodeId, matchingOrderSender, listener);
     }
 
-    /** 발행자 하나 + 기본 대기 전략({@link BlockingWaitStrategy})으로 생성한다. */
+    /** 발행자 하나 + 기본 대기 전략({@link BlockingWaitStrategy}) + 기본 저널로 생성한다. */
     public AccountEngine(int bufferSize, long nodeId, MatchingOrderSender matchingOrderSender, AccountResultListener listener) {
         this(bufferSize, new BlockingWaitStrategy(), ProducerType.SINGLE, nodeId, matchingOrderSender, listener);
+    }
+
+    /** 저널을 반환한다. 테스트·복구 검증용. */
+    public AccountJournal journal() {
+        return journal;
     }
 
     /**
