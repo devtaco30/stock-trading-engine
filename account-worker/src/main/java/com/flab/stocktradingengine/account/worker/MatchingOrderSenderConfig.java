@@ -1,9 +1,8 @@
 package com.flab.stocktradingengine.account.worker;
 
+import org.springframework.context.SmartLifecycle;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-
-import com.flab.stocktradingengine.account.disruptor.MatchingOrderSender;
 
 import io.aeron.Aeron;
 import io.aeron.Publication;
@@ -29,8 +28,18 @@ public class MatchingOrderSenderConfig {
         return aeron.addPublication(MATCHING_CHANNEL, MATCHING_STREAM_ID);
     }
 
+    /**
+     * 반환형을 구현 클래스로 둔다 — {@link AccountEngineConfig#accountEngine}은 이 빈을
+     * {@code MatchingOrderSender} 인터페이스로 주입받고, {@link #aeronMatchingOrderSenderLifecycle}은
+     * {@code start()}·{@code close()}(publisher 스레드 제어) 때문에 구현 클래스가 필요하다.
+     */
     @Bean
-    public MatchingOrderSender matchingOrderSender(Publication matchingOrderPublication) {
+    public AeronMatchingOrderSender matchingOrderSender(Publication matchingOrderPublication) {
         return new AeronMatchingOrderSender(matchingOrderPublication);
+    }
+
+    @Bean
+    public SmartLifecycle aeronMatchingOrderSenderLifecycle(AeronMatchingOrderSender matchingOrderSender) {
+        return new AeronMatchingOrderSenderLifecycle(matchingOrderSender);
     }
 }
