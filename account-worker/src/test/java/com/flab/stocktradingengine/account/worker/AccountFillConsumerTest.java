@@ -47,7 +47,7 @@ class AccountFillConsumerTest {
 
     private void prepare(int expectedResults) {
         latch = new CountDownLatch(expectedResults);
-        engine = new AccountEngine(BUFFER_SIZE, new AtomicLong(0)::incrementAndGet, new Recorder(events, latch));
+        engine = new AccountEngine(BUFFER_SIZE, new AtomicLong(0)::incrementAndGet, (orderId, accountId, stockCode, side, price, quantity) -> {}, new Recorder(events, latch));
     }
 
     private void awaitResults() throws InterruptedException {

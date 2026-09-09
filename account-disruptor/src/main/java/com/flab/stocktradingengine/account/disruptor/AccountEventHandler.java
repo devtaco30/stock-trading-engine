@@ -6,6 +6,8 @@ import java.util.function.LongSupplier;
 
 import com.lmax.disruptor.EventHandler;
 
+import com.flab.stocktradingengine.trading.entity.OrderSide;
+
 /**
  * 링버퍼를 소비하는 단일 계좌 핸들러.
  *
@@ -19,6 +21,10 @@ import com.lmax.disruptor.EventHandler;
  * requestId가 처음 등장하면 {@link #orderIdSupplier}로 orderId를 발급해 {@link AccountState}에
  * 기억시키고, 재전송이면 기억해둔 orderId를 그대로 돌려준다 — accept·reject 결과와 무관하게 발급
  * 자체는 첫 등장에서 한 번뿐이다.</p>
+ *
+ * <h3>매칭으로 발신 (②-b)</h3>
+ * <p>매수·매도가 accept됐을 때만(onAccepted·onSellAccepted 뒤) {@link #matchingOrderSender}로
+ * 매칭에 넘긴다 — 거부·중복·invalid는 매칭이 몰라도 되는 상태라 발신하지 않는다.</p>
  */
 public class AccountEventHandler implements EventHandler<AccountEvent> {
 
@@ -27,11 +33,14 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
 
     private final Map<Long, AccountState> accounts;
     private final LongSupplier orderIdSupplier;
+    private final MatchingOrderSender matchingOrderSender;
     private final AccountResultListener listener;
 
-    public AccountEventHandler(Map<Long, AccountState> accounts, LongSupplier orderIdSupplier, AccountResultListener listener) {
+    public AccountEventHandler(Map<Long, AccountState> accounts, LongSupplier orderIdSupplier,
+                               MatchingOrderSender matchingOrderSender, AccountResultListener listener) {
         this.accounts = accounts;
         this.orderIdSupplier = orderIdSupplier;
+        this.matchingOrderSender = matchingOrderSender;
         this.listener = listener;
     }
 
@@ -85,6 +94,7 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
         ReserveResult result = state.tryReserve(orderId, price, event.getQuantity());
         if (result.accepted()) {
             listener.onAccepted(accountId, orderId, requestId, result.reservedMargin());
+            matchingOrderSender.forwardPlace(orderId, accountId, event.getStockCode(), OrderSide.BUY, price, event.getQuantity());
         } else {
             listener.onRejected(accountId, orderId, requestId, result.reason());
         }
@@ -122,6 +132,7 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
         SellReserveResult result = state.trySellReserve(orderId, event.getStockCode(), event.getQuantity());
         if (result.accepted()) {
             listener.onSellAccepted(accountId, orderId, requestId, result.reservedQuantity());
+            matchingOrderSender.forwardPlace(orderId, accountId, event.getStockCode(), OrderSide.SELL, price, event.getQuantity());
         } else {
             listener.onRejected(accountId, orderId, requestId, result.reason());
         }

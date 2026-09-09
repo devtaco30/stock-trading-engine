@@ -14,6 +14,7 @@ import org.springframework.context.ConfigurableApplicationContext;
 
 import com.flab.stocktradingengine.account.disruptor.AccountEngine;
 import com.flab.stocktradingengine.account.disruptor.AccountResultListener;
+import com.flab.stocktradingengine.account.disruptor.MatchingOrderSender;
 import com.flab.stocktradingengine.account.disruptor.RejectReason;
 
 /**
@@ -39,6 +40,7 @@ class AccountEngineConfigTest {
 
         contextRunner
             .withBean(AccountResultListener.class, () -> new Recorder(events, latch))
+            .withBean(MatchingOrderSender.class, () -> (orderId, accountId, stockCode, side, price, quantity) -> {})
             .run(context -> {
                 AccountEngine engine = context.getBean(AccountEngine.class);
 

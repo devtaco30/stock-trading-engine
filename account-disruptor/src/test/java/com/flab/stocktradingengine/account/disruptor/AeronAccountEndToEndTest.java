@@ -48,7 +48,7 @@ class AeronAccountEndToEndTest {
 
         List<Recorded> events = new CopyOnWriteArrayList<>();
         CountDownLatch latch = new CountDownLatch(1);
-        AccountEngine engine = new AccountEngine(BUFFER_SIZE, new AtomicLong(0)::incrementAndGet, new Recorder(events, latch));
+        AccountEngine engine = new AccountEngine(BUFFER_SIZE, new AtomicLong(0)::incrementAndGet, (orderId, accountId, stockCode, side, price, quantity) -> {}, new Recorder(events, latch));
         engine.seed(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
         engine.start();
 
@@ -87,7 +87,7 @@ class AeronAccountEndToEndTest {
 
         List<Recorded> events = new CopyOnWriteArrayList<>();
         CountDownLatch latch = new CountDownLatch(2);
-        AccountEngine engine = new AccountEngine(BUFFER_SIZE, new AtomicLong(0)::incrementAndGet, new Recorder(events, latch));
+        AccountEngine engine = new AccountEngine(BUFFER_SIZE, new AtomicLong(0)::incrementAndGet, (orderId, accountId, stockCode, side, price, quantity) -> {}, new Recorder(events, latch));
         engine.seed(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
         engine.start();
 

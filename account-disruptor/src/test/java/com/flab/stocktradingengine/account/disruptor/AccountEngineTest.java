@@ -19,6 +19,8 @@ import org.junit.jupiter.api.Test;
 import com.lmax.disruptor.BlockingWaitStrategy;
 import com.lmax.disruptor.dsl.ProducerType;
 
+import com.flab.stocktradingengine.trading.entity.OrderSide;
+
 /**
  * Disruptor 하네스를 통과하는 매수 검증·예약의 종단 동작.
  *
@@ -37,6 +39,7 @@ class AccountEngineTest {
     private static final int BUFFER_SIZE = 1024;
 
     private final List<Recorded> events = new CopyOnWriteArrayList<>();
+    private final List<ForwardedOrder> forwardedOrders = new CopyOnWriteArrayList<>();
     private AccountEngine engine;
     private CountDownLatch latch;
 
@@ -47,10 +50,17 @@ class AccountEngineTest {
         }
     }
 
-    /** 기대 콜백 수만큼 래치를 걸고 엔진을 만든다. 시드·start 는 테스트가 이어서 한다. */
+    /**
+     * 기대 콜백 수만큼 래치를 걸고 엔진을 만든다. 시드·start 는 테스트가 이어서 한다.
+     * matchingOrderSender는 accept마다 {@link #forwardedOrders}에 기록하는 캡처용을 항상 심어둔다(②-b) —
+     * 대부분 테스트는 그 리스트를 안 보고, 발신 자체를 검증하는 테스트만 확인한다.
+     */
     private void prepare(int expectedResults) {
         latch = new CountDownLatch(expectedResults);
-        engine = new AccountEngine(BUFFER_SIZE, new AtomicLong(0)::incrementAndGet, new Recorder(events, latch));
+        engine = new AccountEngine(BUFFER_SIZE, new AtomicLong(0)::incrementAndGet,
+            (orderId, accountId, stockCode, side, price, quantity) ->
+                forwardedOrders.add(new ForwardedOrder(orderId, accountId, stockCode, side, price, quantity)),
+            new Recorder(events, latch));
     }
 
     private void awaitResults() throws InterruptedException {
@@ -262,6 +272,71 @@ class AccountEngineTest {
         assertEquals(1L, events.get(0).orderId()); // 이 엔진에서 처음 발급되는 orderId
     }
 
+    // ---------- 매칭으로 발신 (②-b) ----------
+
+    @Test
+    @DisplayName("매수가 accept되면 매칭으로 forwardPlace(BUY)가 올바른 필드로 딱 한 번 불린다")
+    void 매수_accept되면_매칭발신() throws InterruptedException {
+        prepare(1);
+        engine.seed(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
+        engine.start();
+
+        engine.publishBuy(1L, STOCK, new BigDecimal("10000"), 10, "r1");
+        awaitResults();
+
+        assertTrue(events.get(0).accepted());
+        assertEquals(1, forwardedOrders.size());
+        ForwardedOrder forwarded = forwardedOrders.get(0);
+        assertEquals(events.get(0).orderId(), forwarded.orderId());
+        assertEquals(1L, forwarded.accountId());
+        assertEquals(STOCK, forwarded.stockCode());
+        assertEquals(OrderSide.BUY, forwarded.side());
+        assertEquals(0, new BigDecimal("10000").compareTo(forwarded.price()));
+        assertEquals(10, forwarded.quantity());
+    }
+
+    @Test
+    @DisplayName("매도가 accept되면 매칭으로 forwardPlace(SELL)가 올바른 필드로 딱 한 번 불린다")
+    void 매도_accept되면_매칭발신() throws InterruptedException {
+        prepare(1);
+        engine.seed(1L, new BigDecimal("1000000"), new BigDecimal("0.40"), Map.of(STOCK, 10));
+        engine.start();
+
+        engine.publishSell(1L, STOCK, new BigDecimal("20000"), 4, "r1");
+        awaitResults();
+
+        assertTrue(events.get(0).accepted());
+        assertEquals(1, forwardedOrders.size());
+        ForwardedOrder forwarded = forwardedOrders.get(0);
+        assertEquals(events.get(0).orderId(), forwarded.orderId());
+        assertEquals(1L, forwarded.accountId());
+        assertEquals(STOCK, forwarded.stockCode());
+        assertEquals(OrderSide.SELL, forwarded.side());
+        assertEquals(0, new BigDecimal("20000").compareTo(forwarded.price()));
+        assertEquals(4, forwarded.quantity());
+    }
+
+    @Test
+    @DisplayName("거부·중복·invalid는 매칭으로 발신하지 않는다")
+    void 거부_중복_invalid는_매칭발신안함() throws InterruptedException {
+        prepare(4); // 초과거부(1) + 재전송중복(1) + invalid quantity(1) + 모르는계좌(1)
+        engine.seed(1L, new BigDecimal("30000"), new BigDecimal("0.40")); // buyLimit = 75000
+        engine.start();
+
+        engine.publishBuy(1L, STOCK, new BigDecimal("10000"), 10, "r1"); // 100000 > 75000 → INSUFFICIENT
+        engine.publishBuy(1L, STOCK, new BigDecimal("10000"), 10, "r1"); // 재전송 → duplicate
+        engine.publishBuy(1L, STOCK, new BigDecimal("10000"), 0, "r2"); // INVALID_QUANTITY
+        engine.publishBuy(99L, STOCK, new BigDecimal("10000"), 10, "r3"); // ACCOUNT_NOT_FOUND
+        awaitResults();
+
+        assertEquals(4, events.size());
+        assertFalse(events.get(0).accepted());
+        assertTrue(events.get(1).duplicate());
+        assertFalse(events.get(2).accepted());
+        assertFalse(events.get(3).accepted());
+        assertTrue(forwardedOrders.isEmpty());
+    }
+
     // ---------- 체결 반영 하네스 배선 (B3b) ----------
 
     @Test
@@ -427,7 +502,10 @@ class AccountEngineTest {
         int total = perThread * 2;
         latch = new CountDownLatch(total);
         engine = new AccountEngine(4096, new BlockingWaitStrategy(), ProducerType.MULTI,
-            new AtomicLong(0)::incrementAndGet, new Recorder(events, latch));
+            new AtomicLong(0)::incrementAndGet,
+            (orderId, accountId, stockCode, side, price, quantity) ->
+                forwardedOrders.add(new ForwardedOrder(orderId, accountId, stockCode, side, price, quantity)),
+            new Recorder(events, latch));
         engine.seed(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
         engine.start();
 
@@ -502,5 +580,9 @@ class AccountEngineTest {
     private record Recorded(long accountId, long orderId, String requestId, boolean accepted,
                             BigDecimal reservedMargin, RejectReason reason,
                             Long tradeId, Boolean applied, Integer reservedQuantity, boolean duplicate) {
+    }
+
+    /** matchingOrderSender.forwardPlace 호출 한 건의 캡처(②-b). */
+    private record ForwardedOrder(long orderId, long accountId, String stockCode, OrderSide side, BigDecimal price, int quantity) {
     }
 }
