@@ -13,6 +13,7 @@ import com.flab.stocktradingengine.account.disruptor.AccountEngine;
 import com.flab.stocktradingengine.account.disruptor.AccountJournal;
 import com.flab.stocktradingengine.account.disruptor.AccountResultListener;
 import com.flab.stocktradingengine.account.disruptor.MatchingOrderSender;
+import com.flab.stocktradingengine.codec.AccountJournalEntry;
 import com.flab.stocktradingengine.support.SnowflakeNodeIdResolver;
 import com.lmax.disruptor.BlockingWaitStrategy;
 import com.lmax.disruptor.dsl.ProducerType;
@@ -48,10 +49,15 @@ public class AccountEngineConfig {
      * <p>저널은 기본(인메모리) 대신 {@link AccountJournalArchiveConfig}가 만든 Aeron Archive durable
      * 구현({@code AeronArchiveAccountJournal})을 명시적으로 넘긴다(2b-1b) — 프로세스가 죽어도
      * 저널이 디스크에 남아야 2b-2 리플레이가 성립한다.</p>
+     *
+     * <p>시드 직후, start() 전에 {@link AccountJournalArchiveConfig#accountJournalRecoveredEntries}
+     * (이전 녹화를 읽어둔 결과)를 재적용한다(2b-2b) — 재시작 전 상태·dedup·orderId 발급기를
+     * 되살린 뒤에야 라이브 트래픽을 받는다.</p>
      */
     @Bean
     public AccountEngine accountEngine(AccountWorkerProperties properties, @Value("${snowflake.node-id:}") String nodeIdConfig,
-                                       MatchingOrderSender matchingOrderSender, AccountResultListener listener, AccountJournal journal) {
+                                       MatchingOrderSender matchingOrderSender, AccountResultListener listener, AccountJournal journal,
+                                       List<AccountJournalEntry> accountJournalRecoveredEntries) {
         long nodeId = SnowflakeNodeIdResolver.resolve(nodeIdConfig);
         AccountEngine engine = new AccountEngine(
             BUFFER_SIZE, new BlockingWaitStrategy(), ProducerType.MULTI, nodeId, matchingOrderSender, listener, journal);
@@ -62,6 +68,7 @@ public class AccountEngineConfig {
                 engine.seed(seed.accountId(), seed.balance(), seed.marginRate(), seed.holdings());
             }
         }
+        engine.recover(accountJournalRecoveredEntries);
         return engine;
     }
 

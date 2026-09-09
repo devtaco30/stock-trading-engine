@@ -11,6 +11,8 @@ import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 
 import com.flab.stocktradingengine.account.disruptor.AccountEngine;
 import com.flab.stocktradingengine.account.disruptor.AccountJournal;
@@ -18,6 +20,7 @@ import com.flab.stocktradingengine.account.disruptor.AccountResultListener;
 import com.flab.stocktradingengine.account.disruptor.InMemoryAccountJournal;
 import com.flab.stocktradingengine.account.disruptor.MatchingOrderSender;
 import com.flab.stocktradingengine.account.disruptor.RejectReason;
+import com.flab.stocktradingengine.codec.AccountJournalEntry;
 
 /**
  * 설정값(account-worker.seed-accounts)으로 계좌를 시드한 {@link AccountEngine} 빈이
@@ -28,7 +31,7 @@ class AccountEngineConfigTest {
     private static final String STOCK = "005930";
 
     private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
-        .withUserConfiguration(AccountEngineConfig.class)
+        .withUserConfiguration(AccountEngineConfig.class, EmptyRecoveredEntriesConfig.class)
         .withPropertyValues(
             "account-worker.seed-accounts[0].account-id=1",
             "account-worker.seed-accounts[0].balance=1000000",
@@ -62,6 +65,19 @@ class AccountEngineConfigTest {
 
     private void assertShutsDownCleanly(ConfigurableApplicationContext context) {
         context.close(); // SmartLifecycle.stop() → engine.shutdown() 이 예외 없이 불려야 한다
+    }
+
+    /**
+     * 이 테스트는 real Aeron Archive 없이 AccountEngineConfig만 가볍게 띄운다 — 2b-2b가 추가한
+     * {@code accountJournalRecoveredEntries} 빈은 Spring이 generic List<T> 타입을 실제로 매칭하도록
+     * {@code @Bean} 메서드로 둬야 한다({@code withBean(Class, Supplier)}는 타입 소거로 못 맞춘다).
+     */
+    @Configuration
+    static class EmptyRecoveredEntriesConfig {
+        @Bean
+        List<AccountJournalEntry> accountJournalRecoveredEntries() {
+            return List.of();
+        }
     }
 
     private record Recorded(long accountId, long orderId, boolean accepted) {
