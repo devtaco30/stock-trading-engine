@@ -2,6 +2,8 @@ package com.flab.stocktradingengine.account.disruptor;
 
 import java.util.List;
 
+import com.flab.stocktradingengine.codec.AccountJournalEntry;
+
 /**
  * 계좌 입력 기록 저장소(2b-1) — matching {@code Journal}의 계좌판.
  *

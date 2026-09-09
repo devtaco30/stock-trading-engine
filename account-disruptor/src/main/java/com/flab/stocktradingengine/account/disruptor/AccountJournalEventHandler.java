@@ -2,6 +2,8 @@ package com.flab.stocktradingengine.account.disruptor;
 
 import com.lmax.disruptor.EventHandler;
 
+import com.flab.stocktradingengine.codec.AccountJournalEntry;
+
 /**
  * 링버퍼를 소비해 이벤트를 계좌 저널에 기록하는 핸들러(2b-1) — matching {@code JournalEventHandler}의
  * 계좌판. 매칭과 달리 주문뿐 아니라 체결·정산까지 전 타입을 기록한다(계좌 상태를 만드는 모든 입력).

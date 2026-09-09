@@ -3,6 +3,8 @@ package com.flab.stocktradingengine.account.disruptor;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
+import com.flab.stocktradingengine.codec.AccountJournalEntry;
+
 /**
  * 인메모리 계좌 저널(2b-1) — matching {@code InMemoryJournal}의 계좌판.
  *

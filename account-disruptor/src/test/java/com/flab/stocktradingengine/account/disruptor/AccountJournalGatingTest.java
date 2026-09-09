@@ -14,6 +14,9 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import com.flab.stocktradingengine.codec.AccountEventType;
+import com.flab.stocktradingengine.codec.AccountJournalEntry;
+
 /**
  * 2b-1 저널 게이팅 검증. matching {@code JournalGatingTest}와 같은 결.
  *
@@ -65,21 +68,21 @@ class AccountJournalGatingTest {
         // 아직 발급되기 전(입력 그대로)을 기록하기 때문이다. 리플레이(2b-2)는 이 입력들
         // (accountId·stockCode·price·quantity·requestId)을 그대로 다시 넣어 같은 결정론적
         // 발급기(2b-0)로 orderId를 재생성한다 — 저널에 orderId를 미리 못 박아두지 않는다.
-        assertEquals(EventType.BUY, entries.get(0).type());
+        assertEquals(AccountEventType.BUY, entries.get(0).type());
         assertEquals(0L, entries.get(0).orderId());
         assertEquals(1L, entries.get(0).accountId());
         assertEquals("r1", entries.get(0).requestId());
-        assertEquals(EventType.BUY, entries.get(1).type());
+        assertEquals(AccountEventType.BUY, entries.get(1).type());
         assertEquals(0L, entries.get(1).orderId());
         assertEquals("r2", entries.get(1).requestId());
         // 체결·정산의 orderId·tradeId·settlementRef는 매칭·정산이 넘겨준 입력값이라(계좌가 발급하는
         // 게 아니다) 저널 시점에 이미 확정돼 있다.
-        assertEquals(EventType.BUY_FILL, entries.get(2).type());
+        assertEquals(AccountEventType.BUY_FILL, entries.get(2).type());
         assertEquals(1L, entries.get(2).orderId());
         assertEquals(9001L, entries.get(2).tradeId());
-        assertEquals(EventType.SETTLEMENT, entries.get(3).type());
+        assertEquals(AccountEventType.SETTLEMENT, entries.get(3).type());
         assertEquals(7001L, entries.get(3).tradeId()); // settlementRef가 tradeId 필드 재사용(AccountEvent 참고)
-        assertEquals(EventType.SELL, entries.get(4).type());
+        assertEquals(AccountEventType.SELL, entries.get(4).type());
         assertEquals(0L, entries.get(4).orderId());
         assertEquals("r3", entries.get(4).requestId());
     }
