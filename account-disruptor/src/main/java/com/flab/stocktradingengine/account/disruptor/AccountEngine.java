@@ -12,6 +12,8 @@ import com.lmax.disruptor.dsl.Disruptor;
 import com.lmax.disruptor.dsl.ProducerType;
 import com.lmax.disruptor.util.DaemonThreadFactory;
 
+import com.flab.stocktradingengine.codec.AccountJournalEntry;
+
 /**
  * 계좌 축 워커의 진입점.
  *
@@ -32,9 +34,13 @@ import com.lmax.disruptor.util.DaemonThreadFactory;
  */
 public class AccountEngine {
 
+    private static final MatchingOrderSender NO_OP_MATCHING_ORDER_SENDER =
+        (orderId, accountId, stockCode, side, price, quantity) -> {};
+
     private final Disruptor<AccountEvent> disruptor;
     private final Map<Long, AccountState> accounts = new HashMap<>();
     private final AccountJournal journal;
+    private final AccountOrderIdGenerator orderIdGenerator;
     private RingBuffer<AccountEvent> ringBuffer;
 
     /**
@@ -51,6 +57,7 @@ public class AccountEngine {
     public AccountEngine(int bufferSize, WaitStrategy waitStrategy, ProducerType producerType, long nodeId,
                          MatchingOrderSender matchingOrderSender, AccountResultListener listener, AccountJournal journal) {
         this.journal = journal;
+        this.orderIdGenerator = new AccountOrderIdGenerator(nodeId);
         ThreadFactory threadFactory = DaemonThreadFactory.INSTANCE;
         this.disruptor = new Disruptor<>(
             AccountEvent::new,
@@ -62,8 +69,10 @@ public class AccountEngine {
         // 예상 못한 예외는 fail-fast(handleEventsWith 배선 전에 설정해야 적용됨).
         this.disruptor.setDefaultExceptionHandler(new AccountExceptionHandler());
         // 저널러가 먼저 기록 → 비즈니스 핸들러가 그 뒤에 반영(SequenceBarrier로 게이팅, matching과 같은 결).
+        // orderIdGenerator를 필드로 공유하는 이유는 recover() 참고 — 복구가 진행시킨 카운터를
+        // 라이브가 그대로 이어받아야 발급 충돌이 없다.
         this.disruptor.handleEventsWith(new AccountJournalEventHandler(journal))
-            .then(new AccountEventHandler(accounts, new AccountOrderIdGenerator(nodeId), matchingOrderSender, listener));
+            .then(new AccountEventHandler(accounts, orderIdGenerator, matchingOrderSender, listener));
     }
 
     /** 기본 저널({@link InMemoryAccountJournal})로 생성한다. */
@@ -92,12 +101,63 @@ public class AccountEngine {
      * 계좌 상태를 미리 넣는다. 반드시 {@link #start} 전에 호출한다(기동 후엔 소비자와 경쟁).
      */
     public void seed(long accountId, BigDecimal balance, BigDecimal marginRate) {
+        requireNotStarted();
         accounts.put(accountId, new AccountState(accountId, balance, marginRate));
     }
 
     /** 초기 보유(종목코드 → 수량)까지 함께 미리 넣는다. 반드시 {@link #start} 전에 호출한다. */
     public void seed(long accountId, BigDecimal balance, BigDecimal marginRate, Map<String, Integer> initialHoldings) {
+        requireNotStarted();
         accounts.put(accountId, new AccountState(accountId, balance, marginRate, initialHoldings));
+    }
+
+    /** 계좌 하나의 현재 상태를 반환한다(없으면 null). 테스트·복구 검증용 — {@link #journal()}과 같은 자리. */
+    public AccountState accountState(long accountId) {
+        return accounts.get(accountId);
+    }
+
+    /**
+     * 저널 엔트리를 순서대로 재적용해 계좌 상태·dedup·orderId 발급기를 되살린다(2b-2). 반드시
+     * {@link #start} 전에(설정 스레드에서만) 호출한다 — {@link #seed}와 같은 이유로, 기동 후엔
+     * 소비자 스레드와 경쟁한다. 보통 seed 다음, start 이전에 부른다(seed로 초기 상태를 깔고 그
+     * 위에 저널을 재생한다).
+     *
+     * <p>실제 비즈니스 로직({@link AccountEventHandler})을 그대로 재사용해 계좌 상태·dedup 장부를
+     * 똑같이 재구성하되, 결과 리스너·매칭 발신은 no-op으로 막는다 — 이미 일어난 일을 다시 바깥에
+     * 통지하거나 매칭에 재전송할 이유가 없다. 링버퍼·저널도 거치지 않는다(이미 기록된 입력을
+     * 다시 저널에 넣거나 링에 발행할 이유가 없다).</p>
+     *
+     * <p>여기서 쓰는 {@link #orderIdGenerator}는 이 엔진의 필드라 {@link #start} 이후 라이브
+     * 트래픽을 처리하는 핸들러와 같은 인스턴스다 — 리플레이가 카운터를 진행시킨 뒤 라이브가 그
+     * 지점부터 이어받는다(같은 requestId를 두 번 다른 orderId로 발급하는 충돌을 막는다).</p>
+     */
+    public void recover(Iterable<AccountJournalEntry> entries) {
+        requireNotStarted();
+        AccountEventHandler recoveryHandler =
+            new AccountEventHandler(accounts, orderIdGenerator, NO_OP_MATCHING_ORDER_SENDER, NoOpAccountResultListener.INSTANCE);
+        AccountEvent scratch = new AccountEvent();
+        for (AccountJournalEntry entry : entries) {
+            applyToScratch(scratch, entry);
+            recoveryHandler.onEvent(scratch, 0L, false);
+        }
+    }
+
+    /** 저널 엔트리 하나를 스크래치 슬롯에 채운다 — {@code AccountEvent}의 타입별 setter와 1:1 대응. */
+    private void applyToScratch(AccountEvent event, AccountJournalEntry entry) {
+        switch (entry.type()) {
+            case BUY -> event.setBuy(entry.accountId(), entry.stockCode(), entry.price(), entry.quantity(), entry.requestId());
+            case SELL -> event.setSell(entry.accountId(), entry.stockCode(), entry.price(), entry.quantity(), entry.requestId());
+            case BUY_FILL -> event.setBuyFill(entry.tradeId(), entry.orderId(), entry.accountId(), entry.stockCode(), entry.price(), entry.quantity());
+            case SELL_FILL -> event.setSellFill(entry.tradeId(), entry.orderId(), entry.accountId(), entry.stockCode(), entry.quantity());
+            case SETTLEMENT -> event.setSettlement(entry.tradeId(), entry.accountId(), entry.price());
+        }
+    }
+
+    /** {@link #seed}·{@link #recover}가 {@link #start} 뒤에 불려 소비자 스레드와 경쟁하는 걸 막는다. */
+    private void requireNotStarted() {
+        if (ringBuffer != null) {
+            throw new IllegalStateException("start() 이후에는 호출할 수 없습니다 — 소비자 스레드와 경쟁합니다");
+        }
     }
 
     /** 소비자 스레드를 기동하고 링버퍼를 준비한다. */
