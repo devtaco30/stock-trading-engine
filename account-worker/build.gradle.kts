@@ -15,6 +15,7 @@ dependencies {
 	// (account-disruptor의 implementation 의존은 여기로 전이되지 않는다).
 	implementation(libs.aeron.driver)
 	implementation(libs.aeron.client)
+	implementation(libs.aeron.archive) // 계좌 인테이크 durable 녹화(Archive, 2a)
 
 	implementation(libs.spring.boot.starter)
 	implementation(libs.spring.kafka)

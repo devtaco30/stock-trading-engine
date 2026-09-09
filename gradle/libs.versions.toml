@@ -47,6 +47,7 @@ jmh-generator-annprocess = { module = "org.openjdk.jmh:jmh-generator-annprocess"
 
 aeron-driver = { module = "io.aeron:aeron-driver", version.ref = "aeron" }
 aeron-client = { module = "io.aeron:aeron-client", version.ref = "aeron" }
+aeron-archive = { module = "io.aeron:aeron-archive", version.ref = "aeron" }
 agrona = { module = "org.agrona:agrona", version.ref = "agrona" }
 
 [plugins]
