@@ -19,10 +19,13 @@ import lombok.RequiredArgsConstructor;
  * {@code ACCOUNT_NOT_FOUND}로 걸러내고(격리), 같은 체결이 중복 도착해도 tradeId 멱등으로
  * 안전하다.</p>
  *
- * <h3>ack 시점</h3>
+ * <h3>ack 시점 — 저널 기록 뒤에 커밋한다(A안)</h3>
  * <p>{@link AccountEngine#publishBuyFill}/{@link AccountEngine#publishSellFill}는 링버퍼에
- * 넣기만 하는 비동기 발행이라 여기서 예외가 나는 경우는 사실상 없다(실제 반영 성공·실패는
- * 나중에 {@code AccountResultListener} 콜백으로 갈린다). 그래서 두 발행 호출 뒤 바로 커밋한다.</p>
+ * 넣기만 하는 비동기 발행이라, 발행 직후엔 아직 저널에 durable하게 남지 않았다. 여기서 바로
+ * ack하면 저널 기록 전에 Kafka 오프셋이 넘어가고, 그 사이 크래시하면 저널에도 Kafka에도 없어
+ * 체결이 유실된다. 그래서 {@link AccountEngine#blockUntilJournaled}로 두 발행이 저널에 기록될
+ * 때까지 기다린 뒤에 ack한다. 반대로 기록 뒤·ack 전에 죽으면 Kafka가 재전송하고 tradeId 멱등이
+ * 중복을 흡수한다(유실보다 중복이 안전하다).</p>
  */
 @Component
 @RequiredArgsConstructor
@@ -32,12 +35,13 @@ public class AccountFillConsumer {
 
     @KafkaListener(topics = "account-fills", groupId = "account-worker")
     public void consume(TradeFilledEvent fill, Acknowledgment ack) {
-        accountEngine.publishBuyFill(
+        long buySequence = accountEngine.publishBuyFill(
             fill.tradeId(), fill.buyOrderId(), fill.buyAccountId(), fill.stockCode(),
             fill.matchPrice(), fill.filledQuantity());
-        accountEngine.publishSellFill(
+        long sellSequence = accountEngine.publishSellFill(
             fill.tradeId(), fill.sellOrderId(), fill.sellAccountId(), fill.stockCode(),
             fill.filledQuantity());
+        accountEngine.blockUntilJournaled(Math.max(buySequence, sellSequence));
         ack.acknowledge();
     }
 }

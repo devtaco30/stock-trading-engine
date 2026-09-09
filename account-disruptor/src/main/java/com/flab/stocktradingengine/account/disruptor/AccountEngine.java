@@ -37,9 +37,15 @@ public class AccountEngine {
     private static final MatchingOrderSender NO_OP_MATCHING_ORDER_SENDER =
         (orderId, accountId, stockCode, side, price, quantity) -> {};
 
+    // blockUntilJournaled 최대 대기 시간. 저널 스레드가 죽어(fail-fast) 시퀀스가 영영 안 올라오는
+    // 상황에서 호출 스레드가 무한 스핀하는 걸 막는다. Kafka max.poll.interval(기본 5분)보다 한참 짧아
+    // 리밸런스를 유발하지 않는다.
+    private static final long JOURNAL_WAIT_TIMEOUT_MILLIS = 5000;
+
     private final Disruptor<AccountEvent> disruptor;
     private final Map<Long, AccountState> accounts = new HashMap<>();
     private final AccountJournal journal;
+    private final AccountJournalEventHandler journalHandler;
     private final AccountOrderIdGenerator orderIdGenerator;
     private RingBuffer<AccountEvent> ringBuffer;
 
@@ -71,7 +77,9 @@ public class AccountEngine {
         // 저널러가 먼저 기록 → 비즈니스 핸들러가 그 뒤에 반영(SequenceBarrier로 게이팅, matching과 같은 결).
         // orderIdGenerator를 필드로 공유하는 이유는 recover() 참고 — 복구가 진행시킨 카운터를
         // 라이브가 그대로 이어받아야 발급 충돌이 없다.
-        this.disruptor.handleEventsWith(new AccountJournalEventHandler(journal))
+        // blockUntilJournaled가 이 핸들러의 시퀀스를 읽어야 하므로 필드로 잡아둔다.
+        this.journalHandler = new AccountJournalEventHandler(journal);
+        this.disruptor.handleEventsWith(journalHandler)
             .then(new AccountEventHandler(accounts, orderIdGenerator, matchingOrderSender, listener));
     }
 
@@ -200,8 +208,13 @@ public class AccountEngine {
         }
     }
 
-    /** 매수 체결 반영을 링버퍼에 발행한다. tradeId 는 체결 신원(멱등키). */
-    public void publishBuyFill(long tradeId, long orderId, long accountId, String stockCode, BigDecimal matchPrice, int quantity) {
+    /**
+     * 매수 체결 반영을 링버퍼에 발행한다. tradeId 는 체결 신원(멱등키).
+     *
+     * @return 발행한 링버퍼 시퀀스. {@link #blockUntilJournaled}에 넘겨 이 이벤트가 저널에 기록될
+     *         때까지 기다리는 데 쓴다(Kafka ack를 저널 뒤로 미루는 A안).
+     */
+    public long publishBuyFill(long tradeId, long orderId, long accountId, String stockCode, BigDecimal matchPrice, int quantity) {
         long sequence = ringBuffer.next();
         try {
             AccountEvent event = ringBuffer.get(sequence);
@@ -209,10 +222,11 @@ public class AccountEngine {
         } finally {
             ringBuffer.publish(sequence);
         }
+        return sequence;
     }
 
-    /** 매도 체결 반영을 링버퍼에 발행한다. tradeId 는 체결 신원(멱등키). */
-    public void publishSellFill(long tradeId, long orderId, long accountId, String stockCode, int quantity) {
+    /** 매도 체결 반영을 링버퍼에 발행한다. tradeId 는 체결 신원(멱등키). {@link #publishBuyFill}과 같은 이유로 발행 시퀀스를 돌려준다. */
+    public long publishSellFill(long tradeId, long orderId, long accountId, String stockCode, int quantity) {
         long sequence = ringBuffer.next();
         try {
             AccountEvent event = ringBuffer.get(sequence);
@@ -220,16 +234,40 @@ public class AccountEngine {
         } finally {
             ringBuffer.publish(sequence);
         }
+        return sequence;
     }
 
-    /** 정산(T+2) 되돌림을 링버퍼에 발행한다. settlementRef 는 정산 신원(멱등키). */
-    public void publishSettlement(long settlementRef, long accountId, BigDecimal amount) {
+    /** 정산(T+2) 되돌림을 링버퍼에 발행한다. settlementRef 는 정산 신원(멱등키). {@link #publishBuyFill}과 같은 이유로 발행 시퀀스를 돌려준다. */
+    public long publishSettlement(long settlementRef, long accountId, BigDecimal amount) {
         long sequence = ringBuffer.next();
         try {
             AccountEvent event = ringBuffer.get(sequence);
             event.setSettlement(settlementRef, accountId, amount);
         } finally {
             ringBuffer.publish(sequence);
+        }
+        return sequence;
+    }
+
+    /**
+     * 저널러가 주어진 시퀀스까지 기록(append)을 마칠 때까지 호출 스레드를 동기로 붙잡는다(A안).
+     *
+     * <p>Kafka로 온 체결·정산을 발행한 컨슈머는 이 메서드로 "저널 기록 완료"를 확인한 뒤에 ack해야
+     * 한다 — 그래야 저널에 durable하게 남기 전에 Kafka 오프셋이 넘어가는 유실 창이 닫힌다. 저널러는
+     * {@code handleEventsWith(journal).then(business)} 게이팅으로 이미 링 시퀀스를 순서대로 처리하므로,
+     * 그 핸들러의 시퀀스가 대상 시퀀스 이상이면 그 이벤트는 append가 끝난 것이다.</p>
+     *
+     * <p>저널 스레드가 fail-fast로 죽으면 시퀀스가 영영 안 올라온다. 그래서 {@code JOURNAL_WAIT_TIMEOUT_MILLIS}
+     * 안에 도달하지 못하면 예외를 던진다 — 컨슈머는 ack하지 못하고, Kafka가 나중에 재전송한다(멱등이 중복 흡수).</p>
+     */
+    public void blockUntilJournaled(long sequence) {
+        long deadline = System.nanoTime() + JOURNAL_WAIT_TIMEOUT_MILLIS * 1_000_000L;
+        while (disruptor.getSequenceValueFor(journalHandler) < sequence) {
+            if (System.nanoTime() > deadline) {
+                throw new IllegalStateException(
+                    "저널이 " + JOURNAL_WAIT_TIMEOUT_MILLIS + "ms 안에 시퀀스 " + sequence + "를 기록하지 못했습니다");
+            }
+            Thread.onSpinWait();
         }
     }
 }
