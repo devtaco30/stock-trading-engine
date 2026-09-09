@@ -10,6 +10,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 
 import com.flab.stocktradingengine.account.disruptor.AccountEngine;
+import com.flab.stocktradingengine.account.disruptor.AccountJournal;
 import com.flab.stocktradingengine.account.disruptor.AccountResultListener;
 import com.flab.stocktradingengine.account.disruptor.MatchingOrderSender;
 import com.flab.stocktradingengine.support.SnowflakeNodeIdResolver;
@@ -43,13 +44,17 @@ public class AccountEngineConfig {
      * <p>orderId는 더 이상 Snowflake(벽시계)가 아니라 엔진 내부 결정론적 발급기(2b-0)가 낸다 —
      * 여기서는 nodeId만 넘긴다. matching-worker {@code SnowflakeConfig}와 같은 프로퍼티
      * ({@code snowflake.node-id})를 그대로 재사용한다(같은 노드 구분 관례).</p>
+     *
+     * <p>저널은 기본(인메모리) 대신 {@link AccountJournalArchiveConfig}가 만든 Aeron Archive durable
+     * 구현({@code AeronArchiveAccountJournal})을 명시적으로 넘긴다(2b-1b) — 프로세스가 죽어도
+     * 저널이 디스크에 남아야 2b-2 리플레이가 성립한다.</p>
      */
     @Bean
     public AccountEngine accountEngine(AccountWorkerProperties properties, @Value("${snowflake.node-id:}") String nodeIdConfig,
-                                       MatchingOrderSender matchingOrderSender, AccountResultListener listener) {
+                                       MatchingOrderSender matchingOrderSender, AccountResultListener listener, AccountJournal journal) {
         long nodeId = SnowflakeNodeIdResolver.resolve(nodeIdConfig);
         AccountEngine engine = new AccountEngine(
-            BUFFER_SIZE, new BlockingWaitStrategy(), ProducerType.MULTI, nodeId, matchingOrderSender, listener);
+            BUFFER_SIZE, new BlockingWaitStrategy(), ProducerType.MULTI, nodeId, matchingOrderSender, listener, journal);
         for (AccountWorkerProperties.SeedAccount seed : properties.seedAccounts()) {
             if (seed.holdings() == null || seed.holdings().isEmpty()) {
                 engine.seed(seed.accountId(), seed.balance(), seed.marginRate());

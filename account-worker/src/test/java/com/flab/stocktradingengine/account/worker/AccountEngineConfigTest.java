@@ -13,7 +13,9 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.ConfigurableApplicationContext;
 
 import com.flab.stocktradingengine.account.disruptor.AccountEngine;
+import com.flab.stocktradingengine.account.disruptor.AccountJournal;
 import com.flab.stocktradingengine.account.disruptor.AccountResultListener;
+import com.flab.stocktradingengine.account.disruptor.InMemoryAccountJournal;
 import com.flab.stocktradingengine.account.disruptor.MatchingOrderSender;
 import com.flab.stocktradingengine.account.disruptor.RejectReason;
 
@@ -41,6 +43,9 @@ class AccountEngineConfigTest {
         contextRunner
             .withBean(AccountResultListener.class, () -> new Recorder(events, latch))
             .withBean(MatchingOrderSender.class, () -> (orderId, accountId, stockCode, side, price, quantity) -> {})
+            // 이 테스트는 real Aeron Archive 배선 없이 AccountEngineConfig만 가볍게 띄운다(2b-1b) —
+            // 저널은 AccountJournalArchiveConfig가 없어도 되는 기본(인메모리) 구현으로 준다.
+            .withBean(AccountJournal.class, InMemoryAccountJournal::new)
             .run(context -> {
                 AccountEngine engine = context.getBean(AccountEngine.class);
 

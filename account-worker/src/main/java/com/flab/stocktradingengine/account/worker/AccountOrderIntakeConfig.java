@@ -4,6 +4,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.SmartLifecycle;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -17,35 +18,27 @@ import io.aeron.Subscription;
 import io.aeron.archive.Archive;
 import io.aeron.archive.ArchivingMediaDriver;
 import io.aeron.archive.client.AeronArchive;
-import io.aeron.archive.codecs.SourceLocation;
 import io.aeron.driver.MediaDriver;
 
 /**
- * C5-1b — 매수·매도 주문을 Aeron IPC로 받는 인테이크 경로 배선. 2a부터는 이 인테이크 스트림을
- * Aeron Archive로 durable 녹화한다(입력 로그 — 리플레이는 2b, 매칭 쪽 저널→Archive는 2c).
+ * C5-1b — 매수·매도 주문을 Aeron IPC로 받는 인테이크 경로 배선.
  *
  * <p>채널은 {@code aeron:ipc}(같은 머신, 공유 메모리)로 최소 형태다 — 실 UDP·게이트웨이의
  * accountId→스트림 라우팅 맵은 C5-4에서 다룬다. 그때까지 스트림 ID는 이 워커 인스턴스 전체가
  * 공유하는 고정 상수다.</p>
  *
- * <h3>ArchivingMediaDriver (2a)</h3>
+ * <h3>ArchivingMediaDriver (2a → 2b-1b에서 녹화 대상 이동)</h3>
  * <p>plain {@code MediaDriver.launchEmbedded()} 대신 {@link ArchivingMediaDriver}(임베디드
  * MediaDriver + Archive가 한 프로세스에 묶인 조합)를 띄운다. {@code launchEmbedded()}가 내부적으로
  * 하는 것과 같이 {@link CommonContext#generateRandomDirName}으로 aeron 디렉터리를 매 기동마다
- * 무작위로 잡아 다른 인스턴스(다른 테스트)와 충돌하지 않게 한다. archive 디렉터리도 임시 디렉터리로
- * 매번 새로 만든다 — 지금 단위는 "녹화가 된다"까지고, 카탈로그를 프로세스 재기동 사이에 남기는
- * 정책은 이후(2b 리플레이) 단위에서 다룬다.</p>
+ * 무작위로 잡는다 — IPC 버퍼는 프로세스 생애만큼만 필요해 재시작 사이 보존할 이유가 없다.</p>
  *
- * <h3>녹화 시작 순서 (주문 유실 방지)</h3>
- * <p>{@link #accountIntakeRecordingSubscriptionId}가 {@link #accountOrderSubscription}보다 먼저
- * 만들어지도록 그 빈을 파라미터로 받아 의존시킨다 — Spring은 빈 그래프 순서로 생성하므로,
- * Archive가 이 채널·스트림을 녹화 시작한 뒤에야 우리 자신의 Subscription이 만들어진다(그 뒤에
- * {@link AccountOrderReceiverLifecycle}이 폴링을 시작한다). 녹화가 나중에 시작되면 그 사이 도착한
- * 주문이 기록에서 빠질 수 있어 순서를 지킨다.</p>
- *
- * <p>빈 생성 순서(ArchivingMediaDriver→Aeron→AeronArchive→녹화→Subscription)가 그대로 소멸
- * 순서의 역방향이 되도록 {@code destroyMethod}만 지정한다 — Spring이 빈 의존 그래프를 보고
- * 역순으로 닫아준다.</p>
+ * <p>2a에서는 이 인테이크 스트림(4004) 자체를 녹화했지만, 체결·정산은 Kafka 컨슈머가
+ * {@code AccountEngine}에 직접 publish 해 인테이크를 거치지 않는다 — 인테이크만 녹화하면 리플레이가
+ * 체결·정산을 놓친다. 그래서 2b-1b부터 녹화 대상을 저널 스트림({@link AccountJournalArchiveConfig},
+ * 다섯 타입 전부를 처리 순서대로 보는 유일한 지점)으로 옮겼다. 이 클래스는 더 이상 녹화하지 않는다
+ * — 인테이크 in-transit 유실은 게이트웨이 재전송(requestId 멱등, C5-1a)이 책임진다("링버퍼 앞=전송
+ * 책임 / 뒤=저널·리플레이 책임"의 경계).</p>
  */
 @Configuration
 public class AccountOrderIntakeConfig {
@@ -63,19 +56,37 @@ public class AccountOrderIntakeConfig {
     private static final String CONTROL_RESPONSE_CHANNEL = "aeron:udp?endpoint=localhost:0";
     private static final String REPLICATION_CHANNEL = "aeron:udp?endpoint=localhost:0";
 
+    /**
+     * @param archiveDirConfig {@code account.worker.archive-dir} — 저널 녹화(2b-1b)를 담는
+     *                         Archive 카탈로그 디렉터리. 비워두면(기본, 테스트) 매 기동마다 새
+     *                         임시 디렉터리를 쓴다(격리). 값을 주면(운영, K8s PV 마운트 지점처럼
+     *                         재시작 사이 살아남는 고정 경로) 그 경로를 그대로 쓴다 —
+     *                         {@code deleteArchiveOnStart(false)}와 짝을 이뤄야 재시작 뒤에도
+     *                         이전 저널 녹화가 카탈로그에 남는다.
+     */
     @Bean(destroyMethod = "close")
-    public ArchivingMediaDriver archivingMediaDriver() throws IOException {
+    public ArchivingMediaDriver archivingMediaDriver(
+            @Value("${account.worker.archive-dir:}") String archiveDirConfig) throws IOException {
         String aeronDirectoryName = CommonContext.generateRandomDirName();
-        File archiveDir = Files.createTempDirectory("account-worker-archive-").toFile();
+        File archiveDir = resolveArchiveDir(archiveDirConfig);
 
         return ArchivingMediaDriver.launch(
             new MediaDriver.Context().aeronDirectoryName(aeronDirectoryName),
             new Archive.Context()
                 .controlChannel(CONTROL_REQUEST_CHANNEL)
                 .replicationChannel(REPLICATION_CHANNEL)
-                .deleteArchiveOnStart(true)
+                .deleteArchiveOnStart(false) // 저널은 재시작 넘어 보존해야 한다(2b-1b)
                 .archiveDir(archiveDir)
         );
+    }
+
+    private File resolveArchiveDir(String archiveDirConfig) throws IOException {
+        if (archiveDirConfig == null || archiveDirConfig.isBlank()) {
+            return Files.createTempDirectory("account-worker-archive-").toFile();
+        }
+        File archiveDir = new File(archiveDirConfig);
+        Files.createDirectories(archiveDir.toPath());
+        return archiveDir;
     }
 
     @Bean(destroyMethod = "close")
@@ -93,18 +104,8 @@ public class AccountOrderIntakeConfig {
             .controlResponseChannel(CONTROL_RESPONSE_CHANNEL));
     }
 
-    /**
-     * 인테이크 채널·스트림 녹화를 시작한다(2a). 반환값(Archive 구독 ID)은 안 쓴다 — 이 빈이 존재하는
-     * 이유는 {@link #accountOrderSubscription}이 이 빈에 의존하게 만들어 생성 순서를 강제하는
-     * 것뿐이다(클래스 javadoc "녹화 시작 순서" 참고).
-     */
-    @Bean
-    public Long accountIntakeRecordingSubscriptionId(AeronArchive aeronArchive) {
-        return aeronArchive.startRecording(INTAKE_CHANNEL, INTAKE_STREAM_ID, SourceLocation.LOCAL);
-    }
-
     @Bean(destroyMethod = "close")
-    public Subscription accountOrderSubscription(Aeron aeron, Long accountIntakeRecordingSubscriptionId) {
+    public Subscription accountOrderSubscription(Aeron aeron) {
         return aeron.addSubscription(INTAKE_CHANNEL, INTAKE_STREAM_ID);
     }
 
