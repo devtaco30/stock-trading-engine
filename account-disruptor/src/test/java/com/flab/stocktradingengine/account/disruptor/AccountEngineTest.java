@@ -10,7 +10,6 @@ import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicLong;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
@@ -28,15 +27,17 @@ import com.flab.stocktradingengine.trading.entity.OrderSide;
  * {@link CountDownLatch} 로 기대한 콜백 수가 도착할 때까지 기다린 뒤 검증한다
  * (matching-disruptor 테스트와 동일한 방식).</p>
  *
- * <h3>orderId 예측 (C5-2a)</h3>
- * <p>{@link #prepare}가 매번 새 {@link AtomicLong}(0에서 시작하는 {@code incrementAndGet})을
- * orderId 발급 시드로 엔진에 주입한다 — requestId가 비어있지 않고 처음 등장할 때만(계좌·accept·reject
- * 무관) 소비되므로, 테스트가 그 호출 순서만 세면 발급될 orderId를 그대로 예측해 하드코딩할 수 있다.</p>
+ * <h3>orderId 예측 (2b-0, 결정론적)</h3>
+ * <p>{@link #prepare}가 매번 nodeId=0으로 엔진을 만든다 — {@link AccountOrderIdGenerator}는
+ * requestId가 비어있지 않고 처음 등장할 때만(계좌·accept·reject 무관) 카운터를 증가시키므로,
+ * 테스트가 그 호출 순서만 세면 발급될 orderId(nodeId=0이라 1,2,3…)를 그대로 예측해 하드코딩할
+ * 수 있다.</p>
  */
 class AccountEngineTest {
 
     private static final String STOCK = "005930";
     private static final int BUFFER_SIZE = 1024;
+    private static final long NODE_ID = 0L;
 
     private final List<Recorded> events = new CopyOnWriteArrayList<>();
     private final List<ForwardedOrder> forwardedOrders = new CopyOnWriteArrayList<>();
@@ -57,7 +58,7 @@ class AccountEngineTest {
      */
     private void prepare(int expectedResults) {
         latch = new CountDownLatch(expectedResults);
-        engine = new AccountEngine(BUFFER_SIZE, new AtomicLong(0)::incrementAndGet,
+        engine = new AccountEngine(BUFFER_SIZE, NODE_ID,
             (orderId, accountId, stockCode, side, price, quantity) ->
                 forwardedOrders.add(new ForwardedOrder(orderId, accountId, stockCode, side, price, quantity)),
             new Recorder(events, latch));
@@ -270,6 +271,47 @@ class AccountEngineTest {
 
         assertTrue(events.get(0).accepted());
         assertEquals(1L, events.get(0).orderId()); // 이 엔진에서 처음 발급되는 orderId
+    }
+
+    // ---------- 결정론적 orderId — 리플레이 전제 (2b-0) ----------
+
+    /**
+     * 리플레이(2b)가 성립하려면 "같은 입력이면 같은 orderId"가 보장돼야 한다 — 그래야 리플레이로
+     * 재현한 계좌 상태가 이미 매칭에 실어 보낸 orderId와 어긋나지 않는다. 이 테스트가 그 전제를
+     * 직접 증명한다: 완전히 새로운 엔진 두 개(같은 nodeId)에 같은 입력 시퀀스를 넣고, 발급된
+     * orderId가 완전히 동일한지 본다 — 거부·중복·매도까지 섞어 "발급 자체는 accept·reject와
+     * 무관하게 첫 등장에서만" 규칙이 카운터 결정론을 안 깨는지도 같이 확인한다.
+     */
+    @Test
+    @DisplayName("같은 nodeId·같은 입력 시퀀스를 다른 엔진 두 개에 넣으면 발급되는 orderId가 완전히 같다(2b-0, 리플레이 전제)")
+    void 같은_입력이면_다른_엔진에서도_같은_orderId_발급() throws InterruptedException {
+        List<Long> firstRun = runDeterminismSequence();
+        List<Long> secondRun = runDeterminismSequence();
+
+        assertEquals(firstRun, secondRun);
+    }
+
+    /**
+     * 매수 accept(1) → 매수 거부(2, INSUFFICIENT — 발급은 되지만 거부) → 같은 requestId 재전송(3,
+     * 새 orderId 없이 기존값 반환) → 매도 accept(4)까지 섞은 시퀀스를 한 엔진에 넣고, 발급된
+     * orderId를 발생 순서대로 모아 돌려준다. 호출마다 엔진을 새로 만들어 fresh 상태에서 돈다.
+     */
+    private List<Long> runDeterminismSequence() throws InterruptedException {
+        prepare(4);
+        engine.seed(1L, new BigDecimal("1000000"), new BigDecimal("0.40"), Map.of(STOCK, 100));
+        engine.start();
+
+        engine.publishBuy(1L, STOCK, new BigDecimal("10000"), 10, "r1"); // orderId=1, accept
+        engine.publishBuy(1L, STOCK, new BigDecimal("999999999"), 10, "r2"); // orderId=2, INSUFFICIENT(거부여도 발급은 됨)
+        engine.publishBuy(1L, STOCK, new BigDecimal("10000"), 10, "r1"); // 재전송 — 새 orderId 없이 1 반환
+        engine.publishSell(1L, STOCK, new BigDecimal("10000"), 5, "r3"); // orderId=3, accept
+        awaitResults();
+
+        List<Long> orderIds = events.stream().map(Recorded::orderId).toList();
+        engine.shutdown();
+        events.clear();
+        forwardedOrders.clear();
+        return orderIds;
     }
 
     // ---------- 매칭으로 발신 (②-b) ----------
@@ -502,7 +544,7 @@ class AccountEngineTest {
         int total = perThread * 2;
         latch = new CountDownLatch(total);
         engine = new AccountEngine(4096, new BlockingWaitStrategy(), ProducerType.MULTI,
-            new AtomicLong(0)::incrementAndGet,
+            NODE_ID,
             (orderId, accountId, stockCode, side, price, quantity) ->
                 forwardedOrders.add(new ForwardedOrder(orderId, accountId, stockCode, side, price, quantity)),
             new Recorder(events, latch));

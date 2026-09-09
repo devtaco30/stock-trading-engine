@@ -10,7 +10,6 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicLong;
 
 import org.agrona.concurrent.UnsafeBuffer;
 import org.junit.jupiter.api.Test;
@@ -48,7 +47,7 @@ class AeronAccountEndToEndTest {
 
         List<Recorded> events = new CopyOnWriteArrayList<>();
         CountDownLatch latch = new CountDownLatch(1);
-        AccountEngine engine = new AccountEngine(BUFFER_SIZE, new AtomicLong(0)::incrementAndGet, (orderId, accountId, stockCode, side, price, quantity) -> {}, new Recorder(events, latch));
+        AccountEngine engine = new AccountEngine(BUFFER_SIZE, 0L, (orderId, accountId, stockCode, side, price, quantity) -> {}, new Recorder(events, latch));
         engine.seed(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
         engine.start();
 
@@ -87,7 +86,7 @@ class AeronAccountEndToEndTest {
 
         List<Recorded> events = new CopyOnWriteArrayList<>();
         CountDownLatch latch = new CountDownLatch(2);
-        AccountEngine engine = new AccountEngine(BUFFER_SIZE, new AtomicLong(0)::incrementAndGet, (orderId, accountId, stockCode, side, price, quantity) -> {}, new Recorder(events, latch));
+        AccountEngine engine = new AccountEngine(BUFFER_SIZE, 0L, (orderId, accountId, stockCode, side, price, quantity) -> {}, new Recorder(events, latch));
         engine.seed(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
         engine.start();
 

@@ -10,7 +10,6 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicLong;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
@@ -44,7 +43,7 @@ class AccountSettlementConsumerTest {
     void 정산이벤트_반영하고_ack확인() throws InterruptedException {
         List<Recorded> events = new CopyOnWriteArrayList<>();
         CountDownLatch latch = new CountDownLatch(3); // 매수 접수(1) + 매수 체결(1, 미수금 60000 생김) + 정산 반영(1)
-        engine = new AccountEngine(BUFFER_SIZE, new AtomicLong(0)::incrementAndGet, (orderId, accountId, stockCode, side, price, quantity) -> {}, new Recorder(events, latch));
+        engine = new AccountEngine(BUFFER_SIZE, 0L, (orderId, accountId, stockCode, side, price, quantity) -> {}, new Recorder(events, latch));
         engine.seed(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
         engine.start();
         engine.publishBuy(1L, "005930", new BigDecimal("10000"), 10, "r1"); // orderId=1

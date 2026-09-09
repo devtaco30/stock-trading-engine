@@ -4,7 +4,6 @@ import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ThreadFactory;
-import java.util.function.LongSupplier;
 
 import com.lmax.disruptor.BlockingWaitStrategy;
 import com.lmax.disruptor.RingBuffer;
@@ -38,15 +37,15 @@ public class AccountEngine {
     private RingBuffer<AccountEvent> ringBuffer;
 
     /**
-     * @param orderIdSupplier 매수·매도 첫 접수(requestId 첫 등장)마다 호출해 orderId를 발급하는 시드(C5-2a).
-     *                        실제 배선은 Snowflake({@code SnowflakeIdGenerator::nextId}), 테스트는 결정론적
-     *                        시퀀스(예: {@code AtomicLong::incrementAndGet})를 넣는다.
+     * @param nodeId orderId 발급기(2b-0, {@link AccountOrderIdGenerator})의 노드 구분자. 카운터는
+     *               엔진 안(발급기 자신)에 있다 — 벽시계가 아니라 (nodeId, 카운터)만으로 orderId가
+     *               정해져, 같은 nodeId로 같은 입력을 리플레이하면 항상 같은 orderId가 나온다.
      * @param matchingOrderSender accept한 매수·매도를 매칭으로 넘기는 발신 포트(②-b). 실제 배선은
      *                             Aeron 발신(예: {@code AeronMatchingOrderSender}), 매칭 연동이 필요 없는
      *                             테스트는 no-op을 넣는다.
      */
     public AccountEngine(int bufferSize, WaitStrategy waitStrategy, ProducerType producerType,
-                         LongSupplier orderIdSupplier, MatchingOrderSender matchingOrderSender, AccountResultListener listener) {
+                         long nodeId, MatchingOrderSender matchingOrderSender, AccountResultListener listener) {
         ThreadFactory threadFactory = DaemonThreadFactory.INSTANCE;
         this.disruptor = new Disruptor<>(
             AccountEvent::new,
@@ -57,18 +56,18 @@ public class AccountEngine {
         );
         // 예상 못한 예외는 fail-fast(handleEventsWith 배선 전에 설정해야 적용됨).
         this.disruptor.setDefaultExceptionHandler(new AccountExceptionHandler());
-        this.disruptor.handleEventsWith(new AccountEventHandler(accounts, orderIdSupplier, matchingOrderSender, listener));
+        this.disruptor.handleEventsWith(new AccountEventHandler(accounts, new AccountOrderIdGenerator(nodeId), matchingOrderSender, listener));
     }
 
     /** 발행자가 하나뿐인 경우({@link ProducerType#SINGLE})로 생성한다. */
-    public AccountEngine(int bufferSize, WaitStrategy waitStrategy, LongSupplier orderIdSupplier,
+    public AccountEngine(int bufferSize, WaitStrategy waitStrategy, long nodeId,
                          MatchingOrderSender matchingOrderSender, AccountResultListener listener) {
-        this(bufferSize, waitStrategy, ProducerType.SINGLE, orderIdSupplier, matchingOrderSender, listener);
+        this(bufferSize, waitStrategy, ProducerType.SINGLE, nodeId, matchingOrderSender, listener);
     }
 
     /** 발행자 하나 + 기본 대기 전략({@link BlockingWaitStrategy})으로 생성한다. */
-    public AccountEngine(int bufferSize, LongSupplier orderIdSupplier, MatchingOrderSender matchingOrderSender, AccountResultListener listener) {
-        this(bufferSize, new BlockingWaitStrategy(), ProducerType.SINGLE, orderIdSupplier, matchingOrderSender, listener);
+    public AccountEngine(int bufferSize, long nodeId, MatchingOrderSender matchingOrderSender, AccountResultListener listener) {
+        this(bufferSize, new BlockingWaitStrategy(), ProducerType.SINGLE, nodeId, matchingOrderSender, listener);
     }
 
     /**

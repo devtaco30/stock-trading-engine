@@ -2,7 +2,6 @@ package com.flab.stocktradingengine.account.disruptor;
 
 import java.math.BigDecimal;
 import java.util.Map;
-import java.util.function.LongSupplier;
 
 import com.lmax.disruptor.EventHandler;
 
@@ -16,11 +15,12 @@ import com.flab.stocktradingengine.trading.entity.OrderSide;
  * 검증·예약 규칙은 {@link AccountState} 가 책임하고, 이 핸들러는 이벤트를 계좌에 넘기고 결과를
  * {@link AccountResultListener} 로 내보내는 얇은 껍데기다.</p>
  *
- * <h3>orderId 발급 (C5-2a)</h3>
+ * <h3>orderId 발급 (C5-2a, 2b-0)</h3>
  * <p>v2 핫패스엔 DB가 없어 orderId(주문 신원) 발급 위치를 계좌 워커(single-writer)로 뒀다.
- * requestId가 처음 등장하면 {@link #orderIdSupplier}로 orderId를 발급해 {@link AccountState}에
- * 기억시키고, 재전송이면 기억해둔 orderId를 그대로 돌려준다 — accept·reject 결과와 무관하게 발급
- * 자체는 첫 등장에서 한 번뿐이다.</p>
+ * requestId가 처음 등장하면 {@link #orderIdGenerator}(결정론적, 2b-0)로 orderId를 발급해
+ * {@link AccountState}에 기억시키고, 재전송이면 기억해둔 orderId를 그대로 돌려준다 — accept·reject
+ * 결과와 무관하게 발급 자체는 첫 등장에서 한 번뿐이다(리플레이 때도 카운터가 같은 횟수만 증가해
+ * 같은 orderId가 나오는 이유).</p>
  *
  * <h3>매칭으로 발신 (②-b)</h3>
  * <p>매수·매도가 accept됐을 때만(onAccepted·onSellAccepted 뒤) {@link #matchingOrderSender}로
@@ -28,18 +28,18 @@ import com.flab.stocktradingengine.trading.entity.OrderSide;
  */
 public class AccountEventHandler implements EventHandler<AccountEvent> {
 
-    /** orderId가 발급되지 못했을 때(requestId 빈값·null, 모르는 계좌) 리스너에 싣는 값 — Snowflake는 0을 내지 않는다. */
+    /** orderId가 발급되지 못했을 때(requestId 빈값·null, 모르는 계좌) 리스너에 싣는 값 — 발급기는 0을 내지 않는다. */
     private static final long NO_ORDER_ID = 0L;
 
     private final Map<Long, AccountState> accounts;
-    private final LongSupplier orderIdSupplier;
+    private final AccountOrderIdGenerator orderIdGenerator;
     private final MatchingOrderSender matchingOrderSender;
     private final AccountResultListener listener;
 
-    public AccountEventHandler(Map<Long, AccountState> accounts, LongSupplier orderIdSupplier,
+    public AccountEventHandler(Map<Long, AccountState> accounts, AccountOrderIdGenerator orderIdGenerator,
                                MatchingOrderSender matchingOrderSender, AccountResultListener listener) {
         this.accounts = accounts;
-        this.orderIdSupplier = orderIdSupplier;
+        this.orderIdGenerator = orderIdGenerator;
         this.matchingOrderSender = matchingOrderSender;
         this.listener = listener;
     }
@@ -82,7 +82,7 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
             listener.onDuplicateRequest(accountId, existingOrderId, requestId);
             return;
         }
-        long orderId = orderIdSupplier.getAsLong();
+        long orderId = orderIdGenerator.next();
         state.rememberRequest(requestId, orderId);
 
         BigDecimal price = event.getPrice();
@@ -119,7 +119,7 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
             listener.onDuplicateRequest(accountId, existingOrderId, requestId);
             return;
         }
-        long orderId = orderIdSupplier.getAsLong();
+        long orderId = orderIdGenerator.next();
         state.rememberRequest(requestId, orderId);
 
         // 예약(트리거)엔 price를 안 쓰지만, 매칭 전달용 필드라 여기서도 매수와 대칭으로 검증한다(②-a).

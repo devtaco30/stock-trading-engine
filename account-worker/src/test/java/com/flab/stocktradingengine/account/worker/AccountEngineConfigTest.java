@@ -26,7 +26,7 @@ class AccountEngineConfigTest {
     private static final String STOCK = "005930";
 
     private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
-        .withUserConfiguration(AccountEngineConfig.class, SnowflakeConfig.class)
+        .withUserConfiguration(AccountEngineConfig.class)
         .withPropertyValues(
             "account-worker.seed-accounts[0].account-id=1",
             "account-worker.seed-accounts[0].balance=1000000",
@@ -49,7 +49,7 @@ class AccountEngineConfigTest {
 
                 assertThat(events).hasSize(1);
                 assertThat(events.get(0).accepted()).isTrue();
-                assertThat(events.get(0).orderId()).as("Snowflake가 발급한 orderId는 0이 아니어야 한다").isNotZero();
+                assertThat(events.get(0).orderId()).as("결정론적 발급기(2b-0)가 낸 orderId는 0이 아니어야 한다").isNotZero();
 
                 assertShutsDownCleanly(context);
             });
