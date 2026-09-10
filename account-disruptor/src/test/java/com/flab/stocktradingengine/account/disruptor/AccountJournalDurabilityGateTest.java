@@ -1,10 +1,12 @@
 package com.flab.stocktradingengine.account.disruptor;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
 
 import com.lmax.disruptor.BlockingWaitStrategy;
 import com.lmax.disruptor.dsl.ProducerType;
@@ -65,6 +67,40 @@ class AccountJournalDurabilityGateTest {
         List<AccountJournalEntry> entries = engine.journal().entries();
         assertEquals(1, entries.size(), "blockUntilJournaled 뒤에는 그 체결이 저널에 기록돼 있어야 한다");
         assertEquals(9001L, entries.get(0).tradeId());
+    }
+
+    @Test
+    @DisplayName("저널이 제때 기록 못 하면 blockUntilJournaled는 JournalUnavailableException을 던진다")
+    void 타임아웃시_전용예외를_던진다() {
+        CountDownLatch release = new CountDownLatch(1);
+        AccountJournal blockingJournal = new AccountJournal() {
+            @Override
+            public void append(AccountJournalEntry entry) {
+                try {
+                    release.await(); // 풀어줄 때까지 기록을 막는다 → 시퀀스가 안 올라감
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+
+            @Override
+            public List<AccountJournalEntry> entries() {
+                return List.of();
+            }
+        };
+        engine = new AccountEngine(BUFFER_SIZE, new BlockingWaitStrategy(), ProducerType.SINGLE, 0L,
+            NO_OP_SENDER, NoOpAccountResultListener.INSTANCE, blockingJournal);
+        // 계좌를 시드하지 않는다 — release 후 처리될 때 예약검증(fail-fast)이 아니라 ACCOUNT_NOT_FOUND
+        // (정상 거절)로 빠져 teardown이 깨끗하게 끝나게 한다.
+        engine.start();
+
+        long sequence = engine.publishBuyFill(9001L, 1L, 999L, STOCK, new BigDecimal("10000"), 10);
+        try {
+            // 저널이 막혀 시퀀스가 안 올라가므로 50ms 안에 도달 못 해 예외를 던져야 한다(전용 타입).
+            assertThrows(JournalUnavailableException.class, () -> engine.blockUntilJournaled(sequence, 50L));
+        } finally {
+            release.countDown(); // 저널 스레드를 풀어 shutdown(teardown)이 멈추지 않게 한다
+        }
     }
 
     /** append 를 일부러 늦추는 저널 — 대기하지 않으면 아직 비어 있음이 드러난다. */

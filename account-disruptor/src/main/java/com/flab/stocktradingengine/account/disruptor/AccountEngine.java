@@ -261,11 +261,16 @@ public class AccountEngine {
      * 안에 도달하지 못하면 예외를 던진다 — 컨슈머는 ack하지 못하고, Kafka가 나중에 재전송한다(멱등이 중복 흡수).</p>
      */
     public void blockUntilJournaled(long sequence) {
-        long deadline = System.nanoTime() + JOURNAL_WAIT_TIMEOUT_MILLIS * 1_000_000L;
+        blockUntilJournaled(sequence, JOURNAL_WAIT_TIMEOUT_MILLIS);
+    }
+
+    /** 타임아웃을 주입받는 오버로드 — 테스트에서 짧게 줘 5초를 안 기다리게 한다(패키지 가시성). */
+    void blockUntilJournaled(long sequence, long timeoutMillis) {
+        long deadline = System.nanoTime() + timeoutMillis * 1_000_000L;
         while (disruptor.getSequenceValueFor(journalHandler) < sequence) {
             if (System.nanoTime() > deadline) {
-                throw new IllegalStateException(
-                    "저널이 " + JOURNAL_WAIT_TIMEOUT_MILLIS + "ms 안에 시퀀스 " + sequence + "를 기록하지 못했습니다");
+                throw new JournalUnavailableException(
+                    "저널이 " + timeoutMillis + "ms 안에 시퀀스 " + sequence + "를 기록하지 못했습니다");
             }
             Thread.onSpinWait();
         }
