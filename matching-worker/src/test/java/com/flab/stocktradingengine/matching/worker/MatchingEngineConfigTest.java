@@ -12,7 +12,10 @@ import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 
+import com.flab.stocktradingengine.codec.JournaledOrder;
 import com.flab.stocktradingengine.matching.disruptor.InMemoryJournal;
 import com.flab.stocktradingengine.matching.disruptor.Journal;
 import com.flab.stocktradingengine.matching.disruptor.MatchListener;
@@ -38,7 +41,7 @@ class MatchingEngineConfigTest {
         };
 
         new ApplicationContextRunner()
-            .withUserConfiguration(MatchingEngineConfig.class)
+            .withUserConfiguration(MatchingEngineConfig.class, EmptyRecoveredEntriesConfig.class)
             .withBean(MatchListener.class, () -> recorder)
             // 이 테스트는 real Aeron Archive 배선 없이 MatchingEngineConfig만 가볍게 띄운다(2c-1) —
             // 저널은 MatchingJournalArchiveConfig가 없어도 되는 기본(인메모리) 구현으로 준다.
@@ -59,5 +62,18 @@ class MatchingEngineConfigTest {
 
     private void assertShutsDownCleanly(ConfigurableApplicationContext context) {
         context.close(); // SmartLifecycle.stop() → engine.shutdown() 이 예외 없이 불려야 한다
+    }
+
+    /**
+     * 이 테스트는 real Aeron Archive 없이 MatchingEngineConfig만 가볍게 띄운다 — 2c-2가 추가한
+     * {@code matchingJournalRecoveredEntries} 빈은 Spring이 generic List<T> 타입을 실제로 매칭하도록
+     * {@code @Bean} 메서드로 둬야 한다({@code withBean(Class, Supplier)}는 타입 소거로 못 맞춘다).
+     */
+    @Configuration
+    static class EmptyRecoveredEntriesConfig {
+        @Bean
+        List<JournaledOrder> matchingJournalRecoveredEntries() {
+            return List.of();
+        }
     }
 }

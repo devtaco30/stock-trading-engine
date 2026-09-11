@@ -2,6 +2,8 @@ package com.flab.stocktradingengine.matching.disruptor;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.ThreadFactory;
 
 import com.lmax.disruptor.BlockingWaitStrategy;
@@ -11,7 +13,9 @@ import com.lmax.disruptor.dsl.Disruptor;
 import com.lmax.disruptor.dsl.ProducerType;
 import com.lmax.disruptor.util.DaemonThreadFactory;
 
+import com.flab.stocktradingengine.codec.JournaledOrder;
 import com.flab.stocktradingengine.trading.entity.OrderSide;
+import com.flab.stocktradingengine.trading.matching.OrderBook;
 
 /**
  * Disruptor 매칭 코어의 진입점.
@@ -32,8 +36,14 @@ import com.flab.stocktradingengine.trading.entity.OrderSide;
  */
 public class MatchingEngine {
 
+    private static final MatchListener NO_OP_LISTENER = (stockCode, fill) -> {};
+
     private final Disruptor<OrderEvent> disruptor;
     private final Journal journal;
+    // 종목코드 → 호가창. recover(2c-2)가 새 MatchingEventHandler 인스턴스로 저널을 재적용할 때도
+    // 라이브 배선과 같은 맵을 써야 그 위에서 라이브 매칭이 이어진다(account-disruptor AccountEngine
+    // 의 accounts 맵과 같은 이유) — 그래서 핸들러가 자체 생성하지 않고 엔진이 필드로 들고 넘긴다.
+    private final Map<String, OrderBook> books = new HashMap<>();
     private RingBuffer<OrderEvent> ringBuffer;
 
     public MatchingEngine(int bufferSize, WaitStrategy waitStrategy, MatchListener listener, Journal journal) {
@@ -51,7 +61,7 @@ public class MatchingEngine {
         this.disruptor.setDefaultExceptionHandler(new MatchingExceptionHandler());
         // 저널러가 먼저 기록 → 매처가 그 뒤에 매칭 (SequenceBarrier 로 게이팅)
         this.disruptor.handleEventsWith(new JournalEventHandler(journal))
-            .then(new MatchingEventHandler(listener));
+            .then(new MatchingEventHandler(books, listener));
     }
 
     /** 기본 저널({@link InMemoryJournal})로 생성한다. */
@@ -77,6 +87,47 @@ public class MatchingEngine {
     /** 저널을 반환한다. 테스트·복구 검증용. */
     public Journal journal() {
         return journal;
+    }
+
+    /** 종목의 호가창에 해당 주문이 미체결로 남아있는지 확인한다. 테스트·복구 검증용 — {@link #journal()}과 같은 자리. */
+    public boolean containsOrder(String stockCode, long orderId) {
+        OrderBook book = books.get(stockCode);
+        return book != null && book.containsOrder(orderId);
+    }
+
+    /**
+     * 저널 엔트리를 순서대로 재적용해 호가창을 되살린다(2c-2). 반드시 {@link #start} 전에(설정
+     * 스레드에서만) 호출한다 — 기동 후엔 소비자 스레드와 경쟁한다.
+     *
+     * <p>실제 매칭 로직({@link MatchingEventHandler})을 그대로 재사용해 호가창을 똑같이
+     * 재구성하되, 체결 통지는 no-op으로 막는다 — 재시작 전 체결은 이미 계좌 축(Kafka)이 durable
+     * 하게 받았으므로 다시 내보내면 중복 체결 발행이 된다. 링버퍼·저널도 거치지 않는다(이미
+     * 기록된 입력을 다시 저널에 넣거나 링에 발행할 이유가 없다).</p>
+     */
+    public void recover(Iterable<JournaledOrder> entries) {
+        requireNotStarted();
+        MatchingEventHandler recoveryHandler = new MatchingEventHandler(books, NO_OP_LISTENER);
+        OrderEvent scratch = new OrderEvent();
+        for (JournaledOrder order : entries) {
+            applyToScratch(scratch, order);
+            recoveryHandler.onEvent(scratch, 0L, false);
+        }
+    }
+
+    /** 저널 엔트리 하나를 스크래치 슬롯에 채운다 — {@code OrderEvent}의 타입별 setter와 1:1 대응. */
+    private void applyToScratch(OrderEvent event, JournaledOrder order) {
+        switch (order.type()) {
+            case PLACE -> event.setPlace(order.orderId(), order.accountId(), order.stockCode(),
+                order.side(), order.price(), order.quantity(), order.orderAt());
+            case CANCEL -> event.setCancel(order.orderId(), order.stockCode());
+        }
+    }
+
+    /** {@link #recover}가 {@link #start} 뒤에 불려 소비자 스레드와 경쟁하는 걸 막는다. */
+    private void requireNotStarted() {
+        if (ringBuffer != null) {
+            throw new IllegalStateException("start() 이후에는 호출할 수 없습니다 — 소비자 스레드와 경쟁합니다");
+        }
     }
 
     /**

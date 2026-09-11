@@ -2,7 +2,6 @@ package com.flab.stocktradingengine.matching.disruptor;
 
 import java.lang.System.Logger;
 import java.lang.System.Logger.Level;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
@@ -32,10 +31,14 @@ public class MatchingEventHandler implements EventHandler<OrderEvent> {
     private static final Logger log = System.getLogger(MatchingEventHandler.class.getName());
 
     // 종목코드 → 호가창. 단일 스레드만 접근하므로 일반 HashMap 으로 충분하다.
-    private final Map<String, OrderBook> books = new HashMap<>();
+    // MatchingEngine 이 필드로 들고 있다가 넘겨준다 — recover(2c-2)가 새 핸들러 인스턴스로
+    // 저널을 재적용할 때도 같은 맵을 공유해야 라이브 매칭이 그 위에서 이어진다
+    // (account-disruptor AccountEventHandler 의 accounts 맵과 같은 이유).
+    private final Map<String, OrderBook> books;
     private final MatchListener listener;
 
-    public MatchingEventHandler(MatchListener listener) {
+    public MatchingEventHandler(Map<String, OrderBook> books, MatchListener listener) {
+        this.books = books;
         this.listener = listener;
     }
 
