@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -69,14 +70,21 @@ class AccountEngineConfigTest {
 
     /**
      * 이 테스트는 real Aeron Archive 없이 AccountEngineConfig만 가볍게 띄운다 — 2b-2b가 추가한
-     * {@code accountJournalRecoveredEntries} 빈은 Spring이 generic List<T> 타입을 실제로 매칭하도록
-     * {@code @Bean} 메서드로 둬야 한다({@code withBean(Class, Supplier)}는 타입 소거로 못 맞춘다).
+     * {@code accountJournalRecoveredEntries} 빈과 2d-2b가 추가한 {@code accountLoadedSnapshot}
+     * 빈은 Spring이 generic List<T>·Optional<T> 타입을 실제로 매칭하도록 {@code @Bean} 메서드로
+     * 둬야 한다({@code withBean(Class, Supplier)}는 타입 소거로 못 맞춘다). 스냅샷은 없다고 두면
+     * (Optional.empty) {@code AccountSnapshotConfig}(AeronArchive 필요) 없이도 뜬다.
      */
     @Configuration
     static class EmptyRecoveredEntriesConfig {
         @Bean
         List<AccountJournalEntry> accountJournalRecoveredEntries() {
             return List.of();
+        }
+
+        @Bean
+        Optional<StoredAccountSnapshot> accountLoadedSnapshot() {
+            return Optional.empty();
         }
     }
 
