@@ -87,6 +87,11 @@ class AccountJournalDurabilityGateTest {
             public List<AccountJournalEntry> entries() {
                 return List.of();
             }
+
+            @Override
+            public long position() {
+                return 0L;
+            }
         };
         engine = new AccountEngine(BUFFER_SIZE, new BlockingWaitStrategy(), ProducerType.SINGLE, 0L,
             NO_OP_SENDER, NoOpAccountResultListener.INSTANCE, blockingJournal);
@@ -124,6 +129,11 @@ class AccountJournalDurabilityGateTest {
         @Override
         public List<AccountJournalEntry> entries() {
             return delegate.entries();
+        }
+
+        @Override
+        public long position() {
+            return delegate.position();
         }
     }
 }

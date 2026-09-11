@@ -19,4 +19,12 @@ public interface AccountJournal {
 
     /** 기록된 이벤트를 처리 순서대로 반환한다(복사본). */
     List<AccountJournalEntry> entries();
+
+    /**
+     * 지금까지 기록한 지점을 나타내는 저널 위치(2d-2). 엔진 스냅샷이 "이 위치까지는 스냅샷에
+     * 담겼다"를 같이 저장해, 복구 때 저널을 처음부터가 아니라 이 위치부터만 리플레이하게 한다.
+     * matching {@code Journal.position()}과 같은 이유. durable 구현(Aeron Archive)에서만 의미가
+     * 있다 — 인메모리 구현은 재생 대상 자체가 없어 0을 둔다.
+     */
+    long position();
 }

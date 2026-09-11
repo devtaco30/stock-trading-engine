@@ -125,6 +125,31 @@ public class AccountEngine {
     }
 
     /**
+     * 현재 계좌들·orderId 발급기 카운터·저널 위치를 통째로 찍는다(2d-2, ADR-019 "자체 스냅샷").
+     *
+     * <p>graceful shutdown(소비자 스레드 quiescent) 시점에만 안전하다 — matching
+     * {@code MatchingEngine#snapshot}과 같은 이유(단일 스레드 전제가 깨진 채로 읽게 된다).</p>
+     */
+    public AccountSnapshot snapshot() {
+        Map<Long, AccountStateSnapshot> accountsById = new HashMap<>();
+        accounts.forEach((accountId, state) -> accountsById.put(accountId, state.toSnapshot()));
+        return new AccountSnapshot(accountsById, orderIdGenerator.counter(), journal.position());
+    }
+
+    /**
+     * 스냅샷으로 계좌들·발급기 카운터를 되살린다(2d-2). 반드시 {@link #start} 전에 호출한다 —
+     * seed 이후, recover 이전에 부른다(seed가 만든 계좌를 스냅샷 값으로 그대로 바꿔 끼운다 — 계좌는
+     * matching 호가창과 달리 동적으로 새로 생기지 않고 seed로만 생기므로, 스냅샷의 계좌 집합은
+     * 항상 seed의 계좌 집합과 같다). 스냅샷이 있으면 marginRate 등도 스냅샷 값이 권위다 — 기존
+     * 예약들이 이미 그 값으로 계산돼 있기 때문이다.
+     */
+    public void restore(AccountSnapshot snapshot) {
+        requireNotStarted();
+        snapshot.accountsById().forEach((accountId, stateSnapshot) -> accounts.put(accountId, new AccountState(stateSnapshot)));
+        orderIdGenerator.restoreCounter(snapshot.generatorCounter());
+    }
+
+    /**
      * 저널 엔트리를 순서대로 재적용해 계좌 상태·dedup·orderId 발급기를 되살린다(2b-2). 반드시
      * {@link #start} 전에(설정 스레드에서만) 호출한다 — {@link #seed}와 같은 이유로, 기동 후엔
      * 소비자 스레드와 경쟁한다. 보통 seed 다음, start 이전에 부른다(seed로 초기 상태를 깔고 그

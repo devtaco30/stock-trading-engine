@@ -38,4 +38,18 @@ public final class AccountOrderIdGenerator {
         counter++;
         return (nodeId << COUNTER_BITS) | (counter & COUNTER_MASK);
     }
+
+    /** 현재 카운터. 스냅샷(2d-2)이 이 값을 담아 복구 때 {@link #restoreCounter}로 재현한다. */
+    public long counter() {
+        return counter;
+    }
+
+    /**
+     * 스냅샷(2d-2)에서 카운터를 복원한다. {@link #next}가 이 값 다음부터 이어 발급하게 한다 —
+     * 저널 리플레이로 카운터를 진행시키는 {@link AccountEngine#recover}와 같은 이유로, 스냅샷
+     * 복원도 라이브가 이어받을 지점을 정확히 맞춰야 발급 충돌이 없다.
+     */
+    public void restoreCounter(long counter) {
+        this.counter = counter;
+    }
 }

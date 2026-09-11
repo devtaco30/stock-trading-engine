@@ -124,5 +124,10 @@ class AccountConsumerDurabilityGateTest {
         public List<AccountJournalEntry> entries() {
             return delegate.entries();
         }
+
+        @Override
+        public long position() {
+            return delegate.position();
+        }
     }
 }

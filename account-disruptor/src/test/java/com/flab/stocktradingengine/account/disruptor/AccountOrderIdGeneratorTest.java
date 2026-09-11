@@ -60,4 +60,26 @@ class AccountOrderIdGeneratorTest {
         AccountOrderIdGenerator atMax = new AccountOrderIdGenerator(AccountOrderIdGenerator.MAX_NODE_ID);
         assertEquals(atMax.next(), overMax.next()); // 범위 초과 → MAX_NODE_ID로 클램프돼 같은 값
     }
+
+    @Test
+    @DisplayName("counter()는 지금까지 발급한 횟수를 돌려준다")
+    void counter는_발급_횟수를_돌려준다() {
+        AccountOrderIdGenerator generator = new AccountOrderIdGenerator(0L);
+        assertEquals(0L, generator.counter());
+
+        generator.next();
+        generator.next();
+
+        assertEquals(2L, generator.counter());
+    }
+
+    @Test
+    @DisplayName("restoreCounter로 복원하면 그다음 값부터 이어 발급한다(스냅샷 복구, 2d-2)")
+    void restoreCounter_뒤에는_그다음_값부터_이어_발급() {
+        AccountOrderIdGenerator generator = new AccountOrderIdGenerator(0L);
+        generator.restoreCounter(5L);
+
+        assertEquals(5L, generator.counter());
+        assertEquals(6L, generator.next());
+    }
 }

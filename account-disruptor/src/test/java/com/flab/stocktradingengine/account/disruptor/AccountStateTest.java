@@ -406,4 +406,31 @@ class AccountStateTest {
         // 증거금 + 미수금 = 체결액 전액(101 × 10 = 1010)이어야 한다.
         assertEquals(0, totalMarginPaid.add(state.unpaid()).compareTo(new BigDecimal("1010")));
     }
+
+    // ---------- 스냅샷 복원 (2d-2a) ----------
+
+    @Test
+    @DisplayName("toSnapshot으로 찍고 스냅샷 생성자로 복원하면 잔고·예약·보유·미수금·멱등 캐시·requestId맵이 원본과 같다")
+    void 스냅샷_왕복하면_모든_필드가_원본과_같다() {
+        AccountState original = new AccountState(1L, new BigDecimal("1000000"), new BigDecimal("0.40"), Map.of(STOCK, 10));
+        original.tryReserve(1L, new BigDecimal("10000"), 10); // 매수 예약(부분체결로 잔량 남김)
+        original.applyBuyFill(9001L, 1L, STOCK, new BigDecimal("10000"), 4); // 미수금 생성 + 예약 잔량 6
+        original.trySellReserve(2L, STOCK, 5); // 매도 예약(부분체결로 잔량 남김)
+        original.applySellFill(9002L, 2L, STOCK, 2); // 매도 예약 잔량 3
+        original.rememberRequest("r1", 1L);
+
+        AccountStateSnapshot snapshot = original.toSnapshot();
+        AccountState restored = new AccountState(snapshot);
+
+        assertEquals(0, original.balance().compareTo(restored.balance()));
+        assertEquals(0, original.unpaid().compareTo(restored.unpaid()));
+        assertEquals(0, original.reservedMargin().compareTo(restored.reservedMargin()));
+        assertEquals(original.holding(STOCK), restored.holding(STOCK));
+        assertEquals(original.reservedSellQuantity(STOCK), restored.reservedSellQuantity(STOCK));
+        assertEquals(original.orderIdFor("r1"), restored.orderIdFor("r1"));
+
+        // 멱등 캐시 복원 확인: 같은 tradeId·settlementRef를 다시 반영하면 무시(false)돼야 한다.
+        BuyFillResult replayedFill = restored.applyBuyFill(9001L, 1L, STOCK, new BigDecimal("10000"), 4);
+        assertFalse(replayedFill.applied(), "복원된 상태에도 이미 반영한 tradeId가 멱등 캐시로 남아있어야 한다");
+    }
 }

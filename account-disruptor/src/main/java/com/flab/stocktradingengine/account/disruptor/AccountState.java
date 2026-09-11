@@ -50,6 +50,43 @@ public final class AccountState {
     }
 
     /**
+     * 스냅샷(2d-2)에서 계좌 상태를 통째로 복원한다. {@code accountId}·{@code marginRate}가
+     * final이라 기존 인스턴스를 고쳐 쓸 수 없어, seed 생성자와 별개로 스냅샷 값 그대로 새
+     * 인스턴스를 만든다 — {@link AccountEngine#restore}가 이 생성자로 만든 인스턴스를 seed가
+     * 만든 것과 그대로 바꿔 끼운다.
+     */
+    public AccountState(AccountStateSnapshot snapshot) {
+        this.accountId = snapshot.accountId();
+        this.balance = snapshot.balance();
+        this.marginRate = snapshot.marginRate();
+        this.unpaid = snapshot.unpaid();
+        holdings.putAll(snapshot.holdings());
+        processedTradeIds.addAll(snapshot.processedTradeIds());
+        processedSettlementRefs.addAll(snapshot.processedSettlementRefs());
+        requestIdToOrderId.putAll(snapshot.requestIdToOrderId());
+        snapshot.reservations().forEach((orderId, r) ->
+            reservations.put(orderId, new Reservation(r.price(), r.remainingQuantity())));
+        snapshot.sellReservations().forEach((orderId, r) ->
+            sellReservations.put(orderId, new SellReservation(r.stockCode(), r.remainingQuantity())));
+    }
+
+    /** 현재 상태를 스냅샷으로 찍는다(2d-2). {@link #reservations}·{@link #sellReservations}는
+     *  private record라 공개 서브레코드({@link BuyReservationSnapshot}·{@link SellReservationSnapshot})로 옮겨 담는다. */
+    public AccountStateSnapshot toSnapshot() {
+        Map<Long, BuyReservationSnapshot> reservationSnapshots = new HashMap<>();
+        reservations.forEach((orderId, r) -> reservationSnapshots.put(orderId, new BuyReservationSnapshot(r.price(), r.remainingQuantity())));
+
+        Map<Long, SellReservationSnapshot> sellReservationSnapshots = new HashMap<>();
+        sellReservations.forEach((orderId, r) -> sellReservationSnapshots.put(orderId, new SellReservationSnapshot(r.stockCode(), r.remainingQuantity())));
+
+        return new AccountStateSnapshot(
+            accountId, balance, marginRate,
+            reservationSnapshots, sellReservationSnapshots,
+            Map.copyOf(holdings), Set.copyOf(processedTradeIds), Set.copyOf(processedSettlementRefs),
+            Map.copyOf(requestIdToOrderId), unpaid);
+    }
+
+    /**
      * 이 requestId에 이전에 발급한 orderId를 조회한다(C5-2a).
      *
      * <p>매수·매도 접수(handleBuy·handleSell) 맨 앞에서 호출한다 — null이면 처음 보는
