@@ -16,6 +16,7 @@ dependencies {
 	// 재선언이 필요하다(matching-disruptor의 implementation 의존은 여기로 전이되지 않는다).
 	implementation(libs.aeron.driver)
 	implementation(libs.aeron.client)
+	implementation(libs.aeron.archive) // 매칭 저널 durable 녹화(Archive, 2c-1)
 
 	implementation(libs.spring.boot.starter)
 	implementation(libs.spring.kafka)

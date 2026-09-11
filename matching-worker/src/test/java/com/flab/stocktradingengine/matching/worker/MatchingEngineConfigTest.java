@@ -13,6 +13,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.ConfigurableApplicationContext;
 
+import com.flab.stocktradingengine.matching.disruptor.InMemoryJournal;
+import com.flab.stocktradingengine.matching.disruptor.Journal;
 import com.flab.stocktradingengine.matching.disruptor.MatchListener;
 import com.flab.stocktradingengine.matching.disruptor.MatchingEngine;
 import com.flab.stocktradingengine.trading.entity.OrderSide;
@@ -38,6 +40,9 @@ class MatchingEngineConfigTest {
         new ApplicationContextRunner()
             .withUserConfiguration(MatchingEngineConfig.class)
             .withBean(MatchListener.class, () -> recorder)
+            // 이 테스트는 real Aeron Archive 배선 없이 MatchingEngineConfig만 가볍게 띄운다(2c-1) —
+            // 저널은 MatchingJournalArchiveConfig가 없어도 되는 기본(인메모리) 구현으로 준다.
+            .withBean(Journal.class, InMemoryJournal::new)
             .run(context -> {
                 MatchingEngine engine = context.getBean(MatchingEngine.class);
                 Instant now = Instant.now();
