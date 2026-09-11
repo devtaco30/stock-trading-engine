@@ -1,6 +1,7 @@
 package com.flab.stocktradingengine.matching.worker;
 
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -37,14 +38,24 @@ public class MatchingJournalArchiveConfig {
     static final int JOURNAL_STREAM_ID = 2005; // 매칭 인테이크(2002)와 구분되는 저널 전용 스트림
 
     /**
-     * 이 스트림의 이전 녹화(재시작 전 프로세스가 남긴 저널)를 전부 읽어 복구 입력을 만든다(2c-2).
+     * 이 스트림에서 복구 입력을 읽어 만든다.
      * {@link com.flab.stocktradingengine.matching.disruptor.MatchingEngine#recover}에 그대로 넘긴다
      * ({@code MatchingEngineConfig} 참고). 반드시 {@link #matchingJournalRecordingSubscriptionId}
      * 보다 먼저 만들어져야 한다(클래스 javadoc "순서" 참고) — 이 빈 자체가 그 순서를 강제한다.
+     *
+     * <p>스냅샷이 있으면(2d-1b) 스냅샷이 가리키는 recordingId·position부터만 읽는다 — 스냅샷이
+     * 이미 그 앞까지의 상태를 담고 있어 처음부터 다시 읽을 이유가 없다. 스냅샷이 없으면(2c-2,
+     * 하위호환) 이전 녹화 전부를 처음부터 읽는다.</p>
      */
     @Bean
-    public List<JournaledOrder> matchingJournalRecoveredEntries(AeronArchive aeronArchive) {
-        return new MatchingJournalReplayer(aeronArchive).readAll(JOURNAL_CHANNEL, JOURNAL_STREAM_ID);
+    public List<JournaledOrder> matchingJournalRecoveredEntries(
+            AeronArchive aeronArchive, Optional<StoredMatchingSnapshot> matchingLoadedSnapshot) {
+        MatchingJournalReplayer replayer = new MatchingJournalReplayer(aeronArchive);
+        if (matchingLoadedSnapshot.isPresent()) {
+            StoredMatchingSnapshot stored = matchingLoadedSnapshot.get();
+            return replayer.readFrom(JOURNAL_CHANNEL, JOURNAL_STREAM_ID, stored.recordingId(), stored.snapshot().journalPosition());
+        }
+        return replayer.readAll(JOURNAL_CHANNEL, JOURNAL_STREAM_ID);
     }
 
     /**

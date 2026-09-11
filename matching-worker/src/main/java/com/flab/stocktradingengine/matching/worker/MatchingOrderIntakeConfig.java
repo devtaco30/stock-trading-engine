@@ -52,16 +52,25 @@ public class MatchingOrderIntakeConfig {
     private static final String REPLICATION_CHANNEL = "aeron:udp?endpoint=localhost:0";
 
     /**
-     * @param archiveDirConfig {@code matching.worker.archive-dir} — 저널 녹화(2c-1)를 담는
-     *                         Archive 카탈로그 디렉터리. 비워두면(기본, 테스트) 매 기동마다 새
-     *                         임시 디렉터리를 쓴다(격리). 값을 주면(운영, K8s PV 마운트 지점처럼
-     *                         재시작 사이 살아남는 고정 경로) 그 경로를 그대로 쓴다.
+     * @param archiveDirConfig {@code matching.worker.archive-dir} — 저널 녹화(2c-1)·스냅샷
+     *                         파일(2d-1b, {@link MatchingSnapshotConfig})을 같이 담는 durable
+     *                         디렉터리. 비워두면(기본, 테스트) 매 기동마다 새 임시 디렉터리를
+     *                         쓴다(격리). 값을 주면(운영, K8s PV 마운트 지점처럼 재시작 사이
+     *                         살아남는 고정 경로) 그 경로를 그대로 쓴다.
      */
+    @Bean
+    public File matchingArchiveDir(@Value("${matching.worker.archive-dir:}") String archiveDirConfig) throws IOException {
+        if (archiveDirConfig == null || archiveDirConfig.isBlank()) {
+            return Files.createTempDirectory("matching-worker-archive-").toFile();
+        }
+        File archiveDir = new File(archiveDirConfig);
+        Files.createDirectories(archiveDir.toPath());
+        return archiveDir;
+    }
+
     @Bean(destroyMethod = "close")
-    public ArchivingMediaDriver archivingMediaDriver(
-            @Value("${matching.worker.archive-dir:}") String archiveDirConfig) throws IOException {
+    public ArchivingMediaDriver archivingMediaDriver(File matchingArchiveDir) {
         String aeronDirectoryName = CommonContext.generateRandomDirName();
-        File archiveDir = resolveArchiveDir(archiveDirConfig);
 
         return ArchivingMediaDriver.launch(
             new MediaDriver.Context().aeronDirectoryName(aeronDirectoryName),
@@ -69,17 +78,8 @@ public class MatchingOrderIntakeConfig {
                 .controlChannel(CONTROL_REQUEST_CHANNEL)
                 .replicationChannel(REPLICATION_CHANNEL)
                 .deleteArchiveOnStart(false) // 저널은 재시작 넘어 보존해야 한다(2c-1)
-                .archiveDir(archiveDir)
+                .archiveDir(matchingArchiveDir)
         );
-    }
-
-    private File resolveArchiveDir(String archiveDirConfig) throws IOException {
-        if (archiveDirConfig == null || archiveDirConfig.isBlank()) {
-            return Files.createTempDirectory("matching-worker-archive-").toFile();
-        }
-        File archiveDir = new File(archiveDirConfig);
-        Files.createDirectories(archiveDir.toPath());
-        return archiveDir;
     }
 
     @Bean(destroyMethod = "close")

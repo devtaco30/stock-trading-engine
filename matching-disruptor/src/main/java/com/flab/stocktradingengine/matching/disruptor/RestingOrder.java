@@ -11,6 +11,10 @@ import com.flab.stocktradingengine.trading.entity.OrderSide;
  *
  * <p>stockCode는 담지 않는다 — {@link MatchingSnapshot#booksByStock()}이 이미 종목코드로
  * 묶어놓은 자리에 들어가므로 중복이다.</p>
+ *
+ * <p>{@code cancelled}는 스냅샷 소스인 {@code OrderBook.restingOrders()}가 orderIndex(취소되면
+ * 즉시 제거되는 맵)에서 뽑아오는 한 실제로는 항상 false다. 그래도 {@code OrderEntry}의 전체 필드를
+ * 손실 없이 담는다는 레코드 계약을 지키려고 남겨둔다.</p>
  */
 public record RestingOrder(
     long orderId,

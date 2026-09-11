@@ -23,6 +23,12 @@ import io.aeron.logbuffer.FragmentHandler;
  * <p>이 스트림에 이전 녹화가 여러 개면(재시작을 여러 번 거쳤으면) 시작 시각(startTimestamp) 순서로
  * 전부 읽는다 — 각 녹화가 그 프로세스 생애 동안의 저널 전체이므로, 시각 순서로 이어 붙이면 전체
  * 이력이 재구성된다. 녹화가 없으면(첫 기동) 빈 리스트를 돌려준다.</p>
+ *
+ * <h3>스냅샷 위치부터만 읽기(2d-1b)</h3>
+ * <p>{@link #readFrom}은 스냅샷이 가리키는 recordingId 이전 녹화(이미 스냅샷에 담긴 상태)는 건너뛰고,
+ * 그 recordingId 자체는 스냅샷이 찍힌 position부터(처음부터가 아니라)만 읽는다. 그 뒤에 생긴 녹화(그
+ * 스냅샷 이후 재시작)는 전부 처음부터 읽는다 — 저널을 0부터 전부 재생하지 않고 스냅샷 이후 변화만
+ * 읽어 복구 시간을 줄이는 게 이 메서드가 존재하는 이유(ADR-019).</p>
  */
 class MatchingJournalReplayer {
 
@@ -48,7 +54,39 @@ class MatchingJournalReplayer {
 
         List<JournaledOrder> entries = new ArrayList<>();
         for (RecordingSummary recording : recordings) {
-            replayOne(recording, entries);
+            replayOne(recording, recording.startPosition(), entries);
+        }
+        return entries;
+    }
+
+    /**
+     * {@code fromRecordingId}보다 먼저 시작 시각 순서로 실행된 녹화는 이미 스냅샷에 담긴 것으로
+     * 보고 건너뛴다. {@code fromRecordingId}인 녹화는 {@code fromPosition}부터(처음부터가 아니라)
+     * 읽는다. 그보다 나중에 시작한 녹화는 전부 처음부터 읽는다.
+     *
+     * @throws IllegalStateException fromRecordingId가 카탈로그에 없으면 — 스냅샷 파일과 Archive
+     *                                카탈로그가 서로 어긋난 상태라 복구를 계속할 수 없다.
+     */
+    List<JournaledOrder> readFrom(String journalChannel, int journalStreamId, long fromRecordingId, long fromPosition) {
+        List<RecordingSummary> recordings = listRecordings(journalChannel, journalStreamId);
+        recordings.sort(Comparator.comparingLong(RecordingSummary::startTimestamp));
+
+        List<JournaledOrder> entries = new ArrayList<>();
+        boolean foundSnapshotRecording = false;
+        for (RecordingSummary recording : recordings) {
+            if (!foundSnapshotRecording) {
+                if (recording.recordingId() != fromRecordingId) {
+                    continue; // 스냅샷보다 먼저 끝난 녹화 — 이미 스냅샷에 담긴 상태라 건너뛴다
+                }
+                foundSnapshotRecording = true;
+                replayOne(recording, fromPosition, entries);
+                continue;
+            }
+            replayOne(recording, recording.startPosition(), entries);
+        }
+        if (!foundSnapshotRecording) {
+            throw new IllegalStateException(
+                "스냅샷이 가리키는 recordingId(" + fromRecordingId + ")를 Archive 카탈로그에서 찾지 못했습니다");
         }
         return entries;
     }
@@ -63,13 +101,13 @@ class MatchingJournalReplayer {
         return found;
     }
 
-    private void replayOne(RecordingSummary recording, List<JournaledOrder> out) {
-        long length = recording.stopPosition() - recording.startPosition();
+    private void replayOne(RecordingSummary recording, long fromPosition, List<JournaledOrder> out) {
+        long length = recording.stopPosition() - fromPosition;
         if (length <= 0) {
-            return; // 연결만 되고 아무것도 안 쓴 빈 녹화 — 건너뛴다
+            return; // 이 녹화엔 fromPosition 이후로 새로 쓴 게 없다(빈 녹화이거나, 스냅샷이 이미 끝까지 담았거나) — 건너뛴다
         }
         try (Subscription subscription = aeronArchive.replay(
-                recording.recordingId(), recording.startPosition(), length, REPLAY_CHANNEL, REPLAY_STREAM_ID)) {
+                recording.recordingId(), fromPosition, length, REPLAY_CHANNEL, REPLAY_STREAM_ID)) {
             awaitConnected(subscription);
             Image image = subscription.imageAtIndex(0);
             FragmentHandler handler = (buffer, offset, fragmentLength, header) -> out.add(codec.decode(buffer, offset));

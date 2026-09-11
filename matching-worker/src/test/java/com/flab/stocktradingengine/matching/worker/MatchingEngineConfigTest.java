@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -66,14 +67,21 @@ class MatchingEngineConfigTest {
 
     /**
      * 이 테스트는 real Aeron Archive 없이 MatchingEngineConfig만 가볍게 띄운다 — 2c-2가 추가한
-     * {@code matchingJournalRecoveredEntries} 빈은 Spring이 generic List<T> 타입을 실제로 매칭하도록
-     * {@code @Bean} 메서드로 둬야 한다({@code withBean(Class, Supplier)}는 타입 소거로 못 맞춘다).
+     * {@code matchingJournalRecoveredEntries} 빈과 2d-1b가 추가한 {@code matchingLoadedSnapshot}
+     * 빈은 Spring이 generic List<T>·Optional<T> 타입을 실제로 매칭하도록 {@code @Bean} 메서드로
+     * 둬야 한다({@code withBean(Class, Supplier)}는 타입 소거로 못 맞춘다). 스냅샷은 없다고 두면
+     * (Optional.empty) {@code MatchingSnapshotConfig}(AeronArchive 필요) 없이도 뜬다.
      */
     @Configuration
     static class EmptyRecoveredEntriesConfig {
         @Bean
         List<JournaledOrder> matchingJournalRecoveredEntries() {
             return List.of();
+        }
+
+        @Bean
+        Optional<StoredMatchingSnapshot> matchingLoadedSnapshot() {
+            return Optional.empty();
         }
     }
 }

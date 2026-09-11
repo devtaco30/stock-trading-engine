@@ -1,6 +1,7 @@
 package com.flab.stocktradingengine.matching.worker;
 
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.context.SmartLifecycle;
 import org.springframework.context.annotation.Bean;
@@ -25,14 +26,16 @@ public class MatchingEngineConfig {
      * 구현({@code AeronArchiveMatchingJournal})을 명시적으로 넘긴다(2c-1) — 프로세스가 죽어도
      * 저널이 디스크에 남아야 2c-2 리플레이가 성립한다.</p>
      *
-     * <p>{@link MatchingJournalArchiveConfig#matchingJournalRecoveredEntries}(이전 녹화를 읽어둔
-     * 결과)를 start() 전에 재적용한다(2c-2) — 재시작 전 호가창을 되살린 뒤에야 라이브 트래픽을
-     * 받는다. 계좌 축과 달리 시드할 상태가 없어(호가창은 주문 리플레이만으로 전부 재구성된다)
-     * seed 단계는 없다.</p>
+     * <p>스냅샷이 있으면(2d-1b) 먼저 그걸로 호가창을 복원한 뒤, 그 스냅샷 이후분(delta)만 담긴
+     * {@link MatchingJournalArchiveConfig#matchingJournalRecoveredEntries}를 재적용한다. 스냅샷이
+     * 없으면(2c-2, 하위호환) 저널 전체가 그대로 recover 입력이 된다. 계좌 축과 달리 시드할 상태가
+     * 없어(호가창은 주문 리플레이만으로 전부 재구성된다) seed 단계는 없다.</p>
      */
     @Bean
-    public MatchingEngine matchingEngine(MatchListener listener, Journal journal, List<JournaledOrder> matchingJournalRecoveredEntries) {
+    public MatchingEngine matchingEngine(MatchListener listener, Journal journal,
+            Optional<StoredMatchingSnapshot> matchingLoadedSnapshot, List<JournaledOrder> matchingJournalRecoveredEntries) {
         MatchingEngine engine = new MatchingEngine(BUFFER_SIZE, new BlockingWaitStrategy(), listener, journal);
+        matchingLoadedSnapshot.ifPresent(stored -> engine.restore(stored.snapshot()));
         engine.recover(matchingJournalRecoveredEntries);
         return engine;
     }
