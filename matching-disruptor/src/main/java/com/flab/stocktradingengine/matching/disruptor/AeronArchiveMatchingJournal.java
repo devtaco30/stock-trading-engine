@@ -66,4 +66,10 @@ public class AeronArchiveMatchingJournal implements Journal {
     public List<JournaledOrder> entries() {
         throw new UnsupportedOperationException("Aeron Archive 저널의 read-back 은 2c-2 리플레이에서 다룬다");
     }
+
+    /** 발행 스트림의 현재 위치. 스냅샷(2d-1)이 "여기까지는 스냅샷에 담겼다"로 함께 저장한다. */
+    @Override
+    public long position() {
+        return journalPublication.position();
+    }
 }

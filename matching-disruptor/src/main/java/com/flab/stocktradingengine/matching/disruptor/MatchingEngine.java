@@ -3,6 +3,7 @@ package com.flab.stocktradingengine.matching.disruptor;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ThreadFactory;
 
@@ -16,6 +17,7 @@ import com.lmax.disruptor.util.DaemonThreadFactory;
 import com.flab.stocktradingengine.codec.JournaledOrder;
 import com.flab.stocktradingengine.trading.entity.OrderSide;
 import com.flab.stocktradingengine.trading.matching.OrderBook;
+import com.flab.stocktradingengine.trading.matching.OrderEntry;
 
 /**
  * Disruptor 매칭 코어의 진입점.
@@ -112,6 +114,67 @@ public class MatchingEngine {
             applyToScratch(scratch, order);
             recoveryHandler.onEvent(scratch, 0L, false);
         }
+    }
+
+    /**
+     * 현재 호가창·전량 체결 멱등 캐시·저널 위치를 통째로 찍는다(2d-1, ADR-019 "자체 스냅샷").
+     *
+     * <p>graceful shutdown(Disruptor drain 완료, 소비자 스레드 quiescent) 시점에만 안전하다 —
+     * 소비자 스레드가 아직 books 를 만지고 있는 도중에 부르면 단일 스레드 전제가 깨진 채로 읽게
+     * 된다. 언제가 안전한지 판단하는 건 호출부(matching-worker 호스트) 책임이다.</p>
+     */
+    public MatchingSnapshot snapshot() {
+        Map<String, BookSnapshot> booksByStock = new HashMap<>();
+        for (Map.Entry<String, OrderBook> entry : books.entrySet()) {
+            String stockCode = entry.getKey();
+            OrderBook book = entry.getValue();
+
+            List<RestingOrder> restingOrders = book.restingOrders().stream()
+                .map(MatchingEngine::toRestingOrder)
+                .toList();
+
+            Map<Long, Long> filledTimestampsEpochMillis = new HashMap<>();
+            book.filledOrderTimestamps().forEach((orderId, filledAt) ->
+                filledTimestampsEpochMillis.put(orderId, filledAt.toEpochMilli()));
+
+            booksByStock.put(stockCode, new BookSnapshot(restingOrders, filledTimestampsEpochMillis));
+        }
+        return new MatchingSnapshot(booksByStock, journal.position());
+    }
+
+    private static RestingOrder toRestingOrder(OrderEntry entry) {
+        return new RestingOrder(entry.getOrderId(), entry.getAccountId(), entry.getSide(), entry.getPrice(),
+            entry.getQuantity(), entry.getOrderAt().toEpochMilli(), entry.getFilledQuantity(), entry.isCancelled());
+    }
+
+    /**
+     * 스냅샷으로 호가창·멱등 캐시를 되살린다(2d-1a). 반드시 {@link #start} 전에 호출한다.
+     * 저널을 스냅샷 위치부터 리플레이해 그 뒤의 변화까지 마저 채우는 건 호출부(matching-worker
+     * 호스트, 2d-1b) 책임이다 — 이 메서드는 스냅샷 자체만 되살린다.
+     */
+    public void restore(MatchingSnapshot snapshot) {
+        requireNotStarted();
+        snapshot.booksByStock().forEach((stockCode, bookSnapshot) -> {
+            OrderBook book = books.computeIfAbsent(stockCode, k -> new OrderBook());
+            for (RestingOrder restingOrder : bookSnapshot.restingOrders()) {
+                book.restoreRestingOrder(toOrderEntry(stockCode, restingOrder));
+            }
+            bookSnapshot.filledOrderTimestampsEpochMillis().forEach((orderId, epochMillis) ->
+                book.restoreFilledOrderTimestamp(orderId, Instant.ofEpochMilli(epochMillis)));
+        });
+    }
+
+    private static OrderEntry toOrderEntry(String stockCode, RestingOrder restingOrder) {
+        OrderEntry entry = new OrderEntry(restingOrder.orderId(), restingOrder.accountId(), stockCode,
+            restingOrder.side(), restingOrder.price(), restingOrder.quantity(),
+            Instant.ofEpochMilli(restingOrder.orderAtEpochMillis()));
+        if (restingOrder.filledQuantity() > 0) {
+            entry.addFilled(restingOrder.filledQuantity());
+        }
+        if (restingOrder.cancelled()) {
+            entry.cancel();
+        }
+        return entry;
     }
 
     /** 저널 엔트리 하나를 스크래치 슬롯에 채운다 — {@code OrderEvent}의 타입별 setter와 1:1 대응. */

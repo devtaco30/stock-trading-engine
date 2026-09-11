@@ -25,4 +25,10 @@ public class InMemoryJournal implements Journal {
     public List<JournaledOrder> entries() {
         return List.copyOf(entries);
     }
+
+    /** 재생 대상 스트림 자체가 없다(entries()로 전체를 직접 들고 있다) — 항상 0. */
+    @Override
+    public long position() {
+        return 0L;
+    }
 }

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.Map;
 import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -381,6 +382,69 @@ class OrderBookTest {
             assertThat(result.sellAccountId()).isEqualTo(200L);
             assertThat(result.filledQuantity()).isEqualTo(10);
             assertThat(result.matchPrice()).isEqualByComparingTo("70000");
+        }
+    }
+
+    // ── 스냅샷 복원 (2d-1a) ──────────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("스냅샷 복원")
+    class SnapshotRestore {
+
+        @Test
+        @DisplayName("restoreRestingOrder는 매칭을 유발하지 않는다 — 교차하는 두 주문도 그대로 남는다")
+        void restoreRestingOrder는_매칭을_유발하지_않는다() {
+            book.restoreRestingOrder(buy(1L, new BigDecimal("70000"), 10));
+            book.restoreRestingOrder(sell(2L, new BigDecimal("70000"), 10));
+
+            assertThat(book.restingOrders()).extracting(OrderEntry::getOrderId)
+                .containsExactlyInAnyOrder(1L, 2L);
+        }
+
+        @Test
+        @DisplayName("restingOrders는 현재 미체결 주문의 필드를 그대로 돌려준다")
+        void restingOrders는_현재_미체결_주문을_돌려준다() {
+            OrderEntry entry = buy(1L, new BigDecimal("70000"), 10);
+            book.addOrder(entry);
+
+            OrderEntry found = book.restingOrders().stream()
+                .filter(o -> o.getOrderId().equals(1L))
+                .findFirst().orElseThrow();
+
+            assertThat(found.getAccountId()).isEqualTo(entry.getAccountId());
+            assertThat(found.getStockCode()).isEqualTo(entry.getStockCode());
+            assertThat(found.getSide()).isEqualTo(entry.getSide());
+            assertThat(found.getPrice()).isEqualByComparingTo(entry.getPrice());
+            assertThat(found.getRemainingQuantity()).isEqualTo(10);
+        }
+
+        @Test
+        @DisplayName("restoreRestingOrder로 복원한 주문은 이후 매칭에 정상 참여한다")
+        void 복원한_주문은_이후_매칭에_정상_참여한다() {
+            book.restoreRestingOrder(buy(1L, new BigDecimal("70000"), 10));
+
+            book.addOrder(sell(2L, new BigDecimal("70000"), 10));
+            Optional<FillResult> result = book.match();
+
+            assertThat(result).isPresent();
+            assertThat(result.get().buyOrderId()).isEqualTo(1L);
+        }
+
+        @Test
+        @DisplayName("filledOrderTimestamps를 새 호가창에 restoreFilledOrderTimestamp로 옮기면 멱등 캐시가 복원된다")
+        void filledOrderTimestamps_왕복() {
+            book.addOrder(buy(1L, new BigDecimal("70000"), 10));
+            book.addOrder(sell(2L, new BigDecimal("70000"), 10));
+            book.match(); // orderId 1,2 전량체결 → filledOrderTimestamps에 기록됨
+
+            Map<Long, Instant> captured = book.filledOrderTimestamps();
+            assertThat(captured).containsKeys(1L, 2L);
+
+            OrderBook restored = new OrderBook();
+            captured.forEach(restored::restoreFilledOrderTimestamp);
+
+            assertThat(restored.containsOrder(1L)).isTrue();
+            assertThat(restored.containsOrder(2L)).isTrue();
         }
     }
 }
