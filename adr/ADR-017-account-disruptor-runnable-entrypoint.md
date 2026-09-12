@@ -1,3 +1,6 @@
+> ⚠️ **이 ADR은 ADR-018로 대체됨 (2026-09-08). 여기 결정을 따르지 말 것.**
+> 이 문서가 택한 "plain `main()` + raw kafka + 코어(`account-disruptor`) 안에 main + 하드코딩 시드"는 **폐기됐다.** 실제 구현은 **별도 Spring Boot 호스트 모듈 `account-worker`**(+`matching-worker`)로 갔고, 코어는 프레임워크 0 라이브러리로 유지된다(ADR-018). **진실의 원천은 커밋된 코드다** — account-worker/matching-worker가 Spring Boot로 이미 구현·커밋돼 있다. 이 ADR은 이력 보존용이니 새로 작업할 때 여기 결정을 재적용하지 말 것.
+
 ## 문제
 
 `account-disruptor`(계좌 축 워커)는 지금까지 `main()`이 없다 — 테스트가 `AccountEngine`을 직접 띄우고 검증까지 대신해왔다. B4(Kafka 체결 수신)를 붙이면서, 테스트 통과만으로 끝내지 않고 실제로 떠서 남아 있는 프로세스로 만들어야 한다는 요구가 나왔다. `matching-disruptor`도 같은 상태(main 없음)지만, 이번 결정 범위는 `account-disruptor` 하나로 한정한다 — 두 엔진을 한 프로세스로 묶는 통합 앱은 이전에 시도했다가(`order-manager` 모듈) 캐논 로드맵에 없는 단계라 전부 되돌린 바 있다.
