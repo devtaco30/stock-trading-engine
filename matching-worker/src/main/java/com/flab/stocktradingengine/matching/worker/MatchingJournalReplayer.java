@@ -1,8 +1,11 @@
 package com.flab.stocktradingengine.matching.worker;
 
+import java.lang.System.Logger;
+import java.lang.System.Logger.Level;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 
 import com.flab.stocktradingengine.codec.JournaledOrder;
 import com.flab.stocktradingengine.codec.OrderCodec;
@@ -31,6 +34,8 @@ import io.aeron.logbuffer.FragmentHandler;
  * 읽어 복구 시간을 줄이는 게 이 메서드가 존재하는 이유(ADR-019).</p>
  */
 class MatchingJournalReplayer {
+
+    private static final Logger log = System.getLogger(MatchingJournalReplayer.class.getName());
 
     // 저널 발행 스트림(2005)과 구분되는, 리플레이 전용 스트림 — replay Subscription이 이 위에서만 연다.
     private static final String REPLAY_CHANNEL = "aeron:ipc";
@@ -110,7 +115,14 @@ class MatchingJournalReplayer {
                 recording.recordingId(), fromPosition, length, REPLAY_CHANNEL, REPLAY_STREAM_ID)) {
             awaitConnected(subscription);
             Image image = subscription.imageAtIndex(0);
-            FragmentHandler handler = (buffer, offset, fragmentLength, header) -> out.add(codec.decode(buffer, offset));
+            FragmentHandler handler = (buffer, offset, fragmentLength, header) -> {
+                Optional<JournaledOrder> order = codec.tryDecode(buffer, offset);
+                if (order.isEmpty()) {
+                    log.log(Level.ERROR, "[매칭] 손상 저널 엔트리 skip: recordingId=" + recording.recordingId());
+                    return;
+                }
+                out.add(order.get());
+            };
             while (!image.isEndOfStream() && !image.isClosed()) {
                 image.poll(handler, FRAGMENT_LIMIT);
             }
