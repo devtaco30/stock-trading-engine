@@ -28,5 +28,10 @@ include(
 	"api",
 	"order-engine",
 	"matching-engine",
-	"settlement-engine"
+	"matching-disruptor",
+	"account-disruptor",
+	"account-worker",
+	"matching-worker",
+	"settlement-engine",
+	"settlement-worker"
 )

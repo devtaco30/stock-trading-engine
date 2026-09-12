@@ -128,6 +128,33 @@ public class OrderBook {
     }
 
     /**
+     * 스냅샷(2d-1a)에서 미체결 주문 하나를 복원한다. {@link #addOrder}와 동작은 같지만(매칭을
+     * 유발하지 않고 orderIndex·bids/asks에 꽂기만 한다) — 이미 체결이 끝난 잔여 상태를 그대로
+     * 되살리는 자리라는 걸 호출부에서 구분해 알 수 있도록 별도 이름을 둔다.
+     */
+    public void restoreRestingOrder(OrderEntry entry) {
+        addOrder(entry);
+    }
+
+    /** 현재 호가창에 미체결로 남아있는 주문 전체(복사본). 스냅샷(2d-1a)·테스트 검증용. */
+    public List<OrderEntry> restingOrders() {
+        return List.copyOf(orderIndex.values());
+    }
+
+    /** 전량 체결 멱등 캐시(복사본). 스냅샷(2d-1a)이 별도로 직렬화해야 한다 — orderIndex처럼 자동 재구성되지 않는다. */
+    public Map<Long, Instant> filledOrderTimestamps() {
+        return Map.copyOf(filledOrderTimestamps);
+    }
+
+    /**
+     * 스냅샷(2d-1a)에서 전량 체결 멱등 캐시 엔트리 하나를 복원한다. {@link #containsOrder}가 이
+     * 엔트리를 봐야 재시작 뒤 같은 orderId 재전송을 새 주문으로 오인하지 않는다.
+     */
+    public void restoreFilledOrderTimestamp(long orderId, Instant filledAt) {
+        filledOrderTimestamps.put(orderId, filledAt);
+    }
+
+    /**
      * 체결 가능한 쌍을 찾아 1회 매칭 시도.
      *
      * <p><b>매칭 조건</b>: 최우선 매수가 ≥ 최우선 매도가</p>

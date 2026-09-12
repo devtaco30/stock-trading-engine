@@ -9,6 +9,10 @@ postgresql = "42.7.4"
 snowflake = "1.1"
 junit = "5.10.2"
 spring-kafka = "3.3.4"
+disruptor = "4.0.0"
+jmh = "1.37"
+aeron = "1.48.0"
+agrona = "2.2.1"
 
 [libraries]
 spring-boot-starter = { module = "org.springframework.boot:spring-boot-starter", version.ref = "spring-boot" }
@@ -35,6 +39,16 @@ junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "jun
 
 spring-kafka = { module = "org.springframework.kafka:spring-kafka", version.ref = "spring-kafka" }
 spring-kafka-test = { module = "org.springframework.kafka:spring-kafka-test", version.ref = "spring-kafka" }
+
+disruptor = { module = "com.lmax:disruptor", version.ref = "disruptor" }
+
+jmh-core = { module = "org.openjdk.jmh:jmh-core", version.ref = "jmh" }
+jmh-generator-annprocess = { module = "org.openjdk.jmh:jmh-generator-annprocess", version.ref = "jmh" }
+
+aeron-driver = { module = "io.aeron:aeron-driver", version.ref = "aeron" }
+aeron-client = { module = "io.aeron:aeron-client", version.ref = "aeron" }
+aeron-archive = { module = "io.aeron:aeron-archive", version.ref = "aeron" }
+agrona = { module = "org.agrona:agrona", version.ref = "agrona" }
 
 [plugins]
 spring-boot = { id = "org.springframework.boot", version.ref = "spring-boot" }
