@@ -417,6 +417,25 @@ class AccountEngineTest {
         assertTrue(fillEvent.applied());
     }
 
+    // ---------- content-poison 방어: 도메인 예외 격리 (U1) ----------
+
+    @Test
+    @DisplayName("예약 없는 주문에 대한 체결(도메인 예외)이 와도 이벤트 하나만 폐기하고 다음 이벤트는 정상 처리한다")
+    void 예약없는체결은_폐기하고_다음이벤트는_정상처리() throws InterruptedException {
+        prepare(1); // poison(publishBuyFill)은 onFillApplied 호출 전에 예외가 나 콜백이 없다 — 뒤이은 매수 accept 1건만 기대
+        engine.seed(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
+        engine.start();
+
+        // orderId=999는 매수 접수를 한 적이 없어 예약이 없다 — AccountState.applyBuyFill이
+        // IllegalStateException을 던지는 지점(도메인 불변식 위반, 매칭이 검증 안 된 주문을 체결시킨 셈).
+        engine.publishBuyFill(9001L, 999L, 1L, STOCK, new BigDecimal("10000"), 10);
+        engine.publishBuy(1L, STOCK, new BigDecimal("10000"), 10, "r1");
+        awaitResults();
+
+        assertEquals(1, events.size());
+        assertTrue(events.get(0).accepted());
+    }
+
     // ---------- 매도 보유예약 하네스 배선 ----------
 
     @Test

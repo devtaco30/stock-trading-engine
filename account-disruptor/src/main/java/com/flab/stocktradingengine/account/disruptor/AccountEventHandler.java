@@ -1,5 +1,7 @@
 package com.flab.stocktradingengine.account.disruptor;
 
+import java.lang.System.Logger;
+import java.lang.System.Logger.Level;
 import java.math.BigDecimal;
 import java.util.Map;
 
@@ -28,6 +30,8 @@ import com.flab.stocktradingengine.trading.entity.OrderSide;
  */
 public class AccountEventHandler implements EventHandler<AccountEvent> {
 
+    private static final Logger log = System.getLogger(AccountEventHandler.class.getName());
+
     /** orderId가 발급되지 못했을 때(requestId 빈값·null, 모르는 계좌) 리스너에 싣는 값 — 발급기는 0을 내지 않는다. */
     private static final long NO_ORDER_ID = 0L;
 
@@ -54,6 +58,13 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
                 case SELL_FILL -> handleSellFill(event);
                 case SETTLEMENT -> handleSettlement(event);
             }
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            // 도메인 불변식 위반(예약 없는 체결 등)은 재시도해도 같으므로 이 이벤트만 폐기한다.
+            // 매칭 핸들러(MatchingEventHandler)와 대칭 — 저널에 이미 박힌 poison도 recover 때
+            // 같은 catch로 걸러 무한루프를 끊는다.
+            log.log(Level.WARNING, "[계좌] 이벤트 폐기: type=" + event.getType()
+                + " accountId=" + event.getAccountId() + " orderId=" + event.getOrderId()
+                + " 이유=" + e.getMessage());
         } finally {
             // 슬롯 재사용 대비: 마지막 소비자이므로 처리 후 비운다.
             event.clear();
