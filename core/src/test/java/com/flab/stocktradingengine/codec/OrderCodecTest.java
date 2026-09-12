@@ -1,11 +1,13 @@
 package com.flab.stocktradingengine.codec;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.Optional;
 
 import org.agrona.concurrent.UnsafeBuffer;
 import org.junit.jupiter.api.Test;
@@ -87,5 +89,29 @@ class OrderCodecTest {
         assertEquals(99L, decoded.orderId());
         assertEquals("035420", decoded.stockCode());
         assertEquals(0, original.price().compareTo(decoded.price()));
+    }
+
+    @Test
+    void 정상_바이트는_tryDecode도_값을_돌려준다() {
+        JournaledOrder original = new JournaledOrder(
+            EventType.PLACE, 42L, 100L, "005930", OrderSide.BUY, new BigDecimal("10000"), 30, Instant.EPOCH);
+        codec.encode(buffer, 0, original);
+
+        Optional<JournaledOrder> decoded = codec.tryDecode(buffer, 0);
+
+        assertTrue(decoded.isPresent());
+        assertEquals(42L, decoded.get().orderId());
+    }
+
+    @Test
+    void content_poison_type_바이트가_EventType_범위를_벗어나면_tryDecode는_빈값() {
+        JournaledOrder original = new JournaledOrder(
+            EventType.PLACE, 42L, 100L, "005930", OrderSide.BUY, new BigDecimal("10000"), 30, Instant.EPOCH);
+        codec.encode(buffer, 0, original);
+        buffer.putByte(0, (byte) 99); // EventType.values().length(2)를 벗어난 값
+
+        Optional<JournaledOrder> decoded = codec.tryDecode(buffer, 0);
+
+        assertFalse(decoded.isPresent());
     }
 }
