@@ -54,3 +54,11 @@ tasks.register<JavaExec>("jmh") {
 	mainClass.set("org.openjdk.jmh.Main")
 	classpath = sourceSets.named("jmh").get().runtimeClasspath
 }
+
+// 실행: ./gradlew :matching-disruptor:latencyBench
+tasks.register<JavaExec>("latencyBench") {
+	group = "benchmark"
+	description = "매칭 코어 지연(latency) 벤치 — WaitStrategy별"
+	mainClass.set("com.flab.stocktradingengine.matching.disruptor.MatchingLatencyBench")
+	classpath = sourceSets.named("jmh").get().runtimeClasspath
+}
