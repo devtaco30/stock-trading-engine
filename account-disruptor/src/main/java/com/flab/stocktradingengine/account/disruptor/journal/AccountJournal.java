@@ -1,0 +1,30 @@
+package com.flab.stocktradingengine.account.disruptor.journal;
+
+import java.util.List;
+
+import com.flab.stocktradingengine.codec.AccountJournalEntry;
+
+/**
+ * 계좌 입력 기록 저장소(2b-1) — matching {@code Journal}의 계좌판.
+ *
+ * <p>계좌 상태를 만드는 모든 입력(주문 접수·체결 반영·정산 되돌림)을 처리 순서대로 남긴다.
+ * 프로세스가 죽어 인메모리 계좌 상태가 사라져도, 이 기록을 처음부터 재생(replay)하면 같은
+ * 상태를 다시 만들 수 있다(2b-2). 지금은 인메모리 구현({@link InMemoryAccountJournal})만 두고,
+ * 이후 Aeron Archive durable 구현(2b-1b)으로 교체할 수 있도록 인터페이스로 분리한다.</p>
+ */
+public interface AccountJournal {
+
+    /** 이벤트 스냅샷을 기록 끝에 덧붙인다. */
+    void append(AccountJournalEntry entry);
+
+    /** 기록된 이벤트를 처리 순서대로 반환한다(복사본). */
+    List<AccountJournalEntry> entries();
+
+    /**
+     * 지금까지 기록한 지점을 나타내는 저널 위치(2d-2). 엔진 스냅샷이 "이 위치까지는 스냅샷에
+     * 담겼다"를 같이 저장해, 복구 때 저널을 처음부터가 아니라 이 위치부터만 리플레이하게 한다.
+     * matching {@code Journal.position()}과 같은 이유. durable 구현(Aeron Archive)에서만 의미가
+     * 있다 — 인메모리 구현은 재생 대상 자체가 없어 0을 둔다.
+     */
+    long position();
+}
