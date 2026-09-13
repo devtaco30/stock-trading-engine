@@ -1,4 +1,4 @@
-package com.flab.stocktradingengine.matching.worker;
+package com.flab.stocktradingengine.matching.worker.recovery;
 
 import java.io.File;
 import java.io.IOException;
@@ -10,8 +10,9 @@ import java.nio.file.StandardCopyOption;
 import java.util.Arrays;
 import java.util.Optional;
 
-import com.flab.stocktradingengine.matching.disruptor.MatchingSnapshot;
-import com.flab.stocktradingengine.matching.disruptor.MatchingSnapshotCodec;
+import com.flab.stocktradingengine.matching.disruptor.snapshot.MatchingSnapshot;
+import com.flab.stocktradingengine.matching.disruptor.snapshot.MatchingSnapshotCodec;
+import com.flab.stocktradingengine.matching.worker.lifecycle.MatchingEngineLifecycle;
 
 /**
  * 매칭 엔진 스냅샷(2d-1)을 archive-dir(저널과 같은 durable 디스크)에 파일로 저장·조회한다.
@@ -26,7 +27,7 @@ import com.flab.stocktradingengine.matching.disruptor.MatchingSnapshotCodec;
  * <h3>파일 레이아웃</h3>
  * <pre>[recordingId:8][MatchingSnapshotCodec가 인코딩한 스냅샷 바이트...]</pre>
  */
-class MatchingSnapshotStore {
+public class MatchingSnapshotStore {
 
     private static final String FILE_NAME = "matching-snapshot.dat";
     private static final String TEMP_FILE_NAME = "matching-snapshot.dat.tmp";
@@ -35,12 +36,12 @@ class MatchingSnapshotStore {
     private final File tempFile;
     private final MatchingSnapshotCodec codec = new MatchingSnapshotCodec();
 
-    MatchingSnapshotStore(File archiveDir) {
+    public MatchingSnapshotStore(File archiveDir) {
         this.file = new File(archiveDir, FILE_NAME);
         this.tempFile = new File(archiveDir, TEMP_FILE_NAME);
     }
 
-    void write(long recordingId, MatchingSnapshot snapshot) {
+    public void write(long recordingId, MatchingSnapshot snapshot) {
         byte[] snapshotBytes = codec.encode(snapshot);
         ByteBuffer payload = ByteBuffer.allocate(Long.BYTES + snapshotBytes.length);
         payload.putLong(recordingId);
@@ -56,7 +57,7 @@ class MatchingSnapshotStore {
         }
     }
 
-    Optional<StoredMatchingSnapshot> read() {
+    public Optional<StoredMatchingSnapshot> read() {
         if (!file.exists()) {
             return Optional.empty();
         }

@@ -1,4 +1,4 @@
-package com.flab.stocktradingengine.matching.worker;
+package com.flab.stocktradingengine.matching.worker.config;
 
 import java.util.List;
 import java.util.Optional;
@@ -8,9 +8,11 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 import com.flab.stocktradingengine.codec.JournaledOrder;
-import com.flab.stocktradingengine.matching.disruptor.Journal;
-import com.flab.stocktradingengine.matching.disruptor.MatchListener;
-import com.flab.stocktradingengine.matching.disruptor.MatchingEngine;
+import com.flab.stocktradingengine.matching.disruptor.engine.MatchingEngine;
+import com.flab.stocktradingengine.matching.disruptor.io.MatchListener;
+import com.flab.stocktradingengine.matching.disruptor.journal.Journal;
+import com.flab.stocktradingengine.matching.worker.lifecycle.MatchingEngineLifecycle;
+import com.flab.stocktradingengine.matching.worker.recovery.StoredMatchingSnapshot;
 import com.lmax.disruptor.BlockingWaitStrategy;
 
 @Configuration

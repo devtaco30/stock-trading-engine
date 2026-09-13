@@ -15,7 +15,9 @@ import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.context.ConfigurableApplicationContext;
 
 import com.flab.stocktradingengine.codec.JournaledOrder;
-import com.flab.stocktradingengine.matching.disruptor.MatchingEngine;
+import com.flab.stocktradingengine.matching.disruptor.engine.MatchingEngine;
+import com.flab.stocktradingengine.matching.worker.config.MatchingJournalArchiveConfig;
+import com.flab.stocktradingengine.matching.worker.recovery.MatchingJournalReplayer;
 import com.flab.stocktradingengine.trading.entity.OrderSide;
 
 import io.aeron.ExclusivePublication;

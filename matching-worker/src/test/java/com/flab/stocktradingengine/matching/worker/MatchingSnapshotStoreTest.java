@@ -12,9 +12,12 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import com.flab.stocktradingengine.matching.disruptor.BookSnapshot;
-import com.flab.stocktradingengine.matching.disruptor.MatchingSnapshot;
-import com.flab.stocktradingengine.matching.disruptor.RestingOrder;
+import com.flab.stocktradingengine.matching.disruptor.snapshot.BookSnapshot;
+import com.flab.stocktradingengine.matching.disruptor.snapshot.MatchingSnapshot;
+import com.flab.stocktradingengine.matching.disruptor.snapshot.RestingOrder;
+import com.flab.stocktradingengine.matching.worker.lifecycle.MatchingEngineLifecycle;
+import com.flab.stocktradingengine.matching.worker.recovery.MatchingSnapshotStore;
+import com.flab.stocktradingengine.matching.worker.recovery.StoredMatchingSnapshot;
 import com.flab.stocktradingengine.trading.entity.OrderSide;
 
 /**

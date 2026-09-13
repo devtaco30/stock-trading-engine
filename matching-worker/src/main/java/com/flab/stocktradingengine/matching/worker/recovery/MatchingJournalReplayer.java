@@ -1,4 +1,4 @@
-package com.flab.stocktradingengine.matching.worker;
+package com.flab.stocktradingengine.matching.worker.recovery;
 
 import java.lang.System.Logger;
 import java.lang.System.Logger.Level;
@@ -19,7 +19,7 @@ import io.aeron.logbuffer.FragmentHandler;
  * 저널 스트림(2005)의 이전 녹화를 Aeron Archive에서 읽어 {@link JournaledOrder} 리스트로 돌려주는
  * 리더(2c-2). account-worker의 {@code AccountJournalReplayer}와 같은 결 — 새 코덱 없이
  * {@link OrderCodec}을 그대로 재사용한다(매칭 인테이크가 이미 같은 코덱을 쓴다).
- * {@link com.flab.stocktradingengine.matching.disruptor.MatchingEngine#recover}에 넘길 입력을
+ * {@link com.flab.stocktradingengine.matching.disruptor.engine.MatchingEngine#recover}에 넘길 입력을
  * 만드는 자리 — 재적용 로직 자체는 코어(matching-disruptor)가 갖고 있다.
  *
  * <h3>여러 녹화 = 여러 번의 재시작</h3>
@@ -33,7 +33,7 @@ import io.aeron.logbuffer.FragmentHandler;
  * 스냅샷 이후 재시작)는 전부 처음부터 읽는다 — 저널을 0부터 전부 재생하지 않고 스냅샷 이후 변화만
  * 읽어 복구 시간을 줄이는 게 이 메서드가 존재하는 이유(ADR-019).</p>
  */
-class MatchingJournalReplayer {
+public class MatchingJournalReplayer {
 
     private static final Logger log = System.getLogger(MatchingJournalReplayer.class.getName());
 
@@ -48,12 +48,12 @@ class MatchingJournalReplayer {
     private final AeronArchive aeronArchive;
     private final OrderCodec codec = new OrderCodec();
 
-    MatchingJournalReplayer(AeronArchive aeronArchive) {
+    public MatchingJournalReplayer(AeronArchive aeronArchive) {
         this.aeronArchive = aeronArchive;
     }
 
     /** 지정한 채널·스트림의 이전 녹화를 전부 시작 시각 순서로 읽어 디코딩한다. */
-    List<JournaledOrder> readAll(String journalChannel, int journalStreamId) {
+    public List<JournaledOrder> readAll(String journalChannel, int journalStreamId) {
         List<RecordingSummary> recordings = listRecordings(journalChannel, journalStreamId);
         recordings.sort(Comparator.comparingLong(RecordingSummary::startTimestamp));
 
@@ -72,7 +72,7 @@ class MatchingJournalReplayer {
      * @throws IllegalStateException fromRecordingId가 카탈로그에 없으면 — 스냅샷 파일과 Archive
      *                                카탈로그가 서로 어긋난 상태라 복구를 계속할 수 없다.
      */
-    List<JournaledOrder> readFrom(String journalChannel, int journalStreamId, long fromRecordingId, long fromPosition) {
+    public List<JournaledOrder> readFrom(String journalChannel, int journalStreamId, long fromRecordingId, long fromPosition) {
         List<RecordingSummary> recordings = listRecordings(journalChannel, journalStreamId);
         recordings.sort(Comparator.comparingLong(RecordingSummary::startTimestamp));
 

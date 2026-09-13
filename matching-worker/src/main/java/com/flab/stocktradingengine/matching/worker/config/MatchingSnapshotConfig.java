@@ -1,4 +1,4 @@
-package com.flab.stocktradingengine.matching.worker;
+package com.flab.stocktradingengine.matching.worker.config;
 
 import java.io.File;
 import java.util.Optional;
@@ -7,7 +7,10 @@ import org.springframework.context.SmartLifecycle;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-import com.flab.stocktradingengine.matching.disruptor.MatchingEngine;
+import com.flab.stocktradingengine.matching.disruptor.engine.MatchingEngine;
+import com.flab.stocktradingengine.matching.worker.lifecycle.MatchingSnapshotLifecycle;
+import com.flab.stocktradingengine.matching.worker.recovery.MatchingSnapshotStore;
+import com.flab.stocktradingengine.matching.worker.recovery.StoredMatchingSnapshot;
 
 import io.aeron.archive.client.AeronArchive;
 

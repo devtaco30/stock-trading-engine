@@ -1,8 +1,10 @@
-package com.flab.stocktradingengine.matching.worker;
+package com.flab.stocktradingengine.matching.worker.lifecycle;
 
 import org.springframework.context.SmartLifecycle;
 
-import com.flab.stocktradingengine.matching.disruptor.MatchingEngine;
+import com.flab.stocktradingengine.matching.disruptor.engine.MatchingEngine;
+import com.flab.stocktradingengine.matching.worker.config.MatchingJournalArchiveConfig;
+import com.flab.stocktradingengine.matching.worker.recovery.MatchingSnapshotStore;
 
 import io.aeron.archive.client.AeronArchive;
 
@@ -21,7 +23,7 @@ import io.aeron.archive.client.AeronArchive;
  * 스레드)가 books 를 안전하게 읽을 수 있어서다. 크래시(ungraceful)면 스냅샷을 못 찍고 직전
  * 스냅샷 + 그 뒤 저널 replay로 복구한다(메커니즘 먼저 — 주기적 라이브 스냅샷은 나중 리파인).</p>
  */
-class MatchingSnapshotLifecycle implements SmartLifecycle {
+public class MatchingSnapshotLifecycle implements SmartLifecycle {
 
     private static final int PHASE = -1; // MatchingEngineLifecycle(phase 0)보다 늦게 멈춘다
 
@@ -30,7 +32,7 @@ class MatchingSnapshotLifecycle implements SmartLifecycle {
     private final AeronArchive aeronArchive;
     private boolean running = false;
 
-    MatchingSnapshotLifecycle(MatchingEngine engine, MatchingSnapshotStore snapshotStore, AeronArchive aeronArchive) {
+    public MatchingSnapshotLifecycle(MatchingEngine engine, MatchingSnapshotStore snapshotStore, AeronArchive aeronArchive) {
         this.engine = engine;
         this.snapshotStore = snapshotStore;
         this.aeronArchive = aeronArchive;

@@ -22,7 +22,7 @@ import org.springframework.test.annotation.DirtiesContext;
 
 import com.flab.stocktradingengine.kafka.KafkaTopics;
 import com.flab.stocktradingengine.kafka.event.TradeFilledEvent;
-import com.flab.stocktradingengine.matching.disruptor.MatchingEngine;
+import com.flab.stocktradingengine.matching.disruptor.engine.MatchingEngine;
 import com.flab.stocktradingengine.trading.entity.OrderSide;
 
 /**

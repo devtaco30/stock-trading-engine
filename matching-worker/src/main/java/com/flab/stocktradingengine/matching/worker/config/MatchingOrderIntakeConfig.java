@@ -1,4 +1,4 @@
-package com.flab.stocktradingengine.matching.worker;
+package com.flab.stocktradingengine.matching.worker.config;
 
 import java.io.File;
 import java.io.IOException;
@@ -9,8 +9,9 @@ import org.springframework.context.SmartLifecycle;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-import com.flab.stocktradingengine.matching.disruptor.AeronOrderReceiver;
-import com.flab.stocktradingengine.matching.disruptor.MatchingEngine;
+import com.flab.stocktradingengine.matching.disruptor.engine.MatchingEngine;
+import com.flab.stocktradingengine.matching.disruptor.io.AeronOrderReceiver;
+import com.flab.stocktradingengine.matching.worker.lifecycle.MatchingOrderReceiverLifecycle;
 
 import io.aeron.Aeron;
 import io.aeron.CommonContext;

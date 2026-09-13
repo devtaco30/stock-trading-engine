@@ -1,21 +1,21 @@
-package com.flab.stocktradingengine.matching.worker;
+package com.flab.stocktradingengine.matching.worker.lifecycle;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.springframework.context.SmartLifecycle;
 
-import com.flab.stocktradingengine.matching.disruptor.MatchingEngine;
+import com.flab.stocktradingengine.matching.disruptor.engine.MatchingEngine;
 
 /**
  * {@link MatchingEngine}의 시작·종료를 Spring 컨텍스트 생명주기에 건다.
  * account-worker의 {@code AccountEngineLifecycle}과 같은 결.
  */
-class MatchingEngineLifecycle implements SmartLifecycle {
+public class MatchingEngineLifecycle implements SmartLifecycle {
 
     private final MatchingEngine engine;
     private final AtomicBoolean running = new AtomicBoolean(false);
 
-    MatchingEngineLifecycle(MatchingEngine engine) {
+    public MatchingEngineLifecycle(MatchingEngine engine) {
         this.engine = engine;
     }
 

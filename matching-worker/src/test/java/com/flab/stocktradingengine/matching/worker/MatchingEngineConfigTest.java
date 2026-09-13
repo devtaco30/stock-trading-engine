@@ -17,10 +17,12 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 import com.flab.stocktradingengine.codec.JournaledOrder;
-import com.flab.stocktradingengine.matching.disruptor.InMemoryJournal;
-import com.flab.stocktradingengine.matching.disruptor.Journal;
-import com.flab.stocktradingengine.matching.disruptor.MatchListener;
-import com.flab.stocktradingengine.matching.disruptor.MatchingEngine;
+import com.flab.stocktradingengine.matching.disruptor.engine.MatchingEngine;
+import com.flab.stocktradingengine.matching.disruptor.io.MatchListener;
+import com.flab.stocktradingengine.matching.disruptor.journal.InMemoryJournal;
+import com.flab.stocktradingengine.matching.disruptor.journal.Journal;
+import com.flab.stocktradingengine.matching.worker.config.MatchingEngineConfig;
+import com.flab.stocktradingengine.matching.worker.recovery.StoredMatchingSnapshot;
 import com.flab.stocktradingengine.trading.entity.OrderSide;
 import com.flab.stocktradingengine.trading.matching.FillResult;
 

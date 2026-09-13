@@ -15,6 +15,7 @@ import org.springframework.kafka.core.KafkaTemplate;
 
 import com.flab.stocktradingengine.kafka.KafkaTopics;
 import com.flab.stocktradingengine.kafka.event.TradeFilledEvent;
+import com.flab.stocktradingengine.matching.worker.messaging.AccountFillPublisher;
 import com.flab.stocktradingengine.support.SnowflakeIdGenerator;
 import com.flab.stocktradingengine.trading.matching.FillResult;
 

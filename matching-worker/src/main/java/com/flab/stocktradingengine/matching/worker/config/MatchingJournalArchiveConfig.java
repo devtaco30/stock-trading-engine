@@ -1,4 +1,4 @@
-package com.flab.stocktradingengine.matching.worker;
+package com.flab.stocktradingengine.matching.worker.config;
 
 import java.util.List;
 import java.util.Optional;
@@ -7,7 +7,9 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 import com.flab.stocktradingengine.codec.JournaledOrder;
-import com.flab.stocktradingengine.matching.disruptor.AeronArchiveMatchingJournal;
+import com.flab.stocktradingengine.matching.disruptor.journal.AeronArchiveMatchingJournal;
+import com.flab.stocktradingengine.matching.worker.recovery.MatchingJournalReplayer;
+import com.flab.stocktradingengine.matching.worker.recovery.StoredMatchingSnapshot;
 
 import io.aeron.Aeron;
 import io.aeron.ExclusivePublication;
@@ -34,12 +36,14 @@ import io.aeron.archive.codecs.SourceLocation;
 public class MatchingJournalArchiveConfig {
 
     // 패키지 가시성 — 테스트가 프로덕션과 같은 채널·스트림을 조회하도록 이 상수를 그대로 참조한다.
-    static final String JOURNAL_CHANNEL = "aeron:ipc";
-    static final int JOURNAL_STREAM_ID = 2005; // 매칭 인테이크(2002)와 구분되는 저널 전용 스트림
+    // MatchingSnapshotLifecycle(lifecycle 패키지)·테스트가 프로덕션과 같은 채널·스트림을
+    // 그대로 참조해야 해서 public이다.
+    public static final String JOURNAL_CHANNEL = "aeron:ipc";
+    public static final int JOURNAL_STREAM_ID = 2005; // 매칭 인테이크(2002)와 구분되는 저널 전용 스트림
 
     /**
      * 이 스트림에서 복구 입력을 읽어 만든다.
-     * {@link com.flab.stocktradingengine.matching.disruptor.MatchingEngine#recover}에 그대로 넘긴다
+     * {@link com.flab.stocktradingengine.matching.disruptor.engine.MatchingEngine#recover}에 그대로 넘긴다
      * ({@code MatchingEngineConfig} 참고). 반드시 {@link #matchingJournalRecordingSubscriptionId}
      * 보다 먼저 만들어져야 한다(클래스 javadoc "순서" 참고) — 이 빈 자체가 그 순서를 강제한다.
      *
