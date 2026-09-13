@@ -1,4 +1,4 @@
-package com.flab.stocktradingengine.settlement.worker;
+package com.flab.stocktradingengine.settlement.worker.service;
 
 import java.util.concurrent.TimeUnit;
 
@@ -8,6 +8,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.flab.stocktradingengine.kafka.KafkaTopics;
 import com.flab.stocktradingengine.kafka.event.SettlementResultEvent;
+import com.flab.stocktradingengine.settlement.worker.entity.PendingSettlement;
+import com.flab.stocktradingengine.settlement.worker.repository.PendingSettlementRepository;
 
 import lombok.RequiredArgsConstructor;
 

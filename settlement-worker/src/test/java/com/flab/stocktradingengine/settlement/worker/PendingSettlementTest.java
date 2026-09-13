@@ -7,6 +7,9 @@ import java.math.BigDecimal;
 
 import org.junit.jupiter.api.Test;
 
+import com.flab.stocktradingengine.settlement.worker.entity.PendingSettlement;
+import com.flab.stocktradingengine.settlement.worker.entity.SettlementStatus;
+
 class PendingSettlementTest {
 
     @Test

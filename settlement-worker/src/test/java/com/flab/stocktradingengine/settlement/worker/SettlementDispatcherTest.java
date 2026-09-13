@@ -12,6 +12,12 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
+import com.flab.stocktradingengine.settlement.worker.entity.PendingSettlement;
+import com.flab.stocktradingengine.settlement.worker.entity.SettlementStatus;
+import com.flab.stocktradingengine.settlement.worker.repository.PendingSettlementRepository;
+import com.flab.stocktradingengine.settlement.worker.service.PendingSettlementSettler;
+import com.flab.stocktradingengine.settlement.worker.service.SettlementDispatcher;
+
 /**
  * 스캔(조회)과 건별 발행+정산완료(PendingSettlementSettler)를 분리한 오케스트레이터를 검증한다.
  * 한 건의 실패가 다른 건의 처리를 막지 않는지가 핵심이다(배치 트랜잭션으로 묶지 않는 이유).

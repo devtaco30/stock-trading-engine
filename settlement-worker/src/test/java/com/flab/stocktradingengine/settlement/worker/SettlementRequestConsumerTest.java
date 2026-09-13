@@ -10,6 +10,8 @@ import org.mockito.InOrder;
 import org.springframework.kafka.support.Acknowledgment;
 
 import com.flab.stocktradingengine.kafka.event.SettlementRequestEvent;
+import com.flab.stocktradingengine.settlement.worker.mesaging.SettlementRequestConsumer;
+import com.flab.stocktradingengine.settlement.worker.service.PendingSettlementRecorder;
 
 /**
  * ack가 저장(=커밋)보다 먼저 나가지 않는지 검증한다. 커밋 전에 ack가 나가면 커밋 실패 시

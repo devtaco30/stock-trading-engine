@@ -20,6 +20,10 @@ import org.springframework.kafka.support.SendResult;
 
 import com.flab.stocktradingengine.kafka.KafkaTopics;
 import com.flab.stocktradingengine.kafka.event.SettlementResultEvent;
+import com.flab.stocktradingengine.settlement.worker.entity.PendingSettlement;
+import com.flab.stocktradingengine.settlement.worker.entity.SettlementStatus;
+import com.flab.stocktradingengine.settlement.worker.repository.PendingSettlementRepository;
+import com.flab.stocktradingengine.settlement.worker.service.PendingSettlementSettler;
 
 /**
  * 발행 성공 확인 → markSettled 순서를 검증한다. 발행이 실패하면 markSettled가 호출되지 않아야

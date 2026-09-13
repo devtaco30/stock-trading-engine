@@ -1,10 +1,11 @@
-package com.flab.stocktradingengine.settlement.worker;
+package com.flab.stocktradingengine.settlement.worker.mesaging;
 
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Component;
 
 import com.flab.stocktradingengine.kafka.event.SettlementRequestEvent;
+import com.flab.stocktradingengine.settlement.worker.service.PendingSettlementRecorder;
 
 import lombok.RequiredArgsConstructor;
 

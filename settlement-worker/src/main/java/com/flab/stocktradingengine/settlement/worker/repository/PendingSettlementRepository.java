@@ -1,8 +1,11 @@
-package com.flab.stocktradingengine.settlement.worker;
+package com.flab.stocktradingengine.settlement.worker.repository;
 
 import java.util.List;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+
+import com.flab.stocktradingengine.settlement.worker.entity.PendingSettlement;
+import com.flab.stocktradingengine.settlement.worker.entity.SettlementStatus;
 
 /**
  * 정산 대기 미수금 저장소.

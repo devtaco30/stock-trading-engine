@@ -1,9 +1,12 @@
-package com.flab.stocktradingengine.settlement.worker;
+package com.flab.stocktradingengine.settlement.worker.service;
 
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.flab.stocktradingengine.kafka.event.SettlementRequestEvent;
+import com.flab.stocktradingengine.settlement.worker.entity.PendingSettlement;
+import com.flab.stocktradingengine.settlement.worker.mesaging.SettlementRequestConsumer;
+import com.flab.stocktradingengine.settlement.worker.repository.PendingSettlementRepository;
 
 import lombok.RequiredArgsConstructor;
 

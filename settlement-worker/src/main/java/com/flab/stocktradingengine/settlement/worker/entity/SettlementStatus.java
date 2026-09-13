@@ -1,4 +1,4 @@
-package com.flab.stocktradingengine.settlement.worker;
+package com.flab.stocktradingengine.settlement.worker.entity;
 
 /**
  * 미수금 정산 상태

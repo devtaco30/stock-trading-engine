@@ -28,6 +28,10 @@ import org.springframework.test.annotation.DirtiesContext;
 import com.flab.stocktradingengine.kafka.KafkaTopics;
 import com.flab.stocktradingengine.kafka.event.SettlementRequestEvent;
 import com.flab.stocktradingengine.kafka.event.SettlementResultEvent;
+import com.flab.stocktradingengine.settlement.worker.entity.PendingSettlement;
+import com.flab.stocktradingengine.settlement.worker.entity.SettlementStatus;
+import com.flab.stocktradingengine.settlement.worker.repository.PendingSettlementRepository;
+import com.flab.stocktradingengine.settlement.worker.service.SettlementDispatcher;
 
 /**
  * settlement-worker 앱을 실제로 띄우고, 로컬 docker-compose Kafka(localhost:9092)에 진짜

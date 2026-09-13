@@ -1,8 +1,12 @@
-package com.flab.stocktradingengine.settlement.worker;
+package com.flab.stocktradingengine.settlement.worker.service;
 
 import java.util.List;
 
 import org.springframework.stereotype.Component;
+
+import com.flab.stocktradingengine.settlement.worker.entity.PendingSettlement;
+import com.flab.stocktradingengine.settlement.worker.entity.SettlementStatus;
+import com.flab.stocktradingengine.settlement.worker.repository.PendingSettlementRepository;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

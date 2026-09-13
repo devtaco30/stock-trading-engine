@@ -13,6 +13,10 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 import com.flab.stocktradingengine.kafka.event.SettlementRequestEvent;
+import com.flab.stocktradingengine.settlement.worker.entity.PendingSettlement;
+import com.flab.stocktradingengine.settlement.worker.entity.SettlementStatus;
+import com.flab.stocktradingengine.settlement.worker.repository.PendingSettlementRepository;
+import com.flab.stocktradingengine.settlement.worker.service.PendingSettlementRecorder;
 
 /**
  * 정산 요청을 PENDING으로 저장하는 트랜잭션 경계. 같은 settlementRef 재도착은 저장하지 않는지
