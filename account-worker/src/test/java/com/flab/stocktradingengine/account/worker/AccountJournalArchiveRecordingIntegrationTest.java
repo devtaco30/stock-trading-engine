@@ -9,7 +9,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.annotation.DirtiesContext;
 
-import com.flab.stocktradingengine.account.disruptor.AccountEngine;
+import com.flab.stocktradingengine.account.disruptor.engine.AccountEngine;
+import com.flab.stocktradingengine.account.worker.config.AccountJournalArchiveConfig;
 
 import io.aeron.archive.client.AeronArchive;
 

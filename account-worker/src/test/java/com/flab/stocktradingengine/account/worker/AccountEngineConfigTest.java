@@ -15,12 +15,14 @@ import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-import com.flab.stocktradingengine.account.disruptor.AccountEngine;
-import com.flab.stocktradingengine.account.disruptor.AccountJournal;
-import com.flab.stocktradingengine.account.disruptor.AccountResultListener;
-import com.flab.stocktradingengine.account.disruptor.InMemoryAccountJournal;
-import com.flab.stocktradingengine.account.disruptor.MatchingOrderSender;
-import com.flab.stocktradingengine.account.disruptor.RejectReason;
+import com.flab.stocktradingengine.account.disruptor.domain.AccountResultListener;
+import com.flab.stocktradingengine.account.disruptor.domain.RejectReason;
+import com.flab.stocktradingengine.account.disruptor.engine.AccountEngine;
+import com.flab.stocktradingengine.account.disruptor.io.MatchingOrderSender;
+import com.flab.stocktradingengine.account.disruptor.journal.AccountJournal;
+import com.flab.stocktradingengine.account.disruptor.journal.InMemoryAccountJournal;
+import com.flab.stocktradingengine.account.worker.config.AccountEngineConfig;
+import com.flab.stocktradingengine.account.worker.recovery.StoredAccountSnapshot;
 import com.flab.stocktradingengine.codec.AccountJournalEntry;
 
 /**

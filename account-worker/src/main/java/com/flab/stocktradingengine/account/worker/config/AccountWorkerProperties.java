@@ -1,4 +1,4 @@
-package com.flab.stocktradingengine.account.worker;
+package com.flab.stocktradingengine.account.worker.config;
 
 import java.math.BigDecimal;
 import java.util.List;

@@ -1,4 +1,4 @@
-package com.flab.stocktradingengine.account.worker;
+package com.flab.stocktradingengine.account.worker.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -7,7 +7,7 @@ import org.springframework.kafka.listener.CommonDelegatingErrorHandler;
 import org.springframework.kafka.listener.CommonErrorHandler;
 import org.springframework.kafka.listener.DefaultErrorHandler;
 
-import com.flab.stocktradingengine.account.disruptor.JournalUnavailableException;
+import com.flab.stocktradingengine.account.disruptor.journal.JournalUnavailableException;
 
 /**
  * account-worker Kafka 리스너의 에러 처리 정책(A-3). Spring Boot가 단일 {@link CommonErrorHandler}

@@ -11,7 +11,9 @@ import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.context.ConfigurableApplicationContext;
 
-import com.flab.stocktradingengine.account.disruptor.AccountEngine;
+import com.flab.stocktradingengine.account.disruptor.engine.AccountEngine;
+import com.flab.stocktradingengine.account.worker.config.AccountJournalArchiveConfig;
+import com.flab.stocktradingengine.account.worker.config.AccountOrderIntakeConfig;
 
 import io.aeron.archive.client.AeronArchive;
 

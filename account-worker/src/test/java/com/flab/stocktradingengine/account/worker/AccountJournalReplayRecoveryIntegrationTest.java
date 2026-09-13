@@ -11,8 +11,8 @@ import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.context.ConfigurableApplicationContext;
 
-import com.flab.stocktradingengine.account.disruptor.AccountEngine;
-import com.flab.stocktradingengine.account.disruptor.AccountState;
+import com.flab.stocktradingengine.account.disruptor.domain.AccountState;
+import com.flab.stocktradingengine.account.disruptor.engine.AccountEngine;
 
 /**
  * 2b-2b 핵심 — 계좌 워커가 재시작하면, 이전 프로세스가 Archive에 남긴 저널을 실제로 읽어

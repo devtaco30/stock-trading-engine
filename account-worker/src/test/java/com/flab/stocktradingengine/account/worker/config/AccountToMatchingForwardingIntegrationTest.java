@@ -1,4 +1,4 @@
-package com.flab.stocktradingengine.account.worker;
+package com.flab.stocktradingengine.account.worker.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -15,9 +15,10 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.annotation.DirtiesContext;
 
-import com.flab.stocktradingengine.account.disruptor.AccountEngine;
-import com.flab.stocktradingengine.account.disruptor.AccountResultListener;
-import com.flab.stocktradingengine.account.disruptor.RejectReason;
+import com.flab.stocktradingengine.account.disruptor.domain.AccountResultListener;
+import com.flab.stocktradingengine.account.disruptor.domain.RejectReason;
+import com.flab.stocktradingengine.account.disruptor.engine.AccountEngine;
+import com.flab.stocktradingengine.account.worker.AccountWorkerApplication;
 import com.flab.stocktradingengine.codec.EventType;
 import com.flab.stocktradingengine.codec.JournaledOrder;
 import com.flab.stocktradingengine.codec.OrderCodec;

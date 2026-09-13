@@ -1,8 +1,11 @@
-package com.flab.stocktradingengine.account.worker;
+package com.flab.stocktradingengine.account.worker.config;
 
 import org.springframework.context.SmartLifecycle;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+
+import com.flab.stocktradingengine.account.worker.lifecycle.AeronMatchingOrderSenderLifecycle;
+import com.flab.stocktradingengine.account.worker.messaging.AeronMatchingOrderSender;
 
 import io.aeron.Aeron;
 import io.aeron.Publication;

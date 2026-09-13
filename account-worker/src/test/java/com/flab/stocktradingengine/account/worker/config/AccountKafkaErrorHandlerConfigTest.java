@@ -1,4 +1,4 @@
-package com.flab.stocktradingengine.account.worker;
+package com.flab.stocktradingengine.account.worker.config;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -20,7 +20,7 @@ import org.springframework.kafka.listener.CommonErrorHandler;
 import org.springframework.kafka.listener.ListenerExecutionFailedException;
 import org.springframework.kafka.listener.MessageListenerContainer;
 
-import com.flab.stocktradingengine.account.disruptor.JournalUnavailableException;
+import com.flab.stocktradingengine.account.disruptor.journal.JournalUnavailableException;
 
 /**
  * A-3 에러 핸들러 라우팅 검증 — 저널 죽음일 때만 컨테이너를 멈추고, 그 외 예외는 안 멈춘다.

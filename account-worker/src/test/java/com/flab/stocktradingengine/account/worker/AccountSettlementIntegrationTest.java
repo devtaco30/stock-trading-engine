@@ -21,9 +21,9 @@ import org.springframework.context.annotation.Import;
 import org.springframework.kafka.support.serializer.JsonSerializer;
 import org.springframework.test.annotation.DirtiesContext;
 
-import com.flab.stocktradingengine.account.disruptor.AccountEngine;
-import com.flab.stocktradingengine.account.disruptor.AccountResultListener;
-import com.flab.stocktradingengine.account.disruptor.RejectReason;
+import com.flab.stocktradingengine.account.disruptor.domain.AccountResultListener;
+import com.flab.stocktradingengine.account.disruptor.domain.RejectReason;
+import com.flab.stocktradingengine.account.disruptor.engine.AccountEngine;
 import com.flab.stocktradingengine.kafka.KafkaTopics;
 import com.flab.stocktradingengine.kafka.event.SettlementResultEvent;
 

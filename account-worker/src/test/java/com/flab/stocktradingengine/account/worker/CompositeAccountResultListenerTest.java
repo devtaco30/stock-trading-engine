@@ -8,7 +8,8 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
-import com.flab.stocktradingengine.account.disruptor.AccountResultListener;
+import com.flab.stocktradingengine.account.disruptor.domain.AccountResultListener;
+import com.flab.stocktradingengine.account.worker.listener.CompositeAccountResultListener;
 
 /**
  * AccountEngine은 리스너를 하나만 받는데(AccountEngineConfig), account-worker는 로깅과

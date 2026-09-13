@@ -1,4 +1,4 @@
-package com.flab.stocktradingengine.account.worker;
+package com.flab.stocktradingengine.account.worker.config;
 
 import java.io.File;
 import java.util.Optional;
@@ -7,7 +7,10 @@ import org.springframework.context.SmartLifecycle;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-import com.flab.stocktradingengine.account.disruptor.AccountEngine;
+import com.flab.stocktradingengine.account.disruptor.engine.AccountEngine;
+import com.flab.stocktradingengine.account.worker.lifecycle.AccountSnapshotLifecycle;
+import com.flab.stocktradingengine.account.worker.recovery.AccountSnapshotStore;
+import com.flab.stocktradingengine.account.worker.recovery.StoredAccountSnapshot;
 
 import io.aeron.archive.client.AeronArchive;
 

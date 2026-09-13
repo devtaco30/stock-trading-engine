@@ -1,4 +1,4 @@
-package com.flab.stocktradingengine.account.worker;
+package com.flab.stocktradingengine.account.worker.recovery;
 
 import java.io.File;
 import java.io.IOException;
@@ -10,8 +10,9 @@ import java.nio.file.StandardCopyOption;
 import java.util.Arrays;
 import java.util.Optional;
 
-import com.flab.stocktradingengine.account.disruptor.AccountSnapshot;
-import com.flab.stocktradingengine.account.disruptor.AccountSnapshotCodec;
+import com.flab.stocktradingengine.account.disruptor.snapshot.AccountSnapshot;
+import com.flab.stocktradingengine.account.disruptor.snapshot.AccountSnapshotCodec;
+import com.flab.stocktradingengine.account.worker.lifecycle.AccountSnapshotLifecycle;
 
 /**
  * 계좌 엔진 스냅샷(2d-2)을 archive-dir(저널과 같은 durable 디스크)에 파일로 저장·조회한다.
@@ -27,7 +28,7 @@ import com.flab.stocktradingengine.account.disruptor.AccountSnapshotCodec;
  * <h3>파일 레이아웃</h3>
  * <pre>[recordingId:8][AccountSnapshotCodec가 인코딩한 스냅샷 바이트...]</pre>
  */
-class AccountSnapshotStore {
+public class AccountSnapshotStore {
 
     private static final String FILE_NAME = "account-snapshot.dat";
     private static final String TEMP_FILE_NAME = "account-snapshot.dat.tmp";
@@ -36,12 +37,12 @@ class AccountSnapshotStore {
     private final File tempFile;
     private final AccountSnapshotCodec codec = new AccountSnapshotCodec();
 
-    AccountSnapshotStore(File archiveDir) {
+    public AccountSnapshotStore(File archiveDir) {
         this.file = new File(archiveDir, FILE_NAME);
         this.tempFile = new File(archiveDir, TEMP_FILE_NAME);
     }
 
-    void write(long recordingId, AccountSnapshot snapshot) {
+    public void write(long recordingId, AccountSnapshot snapshot) {
         byte[] snapshotBytes = codec.encode(snapshot);
         ByteBuffer payload = ByteBuffer.allocate(Long.BYTES + snapshotBytes.length);
         payload.putLong(recordingId);
@@ -57,7 +58,7 @@ class AccountSnapshotStore {
         }
     }
 
-    Optional<StoredAccountSnapshot> read() {
+    public Optional<StoredAccountSnapshot> read() {
         if (!file.exists()) {
             return Optional.empty();
         }

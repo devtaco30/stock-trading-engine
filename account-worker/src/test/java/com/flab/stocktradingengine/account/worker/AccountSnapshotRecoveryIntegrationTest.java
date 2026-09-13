@@ -12,8 +12,8 @@ import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.context.ConfigurableApplicationContext;
 
-import com.flab.stocktradingengine.account.disruptor.AccountEngine;
-import com.flab.stocktradingengine.account.disruptor.AccountState;
+import com.flab.stocktradingengine.account.disruptor.domain.AccountState;
+import com.flab.stocktradingengine.account.disruptor.engine.AccountEngine;
 
 /**
  * 2d-2b 핵심 — 계좌 워커가 graceful shutdown 때 스냅샷을 찍고, 재기동 때 그 스냅샷(+ 스냅샷 이후

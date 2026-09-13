@@ -12,8 +12,11 @@ import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import com.flab.stocktradingengine.account.disruptor.AccountSnapshot;
-import com.flab.stocktradingengine.account.disruptor.AccountStateSnapshot;
+import com.flab.stocktradingengine.account.disruptor.snapshot.AccountSnapshot;
+import com.flab.stocktradingengine.account.disruptor.snapshot.AccountStateSnapshot;
+import com.flab.stocktradingengine.account.worker.lifecycle.AccountSnapshotLifecycle;
+import com.flab.stocktradingengine.account.worker.recovery.AccountSnapshotStore;
+import com.flab.stocktradingengine.account.worker.recovery.StoredAccountSnapshot;
 
 /**
  * 2d-2b — {@link AccountSnapshotStore}(archive-dir에 스냅샷 파일을 원자적으로 쓰고 읽는 순수

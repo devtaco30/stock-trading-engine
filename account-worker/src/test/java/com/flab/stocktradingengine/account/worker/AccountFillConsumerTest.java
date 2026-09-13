@@ -17,9 +17,10 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.kafka.support.Acknowledgment;
 
-import com.flab.stocktradingengine.account.disruptor.AccountEngine;
-import com.flab.stocktradingengine.account.disruptor.AccountResultListener;
-import com.flab.stocktradingengine.account.disruptor.RejectReason;
+import com.flab.stocktradingengine.account.disruptor.domain.AccountResultListener;
+import com.flab.stocktradingengine.account.disruptor.domain.RejectReason;
+import com.flab.stocktradingengine.account.disruptor.engine.AccountEngine;
+import com.flab.stocktradingengine.account.worker.messaging.AccountFillConsumer;
 import com.flab.stocktradingengine.kafka.event.TradeFilledEvent;
 
 /**

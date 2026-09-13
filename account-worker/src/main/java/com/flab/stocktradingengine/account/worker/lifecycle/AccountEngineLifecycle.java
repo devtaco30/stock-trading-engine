@@ -1,10 +1,10 @@
-package com.flab.stocktradingengine.account.worker;
+package com.flab.stocktradingengine.account.worker.lifecycle;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.springframework.context.SmartLifecycle;
 
-import com.flab.stocktradingengine.account.disruptor.AccountEngine;
+import com.flab.stocktradingengine.account.disruptor.engine.AccountEngine;
 
 /**
  * {@link AccountEngine}의 시작·종료를 Spring 컨텍스트 생명주기에 건다.
@@ -13,12 +13,12 @@ import com.flab.stocktradingengine.account.disruptor.AccountEngine;
  * {@code SpringApplication.run()}이 등록하는 종료 훅이 컨텍스트를 닫을 때 {@link #stop()}이 불려
  * {@code engine.shutdown()}까지 정상 호출된다. 별도로 대기 스레드·shutdown hook을 짤 필요가 없다.</p>
  */
-class AccountEngineLifecycle implements SmartLifecycle {
+public class AccountEngineLifecycle implements SmartLifecycle {
 
     private final AccountEngine engine;
     private final AtomicBoolean running = new AtomicBoolean(false);
 
-    AccountEngineLifecycle(AccountEngine engine) {
+    public AccountEngineLifecycle(AccountEngine engine) {
         this.engine = engine;
     }
 

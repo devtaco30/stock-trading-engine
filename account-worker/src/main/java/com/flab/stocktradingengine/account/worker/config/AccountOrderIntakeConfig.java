@@ -1,4 +1,4 @@
-package com.flab.stocktradingengine.account.worker;
+package com.flab.stocktradingengine.account.worker.config;
 
 import java.io.File;
 import java.io.IOException;
@@ -9,8 +9,9 @@ import org.springframework.context.SmartLifecycle;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-import com.flab.stocktradingengine.account.disruptor.AccountEngine;
-import com.flab.stocktradingengine.account.disruptor.AccountOrderReceiver;
+import com.flab.stocktradingengine.account.disruptor.engine.AccountEngine;
+import com.flab.stocktradingengine.account.disruptor.io.AccountOrderReceiver;
+import com.flab.stocktradingengine.account.worker.lifecycle.AccountOrderReceiverLifecycle;
 
 import io.aeron.Aeron;
 import io.aeron.CommonContext;

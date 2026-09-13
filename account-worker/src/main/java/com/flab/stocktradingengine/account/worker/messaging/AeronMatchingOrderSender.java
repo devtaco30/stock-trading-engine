@@ -1,4 +1,4 @@
-package com.flab.stocktradingengine.account.worker;
+package com.flab.stocktradingengine.account.worker.messaging;
 
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
@@ -10,7 +10,8 @@ import org.agrona.concurrent.IdleStrategy;
 import org.agrona.concurrent.OneToOneConcurrentArrayQueue;
 import org.agrona.concurrent.UnsafeBuffer;
 
-import com.flab.stocktradingengine.account.disruptor.MatchingOrderSender;
+import com.flab.stocktradingengine.account.disruptor.io.MatchingOrderSender;
+import com.flab.stocktradingengine.account.worker.config.MatchingOrderSenderConfig;
 import com.flab.stocktradingengine.codec.EventType;
 import com.flab.stocktradingengine.codec.JournaledOrder;
 import com.flab.stocktradingengine.codec.OrderCodec;
