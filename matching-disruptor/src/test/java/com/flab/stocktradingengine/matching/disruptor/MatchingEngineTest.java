@@ -14,6 +14,9 @@ import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import com.lmax.disruptor.BlockingWaitStrategy;
+
+import com.flab.stocktradingengine.codec.JournaledOrder;
 import com.flab.stocktradingengine.trading.entity.OrderSide;
 import com.flab.stocktradingengine.trading.matching.FillResult;
 
@@ -80,5 +83,64 @@ class MatchingEngineTest {
 
         assertFalse(arrived, "체결이 없어야 한다");
         assertEquals(0, fills.size());
+    }
+
+    // ---------- shutdown 안전성 (죽은 소비자 앞 무한 대기 방지) ----------
+
+    /**
+     * 저널 소비자(1단계)가 죽으면 저널 소비자 자신은 Disruptor의 hasBacklog 검사에서 빠진다
+     * (BatchEventProcessor.run()의 finally가 running을 IDLE로 되돌려 "죽은 소비자"가 "안 도는
+     * 소비자"와 구분이 안 됨) — 그래서 뒤에 물린 매칭 핸들러(체인의 마지막, hasBacklog가 실제로
+     * 보는 대상)가 죽은 저널 소비자의 시퀀스를 영원히 기다리며 블록된 채(죽지 않고 running=true)
+     * 멈춰야 shutdown()이 실제로 무한 대기한다. 매칭 핸들러 자신이 죽는 시나리오로는 이 hang이
+     * 재현되지 않는다(그 핸들러도 죽으면 검사 대상에서 빠져 shutdown()이 바로 반환됨 —
+     * Disruptor 4.0.0 소스로 확인).
+     */
+    @Test
+    void 저널소비자가_죽어_핸들러가_블록돼도_shutdown은_타임아웃_안에_반환() throws InterruptedException {
+        CountDownLatch journalReached = new CountDownLatch(1);
+        CountDownLatch shutdownReturned = new CountDownLatch(1);
+
+        MatchingEngine deadJournalEngine = new MatchingEngine(BUFFER_SIZE, new BlockingWaitStrategy(),
+            (stockCode, fill) -> { }, new PoisonJournal(journalReached));
+        deadJournalEngine.start();
+
+        Instant now = Instant.now();
+        deadJournalEngine.publishPlace(1L, 100L, STOCK, OrderSide.BUY, new BigDecimal("10000"), 100, now);
+        assertTrue(journalReached.await(1, TimeUnit.SECONDS), "저널 소비자가 append에 도달해야 한다");
+
+        Thread shutdownThread = new Thread(() -> {
+            deadJournalEngine.shutdown();
+            shutdownReturned.countDown();
+        });
+        shutdownThread.setDaemon(true);
+        shutdownThread.start();
+
+        assertTrue(shutdownReturned.await(8, TimeUnit.SECONDS), "8초 안에 shutdown()이 반환해야 한다");
+    }
+
+    /** append 호출 시 latch를 내리고 예외를 던져 저널 소비자를 죽이는 테스트용 저널(shutdown 안전성 검증). */
+    private static final class PoisonJournal implements Journal {
+        private final CountDownLatch reached;
+
+        PoisonJournal(CountDownLatch reached) {
+            this.reached = reached;
+        }
+
+        @Override
+        public void append(JournaledOrder order) {
+            reached.countDown();
+            throw new RuntimeException("의도적 저널 소비자 사망(테스트)");
+        }
+
+        @Override
+        public List<JournaledOrder> entries() {
+            return List.of();
+        }
+
+        @Override
+        public long position() {
+            return 0L;
+        }
     }
 }

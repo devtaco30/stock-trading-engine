@@ -18,6 +18,7 @@ import org.junit.jupiter.api.Test;
 import com.lmax.disruptor.BlockingWaitStrategy;
 import com.lmax.disruptor.dsl.ProducerType;
 
+import com.flab.stocktradingengine.codec.AccountJournalEntry;
 import com.flab.stocktradingengine.trading.entity.OrderSide;
 
 /**
@@ -587,6 +588,44 @@ class AccountEngineTest {
         }
     }
 
+    // ---------- shutdown 안전성 (죽은 소비자 앞 무한 대기 방지) ----------
+
+    /**
+     * 저널 소비자(1단계)가 죽으면, 저널 소비자 자신은 Disruptor의 hasBacklog 검사에서
+     * 빠진다(BatchEventProcessor.run()의 finally가 running을 IDLE로 되돌려 "죽은 소비자"가
+     * "안 도는 소비자"와 구분이 안 됨) — 그래서 뒤에 물린 비즈니스 핸들러(체인의 마지막,
+     * hasBacklog가 실제로 보는 대상)가 죽은 저널 소비자의 시퀀스를 영원히 기다리며 블록된
+     * 채(죽지 않고 running=true) 멈춰야 shutdown()이 실제로 무한 대기한다. 비즈니스 핸들러
+     * 자신이 죽는 시나리오로는 이 hang이 재현되지 않는다(그 핸들러도 죽으면 검사 대상에서
+     * 빠져 shutdown()이 바로 반환됨 — Disruptor 4.0.0 소스로 확인).
+     */
+    @Test
+    @DisplayName("저널 소비자가 죽어 뒤 핸들러가 영원히 블록돼도 shutdown()이 타임아웃 안에 반환한다")
+    void 저널소비자가_죽어_핸들러가_블록돼도_shutdown은_타임아웃_안에_반환() throws InterruptedException {
+        CountDownLatch journalReached = new CountDownLatch(1);
+        CountDownLatch shutdownReturned = new CountDownLatch(1);
+
+        AccountEngine deadJournalEngine = new AccountEngine(BUFFER_SIZE, new BlockingWaitStrategy(), ProducerType.SINGLE,
+            NODE_ID,
+            (orderId, accountId, stockCode, side, price, quantity) -> { },
+            NoOpAccountResultListener.INSTANCE,
+            new PoisonAccountJournal(journalReached));
+        deadJournalEngine.seed(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
+        deadJournalEngine.start();
+
+        deadJournalEngine.publishBuy(1L, STOCK, new BigDecimal("10000"), 10, "r1");
+        assertTrue(journalReached.await(1, TimeUnit.SECONDS), "저널 소비자가 append에 도달해야 한다");
+
+        Thread shutdownThread = new Thread(() -> {
+            deadJournalEngine.shutdown();
+            shutdownReturned.countDown();
+        });
+        shutdownThread.setDaemon(true);
+        shutdownThread.start();
+
+        assertTrue(shutdownReturned.await(8, TimeUnit.SECONDS), "8초 안에 shutdown()이 반환해야 한다");
+    }
+
     /** 소비자 스레드가 낸 결과를 모으고 래치를 내리는 테스트용 리스너. */
     private static final class Recorder implements AccountResultListener {
         private final List<Recorded> events;
@@ -645,5 +684,30 @@ class AccountEngineTest {
 
     /** matchingOrderSender.forwardPlace 호출 한 건의 캡처(②-b). */
     private record ForwardedOrder(long orderId, long accountId, String stockCode, OrderSide side, BigDecimal price, int quantity) {
+    }
+
+    /** append 호출 시 latch를 내리고 예외를 던져 저널 소비자를 죽이는 테스트용 저널(shutdown 안전성 검증). */
+    private static final class PoisonAccountJournal implements AccountJournal {
+        private final CountDownLatch reached;
+
+        PoisonAccountJournal(CountDownLatch reached) {
+            this.reached = reached;
+        }
+
+        @Override
+        public void append(AccountJournalEntry entry) {
+            reached.countDown();
+            throw new RuntimeException("의도적 저널 소비자 사망(테스트)");
+        }
+
+        @Override
+        public List<AccountJournalEntry> entries() {
+            return List.of();
+        }
+
+        @Override
+        public long position() {
+            return 0L;
+        }
     }
 }
