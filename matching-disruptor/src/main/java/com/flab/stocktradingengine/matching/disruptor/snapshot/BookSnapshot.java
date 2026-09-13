@@ -1,4 +1,4 @@
-package com.flab.stocktradingengine.matching.disruptor;
+package com.flab.stocktradingengine.matching.disruptor.snapshot;
 
 import java.util.List;
 import java.util.Map;

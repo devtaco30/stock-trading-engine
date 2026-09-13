@@ -25,6 +25,8 @@ import com.flab.stocktradingengine.trading.matching.FillResult;
 import com.flab.stocktradingengine.codec.EventType;
 import com.flab.stocktradingengine.codec.JournaledOrder;
 import com.flab.stocktradingengine.codec.OrderCodec;
+import com.flab.stocktradingengine.matching.disruptor.engine.MatchingEngine;
+import com.flab.stocktradingengine.matching.disruptor.io.AeronOrderReceiver;
 
 /**
  * Unit 4c — Aeron 을 실제로 통과한 주문이 매칭돼 체결이 나오는지 검증(end-to-end).

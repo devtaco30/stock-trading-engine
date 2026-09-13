@@ -1,4 +1,4 @@
-package com.flab.stocktradingengine.matching.disruptor;
+package com.flab.stocktradingengine.matching.disruptor.snapshot;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;

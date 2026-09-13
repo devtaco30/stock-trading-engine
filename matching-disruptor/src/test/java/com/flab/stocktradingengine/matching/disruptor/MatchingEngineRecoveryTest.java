@@ -17,6 +17,9 @@ import org.junit.jupiter.api.Test;
 
 import com.flab.stocktradingengine.codec.EventType;
 import com.flab.stocktradingengine.codec.JournaledOrder;
+import com.flab.stocktradingengine.matching.disruptor.engine.MatchingEngine;
+import com.flab.stocktradingengine.matching.disruptor.io.MatchListener;
+import com.flab.stocktradingengine.matching.disruptor.journal.InMemoryJournal;
 import com.flab.stocktradingengine.trading.entity.OrderSide;
 import com.flab.stocktradingengine.trading.matching.FillResult;
 import com.lmax.disruptor.BlockingWaitStrategy;

@@ -1,4 +1,4 @@
-package com.flab.stocktradingengine.matching.disruptor;
+package com.flab.stocktradingengine.matching.disruptor.io;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -13,6 +13,7 @@ import io.aeron.logbuffer.Header;
 import com.flab.stocktradingengine.codec.EventType;
 import com.flab.stocktradingengine.codec.JournaledOrder;
 import com.flab.stocktradingengine.codec.OrderCodec;
+import com.flab.stocktradingengine.matching.disruptor.engine.MatchingEngine;
 
 /**
  * Unit 4c — Aeron 으로 들어온 주문을 매칭엔진에 넣는 수신 게이트웨이.

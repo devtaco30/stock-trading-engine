@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Test;
 
 import com.flab.stocktradingengine.trading.entity.OrderSide;
 import com.flab.stocktradingengine.codec.JournaledOrder;
+import com.flab.stocktradingengine.matching.disruptor.engine.MatchingEngine;
 
 /**
  * Unit 2 저널 게이팅 검증.

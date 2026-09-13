@@ -10,6 +10,10 @@ import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import com.flab.stocktradingengine.matching.disruptor.snapshot.BookSnapshot;
+import com.flab.stocktradingengine.matching.disruptor.snapshot.MatchingSnapshot;
+import com.flab.stocktradingengine.matching.disruptor.snapshot.MatchingSnapshotCodec;
+import com.flab.stocktradingengine.matching.disruptor.snapshot.RestingOrder;
 import com.flab.stocktradingengine.trading.entity.OrderSide;
 
 /**

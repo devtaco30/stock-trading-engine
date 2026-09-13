@@ -1,4 +1,4 @@
-package com.flab.stocktradingengine.matching.disruptor;
+package com.flab.stocktradingengine.matching.disruptor.handler;
 
 import java.lang.System.Logger;
 import java.lang.System.Logger.Level;
@@ -11,6 +11,8 @@ import com.flab.stocktradingengine.trading.matching.FillResult;
 import com.flab.stocktradingengine.trading.matching.OrderBook;
 import com.flab.stocktradingengine.trading.matching.OrderEntry;
 import com.flab.stocktradingengine.codec.EventType;
+import com.flab.stocktradingengine.matching.disruptor.engine.OrderEvent;
+import com.flab.stocktradingengine.matching.disruptor.io.MatchListener;
 
 /**
  * 링버퍼를 소비하는 단일 매칭 핸들러.

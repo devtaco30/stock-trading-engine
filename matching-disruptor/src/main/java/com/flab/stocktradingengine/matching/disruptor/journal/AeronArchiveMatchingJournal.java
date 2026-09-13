@@ -1,4 +1,4 @@
-package com.flab.stocktradingengine.matching.disruptor;
+package com.flab.stocktradingengine.matching.disruptor.journal;
 
 import java.nio.ByteBuffer;
 import java.util.List;
@@ -9,6 +9,8 @@ import org.agrona.concurrent.UnsafeBuffer;
 
 import com.flab.stocktradingengine.codec.JournaledOrder;
 import com.flab.stocktradingengine.codec.OrderCodec;
+import com.flab.stocktradingengine.matching.disruptor.handler.JournalEventHandler;
+import com.flab.stocktradingengine.matching.disruptor.handler.MatchingExceptionHandler;
 
 import io.aeron.ExclusivePublication;
 import io.aeron.Publication;

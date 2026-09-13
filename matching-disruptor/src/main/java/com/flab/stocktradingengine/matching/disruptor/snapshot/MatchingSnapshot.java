@@ -1,6 +1,9 @@
-package com.flab.stocktradingengine.matching.disruptor;
+package com.flab.stocktradingengine.matching.disruptor.snapshot;
 
 import java.util.Map;
+
+import com.flab.stocktradingengine.matching.disruptor.engine.MatchingEngine;
+import com.flab.stocktradingengine.matching.disruptor.journal.Journal;
 
 /**
  * 매칭 엔진 전체 상태의 스냅샷(2d-1, ADR-019 "자체 스냅샷"). {@link MatchingEngine#snapshot()}이

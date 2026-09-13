@@ -1,8 +1,10 @@
-package com.flab.stocktradingengine.matching.disruptor;
+package com.flab.stocktradingengine.matching.disruptor.handler;
 
 import com.lmax.disruptor.EventHandler;
 
 import com.flab.stocktradingengine.codec.JournaledOrder;
+import com.flab.stocktradingengine.matching.disruptor.engine.OrderEvent;
+import com.flab.stocktradingengine.matching.disruptor.journal.Journal;
 
 /**
  * 링버퍼를 소비해 주문을 저널에 기록하는 핸들러.

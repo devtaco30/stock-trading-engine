@@ -1,4 +1,4 @@
-package com.flab.stocktradingengine.matching.disruptor;
+package com.flab.stocktradingengine.matching.disruptor.journal;
 
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
