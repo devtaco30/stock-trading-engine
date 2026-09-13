@@ -4,9 +4,11 @@ import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
 
 import com.lmax.disruptor.BlockingWaitStrategy;
 import com.lmax.disruptor.RingBuffer;
+import com.lmax.disruptor.TimeoutException;
 import com.lmax.disruptor.WaitStrategy;
 import com.lmax.disruptor.dsl.Disruptor;
 import com.lmax.disruptor.dsl.ProducerType;
@@ -41,6 +43,11 @@ public class AccountEngine {
     // 상황에서 호출 스레드가 무한 스핀하는 걸 막는다. Kafka max.poll.interval(기본 5분)보다 한참 짧아
     // 리밸런스를 유발하지 않는다.
     private static final long JOURNAL_WAIT_TIMEOUT_MILLIS = 5000;
+
+    // 소비자 스레드가 fail-fast로 죽으면 disruptor.shutdown()이 hasBacklog() 스핀에서 무한 대기할 수
+    // 있다 — 죽은 소비자 뒤에 물린 핸들러가 그 시퀀스를 영원히 기다리며 블록되기 때문. 이 타임아웃
+    // 안에 못 끝나면 halt()로 강제 정지한다.
+    private static final long SHUTDOWN_TIMEOUT_SECONDS = 5;
 
     private final Disruptor<AccountEvent> disruptor;
     private final Map<Long, AccountState> accounts = new HashMap<>();
@@ -198,9 +205,16 @@ public class AccountEngine {
         this.ringBuffer = disruptor.start();
     }
 
-    /** 남은 이벤트를 모두 처리하고 소비자 스레드를 종료한다. */
+    /**
+     * 남은 이벤트를 모두 처리하고 소비자 스레드를 종료한다. 죽은 소비자 앞에서 무한 대기하지
+     * 않도록 {@link #SHUTDOWN_TIMEOUT_SECONDS} 안에 못 끝나면 강제로 halt한다.
+     */
     public void shutdown() {
-        disruptor.shutdown();
+        try {
+            disruptor.shutdown(SHUTDOWN_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        } catch (TimeoutException e) {
+            disruptor.halt();
+        }
     }
 
     /**
