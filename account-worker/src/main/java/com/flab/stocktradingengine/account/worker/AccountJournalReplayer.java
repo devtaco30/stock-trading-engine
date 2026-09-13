@@ -1,8 +1,11 @@
 package com.flab.stocktradingengine.account.worker;
 
+import java.lang.System.Logger;
+import java.lang.System.Logger.Level;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 
 import com.flab.stocktradingengine.codec.AccountJournalEntry;
 import com.flab.stocktradingengine.codec.AccountJournalEntryCodec;
@@ -29,6 +32,8 @@ import io.aeron.logbuffer.FragmentHandler;
  * 같은 이유(ADR-019, 저널을 0부터 전부 재생하지 않고 스냅샷 이후 변화만 읽어 복구 시간을 줄인다).</p>
  */
 class AccountJournalReplayer {
+
+    private static final Logger log = System.getLogger(AccountJournalReplayer.class.getName());
 
     // 저널 발행 스트림(4005)과 구분되는, 리플레이 전용 스트림 — replay Subscription이 이 위에서만 연다.
     private static final String REPLAY_CHANNEL = "aeron:ipc";
@@ -108,7 +113,14 @@ class AccountJournalReplayer {
                 recording.recordingId(), fromPosition, length, REPLAY_CHANNEL, REPLAY_STREAM_ID)) {
             awaitConnected(subscription);
             Image image = subscription.imageAtIndex(0);
-            FragmentHandler handler = (buffer, offset, fragmentLength, header) -> out.add(codec.decode(buffer, offset));
+            FragmentHandler handler = (buffer, offset, fragmentLength, header) -> {
+                Optional<AccountJournalEntry> entry = codec.tryDecode(buffer, offset);
+                if (entry.isEmpty()) {
+                    log.log(Level.ERROR, "[계좌] 손상 저널 엔트리 skip: recordingId=" + recording.recordingId());
+                    return;
+                }
+                out.add(entry.get());
+            };
             while (!image.isEndOfStream() && !image.isClosed()) {
                 image.poll(handler, FRAGMENT_LIMIT);
             }

@@ -2,6 +2,7 @@ package com.flab.stocktradingengine.codec;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.Optional;
 
 import org.agrona.DirectBuffer;
 import org.agrona.MutableDirectBuffer;
@@ -116,5 +117,22 @@ public final class OrderCodec {
 
         String stockCode = buffer.getStringAscii(position);
         return new JournaledOrder(type, orderId, accountId, stockCode, side, price, quantity, orderAt);
+    }
+
+    /**
+     * content-poison 방어(구조 검증, 1층) — decode가 던지게 두지 않고 무효면 예외 대신 빈 값을
+     * 돌려준다(check-then-act). type ordinal이 {@link EventType} 범위를 벗어나면(손상 바이트)
+     * 예방적으로 걸러내고, 검증이 못 예측한 손상은 이 안의 얇은 catch가 최후 안전망으로 흡수한다.
+     */
+    public Optional<JournaledOrder> tryDecode(DirectBuffer buffer, int offset) {
+        try {
+            byte typeOrdinal = buffer.getByte(offset);
+            if (typeOrdinal < 0 || typeOrdinal >= EventType.values().length) {
+                return Optional.empty();
+            }
+            return Optional.of(decode(buffer, offset));
+        } catch (RuntimeException e) {
+            return Optional.empty();
+        }
     }
 }

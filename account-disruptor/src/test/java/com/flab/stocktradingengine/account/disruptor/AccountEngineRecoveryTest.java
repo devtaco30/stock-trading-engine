@@ -1,5 +1,6 @@
 package com.flab.stocktradingengine.account.disruptor;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -180,6 +181,26 @@ class AccountEngineRecoveryTest {
         assertEquals(0, new BigDecimal("1000000").compareTo(state.balance()));
         assertEquals(10, state.holding(STOCK));
         assertEquals(0, BigDecimal.ZERO.compareTo(state.reservedMargin()));
+    }
+
+    @Test
+    @DisplayName("저널에 poison 엔트리(예약 없는 체결)가 섞여 있어도 recover가 예외 없이 끝나고 정상 엔트리만 반영된다 (U1)")
+    void 저널에_poison_섞여도_recover_예외없이_정상엔트리만_반영() {
+        List<AccountJournalEntry> entries = List.of(
+            new AccountJournalEntry(AccountEventType.BUY, 0L, 1L, STOCK, new BigDecimal("10000"), 10, "r1", 0L),
+            // orderId=999는 매수 접수 저널이 없어 예약이 없다 — recoveryHandler.onEvent에서
+            // AccountState.applyBuyFill이 IllegalStateException을 던지는 poison 엔트리.
+            new AccountJournalEntry(AccountEventType.BUY_FILL, 999L, 1L, STOCK, new BigDecimal("10000"), 10, null, 9001L)
+        );
+
+        recovered = new AccountEngine(1024, NODE_ID, NO_OP_SENDER, new NoOpAccountResultListener());
+        recovered.seed(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
+
+        assertDoesNotThrow(() -> recovered.recover(entries), "poison 엔트리 하나가 recover 전체를 죽여선 안 된다");
+
+        recovered.start();
+        AccountState recoveredState = recovered.accountState(1L);
+        assertNotEquals(0L, recoveredState.orderIdFor("r1"), "poison 앞의 정상 BUY 엔트리는 반영돼 orderId가 발급돼 있어야 한다");
     }
 
     /** onAccepted·onSellAccepted에서 requestId→orderId를 기록하고, 지정한 두 단계로 래치를 내리는 리스너. */

@@ -1,8 +1,11 @@
 package com.flab.stocktradingengine.codec;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.math.BigDecimal;
+import java.util.Optional;
 
 import org.agrona.concurrent.UnsafeBuffer;
 import org.junit.jupiter.api.DisplayName;
@@ -64,5 +67,33 @@ class AccountOrderCodecTest {
 
         assertEquals(1L, decoded.accountId());
         assertEquals("req-3", decoded.requestId());
+    }
+
+    @Test
+    @DisplayName("정상 바이트는 tryDecode도 decode와 같은 값을 돌려준다")
+    void tryDecode_정상바이트는_값을_돌려준다() {
+        UnsafeBuffer buffer = new UnsafeBuffer(new byte[256]);
+        DecodedAccountOrder order = new DecodedAccountOrder(
+            OrderSide.BUY, 1L, STOCK, new BigDecimal("10000"), 10, "req-4");
+        codec.encode(buffer, 0, order);
+
+        Optional<DecodedAccountOrder> decoded = codec.tryDecode(buffer, 0);
+
+        assertTrue(decoded.isPresent());
+        assertEquals("req-4", decoded.get().requestId());
+    }
+
+    @Test
+    @DisplayName("content-poison — type 바이트가 OrderSide 범위를 벗어나면 tryDecode는 예외 대신 빈 값을 돌려준다")
+    void tryDecode_손상된_type바이트는_빈값() {
+        UnsafeBuffer buffer = new UnsafeBuffer(new byte[256]);
+        DecodedAccountOrder order = new DecodedAccountOrder(
+            OrderSide.BUY, 1L, STOCK, new BigDecimal("10000"), 10, "req-5");
+        codec.encode(buffer, 0, order);
+        buffer.putByte(0, (byte) 99); // OrderSide.values().length(2)를 벗어난 값
+
+        Optional<DecodedAccountOrder> decoded = codec.tryDecode(buffer, 0);
+
+        assertFalse(decoded.isPresent());
     }
 }

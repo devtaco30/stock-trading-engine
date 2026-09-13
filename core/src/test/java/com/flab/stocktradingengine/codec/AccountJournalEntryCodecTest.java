@@ -1,9 +1,12 @@
 package com.flab.stocktradingengine.codec;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.math.BigDecimal;
+import java.util.Optional;
 
 import org.agrona.concurrent.UnsafeBuffer;
 import org.junit.jupiter.api.DisplayName;
@@ -115,6 +118,34 @@ class AccountJournalEntryCodecTest {
 
         assertEquals(1L, decoded.accountId());
         assertEquals("r3", decoded.requestId());
+    }
+
+    @Test
+    @DisplayName("정상 바이트는 tryDecode도 decode와 같은 값을 돌려준다")
+    void tryDecode_정상바이트는_값을_돌려준다() {
+        UnsafeBuffer buffer = new UnsafeBuffer(new byte[256]);
+        AccountJournalEntry entry = new AccountJournalEntry(
+            AccountEventType.BUY, 0L, 1L, STOCK, new BigDecimal("10000"), 10, "r4", 0L);
+        codec.encode(buffer, 0, entry);
+
+        Optional<AccountJournalEntry> decoded = codec.tryDecode(buffer, 0);
+
+        assertTrue(decoded.isPresent());
+        assertEquals("r4", decoded.get().requestId());
+    }
+
+    @Test
+    @DisplayName("content-poison — type 바이트가 AccountEventType 범위를 벗어나면 tryDecode는 예외 대신 빈 값을 돌려준다")
+    void tryDecode_손상된_type바이트는_빈값() {
+        UnsafeBuffer buffer = new UnsafeBuffer(new byte[256]);
+        AccountJournalEntry entry = new AccountJournalEntry(
+            AccountEventType.BUY, 0L, 1L, STOCK, new BigDecimal("10000"), 10, "r5", 0L);
+        codec.encode(buffer, 0, entry);
+        buffer.putByte(0, (byte) 99); // AccountEventType.values().length(5)를 벗어난 값
+
+        Optional<AccountJournalEntry> decoded = codec.tryDecode(buffer, 0);
+
+        assertFalse(decoded.isPresent());
     }
 
     private AccountJournalEntry roundTrip(AccountJournalEntry entry) {
