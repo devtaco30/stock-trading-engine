@@ -2,7 +2,10 @@ package com.flab.stocktradingengine.api.service;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
@@ -18,24 +21,28 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.flab.stocktradingengine.account.entity.Account;
 import com.flab.stocktradingengine.api.dto.order.BuyOrderRequest;
+import com.flab.stocktradingengine.api.dto.order.SellOrderRequest;
 import com.flab.stocktradingengine.api.exception.ForbiddenException;
+import com.flab.stocktradingengine.api.messaging.AeronAccountOrderSender;
 import com.flab.stocktradingengine.api.redis.LtpRedisRepository;
 import com.flab.stocktradingengine.api.resolver.AccountAccessResolver;
 import com.flab.stocktradingengine.exception.InvalidRequestException;
 import com.flab.stocktradingengine.market.service.QuoteService;
+import com.flab.stocktradingengine.trading.entity.OrderSide;
 
 /**
- * fork5 U1a — v2 주문 게이트웨이 뼈대. Aeron 발신 전까지(검증 통과 지점까지)만 검증한다
- * (ADR-032, 발신은 U1b). requestId는 클라 필수 — v1의 서버 생성 fallback(resolveRequestId)을
+ * fork5 U1a·U1b — v2 주문 게이트웨이. requestId·계좌소유·가격밴드 검증(U1a) 후 계좌 인테이크로
+ * 동기 발신한다(U1b, ADR-032). requestId는 클라 필수 — v1의 서버 생성 fallback(resolveRequestId)을
  * 쓰지 않는다.
  */
 @ExtendWith(MockitoExtension.class)
-@DisplayName("OrderV2ApiService - v2 게이트웨이 뼈대")
+@DisplayName("OrderV2ApiService - v2 게이트웨이")
 class OrderV2ApiServiceTest {
 
     @Mock AccountAccessResolver accountAccessResolver;
     @Mock LtpRedisRepository ltpRedisRepository;
     @Mock QuoteService quoteService;
+    @Mock AeronAccountOrderSender aeronAccountOrderSender;
 
     @InjectMocks
     OrderV2ApiService orderV2ApiService;
@@ -50,10 +57,22 @@ class OrderV2ApiServiceTest {
     @BeforeEach
     void setUp() {
         mockAccount = mock(Account.class);
+        lenient().when(mockAccount.getAccountId()).thenReturn(ACCOUNT_ID);
     }
 
     private BuyOrderRequest buyRequest(BigDecimal price, String requestId) {
         return BuyOrderRequest.builder()
+            .accountId(ACCOUNT_ID)
+            .stockCode(STOCK_CODE)
+            .orderType("LIMIT")
+            .price(price)
+            .quantity(10)
+            .requestId(requestId)
+            .build();
+    }
+
+    private SellOrderRequest sellRequest(BigDecimal price, String requestId) {
+        return SellOrderRequest.builder()
             .accountId(ACCOUNT_ID)
             .stockCode(STOCK_CODE)
             .orderType("LIMIT")
@@ -105,12 +124,28 @@ class OrderV2ApiServiceTest {
     }
 
     @Test
-    @DisplayName("requestId·계좌소유·가격밴드 전부 통과하면 예외 없이 접수된다")
-    void 정상_요청은_접수된다() {
+    @DisplayName("매수 — requestId·계좌소유·가격밴드 전부 통과하면 계좌 인테이크로 발신한다")
+    void 정상_매수는_발신된다() {
         BuyOrderRequest request = buyRequest(REFERENCE_PRICE, "req-1");
         when(accountAccessResolver.resolveAccountOwnedAndActive(USER_ID, ACCOUNT_ID)).thenReturn(mockAccount);
         when(ltpRedisRepository.get(STOCK_CODE)).thenReturn(Optional.of(REFERENCE_PRICE));
 
         assertDoesNotThrow(() -> orderV2ApiService.placeBuyOrder(USER_ID, request));
+
+        verify(aeronAccountOrderSender).send(
+            eq(OrderSide.BUY), eq(ACCOUNT_ID), eq(STOCK_CODE), eq(REFERENCE_PRICE), eq(10), eq("req-1"));
+    }
+
+    @Test
+    @DisplayName("매도 — requestId·계좌소유·가격밴드 전부 통과하면 계좌 인테이크로 발신한다")
+    void 정상_매도는_발신된다() {
+        SellOrderRequest request = sellRequest(REFERENCE_PRICE, "req-2");
+        when(accountAccessResolver.resolveAccountOwnedAndActive(USER_ID, ACCOUNT_ID)).thenReturn(mockAccount);
+        when(ltpRedisRepository.get(STOCK_CODE)).thenReturn(Optional.of(REFERENCE_PRICE));
+
+        assertDoesNotThrow(() -> orderV2ApiService.placeSellOrder(USER_ID, request));
+
+        verify(aeronAccountOrderSender).send(
+            eq(OrderSide.SELL), eq(ACCOUNT_ID), eq(STOCK_CODE), eq(REFERENCE_PRICE), eq(10), eq("req-2"));
     }
 }
