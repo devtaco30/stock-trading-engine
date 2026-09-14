@@ -8,7 +8,7 @@ feeds: [adr, blog]
 
 # 전송 전략 반전 — 핫패스는 Aeron+Archive, Kafka는 off-path
 
-> ⚠️ 2026-09-14 확장: 이 ADR의 "Kafka는 off-path 유지" 부분은 **ADR-032(`single-stack-aeron-archive.md`)가 "Kafka 완전 제거"로 대체**한다. Archive가 내구성을 흡수하고 조회 소비자가 api→account 하나뿐이라 Kafka 존재 근거가 만료됨. 아래는 그 전 단계 기록.
+> ⚠️ 2026-09-14: 이 ADR의 "Kafka는 off-path 유지"는 **재확인됨(현행)**. ADR-032(`single-stack-aeron-archive.md`)가 "Kafka 완전 제거"로 대체하려 했으나, 정산은 off-path 비동기 durable 잡 전달이라 Kafka 니치임이 드러나 **ADR-033(`hybrid-transport-restored.md`)이 이 결정을 되살렸다.** 현행 = 핫패스 Aeron / off-path 정산 Kafka(이 ADR 그대로). (ADR-032의 핫패스 Aeron 부분만 유효.)
 
 ## ADR 네타
 ### ADR-020 전송 전략 반전 (핫패스 Aeron+Archive, Kafka off-path)

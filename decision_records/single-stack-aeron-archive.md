@@ -8,8 +8,14 @@ feeds: [adr, blog]
 
 # Kafka 완전 제거 — 단일 Aeron+Archive 스택 (ADR-020을 확장, ADR-019 Cluster 재검토)
 
-> 설계 단계 기록(미구현, target). 이 세션(2026-09-14)의 큰 아키텍처 결정.
-> ADR-020(transport-inversion, `transport-inversion.md`)이 "Kafka는 off-path 유지"였는데, 이 ADR이 "Kafka 완전 제거"로 더 나간다.
+> ⚠️⚠️ **되돌림(2026-09-14 밤): 이 ADR-032는 ADR-033(`hybrid-transport-restored.md`)이 되돌렸다.**
+> "Kafka 완전 제거"는 핫패스엔 맞지만 **off-path 정산엔 과했다** — 정산은 비동기 durable 잡 전달이라
+> Kafka 니치이고, Aeron 이관은 Kafka 프로듀서를 손으로 재구현하는 일이었다. 정산 이관 시도(S1·S5·S4a·S4b)는
+> `git reset --hard 7ef9bbb`로 드롭+태그 `settlement-aeron-attempt` 보존. **핫패스(체결 U2~U5) Aeron 이관은
+> 유효·유지.** 아래는 그 (부분) 기각된 원 결정 기록 — 학습용으로 남긴다.
+>
+> 설계 단계 기록. 이 세션(2026-09-14)의 아키텍처 결정(핫패스 부분만 유효).
+> ADR-020(transport-inversion, `transport-inversion.md`)이 "Kafka는 off-path 유지"였는데, 이 ADR이 "Kafka 완전 제거"로 더 나갔다(→ADR-033이 off-path는 ADR-020으로 되돌림).
 > 앞선 것: durability(ADR-019, `engine-journal-durability.md`·`snapshot.md`) · 샤딩(ADR-031, `account-sharding-coordination.md`).
 
 ## ADR 네타
