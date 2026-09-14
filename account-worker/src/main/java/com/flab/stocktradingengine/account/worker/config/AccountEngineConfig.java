@@ -1,5 +1,6 @@
 package com.flab.stocktradingengine.account.worker.config;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -17,7 +18,9 @@ import com.flab.stocktradingengine.account.disruptor.journal.AccountJournal;
 import com.flab.stocktradingengine.account.worker.lifecycle.AccountEngineLifecycle;
 import com.flab.stocktradingengine.account.worker.listener.CompositeAccountResultListener;
 import com.flab.stocktradingengine.account.worker.recovery.StoredAccountSnapshot;
+import com.flab.stocktradingengine.codec.AccountEventType;
 import com.flab.stocktradingengine.codec.AccountJournalEntry;
+import com.flab.stocktradingengine.codec.FilledTrade;
 import com.flab.stocktradingengine.support.SnowflakeNodeIdResolver;
 import com.lmax.disruptor.BlockingWaitStrategy;
 import com.lmax.disruptor.dsl.ProducerType;
@@ -57,13 +60,18 @@ public class AccountEngineConfig {
      * <p>시드 직후, start() 전에 스냅샷이 있으면(2d-2b) 그걸로 계좌·발급기 카운터를 먼저 덮어쓴다
      * ({@code restore} — 계좌는 seed로만 생기므로 스냅샷의 계좌 집합은 항상 seed의 계좌 집합과
      * 같아 그대로 덮어써도 안전하다). 그다음 {@link AccountJournalArchiveConfig#accountJournalRecoveredEntries}
-     * (스냅샷이 있으면 그 이후분만, 없으면 전부, 2b-2b/2d-2b)를 재적용한다 — 재시작 전 상태·dedup·
-     * orderId 발급기를 되살린 뒤에야 라이브 트래픽을 받는다.</p>
+     * (스냅샷이 있으면 그 이후분만, 없으면 전부, 2b-2b/2d-2b)를 재적용하고, 마지막으로
+     * {@link AccountFillIntakeConfig#accountFillReplayedEntries}(매칭이 냈지만 이 프로세스가
+     * 못 받은 체결, ADR-032 U4b)를 BUY_FILL·SELL_FILL 저널 엔트리 쌍으로 바꿔 같은 recover 경로로
+     * 재적용한다 — tradeId 멱등(계좌별)이 이미 저널로 반영된 체결과의 중복을 흡수하므로, 저널
+     * recover와 fill recover를 두 번 나눠 불러도 안전하다. 재시작 전 상태·dedup·orderId 발급기를
+     * 되살린 뒤에야 라이브 트래픽을 받는다.</p>
      */
     @Bean
     public AccountEngine accountEngine(AccountWorkerProperties properties, @Value("${snowflake.node-id:}") String nodeIdConfig,
                                        MatchingOrderSender matchingOrderSender, AccountResultListener listener, AccountJournal journal,
-                                       Optional<StoredAccountSnapshot> accountLoadedSnapshot, List<AccountJournalEntry> accountJournalRecoveredEntries) {
+                                       Optional<StoredAccountSnapshot> accountLoadedSnapshot, List<AccountJournalEntry> accountJournalRecoveredEntries,
+                                       List<FilledTrade> accountFillReplayedEntries) {
         long nodeId = SnowflakeNodeIdResolver.resolve(nodeIdConfig);
         AccountEngine engine = new AccountEngine(
             BUFFER_SIZE, new BlockingWaitStrategy(), ProducerType.MULTI, nodeId, matchingOrderSender, listener, journal);
@@ -76,7 +84,25 @@ public class AccountEngineConfig {
         }
         accountLoadedSnapshot.ifPresent(stored -> engine.restore(stored.snapshot()));
         engine.recover(accountJournalRecoveredEntries);
+        engine.recover(toFillJournalEntries(accountFillReplayedEntries));
         return engine;
+    }
+
+    /**
+     * {@link FilledTrade} 하나를 BUY_FILL·SELL_FILL {@link AccountJournalEntry} 쌍으로 바꾼다 —
+     * {@code AccountFillReceiver.onFragment}(라이브 경로, U3)가 같은 체결로 publishBuyFill·
+     * publishSellFill 둘 다 부르는 것과 같은 매핑이다. SELL_FILL은 price를 안 쓰므로(엔진
+     * {@code AccountEvent#setSellFill} 참고) null로 둔다. requestId는 체결에 없는 필드라 null.
+     */
+    private List<AccountJournalEntry> toFillJournalEntries(List<FilledTrade> trades) {
+        List<AccountJournalEntry> entries = new ArrayList<>();
+        for (FilledTrade trade : trades) {
+            entries.add(new AccountJournalEntry(AccountEventType.BUY_FILL, trade.buyOrderId(), trade.buyAccountId(),
+                trade.stockCode(), trade.matchPrice(), trade.filledQuantity(), null, trade.tradeId()));
+            entries.add(new AccountJournalEntry(AccountEventType.SELL_FILL, trade.sellOrderId(), trade.sellAccountId(),
+                trade.stockCode(), null, trade.filledQuantity(), null, trade.tradeId()));
+        }
+        return entries;
     }
 
     @Bean
