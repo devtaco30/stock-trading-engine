@@ -30,7 +30,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
         registry.addInterceptor(authenticationInterceptor)
-            .addPathPatterns("/api/v1/**")  // /api/v1으로 시작하는 모든 경로에 적용
+            .addPathPatterns("/api/v1/**", "/api/v2/**")  // v1·v2 공통 인증(fork5 U1a — v2 게이트웨이도 같은 토큰 인증을 탄다)
             .excludePathPatterns(
                 "/api/v1/health",   // 헬스체크는 인증 제외 (필요시)
                 "/api/v1/stocks/**", // 시세/종목은 공개 API
