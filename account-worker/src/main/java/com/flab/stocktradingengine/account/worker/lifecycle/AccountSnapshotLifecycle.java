@@ -3,6 +3,7 @@ package com.flab.stocktradingengine.account.worker.lifecycle;
 import org.springframework.context.SmartLifecycle;
 
 import com.flab.stocktradingengine.account.disruptor.engine.AccountEngine;
+import com.flab.stocktradingengine.account.disruptor.io.AccountFillReceiver;
 import com.flab.stocktradingengine.account.worker.config.AccountJournalArchiveConfig;
 import com.flab.stocktradingengine.account.worker.recovery.AccountSnapshotStore;
 
@@ -19,22 +20,32 @@ import io.aeron.archive.client.AeronArchive;
  *
  * <h3>순서 — {@link AccountEngineLifecycle}(phase 0)보다 낮은 phase</h3>
  * <p>SmartLifecycle은 낮은 phase부터 시작해 높은 phase부터(역순으로) 멈춘다. 이 빈이 phase -1이면
- * 엔진(phase 0)·수신 스레드(phase 1)가 먼저 멈춘 뒤에야 이 빈이 멈춘다 — {@link AccountEngine#shutdown}
- * (Disruptor drain)이 끝나 소비자 스레드가 quiescent 상태가 된 다음에만 다른 스레드(이 stop() 호출
- * 스레드)가 accounts 를 안전하게 읽을 수 있어서다. 크래시(ungraceful)면 스냅샷을 못 찍고 직전
- * 스냅샷 + 그 뒤 저널 replay로 복구한다(메커니즘 먼저 — 주기적 라이브 스냅샷은 나중 리파인).</p>
+ * 엔진(phase 0)·수신 스레드(phase 1, 주문·체결 둘 다)가 먼저 멈춘 뒤에야 이 빈이 멈춘다 —
+ * {@link AccountEngine#shutdown}(Disruptor drain)이 끝나 소비자 스레드가 quiescent 상태가 된
+ * 다음에만 다른 스레드(이 stop() 호출 스레드)가 accounts 를 안전하게 읽을 수 있어서다. 크래시
+ * (ungraceful)면 스냅샷을 못 찍고 직전 스냅샷 + 그 뒤 저널 replay로 복구한다(메커니즘 먼저 —
+ * 주기적 라이브 스냅샷은 나중 리파인).</p>
+ *
+ * <h3>fillConsumedPosition (ADR-032, U4a)</h3>
+ * <p>{@link AccountFillReceiver}(phase 1)가 이 빈보다 먼저 멈추므로, 그 시점의
+ * {@link AccountFillReceiver#consumedPosition()}은 이미 quiescent한 최종값이다 — 체결 스트림
+ * (6001)에서 durable하게 반영이 끝난 위치를 그대로 스냅샷에 담아, 재기동 시 그 위치부터 fill을
+ * replay하면 된다(U4b).</p>
  */
 public class AccountSnapshotLifecycle implements SmartLifecycle {
 
     private static final int PHASE = -1; // AccountEngineLifecycle(phase 0)보다 늦게 멈춘다
 
     private final AccountEngine engine;
+    private final AccountFillReceiver fillReceiver;
     private final AccountSnapshotStore snapshotStore;
     private final AeronArchive aeronArchive;
     private boolean running = false;
 
-    public AccountSnapshotLifecycle(AccountEngine engine, AccountSnapshotStore snapshotStore, AeronArchive aeronArchive) {
+    public AccountSnapshotLifecycle(AccountEngine engine, AccountFillReceiver fillReceiver,
+            AccountSnapshotStore snapshotStore, AeronArchive aeronArchive) {
         this.engine = engine;
+        this.fillReceiver = fillReceiver;
         this.snapshotStore = snapshotStore;
         this.aeronArchive = aeronArchive;
     }
@@ -47,7 +58,7 @@ public class AccountSnapshotLifecycle implements SmartLifecycle {
     @Override
     public void stop() {
         long recordingId = resolveCurrentJournalRecordingId();
-        snapshotStore.write(recordingId, engine.snapshot());
+        snapshotStore.write(recordingId, fillReceiver.consumedPosition(), engine.snapshot());
         running = false;
     }
 

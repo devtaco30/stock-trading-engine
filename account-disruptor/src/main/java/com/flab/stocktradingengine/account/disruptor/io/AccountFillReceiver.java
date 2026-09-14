@@ -7,6 +7,7 @@ import org.agrona.DirectBuffer;
 import org.agrona.concurrent.BackoffIdleStrategy;
 import org.agrona.concurrent.IdleStrategy;
 
+import io.aeron.Image;
 import io.aeron.Subscription;
 import io.aeron.logbuffer.FragmentHandler;
 import io.aeron.logbuffer.Header;
@@ -35,6 +36,11 @@ import com.flab.stocktradingengine.codec.FilledTrade;
  * <p>Kafka 시절의 {@code AccountFillConsumer}는 저널 기록 확인 뒤에 ack했다(A안) — offset 커밋을
  * 저널 뒤로 미뤄 유실 창을 닫는 규약이었다. Aeron Archive에는 그 규약이 없다 — position 추적·
  * 크래시 복구는 U4 몫이고, 이 유닛은 라이브 경로만 닫는다.</p>
+ *
+ * <h3>소비 position 추적 (U4a)</h3>
+ * <p>{@link #consumedPosition()}은 이 수신기가 지금까지 소비한 스트림 위치를 돌려준다 — graceful
+ * shutdown(quiescent) 시점에 스냅샷 라이프사이클(다른 스레드)이 읽어 저장한다({@code
+ * AccountSnapshotLifecycle}). 폴 스레드가 쓰고 다른 스레드가 읽으므로 필드를 volatile로 둔다.</p>
  */
 public final class AccountFillReceiver implements AutoCloseable {
 
@@ -48,6 +54,7 @@ public final class AccountFillReceiver implements AutoCloseable {
     private final AtomicBoolean running = new AtomicBoolean(false);
     private final FragmentHandler fragmentHandler = this::onFragment;
 
+    private volatile long consumedPosition = 0L;
     private Thread pollThread;
 
     public AccountFillReceiver(Subscription subscription, AccountEngine engine) {
@@ -66,8 +73,23 @@ public final class AccountFillReceiver implements AutoCloseable {
     private void pollLoop() {
         while (running.get()) {
             int fragments = subscription.poll(fragmentHandler, FRAGMENT_LIMIT);
+            updateConsumedPosition();
             idleStrategy.idle(fragments);
         }
+    }
+
+    /** image가 아직 연결되기 전(발행자가 아직 안 붙음)이면 건드리지 않는다 — 초기값 0이 안전하다. */
+    private void updateConsumedPosition() {
+        if (subscription.imageCount() == 0) {
+            return;
+        }
+        Image image = subscription.imageAtIndex(0);
+        consumedPosition = image.position();
+    }
+
+    /** 이 수신기가 지금까지 소비한 스트림 위치. 스냅샷 라이프사이클(다른 스레드)이 읽는다. */
+    public long consumedPosition() {
+        return consumedPosition;
     }
 
     /** 패키지 가시성 — 단위 테스트가 실제 Subscription 없이 이 메서드를 직접 호출한다. */

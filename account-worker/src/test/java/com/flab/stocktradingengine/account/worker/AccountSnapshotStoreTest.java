@@ -39,7 +39,7 @@ class AccountSnapshotStoreTest {
     }
 
     @Test
-    void write_후_read하면_recordingId와_스냅샷이_그대로_돌아온다() {
+    void write_후_read하면_recordingId와_fillConsumedPosition과_스냅샷이_그대로_돌아온다() {
         AccountStateSnapshot account = new AccountStateSnapshot(
             1L, new BigDecimal("1000000"), new BigDecimal("0.40"),
             Map.of(), Map.of(), Map.of("005930", 5), Set.of(), Set.of(),
@@ -47,23 +47,25 @@ class AccountSnapshotStoreTest {
         AccountSnapshot snapshot = new AccountSnapshot(Map.of(1L, account), 3L, 555L);
 
         AccountSnapshotStore store = store();
-        store.write(42L, snapshot);
+        store.write(42L, 777L, snapshot);
 
         Optional<StoredAccountSnapshot> found = store.read();
         assertThat(found).isPresent();
         assertThat(found.get().recordingId()).isEqualTo(42L);
+        assertThat(found.get().fillConsumedPosition()).isEqualTo(777L);
         assertThat(found.get().snapshot()).isEqualTo(snapshot);
     }
 
     @Test
     void write를_두_번_하면_최신_한_개만_남는다() {
         AccountSnapshotStore store = store();
-        store.write(1L, new AccountSnapshot(Map.of(), 0L, 100L));
-        store.write(2L, new AccountSnapshot(Map.of(), 0L, 200L));
+        store.write(1L, 10L, new AccountSnapshot(Map.of(), 0L, 100L));
+        store.write(2L, 20L, new AccountSnapshot(Map.of(), 0L, 200L));
 
         Optional<StoredAccountSnapshot> found = store.read();
         assertThat(found).isPresent();
         assertThat(found.get().recordingId()).isEqualTo(2L);
+        assertThat(found.get().fillConsumedPosition()).isEqualTo(20L);
         assertThat(found.get().snapshot().journalPosition()).isEqualTo(200L);
 
         File[] filesInDir = archiveDir.toFile().listFiles((dir, name) -> name.contains("account-snapshot"));

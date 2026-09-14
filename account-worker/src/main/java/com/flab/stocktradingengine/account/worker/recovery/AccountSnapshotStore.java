@@ -26,7 +26,7 @@ import com.flab.stocktradingengine.account.worker.lifecycle.AccountSnapshotLifec
  * 유지한다(이전 스냅샷은 rename이 덮어쓴다).</p>
  *
  * <h3>파일 레이아웃</h3>
- * <pre>[recordingId:8][AccountSnapshotCodec가 인코딩한 스냅샷 바이트...]</pre>
+ * <pre>[recordingId:8][fillConsumedPosition:8][AccountSnapshotCodec가 인코딩한 스냅샷 바이트...]</pre>
  */
 public class AccountSnapshotStore {
 
@@ -42,10 +42,11 @@ public class AccountSnapshotStore {
         this.tempFile = new File(archiveDir, TEMP_FILE_NAME);
     }
 
-    public void write(long recordingId, AccountSnapshot snapshot) {
+    public void write(long recordingId, long fillConsumedPosition, AccountSnapshot snapshot) {
         byte[] snapshotBytes = codec.encode(snapshot);
-        ByteBuffer payload = ByteBuffer.allocate(Long.BYTES + snapshotBytes.length);
+        ByteBuffer payload = ByteBuffer.allocate(Long.BYTES + Long.BYTES + snapshotBytes.length);
         payload.putLong(recordingId);
+        payload.putLong(fillConsumedPosition);
         payload.put(snapshotBytes);
 
         try {
@@ -66,9 +67,10 @@ public class AccountSnapshotStore {
             byte[] payload = Files.readAllBytes(file.toPath());
             ByteBuffer buffer = ByteBuffer.wrap(payload);
             long recordingId = buffer.getLong();
-            byte[] snapshotBytes = Arrays.copyOfRange(payload, Long.BYTES, payload.length);
+            long fillConsumedPosition = buffer.getLong();
+            byte[] snapshotBytes = Arrays.copyOfRange(payload, Long.BYTES + Long.BYTES, payload.length);
             AccountSnapshot snapshot = codec.decode(snapshotBytes);
-            return Optional.of(new StoredAccountSnapshot(recordingId, snapshot));
+            return Optional.of(new StoredAccountSnapshot(recordingId, fillConsumedPosition, snapshot));
         } catch (IOException e) {
             throw new UncheckedIOException("계좌 스냅샷 파일 읽기 실패: " + file, e);
         }

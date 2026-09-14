@@ -8,6 +8,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 import com.flab.stocktradingengine.account.disruptor.engine.AccountEngine;
+import com.flab.stocktradingengine.account.disruptor.io.AccountFillReceiver;
 import com.flab.stocktradingengine.account.worker.lifecycle.AccountSnapshotLifecycle;
 import com.flab.stocktradingengine.account.worker.recovery.AccountSnapshotStore;
 import com.flab.stocktradingengine.account.worker.recovery.StoredAccountSnapshot;
@@ -38,8 +39,8 @@ public class AccountSnapshotConfig {
     }
 
     @Bean
-    public SmartLifecycle accountSnapshotLifecycle(
-            AccountEngine accountEngine, AccountSnapshotStore accountSnapshotStore, AeronArchive aeronArchive) {
-        return new AccountSnapshotLifecycle(accountEngine, accountSnapshotStore, aeronArchive);
+    public SmartLifecycle accountSnapshotLifecycle(AccountEngine accountEngine, AccountFillReceiver accountFillReceiver,
+            AccountSnapshotStore accountSnapshotStore, AeronArchive aeronArchive) {
+        return new AccountSnapshotLifecycle(accountEngine, accountFillReceiver, accountSnapshotStore, aeronArchive);
     }
 }
