@@ -1,47 +1,46 @@
-package com.flab.stocktradingengine.account.worker;
+package com.flab.stocktradingengine.account.worker.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.math.BigDecimal;
+import java.nio.ByteBuffer;
 import java.util.List;
-import java.util.Properties;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
-import org.apache.kafka.clients.producer.KafkaProducer;
-import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.common.serialization.StringSerializer;
+import org.agrona.concurrent.UnsafeBuffer;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
-import org.springframework.kafka.support.serializer.JsonSerializer;
 import org.springframework.test.annotation.DirtiesContext;
 
 import com.flab.stocktradingengine.account.disruptor.domain.AccountResultListener;
 import com.flab.stocktradingengine.account.disruptor.domain.RejectReason;
 import com.flab.stocktradingengine.account.disruptor.engine.AccountEngine;
-import com.flab.stocktradingengine.kafka.KafkaTopics;
-import com.flab.stocktradingengine.kafka.event.TradeFilledEvent;
+import com.flab.stocktradingengine.account.worker.AccountWorkerApplication;
+import com.flab.stocktradingengine.codec.FillCodec;
+import com.flab.stocktradingengine.codec.FilledTrade;
+
+import io.aeron.Aeron;
+import io.aeron.Publication;
 
 /**
- * account-worker 앱을 실제로 띄우고, 로컬 docker-compose Kafka(localhost:9092)에 진짜
- * {@code account-fills} 메시지를 발행해 계좌에 반영되는지 확인하는 end-to-end 테스트.
+ * account-worker 앱을 실제로 띄우고, 진짜 Aeron IPC로 체결을 발신해 계좌에 반영되는지 확인하는
+ * end-to-end 테스트(ADR-032, U3). {@link AccountOrderIntakeIntegrationTest}와 같은 결(같은
+ * 프로세스라 Aeron 빈을 재사용해 테스트용 Publication만 새로 연다) — matching-worker
+ * {@code AccountFillPublisher}가 하는 일을 테스트가 직접 흉내낸다.
  *
- * <p>주문 접수 경로(Aeron)는 B4 범위 밖이라, 체결이 도착하기 전에 필요한 매수·매도 예약은
- * 테스트가 {@link AccountEngine}에 직접 발행해 만든다 — "이미 예약된 주문에 체결이
- * 도착한다"는 전제를 흉내낸다.</p>
+ * <p>주문 접수 경로(Aeron)는 이 테스트 범위 밖이라, 체결이 도착하기 전에 필요한 매수·매도 예약은
+ * 테스트가 {@link AccountEngine}에 직접 발행해 만든다 — "이미 예약된 주문에 체결이 도착한다"는
+ * 전제를 흉내낸다(구 Kafka 버전 {@code AccountFillIntegrationTest}와 같은 전제).</p>
  *
- * <p>사전 조건: {@code docker compose up -d} 로 로컬 Kafka(9092)가 떠 있어야 한다.</p>
+ * <p>Kafka fan-out(같은 체결을 매수·매도 앞으로 두 번 발행)이 없어졌으므로 이 테스트도 한 번만
+ * 발행한다 — 수신기가 그 한 건으로 매수·매도 양쪽을 다 반영한다.</p>
  *
- * <p>{@code @DirtiesContext} — 이 컨텍스트를 Spring 테스트 캐시에 남겨두지 않는다. 캐시에 남으면
- * account-fills·account-settlements 두 컨슈머가 다른 테스트 클래스가 도는 동안에도 group.id
- * "account-worker"의 멤버로 계속 붙어 있어, 그 다른 테스트가 컨슈머를 새로 join/leave 할 때마다
- * 이 컨슈머까지 같이 리밸런스에 휘말린다 — 실제로 겪은 문제(제너레이션이 계속 올라가며
- * 폴링이 지연돼 타임아웃).</p>
+ * <p>{@code @DirtiesContext} — 이 컨텍스트가 만든 임베디드 MediaDriver를 다음 테스트와 안 겹치게 한다.</p>
  */
 @SpringBootTest(
     classes = AccountWorkerApplication.class,
@@ -60,16 +59,21 @@ import com.flab.stocktradingengine.kafka.event.TradeFilledEvent;
 class AccountFillIntegrationTest {
 
     private static final String STOCK = "005930";
-    private static final String BOOTSTRAP_SERVERS = "localhost:9092";
+    private static final long TIMEOUT_NANOS = 5_000_000_000L;
+
+    private final FillCodec codec = new FillCodec();
 
     @Autowired
     private AccountEngine engine;
 
     @Autowired
+    private Aeron aeron;
+
+    @Autowired
     private Recorder recorder;
 
     @Test
-    void 실제_카프카로_받은_체결을_매수_매도_양쪽에_반영한다() throws Exception {
+    void 실제_Aeron으로_받은_체결을_매수_매도_양쪽에_반영한다() throws InterruptedException {
         recorder.prepare(2); // 매수 예약(1) + 매도 예약(1)
         engine.publishBuy(1L, STOCK, new BigDecimal("10000"), 4, "r1");
         engine.publishSell(2L, STOCK, new BigDecimal("10000"), 4, "r2");
@@ -79,34 +83,49 @@ class AccountFillIntegrationTest {
         long buyOrderId = recorder.acceptedOrderIds().get(0);
         long sellOrderId = recorder.acceptedOrderIds().get(1);
 
-        // fan-out 메시지 2개(같은 체결, accountId 키만 다름)를 이 컨슈머가 매번 매수·매도 양쪽 다
-        // AccountEngine에 넣는다(AccountFillConsumer 참고) — 이 테스트는 계좌 1·2를 워커 하나가
-        // 같이 소유하므로 진짜 반영 2개 + 같은 tradeId 재도착으로 무시된 중복 2개, 총 4개가
-        // 결정론적으로 온다. 2개만 기다렸다가 단언하면 "그 2개가 진짜인지 중복인지"가 경쟁이 된다.
-        recorder.prepare(4);
-        TradeFilledEvent fill = new TradeFilledEvent(9001L, STOCK, buyOrderId, 1L, sellOrderId, 2L, 4, new BigDecimal("10000"));
-        publishFanOut(fill);
+        recorder.prepare(2); // 매수 체결반영(1) + 매도 체결반영(1) — fan-out이 없어 딱 2개만 온다
+        FilledTrade trade = new FilledTrade(9001L, STOCK, buyOrderId, 1L, sellOrderId, 2L, 4, new BigDecimal("10000"));
+        Publication publication = aeron.addPublication(AccountFillIntakeConfig.FILL_CHANNEL, AccountFillIntakeConfig.FILL_STREAM_ID);
+        try {
+            awaitConnected(publication);
+            send(publication, trade);
 
-        assertThat(recorder.await()).as("체결 반영 콜백 4개(반영 2 + 중복무시 2)가 도착해야 한다").isTrue();
-        List<Recorder.FillEvent> appliedEvents = recorder.fillEvents().stream()
-            .filter(Recorder.FillEvent::applied)
-            .toList();
-        assertThat(appliedEvents).containsExactlyInAnyOrder(
-            new Recorder.FillEvent(1L, 9001L, true),
-            new Recorder.FillEvent(2L, 9001L, true)
-        );
+            assertThat(recorder.await()).as("체결 반영 콜백 2개가 도착해야 한다").isTrue();
+            assertThat(recorder.fillEvents()).containsExactlyInAnyOrder(
+                new Recorder.FillEvent(1L, 9001L, true),
+                new Recorder.FillEvent(2L, 9001L, true)
+            );
+        } finally {
+            publication.close();
+        }
     }
 
-    /** 체결 하나를 매수·매도 계좌 앞으로 각각 accountId 키로 발행한다(ADR-018 fan-out). */
-    private void publishFanOut(TradeFilledEvent fill) throws Exception {
-        Properties props = new Properties();
-        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, BOOTSTRAP_SERVERS);
-        try (KafkaProducer<String, TradeFilledEvent> producer =
-                 new KafkaProducer<>(props, new StringSerializer(), new JsonSerializer<>())) {
-            producer.send(new ProducerRecord<>(KafkaTopics.accountFills(), String.valueOf(fill.buyAccountId()), fill))
-                .get(5, TimeUnit.SECONDS);
-            producer.send(new ProducerRecord<>(KafkaTopics.accountFills(), String.valueOf(fill.sellAccountId()), fill))
-                .get(5, TimeUnit.SECONDS);
+    /** 체결을 인코딩해 Aeron으로 발행한다. 백프레셔면 받아들여질 때까지 재시도한다. */
+    private void send(Publication publication, FilledTrade trade) {
+        UnsafeBuffer buffer = new UnsafeBuffer(ByteBuffer.allocateDirect(256));
+        int length = codec.encode(buffer, 0, trade);
+
+        long deadline = System.nanoTime() + TIMEOUT_NANOS;
+        long result;
+        do {
+            result = publication.offer(buffer, 0, length);
+            if (result > 0) {
+                return;
+            }
+            if (System.nanoTime() > deadline) {
+                throw new AssertionError("5초 안에 체결 발행 실패 — offer 반환=" + result);
+            }
+            Thread.yield();
+        } while (true);
+    }
+
+    private void awaitConnected(Publication publication) {
+        long deadline = System.nanoTime() + TIMEOUT_NANOS;
+        while (!publication.isConnected()) {
+            if (System.nanoTime() > deadline) {
+                throw new AssertionError("5초 안에 Publication이 연결되지 않음");
+            }
+            Thread.yield();
         }
     }
 
@@ -131,8 +150,6 @@ class AccountFillIntegrationTest {
         }
 
         boolean await() throws InterruptedException {
-            // 갓 띄운 로컬 브로커는 컨슈머 그룹 코디네이터 협상(__consumer_offsets 생성 등)에
-            // 수 초가 걸릴 수 있어 넉넉히 잡는다(실제 처리 지연이 아니라 최초 조인 비용).
             return latch.await(20, TimeUnit.SECONDS);
         }
 

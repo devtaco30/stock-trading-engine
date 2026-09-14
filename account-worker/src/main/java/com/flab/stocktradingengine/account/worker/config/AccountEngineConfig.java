@@ -41,10 +41,10 @@ public class AccountEngineConfig {
     /**
      * 설정된 계좌들을 시드한 {@link AccountEngine}을 만든다. 아직 start() 는 안 부른다 — 생명주기 빈이 담당.
      *
-     * <p>{@link ProducerType#MULTI}로 만든다 — 이 앱은 발행자가 하나가 아니다. account-fills
-     * 컨슈머(Kafka 리스너 스레드)가 체결 반영을 발행하고, 이후 주문 접수 경로(Aeron 수신 스레드)도
-     * 같은 링버퍼에 검증·예약을 발행하게 된다. SINGLE로 두면 두 스레드가 동시에 발행할 때
-     * 링버퍼 시퀀스가 깨진다.</p>
+     * <p>{@link ProducerType#MULTI}로 만든다 — 이 앱은 발행자가 하나가 아니다.
+     * {@code AccountFillReceiver}(체결 Aeron 수신 스레드, ADR-032 U3)가 체결 반영을 발행하고,
+     * 주문 접수 경로(Aeron 수신 스레드)도 같은 링버퍼에 검증·예약을 발행한다. SINGLE로 두면
+     * 두 스레드가 동시에 발행할 때 링버퍼 시퀀스가 깨진다.</p>
      *
      * <p>orderId는 더 이상 Snowflake(벽시계)가 아니라 엔진 내부 결정론적 발급기(2b-0)가 낸다 —
      * 여기서는 nodeId만 넘긴다. matching-worker {@code SnowflakeConfig}와 같은 프로퍼티

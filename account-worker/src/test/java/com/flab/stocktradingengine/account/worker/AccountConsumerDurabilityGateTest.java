@@ -22,15 +22,15 @@ import com.flab.stocktradingengine.account.disruptor.engine.AccountEngine;
 import com.flab.stocktradingengine.account.disruptor.io.MatchingOrderSender;
 import com.flab.stocktradingengine.account.disruptor.journal.AccountJournal;
 import com.flab.stocktradingengine.account.disruptor.journal.InMemoryAccountJournal;
-import com.flab.stocktradingengine.account.worker.messaging.AccountFillConsumer;
 import com.flab.stocktradingengine.account.worker.messaging.AccountSettlementConsumer;
 import com.flab.stocktradingengine.codec.AccountJournalEntry;
 import com.flab.stocktradingengine.kafka.event.SettlementResultEvent;
-import com.flab.stocktradingengine.kafka.event.TradeFilledEvent;
 
 /**
- * A안(계좌 유실 창 막기) — Kafka 컨슈머가 체결·정산을 링에 발행한 뒤, <b>저널에 기록된 걸
- * 확인한 뒤에만 ack</b> 하는지 검증한다.
+ * A안(계좌 유실 창 막기) — Kafka 컨슈머가 정산을 링에 발행한 뒤, <b>저널에 기록된 걸
+ * 확인한 뒤에만 ack</b> 하는지 검증한다. 체결은 ADR-032 U3부터 Kafka가 아니라 Aeron
+ * {@code AccountFillReceiver}로 받는다 — 그쪽의 유실 창·durability는 ack 규약이 아니라
+ * position 추적으로 닫는다(U4).
  *
  * <p>배경: 발행은 링에 넣기만 하는 비동기라, 저널러가 그 이벤트를 durable하게 기록하기 전에
  * ack가 나가면 Kafka 오프셋이 먼저 넘어간다 — 그 사이 크래시하면 저널에도 Kafka에도 없어 유실.
@@ -61,27 +61,6 @@ class AccountConsumerDurabilityGateTest {
         engine = new AccountEngine(BUFFER_SIZE, new BlockingWaitStrategy(), ProducerType.SINGLE, 0L,
             NO_OP_SENDER, mock(AccountResultListener.class), slowJournal);
         engine.start();
-    }
-
-    @Test
-    @DisplayName("체결 컨슈머는 매수·매도 체결이 저널에 기록된 뒤에 ack 한다")
-    void 체결_ack는_저널기록_뒤에() {
-        startEngineWithDelayingJournal();
-        AtomicInteger journalSizeAtAck = new AtomicInteger(-1);
-        Acknowledgment ack = mock(Acknowledgment.class);
-        doAnswer(inv -> {
-            journalSizeAtAck.set(engine.journal().entries().size());
-            return null;
-        }).when(ack).acknowledge();
-
-        AccountFillConsumer consumer = new AccountFillConsumer(engine);
-        // (tradeId, stockCode, buyOrderId, buyAccountId, sellOrderId, sellAccountId, filledQuantity, matchPrice)
-        TradeFilledEvent fill = new TradeFilledEvent(9001L, STOCK, 1L, 1L, 2L, 2L, 4, new BigDecimal("10000"));
-
-        consumer.consume(fill, ack);
-
-        verify(ack).acknowledge();
-        assertEquals(2, journalSizeAtAck.get(), "ack 시점엔 매수·매도 체결 둘 다 이미 저널에 있어야 한다");
     }
 
     @Test
