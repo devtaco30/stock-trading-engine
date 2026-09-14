@@ -38,7 +38,6 @@ public class AeronAccountOrderSender {
 
     private final Publication accountOrderPublication;
     private final AccountOrderCodec codec = new AccountOrderCodec();
-    private final IdleStrategy idleStrategy = new BackoffIdleStrategy();
 
     public AeronAccountOrderSender(Publication accountOrderPublication) {
         this.accountOrderPublication = accountOrderPublication;
@@ -48,6 +47,12 @@ public class AeronAccountOrderSender {
      * 매수·매도 주문을 계좌 인테이크로 동기 발신한다. orderId는 싣지 않는다(C5-2a — 계좌 워커가
      * requestId 첫 접수 시점에 직접 발급한다).
      *
+     * <p>이 인스턴스는 싱글톤 빈이라 여러 HTTP 요청 스레드가 동시에 {@code send}를 부른다.
+     * {@link BackoffIdleStrategy}는 내부에 spin/yield/park 카운터를 갖는 비스레드안전 객체라
+     * 필드로 공유하면 동시 재시도 때 백오프 상태가 서로 덮어써 뒤섞인다 — 그래서 호출마다
+     * 지역 변수로 새로 만든다({@link AccountOrderCodec}은 필드가 없는 순수 인코더라 공유해도
+     * 안전하다).</p>
+     *
      * @throws OrderPublishException {@link #MAX_ATTEMPTS}번 재시도해도 offer가 성공하지 못하면
      */
     public void send(OrderSide side, long accountId, String stockCode, BigDecimal price, int quantity, String requestId) {
@@ -55,7 +60,7 @@ public class AeronAccountOrderSender {
         UnsafeBuffer buffer = new UnsafeBuffer(ByteBuffer.allocateDirect(ENCODE_BUFFER_SIZE));
         int length = codec.encode(buffer, 0, order);
 
-        idleStrategy.reset();
+        IdleStrategy idleStrategy = new BackoffIdleStrategy();
         long result = -1;
         for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
             result = accountOrderPublication.offer(buffer, 0, length);
