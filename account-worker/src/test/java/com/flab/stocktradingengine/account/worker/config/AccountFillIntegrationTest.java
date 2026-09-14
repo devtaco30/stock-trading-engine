@@ -21,6 +21,7 @@ import com.flab.stocktradingengine.account.disruptor.domain.AccountResultListene
 import com.flab.stocktradingengine.account.disruptor.domain.RejectReason;
 import com.flab.stocktradingengine.account.disruptor.engine.AccountEngine;
 import com.flab.stocktradingengine.account.worker.AccountWorkerApplication;
+import com.flab.stocktradingengine.aeron.AeronStreamIds;
 import com.flab.stocktradingengine.codec.FillCodec;
 import com.flab.stocktradingengine.codec.FilledTrade;
 
@@ -85,7 +86,7 @@ class AccountFillIntegrationTest {
 
         recorder.prepare(2); // 매수 체결반영(1) + 매도 체결반영(1) — fan-out이 없어 딱 2개만 온다
         FilledTrade trade = new FilledTrade(9001L, STOCK, buyOrderId, 1L, sellOrderId, 2L, 4, new BigDecimal("10000"));
-        Publication publication = aeron.addPublication(AccountFillIntakeConfig.FILL_CHANNEL, AccountFillIntakeConfig.FILL_STREAM_ID);
+        Publication publication = aeron.addPublication(AccountFillIntakeConfig.DEFAULT_FILL_CHANNEL, AeronStreamIds.FILL);
         try {
             awaitConnected(publication);
             send(publication, trade);

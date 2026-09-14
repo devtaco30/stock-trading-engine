@@ -3,6 +3,7 @@ package com.flab.stocktradingengine.account.worker.config;
 import java.util.List;
 import java.util.Optional;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.SmartLifecycle;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -13,6 +14,7 @@ import com.flab.stocktradingengine.account.worker.lifecycle.AccountFillReceiverL
 import com.flab.stocktradingengine.account.worker.recovery.AccountFillReplayer;
 import com.flab.stocktradingengine.account.worker.recovery.AccountSnapshotStore;
 import com.flab.stocktradingengine.account.worker.recovery.StoredAccountSnapshot;
+import com.flab.stocktradingengine.aeron.AeronStreamIds;
 import com.flab.stocktradingengine.codec.FilledTrade;
 
 import io.aeron.Aeron;
@@ -25,20 +27,24 @@ import io.aeron.archive.client.AeronArchive;
  * 클래스와 같은 결). Kafka {@code AccountFillConsumer}를 대체한다 — 정산 컨슈머(account-settlements)는
  * 그대로 Kafka에 남는다({@link AccountKafkaErrorHandlerConfig} 참고).
  *
- * <p>채널·스트림은 matching-worker의 {@code MatchingFillPublishConfig.FILL_STREAM_ID}(6001)와
- * 반드시 같아야 한다 — account-worker는 모듈 경계상 matching-worker에 의존하지 않아 상수를
- * 공유하지 못하고 값만 맞춘다({@code MatchingOrderSenderConfig}와 같은 이유).</p>
+ * <p>스트림 ID는 {@link com.flab.stocktradingengine.aeron.AeronStreamIds#FILL}로 matching-worker의
+ * {@code MatchingFillPublishConfig}와 core에서 공유한다. 채널은 {@code transport.fill.channel}
+ * 속성에서 해석된다(fork1 Unit 1) — 두 앱은 모듈 경계상 서로 의존하지 않아 값 일치를 코드가
+ * 강제하진 못하므로, 같은 값을 각자의 config에 넣어야 한다.</p>
  */
 @Configuration
 public class AccountFillIntakeConfig {
 
-    // 패키지 가시성 — 테스트(같은 패키지)가 이 값을 그대로 참조해 matching-worker 체결 스트림과 맞춘다.
-    static final String FILL_CHANNEL = "aeron:ipc";
-    static final int FILL_STREAM_ID = 6001; // matching-worker MatchingFillPublishConfig.FILL_STREAM_ID와 동일해야 함
+    // 패키지 가시성 — 테스트(같은 패키지)가 이 기본값을 그대로 참조해 matching-worker 체결
+    // 채널과 맞춘다. 실제 채널은 transport.fill.channel 속성에서 해석된다(fork1 Unit 1). 스트림
+    // ID는 core AeronStreamIds.FILL로 matching-worker와 공유한다.
+    static final String DEFAULT_FILL_CHANNEL = "aeron:ipc";
 
     @Bean(destroyMethod = "close")
-    public Subscription accountFillSubscription(Aeron aeron) {
-        return aeron.addSubscription(FILL_CHANNEL, FILL_STREAM_ID);
+    public Subscription accountFillSubscription(
+            Aeron aeron,
+            @Value("${transport.fill.channel:" + DEFAULT_FILL_CHANNEL + "}") String fillChannel) {
+        return aeron.addSubscription(fillChannel, AeronStreamIds.FILL);
     }
 
     @Bean
@@ -72,12 +78,15 @@ public class AccountFillIntakeConfig {
      * 안 됨). 파일 읽기가 가벼워 두 번 불러도 비용이 무시할 만하다.</p>
      */
     @Bean
-    public List<FilledTrade> accountFillReplayedEntries(AeronArchive aeronArchive, AccountSnapshotStore accountSnapshotStore) {
+    public List<FilledTrade> accountFillReplayedEntries(
+            AeronArchive aeronArchive,
+            AccountSnapshotStore accountSnapshotStore,
+            @Value("${transport.fill.channel:" + DEFAULT_FILL_CHANNEL + "}") String fillChannel) {
         Optional<StoredAccountSnapshot> accountLoadedSnapshot = accountSnapshotStore.read();
         if (accountLoadedSnapshot.isEmpty()) {
             return List.of();
         }
         AccountFillReplayer replayer = new AccountFillReplayer(aeronArchive);
-        return replayer.readFrom(FILL_CHANNEL, FILL_STREAM_ID, accountLoadedSnapshot.get().fillConsumedPosition());
+        return replayer.readFrom(fillChannel, AeronStreamIds.FILL, accountLoadedSnapshot.get().fillConsumedPosition());
     }
 }

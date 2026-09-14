@@ -12,6 +12,7 @@ import org.springframework.context.annotation.Configuration;
 import com.flab.stocktradingengine.account.disruptor.engine.AccountEngine;
 import com.flab.stocktradingengine.account.disruptor.io.AccountOrderReceiver;
 import com.flab.stocktradingengine.account.worker.lifecycle.AccountOrderReceiverLifecycle;
+import com.flab.stocktradingengine.aeron.AeronStreamIds;
 
 import io.aeron.Aeron;
 import io.aeron.CommonContext;
@@ -44,16 +45,19 @@ import io.aeron.driver.MediaDriver;
 @Configuration
 public class AccountOrderIntakeConfig {
 
-    // 패키지 가시성 — 테스트(같은 패키지)가 프로덕션과 같은 채널·스트림으로 발행하도록 이 상수를 그대로 참조한다.
-    static final String INTAKE_CHANNEL = "aeron:ipc";
-    static final int INTAKE_STREAM_ID = 4004;
+    // 패키지 가시성 — 테스트(같은 패키지)가 프로덕션과 같은 채널로 발행하도록 이 기본값을 그대로
+    // 참조한다. 실제 채널은 transport.account-intake.channel 속성에서 해석된다(fork1 Unit 1).
+    // 스트림 ID는 core AeronStreamIds.ACCOUNT_INTAKE로 공유한다.
+    static final String DEFAULT_INTAKE_CHANNEL = "aeron:ipc";
 
     // Archive 제어 채널(주문 데이터 자체가 아니라 "녹화 시작해라" 같은 제어 요청/응답이 오가는 채널) —
-    // 기본값이 없어 필수다. aeron-io/aeron 저장소 자체 테스트 헬퍼(TestContexts.localhostArchive/
-    // localhostAeronArchive)가 쓰는 것과 같은 관례값이다: 요청 채널은 널리 쓰이는 고정 포트(8010),
-    // 응답·리플리케이션 채널은 ephemeral(포트 0, OS가 배정). 이 유닛은 원격·리플리케이션 자체를
-    // 쓰지 않는다 — 가치·주문 데이터는 여전히 aeron:ipc(INTAKE_CHANNEL)로만 오간다.
-    private static final String CONTROL_REQUEST_CHANNEL = "aeron:udp?endpoint=localhost:8010";
+    // account.worker.archive.control-channel 속성에서 해석된다(fork1 Unit 1 — 3-JVM 실행 시
+    // matching-worker와 포트가 겹치지 않게 워커별로 다른 값을 준다). 기본값은 aeron-io/aeron
+    // 저장소 자체 테스트 헬퍼(TestContexts.localhostArchive/localhostAeronArchive)가 쓰는 것과
+    // 같은 관례값: 요청 채널은 널리 쓰이는 고정 포트(8010), 응답·리플리케이션 채널은 ephemeral
+    // (포트 0, OS가 배정) — 이 둘은 3-JVM에서도 그대로 둔다. 가치·주문 데이터는 여전히
+    // transport.account-intake.channel(DEFAULT_INTAKE_CHANNEL)로만 오간다.
+    private static final String DEFAULT_CONTROL_REQUEST_CHANNEL = "aeron:udp?endpoint=localhost:8010";
     private static final String CONTROL_RESPONSE_CHANNEL = "aeron:udp?endpoint=localhost:0";
     private static final String REPLICATION_CHANNEL = "aeron:udp?endpoint=localhost:0";
 
@@ -76,13 +80,15 @@ public class AccountOrderIntakeConfig {
     }
 
     @Bean(destroyMethod = "close")
-    public ArchivingMediaDriver archivingMediaDriver(File accountArchiveDir) {
+    public ArchivingMediaDriver archivingMediaDriver(
+            File accountArchiveDir,
+            @Value("${account.worker.archive.control-channel:" + DEFAULT_CONTROL_REQUEST_CHANNEL + "}") String controlRequestChannel) {
         String aeronDirectoryName = CommonContext.generateRandomDirName();
 
         return ArchivingMediaDriver.launch(
             new MediaDriver.Context().aeronDirectoryName(aeronDirectoryName),
             new Archive.Context()
-                .controlChannel(CONTROL_REQUEST_CHANNEL)
+                .controlChannel(controlRequestChannel)
                 .replicationChannel(REPLICATION_CHANNEL)
                 .deleteArchiveOnStart(false) // 저널은 재시작 넘어 보존해야 한다(2b-1b)
                 .archiveDir(accountArchiveDir)
@@ -96,17 +102,21 @@ public class AccountOrderIntakeConfig {
     }
 
     @Bean(destroyMethod = "close")
-    public AeronArchive aeronArchive(Aeron aeron) {
+    public AeronArchive aeronArchive(
+            Aeron aeron,
+            @Value("${account.worker.archive.control-channel:" + DEFAULT_CONTROL_REQUEST_CHANNEL + "}") String controlRequestChannel) {
         return AeronArchive.connect(new AeronArchive.Context()
             .aeron(aeron)
             .ownsAeronClient(false) // Aeron 빈은 우리가 별도로 소유·소멸시킨다(위 aeron() 빈)
-            .controlRequestChannel(CONTROL_REQUEST_CHANNEL)
+            .controlRequestChannel(controlRequestChannel)
             .controlResponseChannel(CONTROL_RESPONSE_CHANNEL));
     }
 
     @Bean(destroyMethod = "close")
-    public Subscription accountOrderSubscription(Aeron aeron) {
-        return aeron.addSubscription(INTAKE_CHANNEL, INTAKE_STREAM_ID);
+    public Subscription accountOrderSubscription(
+            Aeron aeron,
+            @Value("${transport.account-intake.channel:" + DEFAULT_INTAKE_CHANNEL + "}") String intakeChannel) {
+        return aeron.addSubscription(intakeChannel, AeronStreamIds.ACCOUNT_INTAKE);
     }
 
     @Bean

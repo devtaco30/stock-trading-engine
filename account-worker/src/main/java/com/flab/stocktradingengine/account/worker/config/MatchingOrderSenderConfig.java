@@ -1,11 +1,13 @@
 package com.flab.stocktradingengine.account.worker.config;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.SmartLifecycle;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 import com.flab.stocktradingengine.account.worker.lifecycle.AeronMatchingOrderSenderLifecycle;
 import com.flab.stocktradingengine.account.worker.messaging.AeronMatchingOrderSender;
+import com.flab.stocktradingengine.aeron.AeronStreamIds;
 
 import io.aeron.Aeron;
 import io.aeron.Publication;
@@ -22,13 +24,16 @@ import io.aeron.Publication;
 @Configuration
 public class MatchingOrderSenderConfig {
 
-    // 패키지 가시성 — 테스트(같은 패키지)가 이 값을 그대로 참조해 매칭 인테이크와 같은 스트림을 구독한다.
-    static final String MATCHING_CHANNEL = "aeron:ipc";
-    static final int MATCHING_STREAM_ID = 2002; // matching-worker MatchingOrderIntakeConfig.INTAKE_STREAM_ID와 동일해야 함
+    // 패키지 가시성 — 테스트(같은 패키지)가 이 기본값을 그대로 참조해 매칭 인테이크와 같은
+    // 채널을 구독한다. 실제 채널은 transport.matching-intake.channel 속성에서 해석된다(fork1
+    // Unit 1). 스트림 ID는 core AeronStreamIds.MATCHING_INTAKE로 matching-worker와 공유한다.
+    static final String DEFAULT_MATCHING_CHANNEL = "aeron:ipc";
 
     @Bean(destroyMethod = "close")
-    public Publication matchingOrderPublication(Aeron aeron) {
-        return aeron.addPublication(MATCHING_CHANNEL, MATCHING_STREAM_ID);
+    public Publication matchingOrderPublication(
+            Aeron aeron,
+            @Value("${transport.matching-intake.channel:" + DEFAULT_MATCHING_CHANNEL + "}") String matchingIntakeChannel) {
+        return aeron.addPublication(matchingIntakeChannel, AeronStreamIds.MATCHING_INTAKE);
     }
 
     /**

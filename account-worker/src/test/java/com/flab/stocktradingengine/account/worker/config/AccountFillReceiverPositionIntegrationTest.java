@@ -13,6 +13,7 @@ import org.springframework.test.annotation.DirtiesContext;
 
 import com.flab.stocktradingengine.account.disruptor.io.AccountFillReceiver;
 import com.flab.stocktradingengine.account.worker.AccountWorkerApplication;
+import com.flab.stocktradingengine.aeron.AeronStreamIds;
 import com.flab.stocktradingengine.codec.FillCodec;
 import com.flab.stocktradingengine.codec.FilledTrade;
 
@@ -53,7 +54,7 @@ class AccountFillReceiverPositionIntegrationTest {
     void 체결을_소비할수록_consumedPosition이_늘어난다() {
         long positionBefore = accountFillReceiver.consumedPosition();
 
-        Publication publication = aeron.addPublication(AccountFillIntakeConfig.FILL_CHANNEL, AccountFillIntakeConfig.FILL_STREAM_ID);
+        Publication publication = aeron.addPublication(AccountFillIntakeConfig.DEFAULT_FILL_CHANNEL, AeronStreamIds.FILL);
         try {
             awaitConnected(publication);
             FilledTrade trade = new FilledTrade(9001L, STOCK, 1L, 1L, 2L, 2L, 4, new BigDecimal("10000"));

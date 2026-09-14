@@ -1,8 +1,10 @@
 package com.flab.stocktradingengine.matching.worker.config;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import com.flab.stocktradingengine.aeron.AeronStreamIds;
 import com.flab.stocktradingengine.matching.worker.messaging.AccountFillPublisher;
 import com.flab.stocktradingengine.support.SnowflakeIdGenerator;
 
@@ -26,9 +28,10 @@ import io.aeron.archive.codecs.SourceLocation;
 @Configuration
 public class MatchingFillPublishConfig {
 
-    // 패키지 가시성 — 테스트(같은 패키지)가 프로덕션과 같은 채널·스트림을 그대로 참조한다.
-    static final String FILL_CHANNEL = "aeron:ipc";
-    static final int FILL_STREAM_ID = 6001; // 인테이크(2002)·저널(2005)과 구분되는 체결 발행 전용 스트림
+    // 패키지 가시성 — 테스트(같은 패키지)가 프로덕션과 같은 채널을 그대로 참조한다. 실제 채널은
+    // transport.fill.channel 속성에서 해석된다(fork1 Unit 1). 스트림 ID는 core
+    // AeronStreamIds.FILL로 account-worker와 공유한다(인테이크(2002)·저널(2005)과 구분).
+    static final String DEFAULT_FILL_CHANNEL = "aeron:ipc";
 
     /**
      * 체결 스트림에 새 녹화를 시작한다. 반환값(Archive 구독 ID)은 안 쓴다 — 이 빈이 존재하는
@@ -36,8 +39,10 @@ public class MatchingFillPublishConfig {
      * 것뿐이다(클래스 javadoc "순서" 참고).
      */
     @Bean
-    public Long matchingFillRecordingSubscriptionId(AeronArchive aeronArchive) {
-        return aeronArchive.startRecording(FILL_CHANNEL, FILL_STREAM_ID, SourceLocation.LOCAL);
+    public Long matchingFillRecordingSubscriptionId(
+            AeronArchive aeronArchive,
+            @Value("${transport.fill.channel:" + DEFAULT_FILL_CHANNEL + "}") String fillChannel) {
+        return aeronArchive.startRecording(fillChannel, AeronStreamIds.FILL, SourceLocation.LOCAL);
     }
 
     /**
@@ -45,8 +50,11 @@ public class MatchingFillPublishConfig {
      * {@link ExclusivePublication}으로 연다.
      */
     @Bean(destroyMethod = "close")
-    public ExclusivePublication matchingFillPublication(Aeron aeron, Long matchingFillRecordingSubscriptionId) {
-        return aeron.addExclusivePublication(FILL_CHANNEL, FILL_STREAM_ID);
+    public ExclusivePublication matchingFillPublication(
+            Aeron aeron,
+            Long matchingFillRecordingSubscriptionId,
+            @Value("${transport.fill.channel:" + DEFAULT_FILL_CHANNEL + "}") String fillChannel) {
+        return aeron.addExclusivePublication(fillChannel, AeronStreamIds.FILL);
     }
 
     @Bean

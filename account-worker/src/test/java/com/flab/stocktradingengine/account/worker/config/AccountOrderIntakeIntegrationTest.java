@@ -20,6 +20,7 @@ import org.springframework.test.annotation.DirtiesContext;
 import com.flab.stocktradingengine.account.disruptor.domain.AccountResultListener;
 import com.flab.stocktradingengine.account.disruptor.domain.RejectReason;
 import com.flab.stocktradingengine.account.worker.AccountWorkerApplication;
+import com.flab.stocktradingengine.aeron.AeronStreamIds;
 import com.flab.stocktradingengine.trading.entity.OrderSide;
 import com.flab.stocktradingengine.codec.AccountOrderCodec;
 import com.flab.stocktradingengine.codec.DecodedAccountOrder;
@@ -61,7 +62,7 @@ class AccountOrderIntakeIntegrationTest {
     void Aeron_IPC로_받은_매수주문이_검증되고_예약된다() throws InterruptedException {
         recorder.prepare(1);
         Publication publication =
-            aeron.addPublication(AccountOrderIntakeConfig.INTAKE_CHANNEL, AccountOrderIntakeConfig.INTAKE_STREAM_ID);
+            aeron.addPublication(AccountOrderIntakeConfig.DEFAULT_INTAKE_CHANNEL, AeronStreamIds.ACCOUNT_INTAKE);
         try {
             awaitConnected(publication);
             send(publication, new DecodedAccountOrder(

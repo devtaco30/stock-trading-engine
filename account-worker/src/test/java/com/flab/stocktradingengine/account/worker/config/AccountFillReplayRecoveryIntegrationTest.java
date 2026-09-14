@@ -17,6 +17,7 @@ import com.flab.stocktradingengine.account.disruptor.domain.AccountState;
 import com.flab.stocktradingengine.account.disruptor.engine.AccountEngine;
 import com.flab.stocktradingengine.account.disruptor.io.AccountFillReceiver;
 import com.flab.stocktradingengine.account.worker.AccountWorkerApplication;
+import com.flab.stocktradingengine.aeron.AeronStreamIds;
 import com.flab.stocktradingengine.codec.FillCodec;
 import com.flab.stocktradingengine.codec.FilledTrade;
 
@@ -79,9 +80,9 @@ class AccountFillReplayRecoveryIntegrationTest {
             // 녹화는 실제로 image가 붙어야(=발행자가 나타나야) 카탈로그에 recordingId가 생긴다 —
             // 그래서 startRecording을 먼저 부르되, Publication을 만들고 연결을 기다린 뒤에야
             // awaitRecordingId가 성공한다.
-            aeronArchive.startRecording(AccountFillIntakeConfig.FILL_CHANNEL, AccountFillIntakeConfig.FILL_STREAM_ID, SourceLocation.LOCAL);
+            aeronArchive.startRecording(AccountFillIntakeConfig.DEFAULT_FILL_CHANNEL, AeronStreamIds.FILL, SourceLocation.LOCAL);
 
-            Publication publication = aeron.addPublication(AccountFillIntakeConfig.FILL_CHANNEL, AccountFillIntakeConfig.FILL_STREAM_ID);
+            Publication publication = aeron.addPublication(AccountFillIntakeConfig.DEFAULT_FILL_CHANNEL, AeronStreamIds.FILL);
             try {
                 awaitConnected(publication);
                 awaitRecordingId(aeronArchive);
@@ -176,7 +177,7 @@ class AccountFillReplayRecoveryIntegrationTest {
     private long findRecordingId(AeronArchive archive) {
         long[] found = {NOT_FOUND};
         archive.listRecordingsForUri(0, 10,
-            AccountFillIntakeConfig.FILL_CHANNEL, AccountFillIntakeConfig.FILL_STREAM_ID,
+            AccountFillIntakeConfig.DEFAULT_FILL_CHANNEL, AeronStreamIds.FILL,
             (controlSessionId, correlationId, recordingId, startTimestamp, stopTimestamp,
              startPosition, stopPosition, initialTermId, segmentFileLength, termBufferLength,
              mtuLength, sessionId, streamId, strippedChannel, originalChannel, sourceIdentity) ->

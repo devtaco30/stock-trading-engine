@@ -15,6 +15,7 @@ import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.context.ConfigurableApplicationContext;
 
+import com.flab.stocktradingengine.aeron.AeronStreamIds;
 import com.flab.stocktradingengine.codec.FillCodec;
 import com.flab.stocktradingengine.codec.FilledTrade;
 import com.flab.stocktradingengine.matching.disruptor.engine.MatchingEngine;
@@ -116,7 +117,7 @@ class MatchingFillArchiveRecordingIntegrationTest {
     private long findRecordingId(AeronArchive archive) {
         long[] found = {NOT_FOUND};
         archive.listRecordingsForUri(0, 10,
-            MatchingFillPublishConfig.FILL_CHANNEL, MatchingFillPublishConfig.FILL_STREAM_ID,
+            MatchingFillPublishConfig.DEFAULT_FILL_CHANNEL, AeronStreamIds.FILL,
             (controlSessionId, correlationId, recordingId, startTimestamp, stopTimestamp,
              startPosition, stopPosition, initialTermId, segmentFileLength, termBufferLength,
              mtuLength, sessionId, streamId, strippedChannel, originalChannel, sourceIdentity) ->

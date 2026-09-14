@@ -9,6 +9,7 @@ import org.springframework.context.SmartLifecycle;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import com.flab.stocktradingengine.aeron.AeronStreamIds;
 import com.flab.stocktradingengine.matching.disruptor.engine.MatchingEngine;
 import com.flab.stocktradingengine.matching.disruptor.io.AeronOrderReceiver;
 import com.flab.stocktradingengine.matching.worker.lifecycle.MatchingOrderReceiverLifecycle;
@@ -43,12 +44,15 @@ import io.aeron.driver.MediaDriver;
 @Configuration
 public class MatchingOrderIntakeConfig {
 
-    // 패키지 가시성 — 테스트(같은 패키지)가 프로덕션과 같은 채널·스트림으로 발행하도록 이 상수를 그대로 참조한다.
-    static final String INTAKE_CHANNEL = "aeron:ipc";
-    static final int INTAKE_STREAM_ID = 2002;
+    // 패키지 가시성 — 테스트(같은 패키지)가 프로덕션과 같은 채널로 발행하도록 이 기본값을 그대로
+    // 참조한다. 실제 채널은 transport.matching-intake.channel 속성에서 해석된다(fork1 Unit 1).
+    // 스트림 ID는 core AeronStreamIds.MATCHING_INTAKE로 공유한다.
+    static final String DEFAULT_INTAKE_CHANNEL = "aeron:ipc";
 
-    // Archive 제어 채널 — account-worker AccountOrderIntakeConfig와 같은 관례값이다.
-    private static final String CONTROL_REQUEST_CHANNEL = "aeron:udp?endpoint=localhost:8010";
+    // Archive 제어 채널 — matching.worker.archive.control-channel 속성에서 해석된다(fork1 Unit 1
+    // — 3-JVM 실행 시 account-worker와 포트가 겹치지 않게 워커별로 다른 값을 준다). 기본값은
+    // account-worker AccountOrderIntakeConfig와 같은 관례값이다.
+    private static final String DEFAULT_CONTROL_REQUEST_CHANNEL = "aeron:udp?endpoint=localhost:8010";
     private static final String CONTROL_RESPONSE_CHANNEL = "aeron:udp?endpoint=localhost:0";
     private static final String REPLICATION_CHANNEL = "aeron:udp?endpoint=localhost:0";
 
@@ -70,13 +74,15 @@ public class MatchingOrderIntakeConfig {
     }
 
     @Bean(destroyMethod = "close")
-    public ArchivingMediaDriver archivingMediaDriver(File matchingArchiveDir) {
+    public ArchivingMediaDriver archivingMediaDriver(
+            File matchingArchiveDir,
+            @Value("${matching.worker.archive.control-channel:" + DEFAULT_CONTROL_REQUEST_CHANNEL + "}") String controlRequestChannel) {
         String aeronDirectoryName = CommonContext.generateRandomDirName();
 
         return ArchivingMediaDriver.launch(
             new MediaDriver.Context().aeronDirectoryName(aeronDirectoryName),
             new Archive.Context()
-                .controlChannel(CONTROL_REQUEST_CHANNEL)
+                .controlChannel(controlRequestChannel)
                 .replicationChannel(REPLICATION_CHANNEL)
                 .deleteArchiveOnStart(false) // 저널은 재시작 넘어 보존해야 한다(2c-1)
                 .archiveDir(matchingArchiveDir)
@@ -90,17 +96,21 @@ public class MatchingOrderIntakeConfig {
     }
 
     @Bean(destroyMethod = "close")
-    public AeronArchive aeronArchive(Aeron aeron) {
+    public AeronArchive aeronArchive(
+            Aeron aeron,
+            @Value("${matching.worker.archive.control-channel:" + DEFAULT_CONTROL_REQUEST_CHANNEL + "}") String controlRequestChannel) {
         return AeronArchive.connect(new AeronArchive.Context()
             .aeron(aeron)
             .ownsAeronClient(false) // Aeron 빈은 우리가 별도로 소유·소멸시킨다(위 aeron() 빈)
-            .controlRequestChannel(CONTROL_REQUEST_CHANNEL)
+            .controlRequestChannel(controlRequestChannel)
             .controlResponseChannel(CONTROL_RESPONSE_CHANNEL));
     }
 
     @Bean(destroyMethod = "close")
-    public Subscription matchingOrderSubscription(Aeron aeron) {
-        return aeron.addSubscription(INTAKE_CHANNEL, INTAKE_STREAM_ID);
+    public Subscription matchingOrderSubscription(
+            Aeron aeron,
+            @Value("${transport.matching-intake.channel:" + DEFAULT_INTAKE_CHANNEL + "}") String intakeChannel) {
+        return aeron.addSubscription(intakeChannel, AeronStreamIds.MATCHING_INTAKE);
     }
 
     @Bean

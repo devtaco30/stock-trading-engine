@@ -12,6 +12,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.annotation.DirtiesContext;
 
+import com.flab.stocktradingengine.aeron.AeronStreamIds;
 import com.flab.stocktradingengine.matching.worker.MatchingWorkerApplication;
 import com.flab.stocktradingengine.trading.entity.OrderSide;
 import com.flab.stocktradingengine.codec.EventType;
@@ -64,7 +65,7 @@ class MatchingOrderIntakeIntegrationTest {
         long positionBefore = aeronArchive.getRecordingPosition(recordingId);
 
         Publication publication =
-            aeron.addPublication(MatchingOrderIntakeConfig.INTAKE_CHANNEL, MatchingOrderIntakeConfig.INTAKE_STREAM_ID);
+            aeron.addPublication(MatchingOrderIntakeConfig.DEFAULT_INTAKE_CHANNEL, AeronStreamIds.MATCHING_INTAKE);
         try {
             awaitConnected(publication);
 
@@ -95,7 +96,7 @@ class MatchingOrderIntakeIntegrationTest {
     private long findRecordingId() {
         long[] found = {NOT_FOUND};
         aeronArchive.listRecordingsForUri(0, 10,
-            MatchingFillPublishConfig.FILL_CHANNEL, MatchingFillPublishConfig.FILL_STREAM_ID,
+            MatchingFillPublishConfig.DEFAULT_FILL_CHANNEL, AeronStreamIds.FILL,
             (controlSessionId, correlationId, recordingId, startTimestamp, stopTimestamp,
              startPosition, stopPosition, initialTermId, segmentFileLength, termBufferLength,
              mtuLength, sessionId, streamId, strippedChannel, originalChannel, sourceIdentity) ->

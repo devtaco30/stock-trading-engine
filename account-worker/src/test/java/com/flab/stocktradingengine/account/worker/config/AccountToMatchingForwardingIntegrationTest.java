@@ -19,6 +19,7 @@ import com.flab.stocktradingengine.account.disruptor.domain.AccountResultListene
 import com.flab.stocktradingengine.account.disruptor.domain.RejectReason;
 import com.flab.stocktradingengine.account.disruptor.engine.AccountEngine;
 import com.flab.stocktradingengine.account.worker.AccountWorkerApplication;
+import com.flab.stocktradingengine.aeron.AeronStreamIds;
 import com.flab.stocktradingengine.codec.EventType;
 import com.flab.stocktradingengine.codec.JournaledOrder;
 import com.flab.stocktradingengine.codec.OrderCodec;
@@ -69,7 +70,7 @@ class AccountToMatchingForwardingIntegrationTest {
     @Test
     void 매수가_accept되면_매칭으로_JournaledOrder_PLACE가_발신된다() throws InterruptedException {
         Subscription subscription = aeron.addSubscription(
-            MatchingOrderSenderConfig.MATCHING_CHANNEL, MatchingOrderSenderConfig.MATCHING_STREAM_ID);
+            MatchingOrderSenderConfig.DEFAULT_MATCHING_CHANNEL, AeronStreamIds.MATCHING_INTAKE);
         try {
             awaitSubscribed(subscription); // best-effort 발신이라, 구독 전에 accept가 오면 조용히 유실된다
 
@@ -97,7 +98,7 @@ class AccountToMatchingForwardingIntegrationTest {
     @Test
     void 매도가_accept되면_매칭으로_JournaledOrder_PLACE가_발신된다() throws InterruptedException {
         Subscription subscription = aeron.addSubscription(
-            MatchingOrderSenderConfig.MATCHING_CHANNEL, MatchingOrderSenderConfig.MATCHING_STREAM_ID);
+            MatchingOrderSenderConfig.DEFAULT_MATCHING_CHANNEL, AeronStreamIds.MATCHING_INTAKE);
         try {
             awaitSubscribed(subscription);
 

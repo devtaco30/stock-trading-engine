@@ -23,7 +23,8 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * {@link MatchingOrderSender}의 Aeron 구현 — 계좌가 accept한 매수·매도를 매칭 인테이크
- * (파이프라인 연결 ①, stream {@link MatchingOrderSenderConfig#MATCHING_STREAM_ID})로 인코딩해 보낸다.
+ * (파이프라인 연결 ①, stream {@link com.flab.stocktradingengine.aeron.AeronStreamIds#MATCHING_INTAKE})로
+ * 인코딩해 보낸다.
  *
  * <h3>발신을 로직 스레드 밖으로 (LMAX 1단계)</h3>
  * <p>{@link #forwardPlace}는 계좌 엔진의 단일 상시 컨슈머 스레드에서 호출된다 — 그 스레드가 직접
