@@ -26,16 +26,21 @@ class AccountSnapshotRecoveryIntegrationTest {
     private static final String STOCK = "005930";
     private static final long TIMEOUT_NANOS = 5_000_000_000L;
 
+    // 복구가 되살려야 할 결정적 기준값 — seed 잔고 1,000,000 · margin-rate 0.40 · 매수 10주 @ 10,000(예약 40,000),
+    // 그중 4주만 부분체결. 지급 증거금 = 4 * 10,000 * 0.40 = 16,000 → 잔고 984,000, 미수금 = 4*10,000*0.60 = 24,000,
+    // 남은 예약(미체결 6주분) = 24,000, 보유 4. run1을 라이브로 읽어 오라클로 쓰지 않는다 —
+    // 그 읽기는 소비자 스레드와 경쟁해 반쪽 상태(holding만 갱신된 찰나)를 잡을 수 있어서다.
+    private static final BigDecimal EXPECTED_BALANCE = new BigDecimal("984000");
+    private static final BigDecimal EXPECTED_RESERVED = new BigDecimal("24000");
+    private static final BigDecimal EXPECTED_UNPAID = new BigDecimal("24000");
+    private static final int EXPECTED_HOLDING = 4;
+
     @TempDir
     private Path archiveDir;
 
     @Test
     void graceful_shutdown하면_스냅샷_파일이_생기고_재기동하면_계좌_상태가_복원된다() {
         long buyOrderId;
-        BigDecimal balanceAfterFill;
-        BigDecimal reservedMarginAfterFill;
-        BigDecimal unpaidAfterFill;
-        int holdingAfterFill;
 
         ConfigurableApplicationContext run1 = launch();
         try {
@@ -45,13 +50,9 @@ class AccountSnapshotRecoveryIntegrationTest {
             buyOrderId = awaitOrderId(engine, "r1");
 
             engine.publishBuyFill(9001L, buyOrderId, 1L, STOCK, new BigDecimal("10000"), 4); // 부분체결
+            // 체결 처리(→스냅샷에 담길 상태 확정)까지만 기다린다. 잔고·미수금을 여기서 라이브로 읽어
+            // 오라클로 쓰지 않는다(위 상수 주석 참고) — run2가 되살린 값을 결정적 기준값에 대조한다.
             awaitHolding(engine, 4);
-
-            AccountState state = engine.accountState(1L);
-            balanceAfterFill = state.balance();
-            reservedMarginAfterFill = state.reservedMargin();
-            unpaidAfterFill = state.unpaid();
-            holdingAfterFill = state.holding(STOCK);
         } finally {
             run1.close(); // SmartLifecycle.stop() 체인 끝에서 AccountSnapshotLifecycle이 스냅샷을 찍는다
         }
@@ -65,10 +66,10 @@ class AccountSnapshotRecoveryIntegrationTest {
             AccountState state = engine.accountState(1L);
 
             assertThat(state.orderIdFor("r1")).as("r1의 orderId가 재시작 뒤에도 재현돼야 한다").isEqualTo(buyOrderId);
-            assertThat(state.balance().compareTo(balanceAfterFill)).as("잔고가 복원돼야 한다").isZero();
-            assertThat(state.reservedMargin().compareTo(reservedMarginAfterFill)).as("예약증거금이 복원돼야 한다").isZero();
-            assertThat(state.unpaid().compareTo(unpaidAfterFill)).as("미수금이 복원돼야 한다").isZero();
-            assertThat(state.holding(STOCK)).as("보유 수량이 복원돼야 한다").isEqualTo(holdingAfterFill);
+            assertThat(state.balance().compareTo(EXPECTED_BALANCE)).as("잔고가 복원돼야 한다").isZero();
+            assertThat(state.reservedMargin().compareTo(EXPECTED_RESERVED)).as("예약증거금이 복원돼야 한다").isZero();
+            assertThat(state.unpaid().compareTo(EXPECTED_UNPAID)).as("미수금이 복원돼야 한다").isZero();
+            assertThat(state.holding(STOCK)).as("보유 수량이 복원돼야 한다").isEqualTo(EXPECTED_HOLDING);
 
             // 발급기 이월: 새 requestId는 스냅샷에 담긴 카운터 다음 값을 받아야 한다(재시작 전과 안 겹침).
             engine.publishBuy(1L, STOCK, new BigDecimal("10000"), 5, "r2");
