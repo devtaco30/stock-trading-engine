@@ -4,27 +4,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
-import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Properties;
 
 import org.agrona.concurrent.UnsafeBuffer;
-import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.consumer.ConsumerRecords;
-import org.apache.kafka.clients.consumer.KafkaConsumer;
-import org.apache.kafka.common.serialization.StringDeserializer;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.kafka.support.serializer.JsonDeserializer;
 import org.springframework.test.annotation.DirtiesContext;
 
-import com.flab.stocktradingengine.kafka.KafkaTopics;
 import com.flab.stocktradingengine.matching.worker.MatchingWorkerApplication;
-import com.flab.stocktradingengine.kafka.event.TradeFilledEvent;
 import com.flab.stocktradingengine.trading.entity.OrderSide;
 import com.flab.stocktradingengine.codec.EventType;
 import com.flab.stocktradingengine.codec.JournaledOrder;
@@ -32,6 +20,7 @@ import com.flab.stocktradingengine.codec.OrderCodec;
 
 import io.aeron.Aeron;
 import io.aeron.Publication;
+import io.aeron.archive.client.AeronArchive;
 
 /**
  * matching-worker 앱을 실제로 띄우고, 진짜 Aeron IPC로 교차 주문을 발신해 매칭까지 되는지
@@ -40,8 +29,10 @@ import io.aeron.Publication;
  * 새로 연다(account-worker {@code AccountOrderIntakeIntegrationTest}와 같은 결).
  *
  * <p>관측은 {@link MatchListener} 빈을 따로 추가하지 않고(프로덕션 {@code AccountFillPublisher}가
- * 유일한 MatchListener 빈이라는 전제를 지킨다), {@code MatchingFillIntegrationTest}와 같은 방식으로
- * 로컬 Kafka {@code account-fills} 토픽에 실제로 체결이 발행되는지로 확인한다.</p>
+ * 유일한 MatchListener 빈이라는 전제를 지킨다), 체결 Aeron Archive 스트림({@link MatchingFillPublishConfig})의
+ * 녹화 위치가 늘어나는지로 확인한다(ADR-032, U2 — 예전엔 Kafka {@code account-fills} 토픽으로
+ * 확인했다). 체결 내용 디코딩 검증은 {@code MatchingFillArchiveRecordingIntegrationTest} 몫이라
+ * 여기서는 "정말 체결까지 났다"만 본다.</p>
  *
  * <p>{@code @DirtiesContext} — 이 컨텍스트가 만든 임베디드 MediaDriver를 다음 테스트와 안 겹치게 한다.</p>
  */
@@ -50,25 +41,27 @@ import io.aeron.Publication;
 class MatchingOrderIntakeIntegrationTest {
 
     private static final String STOCK = "005930";
-    private static final String TOPIC = KafkaTopics.accountFills();
-    private static final String BOOTSTRAP_SERVERS = "localhost:9092";
     private static final long TIMEOUT_NANOS = 5_000_000_000L;
+    private static final long NOT_FOUND = -1L;
 
     private final OrderCodec codec = new OrderCodec();
 
     @Autowired
     private Aeron aeron;
 
+    @Autowired
+    private AeronArchive aeronArchive;
+
     @Test
-    void Aeron_IPC로_들어온_교차_주문이_매칭돼_account_fills에_발행된다() throws Exception {
-        // 계좌·주문 ID를 실행마다 새로 뽑는다 — 상수로 고정하면 이전 실행이 이 토픽에 남긴
-        // 레코드까지 조건에 걸려서, 이번 실행이 실제로 매칭 안 해도 옛 레코드로 통과해버린다
-        // (MatchingFillIntegrationTest와 같은 이유).
+    void Aeron_IPC로_들어온_교차_주문이_매칭돼_체결_스트림에_녹화된다() throws Exception {
         long runId = System.nanoTime();
         long buyAccountId = runId;
         long sellAccountId = runId + 1;
         long buyOrderId = runId + 2;
         long sellOrderId = runId + 3;
+
+        long recordingId = awaitRecordingId();
+        long positionBefore = aeronArchive.getRecordingPosition(recordingId);
 
         Publication publication =
             aeron.addPublication(MatchingOrderIntakeConfig.INTAKE_CHANNEL, MatchingOrderIntakeConfig.INTAKE_STREAM_ID);
@@ -81,18 +74,42 @@ class MatchingOrderIntakeIntegrationTest {
             send(publication, new JournaledOrder(
                 EventType.PLACE, sellOrderId, sellAccountId, STOCK, OrderSide.SELL, new BigDecimal("10000"), 4, now.plusMillis(1)));
 
-            List<ConsumerRecord<String, TradeFilledEvent>> matched = consumeUntilBothSidesArrive(buyAccountId, sellAccountId);
-
-            assertThat(matched).hasSize(2);
-            TradeFilledEvent event = matched.get(0).value();
-            assertThat(event.buyOrderId()).isEqualTo(buyOrderId);
-            assertThat(event.buyAccountId()).isEqualTo(buyAccountId);
-            assertThat(event.sellOrderId()).isEqualTo(sellOrderId);
-            assertThat(event.sellAccountId()).isEqualTo(sellAccountId);
-            assertThat(event.filledQuantity()).isEqualTo(4);
-            assertThat(event.matchPrice()).isEqualByComparingTo("10000");
+            awaitPositionAdvance(recordingId, positionBefore);
         } finally {
             publication.close();
+        }
+    }
+
+    private long awaitRecordingId() {
+        long deadline = System.nanoTime() + TIMEOUT_NANOS;
+        long recordingId;
+        while ((recordingId = findRecordingId()) == NOT_FOUND) {
+            if (System.nanoTime() > deadline) {
+                throw new AssertionError("5초 안에 체결 스트림 녹화가 시작되지 않음");
+            }
+            Thread.yield();
+        }
+        return recordingId;
+    }
+
+    private long findRecordingId() {
+        long[] found = {NOT_FOUND};
+        aeronArchive.listRecordingsForUri(0, 10,
+            MatchingFillPublishConfig.FILL_CHANNEL, MatchingFillPublishConfig.FILL_STREAM_ID,
+            (controlSessionId, correlationId, recordingId, startTimestamp, stopTimestamp,
+             startPosition, stopPosition, initialTermId, segmentFileLength, termBufferLength,
+             mtuLength, sessionId, streamId, strippedChannel, originalChannel, sourceIdentity) ->
+                found[0] = recordingId);
+        return found[0];
+    }
+
+    private void awaitPositionAdvance(long recordingId, long positionBefore) {
+        long deadline = System.nanoTime() + TIMEOUT_NANOS;
+        while (aeronArchive.getRecordingPosition(recordingId) <= positionBefore) {
+            if (System.nanoTime() > deadline) {
+                throw new AssertionError("5초 안에 체결 녹화 위치가 늘지 않음 — 매칭이 안 된 것으로 보임");
+            }
+            Thread.yield();
         }
     }
 
@@ -123,33 +140,5 @@ class MatchingOrderIntakeIntegrationTest {
             }
             Thread.yield();
         }
-    }
-
-    /** 이 실행의 accountId 키를 가진 레코드 두 개(매수·매도)가 도착할 때까지 폴링한다. */
-    private List<ConsumerRecord<String, TradeFilledEvent>> consumeUntilBothSidesArrive(long buyAccountId, long sellAccountId) {
-        Properties props = new Properties();
-        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, BOOTSTRAP_SERVERS);
-        props.put(ConsumerConfig.GROUP_ID_CONFIG, "matching-order-intake-integration-test-" + System.nanoTime());
-        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-
-        String buyKey = String.valueOf(buyAccountId);
-        String sellKey = String.valueOf(sellAccountId);
-        List<ConsumerRecord<String, TradeFilledEvent>> found = new ArrayList<>();
-        try (KafkaConsumer<String, TradeFilledEvent> consumer =
-                 new KafkaConsumer<>(props, new StringDeserializer(), new JsonDeserializer<>(TradeFilledEvent.class, false))) {
-            consumer.subscribe(List.of(TOPIC));
-
-            long deadline = System.currentTimeMillis() + 20_000; // 최초 컨슈머 그룹 조인 지연 감안(B4와 동일 이유)
-            while (found.size() < 2 && System.currentTimeMillis() < deadline) {
-                ConsumerRecords<String, TradeFilledEvent> records = consumer.poll(Duration.ofMillis(500));
-                for (ConsumerRecord<String, TradeFilledEvent> record : records) {
-                    if (buyKey.equals(record.key()) || sellKey.equals(record.key())) {
-                        found.add(record);
-                    }
-                }
-            }
-        }
-        found.sort((a, b) -> Long.compare(Long.parseLong(a.key()), Long.parseLong(b.key()))); // 매수 키가 먼저 오게 정렬(검증 편의)
-        return found;
     }
 }

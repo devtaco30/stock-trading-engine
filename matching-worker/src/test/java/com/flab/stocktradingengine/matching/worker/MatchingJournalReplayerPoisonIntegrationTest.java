@@ -46,7 +46,8 @@ class MatchingJournalReplayerPoisonIntegrationTest {
         ConfigurableApplicationContext run1 = launch();
         try {
             MatchingEngine engine = run1.getBean(MatchingEngine.class);
-            ExclusivePublication publication = run1.getBean(ExclusivePublication.class);
+            // ExclusivePublication 빈이 저널·체결(U2, MatchingFillPublishConfig) 둘이라 이름으로 지정한다.
+            ExclusivePublication publication = run1.getBean("matchingJournalPublication", ExclusivePublication.class);
 
             engine.publishPlace(1L, 100L, STOCK, OrderSide.BUY, new BigDecimal("10000"), 10, Instant.now());
             awaitContainsOrder(engine, 1L);
