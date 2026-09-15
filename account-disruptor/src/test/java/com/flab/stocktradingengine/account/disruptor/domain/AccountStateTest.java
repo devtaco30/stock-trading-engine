@@ -179,6 +179,40 @@ class AccountStateTest {
         assertEquals(6, state.holding(STOCK));
     }
 
+    // ---------- tradeId 세대 가지치기 (1-4, docs/_tradeid_snapshot_prune.html) ----------
+
+    @Test
+    @DisplayName("두 세대 전으로 밀려나 가지치기된 tradeId는 재도착 시 처음 보는 것으로 취급되어 다시 반영된다")
+    void 두세대전_가지치기된_tradeId는_재반영된다() {
+        AccountState state = new AccountState(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
+        state.tryReserve(1L, new BigDecimal("10000"), 10); // 10주 예약
+        state.applyBuyFill(9001L, 1L, STOCK, new BigDecimal("10000"), 5); // 세대 0(boundarySeq=0)에 기록, 잔량 5
+
+        state.startNewGeneration(10L); // 세대 1이 현재, 세대 0은 직전
+        state.startNewGeneration(20L); // 세대 2가 현재, 세대 1은 직전, 세대 0은 두 세대 전
+        state.pruneOlderThan(2); // 세대 0(9001L을 담은 세대) 버림 — 남는 건 세대 2·세대 1
+
+        BuyFillResult replayed = state.applyBuyFill(9001L, 1L, STOCK, new BigDecimal("10000"), 5); // 같은 tradeId, 남은 잔량 5
+
+        assertTrue(replayed.applied(), "가지치기된 세대의 tradeId는 더 이상 멱등 장부에 없어야 한다");
+        assertEquals(10, state.holding(STOCK), "재반영으로 나머지 5주가 한 번 더 체결 처리돼야 한다");
+    }
+
+    @Test
+    @DisplayName("직전 세대(가지치기 전)의 tradeId는 새 세대가 시작돼도 여전히 멱등으로 무시된다")
+    void 직전세대_tradeId는_여전히_멱등() {
+        AccountState state = new AccountState(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
+        state.tryReserve(1L, new BigDecimal("10000"), 10);
+        state.applyBuyFill(9001L, 1L, STOCK, new BigDecimal("10000"), 5); // 세대 0에 기록
+
+        state.startNewGeneration(10L); // 세대 0은 이제 "직전 세대" — 아직 안 버려짐(가지치기 안 함)
+
+        BuyFillResult replayed = state.applyBuyFill(9001L, 1L, STOCK, new BigDecimal("10000"), 5); // 재도착
+
+        assertFalse(replayed.applied(), "직전 세대에 남아있는 tradeId는 가지치기 전이라 계속 멱등 처리돼야 한다");
+        assertEquals(5, state.holding(STOCK), "재도착이 무시됐으므로 보유가 늘면 안 된다");
+    }
+
     // ---------- 부분 체결 (B3c) ----------
 
     @Test

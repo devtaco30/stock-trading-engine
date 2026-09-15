@@ -1,8 +1,10 @@
 package com.flab.stocktradingengine.account.disruptor.snapshot;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -27,7 +29,7 @@ import org.agrona.concurrent.UnsafeBuffer;
  *  reservationCount:4, (orderId:8, price(8+4), remainingQuantity:4) × N,
  *  sellReservationCount:4, (orderId:8, stockCode:4+N, remainingQuantity:4) × N,
  *  holdingCount:4, (stockCode:4+N, quantity:4) × N,
- *  processedTradeIdCount:4, (tradeId:8) × N,
+ *  tradeIdGenerationCount:4, (boundarySeq:8, tradeIdCount:4, (tradeId:8) × M) × N,
  *  processedSettlementRefCount:4, (settlementRef:8) × N,
  *  processedRequestIdCount:4, (requestId:4+N) × N) × accountCount
  * </pre>
@@ -101,11 +103,17 @@ public final class AccountSnapshotCodec {
             position += Integer.BYTES;
         }
 
-        buffer.putInt(position, account.processedTradeIds().size());
+        buffer.putInt(position, account.tradeIdGenerations().size());
         position += Integer.BYTES;
-        for (long tradeId : account.processedTradeIds()) {
-            buffer.putLong(position, tradeId);
+        for (TradeIdGenerationSnapshot generation : account.tradeIdGenerations()) {
+            buffer.putLong(position, generation.boundarySeq());
             position += Long.BYTES;
+            buffer.putInt(position, generation.tradeIds().size());
+            position += Integer.BYTES;
+            for (long tradeId : generation.tradeIds()) {
+                buffer.putLong(position, tradeId);
+                position += Long.BYTES;
+            }
         }
 
         buffer.putInt(position, account.processedSettlementRefs().size());
@@ -207,12 +215,20 @@ public final class AccountSnapshotCodec {
             holdings.put(stockCode, quantity);
         }
 
-        int processedTradeIdCount = buffer.getInt(position);
+        int tradeIdGenerationCount = buffer.getInt(position);
         position += Integer.BYTES;
-        Set<Long> processedTradeIds = new HashSet<>();
-        for (int i = 0; i < processedTradeIdCount; i++) {
-            processedTradeIds.add(buffer.getLong(position));
+        List<TradeIdGenerationSnapshot> tradeIdGenerations = new ArrayList<>();
+        for (int i = 0; i < tradeIdGenerationCount; i++) {
+            long boundarySeq = buffer.getLong(position);
             position += Long.BYTES;
+            int tradeIdCount = buffer.getInt(position);
+            position += Integer.BYTES;
+            Set<Long> tradeIds = new HashSet<>();
+            for (int j = 0; j < tradeIdCount; j++) {
+                tradeIds.add(buffer.getLong(position));
+                position += Long.BYTES;
+            }
+            tradeIdGenerations.add(new TradeIdGenerationSnapshot(boundarySeq, tradeIds));
         }
 
         int processedSettlementRefCount = buffer.getInt(position);
@@ -233,7 +249,7 @@ public final class AccountSnapshotCodec {
         }
 
         AccountStateSnapshot account = new AccountStateSnapshot(accountId, seq, balance, marginRate,
-            reservations, sellReservations, holdings, processedTradeIds, processedSettlementRefs,
+            reservations, sellReservations, holdings, tradeIdGenerations, processedSettlementRefs,
             processedRequestIds, unpaid);
         return new DecodeResult<>(account, position);
     }

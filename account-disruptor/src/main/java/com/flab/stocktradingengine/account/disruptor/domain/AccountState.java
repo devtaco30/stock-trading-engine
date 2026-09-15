@@ -2,10 +2,14 @@ package com.flab.stocktradingengine.account.disruptor.domain;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -13,6 +17,7 @@ import com.flab.stocktradingengine.account.disruptor.engine.AccountEngine;
 import com.flab.stocktradingengine.account.disruptor.snapshot.AccountStateSnapshot;
 import com.flab.stocktradingengine.account.disruptor.snapshot.BuyReservationSnapshot;
 import com.flab.stocktradingengine.account.disruptor.snapshot.SellReservationSnapshot;
+import com.flab.stocktradingengine.account.disruptor.snapshot.TradeIdGenerationSnapshot;
 
 /**
  * 계좌 하나의 인메모리 상태.
@@ -39,7 +44,13 @@ public final class AccountState {
     private final Map<Long, Reservation> reservations = new HashMap<>();         // orderId → 매수 예약(가격·잔량) 장부
     private final Map<Long, SellReservation> sellReservations = new HashMap<>(); // orderId → 매도 예약(종목·잔량) 장부
     private final Map<String, Integer> holdings = new HashMap<>();      // 종목코드 → 보유 수량
-    private final Set<Long> processedTradeIds = new HashSet<>();        // 이미 반영한 체결(tradeId), 멱등용
+    // 이미 반영한 체결(tradeId) 세대별 장부(1-4, docs/_tradeid_snapshot_prune.html) — 무상한 HashSet
+    // 하나 대신 "저널 적용 순번(boundarySeq)마다 세대를 나눠 쌓고, durable 스냅샷 경계보다 오래된
+    // 세대를 통째로 버린다"는 안 A(세대별 HashSet). 맨 앞(peekFirst)이 현재 세대 — 새 tradeId는
+    // 항상 거기에만 추가한다. 판정은 모든 세대를 훑어 하나라도 있으면 중복이다. 세대 경계를 넘기고
+    // (startNewGeneration) 가지치기(pruneOlderThan)하는 건 소비자 스레드(핸들러)의 몫이다(1-3) —
+    // AccountState는 자료구조와 판정만 책임진다.
+    private final Deque<TradeIdGeneration> tradeIdGenerations = new ArrayDeque<>();
     // AccountSettlementConsumer가 ack-mode=manual_immediate + enable-auto-commit=false라 정산 하나를
     // 저널에 기록한 뒤 바로 offset을 커밋한다 → 크래시 시 재소비되는 건 "커밋 직전 처리 중이던 1건"뿐이다.
     // max.poll.records를 따로 설정하지 않아 Kafka 기본값 500이라, 어떤 리밸런스·재조정이 겹쳐도 한 번의
@@ -88,6 +99,7 @@ public final class AccountState {
         this.marginRate = marginRate;
         this.processedSettlementRefs = boundedSet(settlementRetentionLimit);
         this.processedRequestIds = boundedSet(requestIdRetentionLimit);
+        tradeIdGenerations.addFirst(new TradeIdGeneration(0L, new HashSet<>()));
     }
 
     /**
@@ -101,7 +113,12 @@ public final class AccountState {
         this.unpaid = snapshot.unpaid();
         this.seq = snapshot.seq();
         holdings.putAll(snapshot.holdings());
-        processedTradeIds.addAll(snapshot.processedTradeIds());
+        // 생성자 초기값(세대 1개)을 스냅샷의 세대들로 통째로 바꿔 끼운다 — 순서(현재 세대가 0번째)를
+        // 그대로 보존해야 이후 startNewGeneration·pruneOlderThan이 같은 경계로 이어진다.
+        tradeIdGenerations.clear();
+        for (TradeIdGenerationSnapshot generation : snapshot.tradeIdGenerations()) {
+            tradeIdGenerations.addLast(new TradeIdGeneration(generation.boundarySeq(), new HashSet<>(generation.tradeIds())));
+        }
         processedSettlementRefs.addAll(snapshot.processedSettlementRefs());
         processedRequestIds.addAll(snapshot.processedRequestIds());
         snapshot.reservations().forEach((orderId, r) ->
@@ -121,6 +138,46 @@ public final class AccountState {
         return Collections.newSetFromMap(boundedMap);
     }
 
+    /**
+     * tradeId가 이미 반영된 적 있는지 판정한다(1-4). 모든 세대를 훑어 하나라도 있으면 중복이다.
+     * 처음 보는 tradeId면 현재 세대(맨 앞, {@link Deque#peekFirst()})에만 기록한다 — 옛 세대는
+     * 절대 건드리지 않는다(가지치기로만 줄어든다).
+     */
+    private boolean isDuplicateTradeId(long tradeId) {
+        for (TradeIdGeneration generation : tradeIdGenerations) {
+            if (generation.tradeIds().contains(tradeId)) {
+                return true;
+            }
+        }
+        tradeIdGenerations.peekFirst().tradeIds().add(tradeId);
+        return false;
+    }
+
+    /**
+     * tradeId 멱등 장부의 새 세대를 연다(1-3이 저널 적용 순번이 N의 배수가 될 때마다 호출). 지금
+     * 세대는 "직전 세대"로 밀리고, 이후 반영되는 tradeId는 새 세대에 쌓인다.
+     *
+     * @param boundarySeq 새 세대가 시작되는 시점의 저널 적용 순번 — 스냅샷이 durable해진 뒤 이
+     *                    값보다 오래된(두 세대 전) tradeId를 가지치기해도 안전한 근거가 된다.
+     */
+    public void startNewGeneration(long boundarySeq) {
+        tradeIdGenerations.addFirst(new TradeIdGeneration(boundarySeq, new HashSet<>()));
+    }
+
+    /**
+     * 가장 오래된 세대부터 {@code keep}개를 넘는 세대를 버린다(1-3이 스냅샷 durable 확인 뒤 호출).
+     * 현재 세대 + 직전 세대(기본 {@code keep=2})는 항상 남겨 재전송 창을 덮는다.
+     */
+    public void pruneOlderThan(int keep) {
+        while (tradeIdGenerations.size() > keep) {
+            tradeIdGenerations.removeLast();
+        }
+    }
+
+    /** tradeId 멱등 장부 세대 한 줄 — 세대 시작 저널 적용 순번과 그 세대에 쌓인 tradeId 집합. */
+    private record TradeIdGeneration(long boundarySeq, Set<Long> tradeIds) {
+    }
+
     /** 현재 상태를 스냅샷으로 찍는다(2d-2). {@link #reservations}·{@link #sellReservations}는
      *  private record라 공개 서브레코드({@link BuyReservationSnapshot}·{@link SellReservationSnapshot})로 옮겨 담는다. */
     public AccountStateSnapshot toSnapshot() {
@@ -130,10 +187,15 @@ public final class AccountState {
         Map<Long, SellReservationSnapshot> sellReservationSnapshots = new HashMap<>();
         sellReservations.forEach((orderId, r) -> sellReservationSnapshots.put(orderId, new SellReservationSnapshot(r.stockCode(), r.remainingQuantity())));
 
+        List<TradeIdGenerationSnapshot> tradeIdGenerationSnapshots = new ArrayList<>();
+        for (TradeIdGeneration generation : tradeIdGenerations) {
+            tradeIdGenerationSnapshots.add(new TradeIdGenerationSnapshot(generation.boundarySeq(), Set.copyOf(generation.tradeIds())));
+        }
+
         return new AccountStateSnapshot(
             accountId, seq, balance, marginRate,
             reservationSnapshots, sellReservationSnapshots,
-            Map.copyOf(holdings), Set.copyOf(processedTradeIds), Set.copyOf(processedSettlementRefs),
+            Map.copyOf(holdings), List.copyOf(tradeIdGenerationSnapshots), Set.copyOf(processedSettlementRefs),
             Set.copyOf(processedRequestIds), unpaid);
     }
 
@@ -184,7 +246,7 @@ public final class AccountState {
      * @return 이번 호출로 실제 반영했으면 true, 이미 반영한 tradeId 라 무시했으면 false
      */
     public BuyFillResult applyBuyFill(long tradeId, long orderId, String stockCode, BigDecimal matchPrice, int fillQty) {
-        if (!processedTradeIds.add(tradeId)) {
+        if (isDuplicateTradeId(tradeId)) {
             return BuyFillResult.notApplied(); // 이미 반영한 체결 재도착 — 무시
         }
         Reservation reservation = reservations.get(orderId);
@@ -254,7 +316,7 @@ public final class AccountState {
      * @return 이번 호출로 실제 반영했으면 true, 이미 반영한 tradeId 라 무시했으면 false
      */
     public boolean applySellFill(long tradeId, long orderId, String stockCode, int fillQty) {
-        if (!processedTradeIds.add(tradeId)) {
+        if (isDuplicateTradeId(tradeId)) {
             return false; // 이미 반영한 체결 재도착 — 무시
         }
         SellReservation reservation = sellReservations.get(orderId);
