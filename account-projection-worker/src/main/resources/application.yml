@@ -1,0 +1,26 @@
+spring:
+  main:
+    web-application-type: none
+  # read model(재구성 가능)이라 settlement-worker와 달리 H2를 기본으로 쓴다(내구성 경계 아님).
+  # 운영/로컬 실행은 application-local.yml의 Postgres(api와 같은 stock_trading DB).
+  datasource:
+    url: jdbc:h2:mem:account-projection;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: update
+    database-platform: org.hibernate.dialect.H2Dialect
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: account-projection-worker
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "com.flab.stocktradingengine.kafka.event"
+    listener:
+      ack-mode: manual_immediate

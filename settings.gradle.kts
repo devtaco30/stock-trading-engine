@@ -33,5 +33,6 @@ include(
 	"account-worker",
 	"matching-worker",
 	"settlement-engine",
-	"settlement-worker"
+	"settlement-worker",
+	"account-projection-worker"
 )
