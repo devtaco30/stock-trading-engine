@@ -92,6 +92,7 @@ class AccountEngineRecoveryTest {
         assertEquals(0, originalUnpaid.compareTo(recoveredState.unpaid()), "미수금이 원본과 같아야 한다");
         assertEquals(buyOrderId, recoveredState.orderIdFor("r1"), "r1의 orderId가 원본과 같이 재현돼야 한다");
         assertEquals(sellOrderId, recoveredState.orderIdFor("r2"), "r2의 orderId가 원본과 같이 재현돼야 한다");
+        assertEquals(originalState.seq(), recoveredState.seq(), "seq가 원본과 같이 재현돼야 한다");
     }
 
     @Test

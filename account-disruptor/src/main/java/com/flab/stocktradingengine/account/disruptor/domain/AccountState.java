@@ -41,6 +41,10 @@ public final class AccountState {
     private final Set<Long> processedSettlementRefs = new HashSet<>();  // 이미 반영한 정산(settlementRef), 멱등용
     private final Map<String, Long> requestIdToOrderId = new HashMap<>(); // requestId → 발급한 orderId, 재전송 멱등+orderId 조회용(C5-2a)
     private BigDecimal unpaid = BigDecimal.ZERO;                        // 미결제 미수금
+    // 계좌별 단조 카운터(계좌 상태 영속/프로젝션 트랙 Unit 1). 상태를 실제로 바꾸는 연산마다
+    // 1씩 증가한다 — 나중에 이 계좌의 full-state를 캡처해 발행할 때 stale-guard(더 큰 seq만
+    // 반영) 키로 쓴다. gap은 무해하므로(엄격 증가만 보장하면 됨) "모든 변경마다 +1"로 단순하게 간다.
+    private long seq = 0L;
 
     public AccountState(long accountId, BigDecimal balance, BigDecimal marginRate) {
         this.accountId = accountId;
@@ -65,6 +69,7 @@ public final class AccountState {
         this.balance = snapshot.balance();
         this.marginRate = snapshot.marginRate();
         this.unpaid = snapshot.unpaid();
+        this.seq = snapshot.seq();
         holdings.putAll(snapshot.holdings());
         processedTradeIds.addAll(snapshot.processedTradeIds());
         processedSettlementRefs.addAll(snapshot.processedSettlementRefs());
@@ -85,7 +90,7 @@ public final class AccountState {
         sellReservations.forEach((orderId, r) -> sellReservationSnapshots.put(orderId, new SellReservationSnapshot(r.stockCode(), r.remainingQuantity())));
 
         return new AccountStateSnapshot(
-            accountId, balance, marginRate,
+            accountId, seq, balance, marginRate,
             reservationSnapshots, sellReservationSnapshots,
             Map.copyOf(holdings), Set.copyOf(processedTradeIds), Set.copyOf(processedSettlementRefs),
             Map.copyOf(requestIdToOrderId), unpaid);
@@ -134,6 +139,7 @@ public final class AccountState {
         }
 
         reservations.put(orderId, new Reservation(price, quantity));
+        seq++;
         return ReserveResult.accepted(reservedThis);
     }
 
@@ -187,6 +193,7 @@ public final class AccountState {
         BigDecimal unpaidThis = fillAmount.subtract(marginPaid);
         balance = balance.subtract(marginPaid);
         unpaid = unpaid.add(unpaidThis);
+        seq++;
         return new BuyFillResult(true, unpaidThis);
     }
 
@@ -204,6 +211,7 @@ public final class AccountState {
             return SellReserveResult.rejected(RejectReason.INSUFFICIENT_HOLDING);
         }
         sellReservations.put(orderId, new SellReservation(stockCode, quantity));
+        seq++;
         return SellReserveResult.accepted(quantity);
     }
 
@@ -234,6 +242,7 @@ public final class AccountState {
             sellReservations.put(orderId, new SellReservation(reservation.stockCode(), remainingQuantity));
         }
         holdings.merge(stockCode, -fillQty, Integer::sum);
+        seq++;
         return true;
     }
 
@@ -256,6 +265,7 @@ public final class AccountState {
         }
         balance = balance.subtract(amount);
         unpaid = unpaid.subtract(amount);
+        seq++;
         return true;
     }
 
@@ -315,5 +325,10 @@ public final class AccountState {
 
     public BigDecimal balance() {
         return balance;
+    }
+
+    /** 계좌별 단조 카운터(계좌 상태 영속/프로젝션 트랙 Unit 1) — full-state 캡처의 stale-guard 키. */
+    public long seq() {
+        return seq;
     }
 }

@@ -43,7 +43,7 @@ class AccountSnapshotCodecTest {
     @DisplayName("여러 계좌·여러 예약·멱등 캐시·requestId맵이 뒤섞여도 정확히 왕복된다")
     void 다중_계좌_다중_예약_왕복() {
         AccountStateSnapshot account1 = new AccountStateSnapshot(
-            1L, new BigDecimal("1000000"), new BigDecimal("0.40"),
+            1L, 42L, new BigDecimal("1000000"), new BigDecimal("0.40"),
             Map.of(10L, new BuyReservationSnapshot(new BigDecimal("70000"), 3)),
             Map.of(20L, new SellReservationSnapshot(STOCK, 5)),
             Map.of(STOCK, 10),
@@ -53,7 +53,7 @@ class AccountSnapshotCodecTest {
             new BigDecimal("1500"));
 
         AccountStateSnapshot account2 = new AccountStateSnapshot(
-            2L, new BigDecimal("500000"), new BigDecimal("1.00"),
+            2L, 0L, new BigDecimal("500000"), new BigDecimal("1.00"),
             Map.of(), Map.of(), Map.of(),
             Set.of(), Set.of(), Map.of(),
             BigDecimal.ZERO);
@@ -67,6 +67,7 @@ class AccountSnapshotCodecTest {
         assertEquals(2, decoded.accountsById().size());
 
         AccountStateSnapshot decodedAccount1 = decoded.accountsById().get(1L);
+        assertEquals(account1.seq(), decodedAccount1.seq());
         assertEquals(0, account1.balance().compareTo(decodedAccount1.balance()));
         assertEquals(0, account1.unpaid().compareTo(decodedAccount1.unpaid()));
         assertEquals(account1.holdings(), decodedAccount1.holdings());

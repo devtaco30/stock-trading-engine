@@ -13,9 +13,14 @@ import com.flab.stocktradingengine.account.disruptor.domain.AccountState;
  * <p>{@code processedTradeIds}·{@code processedSettlementRefs}(체결·정산 멱등 캐시)를 반드시
  * 같이 담는다 — 빼면 복구 뒤 Kafka가 재전송한 체결·정산이 "새 이벤트"로 오인돼 중복 반영된다
  * (matching {@code filledOrderTimestamps}와 같은 이유).</p>
+ *
+ * <p>{@code seq}(계좌별 단조 카운터, 계좌 상태 영속/프로젝션 트랙 Unit 1)도 반드시 같이 담는다 —
+ * 빼면 복원 직후 seq가 0으로 되돌아가, 그 뒤 저널 replay로 재현한 값이 크래시 전보다 작아져서
+ * 프로젝션 워커의 stale-guard(더 큰 seq만 반영)가 최신 상태를 구버전으로 오인해 버릴 수 있다.</p>
  */
 public record AccountStateSnapshot(
     long accountId,
+    long seq,
     BigDecimal balance,
     BigDecimal marginRate,
     Map<Long, BuyReservationSnapshot> reservations,

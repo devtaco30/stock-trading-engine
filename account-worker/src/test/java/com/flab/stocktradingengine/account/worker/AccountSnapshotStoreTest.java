@@ -41,7 +41,7 @@ class AccountSnapshotStoreTest {
     @Test
     void write_후_read하면_recordingId와_fillConsumedPosition과_스냅샷이_그대로_돌아온다() {
         AccountStateSnapshot account = new AccountStateSnapshot(
-            1L, new BigDecimal("1000000"), new BigDecimal("0.40"),
+            1L, 3L, new BigDecimal("1000000"), new BigDecimal("0.40"),
             Map.of(), Map.of(), Map.of("005930", 5), Set.of(), Set.of(),
             Map.of("r1", 10L), BigDecimal.ZERO);
         AccountSnapshot snapshot = new AccountSnapshot(Map.of(1L, account), 3L, 555L);

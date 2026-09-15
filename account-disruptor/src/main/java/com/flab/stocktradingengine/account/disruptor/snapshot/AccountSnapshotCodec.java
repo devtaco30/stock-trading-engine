@@ -23,7 +23,7 @@ import org.agrona.concurrent.UnsafeBuffer;
  * <h3>레이아웃 (running offset, 앞에서 뒤로)</h3>
  * <pre>
  * journalPosition:8, generatorCounter:8, accountCount:4,
- * (accountId:8, balance(8+4), marginRate(8+4), unpaid(8+4),
+ * (accountId:8, seq:8, balance(8+4), marginRate(8+4), unpaid(8+4),
  *  reservationCount:4, (orderId:8, price(8+4), remainingQuantity:4) × N,
  *  sellReservationCount:4, (orderId:8, stockCode:4+N, remainingQuantity:4) × N,
  *  holdingCount:4, (stockCode:4+N, quantity:4) × N,
@@ -66,6 +66,8 @@ public final class AccountSnapshotCodec {
         int position = offset;
 
         buffer.putLong(position, account.accountId());
+        position += Long.BYTES;
+        buffer.putLong(position, account.seq());
         position += Long.BYTES;
         position = encodeBigDecimal(buffer, position, account.balance());
         position = encodeBigDecimal(buffer, position, account.marginRate());
@@ -158,6 +160,8 @@ public final class AccountSnapshotCodec {
 
         long accountId = buffer.getLong(position);
         position += Long.BYTES;
+        long seq = buffer.getLong(position);
+        position += Long.BYTES;
         DecodeResult<BigDecimal> balanceResult = decodeBigDecimal(buffer, position);
         BigDecimal balance = balanceResult.value();
         position = balanceResult.nextOffset();
@@ -232,7 +236,7 @@ public final class AccountSnapshotCodec {
             requestIdToOrderId.put(requestId, orderId);
         }
 
-        AccountStateSnapshot account = new AccountStateSnapshot(accountId, balance, marginRate,
+        AccountStateSnapshot account = new AccountStateSnapshot(accountId, seq, balance, marginRate,
             reservations, sellReservations, holdings, processedTradeIds, processedSettlementRefs,
             requestIdToOrderId, unpaid);
         return new DecodeResult<>(account, position);

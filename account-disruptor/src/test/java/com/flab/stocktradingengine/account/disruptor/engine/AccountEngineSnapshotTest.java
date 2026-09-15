@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
@@ -24,6 +25,7 @@ import com.flab.stocktradingengine.account.disruptor.io.MatchingOrderSender;
 import com.flab.stocktradingengine.account.disruptor.journal.InMemoryAccountJournal;
 import com.flab.stocktradingengine.account.disruptor.snapshot.AccountSnapshot;
 import com.flab.stocktradingengine.account.disruptor.snapshot.AccountSnapshotCodec;
+import com.flab.stocktradingengine.codec.AccountJournalEntry;
 import com.lmax.disruptor.BlockingWaitStrategy;
 import com.lmax.disruptor.dsl.ProducerType;
 
@@ -118,6 +120,50 @@ class AccountEngineSnapshotTest {
 
         BuyFillResult replayedFill = restored.accountState(1L).applyBuyFill(9001L, orderId, STOCK, new BigDecimal("10000"), 10);
         assertFalse(replayedFill.applied(), "복원된 상태에도 이미 반영한 tradeId가 멱등 캐시로 남아있어야 한다");
+    }
+
+    @Test
+    @DisplayName("스냅샷 복원 뒤 그 이후 저널만 재적용해도 seq가 크래시 전 최종 상태와 같아진다 (계좌 상태 영속/프로젝션 트랙 Unit 1)")
+    void 스냅샷_복원_후_나머지_저널만_재적용해도_seq가_재현된다() {
+        InMemoryAccountJournal journal = new InMemoryAccountJournal();
+        original = new AccountEngine(1024, new BlockingWaitStrategy(), ProducerType.SINGLE, NODE_ID, NO_OP_SENDER, NoOpAccountResultListener.INSTANCE, journal);
+        original.seed(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
+        original.start();
+
+        original.publishBuy(1L, STOCK, new BigDecimal("10000"), 10, "r1");
+        long buyOrderId = awaitOrderId(original, "r1");
+        original.publishBuyFill(9001L, buyOrderId, 1L, STOCK, new BigDecimal("10000"), 10);
+        awaitSeq(original, 2L); // 예약 accept(1) + 체결 반영(1)
+
+        // 크래시 시점이 아니라 "아직 살아있는 중간" 스냅샷 — 이 이후 벌어진 일은 저널만으로 재현해야 한다.
+        AccountSnapshot midSnapshot = original.snapshot();
+        int entriesAtSnapshot = journal.entries().size();
+
+        original.publishBuy(1L, STOCK, new BigDecimal("10000"), 1, "r2");
+        awaitSeq(original, 3L); // 두 번째 예약 accept
+
+        long seqBeforeCrash = original.accountState(1L).seq();
+        List<AccountJournalEntry> entriesAfterSnapshot =
+            journal.entries().subList(entriesAtSnapshot, journal.entries().size());
+
+        restored = new AccountEngine(1024, NODE_ID, NO_OP_SENDER, NoOpAccountResultListener.INSTANCE);
+        restored.restore(midSnapshot);
+        restored.recover(entriesAfterSnapshot);
+        restored.start();
+
+        assertEquals(seqBeforeCrash, restored.accountState(1L).seq(),
+            "스냅샷 복원 + 그 이후 저널 replay 후 seq가 크래시 전 최종 상태와 같아야 한다");
+    }
+
+    /** 계좌 seq가 기대값 이상이 될 때까지 기다린다(비동기 소비자 스레드 처리 대기). */
+    private void awaitSeq(AccountEngine engine, long expectedSeq) {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(1);
+        while (engine.accountState(1L).seq() < expectedSeq) {
+            if (System.nanoTime() > deadline) {
+                throw new AssertionError("1초 안에 seq가 " + expectedSeq + "에 도달하지 않음");
+            }
+            Thread.onSpinWait();
+        }
     }
 
     private long awaitOrderId(AccountEngine engine, String requestId) {

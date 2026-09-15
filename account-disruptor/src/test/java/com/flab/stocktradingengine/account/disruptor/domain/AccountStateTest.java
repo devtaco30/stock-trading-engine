@@ -440,4 +440,69 @@ class AccountStateTest {
         BuyFillResult replayedFill = restored.applyBuyFill(9001L, 1L, STOCK, new BigDecimal("10000"), 4);
         assertFalse(replayedFill.applied(), "복원된 상태에도 이미 반영한 tradeId가 멱등 캐시로 남아있어야 한다");
     }
+
+    // ---------- seq (계좌 상태 영속/프로젝션 트랙 Unit 1) ----------
+
+    @Test
+    @DisplayName("상태를 바꾸는 연산마다 seq가 1씩 단조 증가한다")
+    void 상태변경_연산마다_seq가_단조증가() {
+        AccountState state = new AccountState(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
+        assertEquals(0L, state.seq());
+
+        state.tryReserve(1L, new BigDecimal("10000"), 10); // 매수 예약 accept
+        assertEquals(1L, state.seq());
+
+        state.trySellReserve(2L, STOCK, 3); // 매도 예약 accept (보유 없어도 3 <= 0 아니면 거부지만 여기선 보유 0이라 거부됨)
+        // 위 매도는 보유가 없어 거부되므로 seq 불변 — 아래에서 별도로 accept 케이스를 확인한다.
+        assertEquals(1L, state.seq());
+
+        state.applyBuyFill(9001L, 1L, STOCK, new BigDecimal("10000"), 10); // 매수 체결 반영
+        assertEquals(2L, state.seq());
+
+        state.applySettlement(7001L, new BigDecimal("1")); // 정산 반영
+        assertEquals(3L, state.seq());
+    }
+
+    @Test
+    @DisplayName("매도 예약 accept와 매도 체결 반영도 seq를 증가시킨다")
+    void 매도_예약과_체결도_seq_증가() {
+        AccountState state = new AccountState(1L, new BigDecimal("1000000"), new BigDecimal("0.40"), Map.of(STOCK, 10));
+        assertEquals(0L, state.seq());
+
+        state.trySellReserve(1L, STOCK, 5); // 매도 예약 accept
+        assertEquals(1L, state.seq());
+
+        state.applySellFill(9001L, 1L, STOCK, 5); // 매도 체결 반영
+        assertEquals(2L, state.seq());
+    }
+
+    @Test
+    @DisplayName("거부되거나 이미 반영한(멱등) 이벤트는 seq를 증가시키지 않는다")
+    void 거부되거나_중복이면_seq_불변() {
+        AccountState state = new AccountState(1L, new BigDecimal("30000"), new BigDecimal("0.40"));
+
+        state.tryReserve(1L, new BigDecimal("10000"), 10); // 거부(가용 초과)
+        assertEquals(0L, state.seq());
+
+        AccountState funded = new AccountState(2L, new BigDecimal("1000000"), new BigDecimal("0.40"));
+        funded.tryReserve(1L, new BigDecimal("10000"), 10);
+        funded.applyBuyFill(9001L, 1L, STOCK, new BigDecimal("10000"), 10);
+        long seqAfterFirstApply = funded.seq();
+
+        funded.applyBuyFill(9001L, 1L, STOCK, new BigDecimal("10000"), 10); // 같은 tradeId 재도착 — 멱등 무시
+        assertEquals(seqAfterFirstApply, funded.seq(), "이미 반영한 tradeId 재도착은 seq를 증가시키면 안 된다");
+    }
+
+    @Test
+    @DisplayName("toSnapshot으로 찍고 복원하면 seq가 그대로 보존된다")
+    void 스냅샷_왕복하면_seq도_보존된다() {
+        AccountState original = new AccountState(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
+        original.tryReserve(1L, new BigDecimal("10000"), 10);
+        original.applyBuyFill(9001L, 1L, STOCK, new BigDecimal("10000"), 10);
+        long seqBeforeSnapshot = original.seq();
+
+        AccountState restored = new AccountState(original.toSnapshot());
+
+        assertEquals(seqBeforeSnapshot, restored.seq());
+    }
 }
