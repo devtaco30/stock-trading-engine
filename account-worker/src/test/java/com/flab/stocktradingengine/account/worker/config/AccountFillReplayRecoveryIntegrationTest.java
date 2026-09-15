@@ -24,7 +24,6 @@ import com.flab.stocktradingengine.codec.FilledTrade;
 import io.aeron.Aeron;
 import io.aeron.Publication;
 import io.aeron.archive.client.AeronArchive;
-import io.aeron.archive.codecs.SourceLocation;
 
 /**
  * ADR-032, U4b 핵심 — "매칭이 냈지만 계좌가 재시작되기 전에 못 받은 체결"이 재기동 시 fill
@@ -35,9 +34,11 @@ import io.aeron.archive.codecs.SourceLocation;
  * <h3>gap을 만드는 방법 — 타이밍 경쟁이 아니라 결정적으로</h3>
  * <p>run1에서 {@link AccountFillReceiver#close()}를 테스트가 직접 불러 폴 스레드를 먼저 멈춘 뒤에
  * 두 번째 체결을 발행한다 — "수신기가 마침 그 순간 못 받았을 수도 있다"는 race가 아니라, 발행
- * 시점에 수신기가 이미 죽어 있어 절대 못 받는다는 걸 보장한다. 그래도 테스트가 매칭의 Archive
- * 녹화 역할까지 겸하므로(아직 실 크로스 프로세스가 아님, C5 전) 그 두 번째 체결은 recording에는
- * 그대로 남는다 — run2가 그 recording을 replay해서 되살려야 한다.</p>
+ * 시점에 수신기가 이미 죽어 있어 절대 못 받는다는 걸 보장한다. 녹화는 프로덕션이 담당한다(fork3
+ * U3, {@link AccountFillIntakeConfig#accountFillRecordingSubscriptionId} — REMOTE, 컨텍스트 기동
+ * 시 자동 시작) — 이 테스트는 매칭 역할을 하는 {@link Publication}만 열면 되고, 두 번째 체결은
+ * 수신기가 죽어 있어도 그 REMOTE 녹화엔 그대로 남는다 — run2가 그 recording을 replay해서
+ * 되살려야 한다.</p>
  *
  * <p>{@link AccountJournalReplayRecoveryIntegrationTest}(86718c3)처럼 run1을 라이브로 읽어
  * 오라클로 쓰지 않는다 — 두 체결의 예약증거금·미수금을 손으로 계산한 결정적 기준값과 대조한다.</p>
@@ -77,11 +78,10 @@ class AccountFillReplayRecoveryIntegrationTest {
             engine.publishBuy(1L, STOCK, new BigDecimal("10000"), 10, "r1");
             long buyOrderId1 = awaitOrderId(engine, "r1");
 
-            // 녹화는 실제로 image가 붙어야(=발행자가 나타나야) 카탈로그에 recordingId가 생긴다 —
-            // 그래서 startRecording을 먼저 부르되, Publication을 만들고 연결을 기다린 뒤에야
+            // 프로덕션 REMOTE 녹화(AccountFillIntakeConfig.accountFillRecordingSubscriptionId)는
+            // 컨텍스트 기동 때 이미 시작돼 있다 — 실제로 image가 붙어야(=발행자가 나타나야) 카탈로그에
+            // recordingId가 생기므로, 이 테스트의 Publication을 만들고 연결을 기다린 뒤에야
             // awaitRecordingId가 성공한다.
-            aeronArchive.startRecording(AccountFillIntakeConfig.DEFAULT_FILL_CHANNEL, AeronStreamIds.FILL, SourceLocation.LOCAL);
-
             Publication publication = aeron.addPublication(AccountFillIntakeConfig.DEFAULT_FILL_CHANNEL, AeronStreamIds.FILL);
             try {
                 awaitConnected(publication);

@@ -20,15 +20,15 @@ import io.aeron.logbuffer.FragmentHandler;
  * awaitConnected 구조가 같다. 매칭이 "재기동 전에 계좌가 못 받은 체결"을 이 스트림에 이미 durable
  * 하게 남겨뒀으므로, 여기서 읽어 {@code AccountEngine#recover}에 넘길 입력을 만든다.
  *
- * <h3>단순화 — 단일 recording 가정 (C5로 미룸)</h3>
+ * <h3>단순화 — 단일 recording 가정 (C6로 미룸)</h3>
  * <p>{@link AccountJournalReplayer}는 저널 스트림에 recording이 여러 개(자기 프로세스가 여러 번
  * 재시작)일 수 있어 시작 시각순으로 이어 붙인다. 이 클래스는 그 복잡도를 지금 들이지 않는다 —
- * 체결 스트림(6001)의 소유자는 이 프로세스(계좌)가 아니라 매칭이라, "이 position이 어느
- * recording 소속인가"를 가리려면 매칭이 낸 recordingId까지 계좌 스냅샷에 저장해야 한다(계좌가
- * 매칭 소유 Archive 자원의 식별자를 아는 것 — 아직 실제 크로스 프로세스 경계가 없는 지금 단계에서
- * 억지로 만들 이유가 없다). 지금은 이 채널·스트림의 recording이 정확히 하나(또는 아직 없음, 0개)
- * 라고 가정한다 — 실 크로스 프로세스(C5)에서 매칭이 여러 번 재시작해 recording이 여러 개가 되는
- * 경우는 그때 recordingId까지 스냅샷에 싣는 형태로 확장한다.</p>
+ * fork3 U3부터 체결 스트림(6001)의 녹화 주체는 이 프로세스(계좌) 자신이라(REMOTE, {@code
+ * AccountFillIntakeConfig}), recordingId도 계좌가 직접 안다. 단순화는 여전히 남는다: run(프로세스
+ * 수명) 하나당 이 채널·스트림에 recording이 정확히 하나(또는 아직 없음, 0개)라고 가정한다 — 발행자인
+ * 매칭이 한 run 안에서 여러 번 재시작하면 같은 계좌 run이 매칭 recording을 여러 개 relay로 이어
+ * 받게 되는 경우까지는 다루지 않는다(그때는 recordingId를 시작 시각순으로 이어 붙이는
+ * {@link AccountJournalReplayer} 방식으로 확장 — 복구 하드닝 C6에서 다룬다).</p>
  */
 public class AccountFillReplayer {
 
