@@ -12,6 +12,8 @@ v2 계좌 엔진 `AccountState`는 각 계좌의 잔고·보유를 프로세스 
 
 **이 flush의 핵심**: 처음엔 소스 성격별로 "tradeId→워터마크 / settlement→LRU / requestId→TTL" 3분할로 설계했는데, 착수하며 코드·실측으로 검증하니 **세 결론이 다 바뀌었다.** tradeId는 워터마크가 불가능(스냅샷 정책과 얽혀 이번 범위서 뺌), requestId는 TTL이 아니라 orderId 자체가 불필요(Set으로 축소), settlement만 LRU가 맞되 N의 근거가 바뀜. "설계는 검증 전엔 가설"이라는 실물 사례.
 
+> **용어 정정(2026-09-15)**: 아래에서 "LRU"라 부른 상한 집합의 실제 동작은 **FIFO(삽입순서 퇴출)**다. 구현이 `LinkedHashMap(cap, 0.75f, accessOrder=false) + removeEldestEntry`라 조회로 순서가 갱신되지 않고, 가장 먼저 들어온 것부터 밀려난다(`AccountState.boundedSet`, `OrderBook.filledOrderTimestamps`). 이 문서·코드가 "LRU"라 쓴 건 오기이고, dedup 창을 덮는 논리는 FIFO로도 그대로 성립한다(밀려나는 건 항상 가장 오래된 것). 코드 주석은 FIFO로 수정됨.
+
 ## ADR 네타
 
 ### tradeId 워터마크는 왜 안 되나 — "순서 보장 ≠ 값 단조", 그리고 발급 소스를 봐야 한다

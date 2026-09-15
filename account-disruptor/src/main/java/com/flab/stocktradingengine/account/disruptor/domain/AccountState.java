@@ -44,10 +44,13 @@ public final class AccountState {
     // 저널에 기록한 뒤 바로 offset을 커밋한다 → 크래시 시 재소비되는 건 "커밋 직전 처리 중이던 1건"뿐이다.
     // max.poll.records를 따로 설정하지 않아 Kafka 기본값 500이라, 어떤 리밸런스·재조정이 겹쳐도 한 번의
     // poll 배치(≤500)를 넘는 재소비는 없다 — 그래서 복구 겹침 상한을 500(=max.poll.records)으로 잡는다.
+    // ⚠️ 이 500은 max.poll.records 기본값에 묶인 값이다. 그 설정을 500보다 크게 올리면 dedup 창이
+    //    한 poll 배치보다 작아져 복구 겹침에서 멱등이 뚫릴 수 있다 → 설정을 올릴 때 이 상한도 함께 올릴 것.
     static final int SETTLEMENT_RETENTION_LIMIT = 500;
     // 이미 반영한 정산(settlementRef), 멱등용. 상한 없는 HashSet은 장기 실행 시 무한 증가하므로(OOM 릭)
     // OrderBook.filledOrderTimestamps와 같은 방식(LinkedHashMap 삽입순서 + removeEldestEntry)으로 상한을 둔다.
-    // LRU가 이 복구 겹침 상한(500)을 덮으므로, 밀려난 정산이 재도착해 멱등이 뚫릴 일은 없다.
+    // 삽입순서 퇴출(FIFO — accessOrder=false라 먼저 들어온 것부터 밀려난다)이 이 복구 겹침 상한(500)을
+    // 덮으므로, 밀려난 정산이 재도착해 멱등이 뚫릴 일은 없다.
     private final Set<Long> processedSettlementRefs;
     // ⚠️ 이 값은 근거 있는 상한이 아니라 릭(무한증가) 방지용 임시값이다. requestId 상한이 덮어야
     // 하는 "재전송 창"은 클라 재시도 정책·결과 폴링 조회 API(fork5 ⑤ 후속)에 묶이는데 둘 다
@@ -55,7 +58,7 @@ public final class AccountState {
     static final int REQUEST_ID_RETENTION_LIMIT = 5000;
     // 이미 처리한 매수·매도 접수 requestId, 재전송 멱등용(C5-1a). orderId는 안 담는다 — 재전송의
     // 원래 orderId를 실제로 쓰는 소비자가 없었다(릭 수정 U2, 로그 한 줄뿐이고 클라 응답 경로로도
-    // 안 나감). settlementRefs와 같은 삽입순서 상한 Set(LRU bounded).
+    // 안 나감). settlementRefs와 같은 삽입순서 상한 Set(FIFO bounded).
     private final Set<String> processedRequestIds;
     private BigDecimal unpaid = BigDecimal.ZERO;                        // 미결제 미수금
     // 계좌별 단조 카운터(계좌 상태 영속/프로젝션 트랙 Unit 1). 상태를 실제로 바꾸는 연산마다
@@ -73,12 +76,12 @@ public final class AccountState {
         holdings.putAll(initialHoldings);
     }
 
-    /** 테스트 전용. settlementRetentionLimit을 작게 지정해 정산 멱등 캐시의 LRU 퇴출 동작을 검증할 때 쓴다. */
+    /** 테스트 전용. settlementRetentionLimit을 작게 지정해 정산 멱등 캐시의 FIFO(삽입순서) 퇴출 동작을 검증할 때 쓴다. */
     AccountState(long accountId, BigDecimal balance, BigDecimal marginRate, int settlementRetentionLimit) {
         this(accountId, balance, marginRate, settlementRetentionLimit, REQUEST_ID_RETENTION_LIMIT);
     }
 
-    /** 테스트 전용. settlement·requestId 멱등 캐시 상한을 모두 작게 지정해 LRU 퇴출 동작을 검증할 때 쓴다. */
+    /** 테스트 전용. settlement·requestId 멱등 캐시 상한을 모두 작게 지정해 FIFO(삽입순서) 퇴출 동작을 검증할 때 쓴다. */
     AccountState(long accountId, BigDecimal balance, BigDecimal marginRate, int settlementRetentionLimit, int requestIdRetentionLimit) {
         this.accountId = accountId;
         this.balance = balance;
@@ -107,7 +110,7 @@ public final class AccountState {
             sellReservations.put(orderId, new SellReservation(r.stockCode(), r.remainingQuantity())));
     }
 
-    /** 삽입순서 상한 집합(LRU bounded) — OrderBook.filledOrderTimestamps와 같은 패턴. */
+    /** 삽입순서 상한 집합(FIFO bounded) — OrderBook.filledOrderTimestamps와 같은 패턴. */
     private static <T> Set<T> boundedSet(int limit) {
         Map<T, Boolean> boundedMap = new LinkedHashMap<>(limit, 0.75f, false) {
             @Override

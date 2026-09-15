@@ -63,7 +63,7 @@ public class OrderBook {
     static final int FILLED_ORDER_RETENTION_LIMIT = 5_000;
     static final Duration FILLED_ORDER_RETENTION_TTL = Duration.ofMinutes(5);
 
-    // 전량 체결 완료된 주문 ID → 체결 시각. LRU bounded + TTL lazy 체크로 메모리 상한 보장.
+    // 전량 체결 완료된 주문 ID → 체결 시각. FIFO(삽입순서 퇴출, accessOrder=false) bounded + TTL lazy 체크로 메모리 상한 보장.
     private final Map<Long, Instant> filledOrderTimestamps;
 
     public OrderBook() {
@@ -75,7 +75,7 @@ public class OrderBook {
         };
     }
 
-    /** 테스트 전용 생성자. retentionLimit 을 작게 지정해 LRU 퇴출 동작을 검증할 때 사용. */
+    /** 테스트 전용 생성자. retentionLimit 을 작게 지정해 FIFO(삽입순서) 퇴출 동작을 검증할 때 사용. */
     OrderBook(int retentionLimit) {
         this.filledOrderTimestamps = new LinkedHashMap<>(retentionLimit, 0.75f, false) {
             @Override
