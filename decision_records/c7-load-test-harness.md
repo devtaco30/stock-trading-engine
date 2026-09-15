@@ -2,7 +2,7 @@
 feature: c7-load-test-harness
 date: 2026-09-15
 branch: feat/c7-load-harness
-commits: [c9a00f6]
+commits: [c9a00f6, 8fc8da8]
 feeds: [adr, blog]
 ---
 
@@ -38,6 +38,27 @@ k6 스크립트를 짰다. 애플리케이션 코드(AccountState·리스너)는
   로컬 전용으로 다시 복사해야 한다는 뜻 — git이 자동으로 못 해준다.
 - **무엇을**: `stock-trading-engine-c7/docker-compose.loadtest.yml`(로컬 전용, 커밋 안 됨).
 - **결과·수치**: 복사 후 정상 동작.
+
+### `docker-compose.loadtest.yml`은 커밋한다 — 위 항목의 "커밋 대상 아님" 결정을 대체
+- **context**: 위 항목("커밋 대상이 아니라 워크트리마다 따로 있어야 한다")은 이 파일이
+  `.gitignore` 대상이라 커밋할 수 없다고 적었는데, 실제로는 `.gitignore`에 안 걸려 있었다
+  (`git check-ignore`로 확인) — 그냥 커밋을 안 한 상태였을 뿐이다. 이 사실이 드러난 뒤
+  Jack이 커밋 쪽으로 결정을 뒤집었다.
+- **왜(문제)**: 새 워크트리를 만들 때마다(이번 측정에서 `../stock-trading-engine-main`을 새로
+  만들면서 또) 이 파일이 안 따라와 `run-v2.sh`가 "파일 없음"으로 즉시 죽는 사고가 반복됐다.
+  워크트리는 git이 추적하는 파일만 새 디렉터리에 나타나므로, 커밋하지 않는 한 매번 수동
+  복사가 필요하다.
+- **어떻게(정정)**: 커밋한다. `postgres.ports`를 `9702:5432`로 오버라이드하는
+  `!override` 머지 방식은 그대로 유지, 헤더 주석만 "커밋 대상 아님"에서 "run-v1.sh/
+  run-v2.sh가 전제하므로 커밋해 둔다"로 수정.
+- **무엇을**: `docker-compose.loadtest.yml` 커밋 (`feat/c7-load-harness` 브랜치 `8fc8da8`,
+  `main`에는 cherry-pick으로 `ef2034e`).
+- **대가**: postgres 포트 9702 오버라이드는 이 머신 로컬 값(포트 배정표 `~/.claude/ports.md`
+  기준, 다른 프로젝트 Sentinel과의 충돌 회피용)인데, 커밋하면 이 머신 전용 값이 레포에
+  고정된다. 다른 머신에서 클론하면 그 머신 사정과 안 맞을 수 있음 — Jack이 이 대가를 알고
+  승인.
+- **결과·수치**: 실측 — cherry-pick 후 `run-v1.sh`·`run-v2.sh` 둘 다 `../stock-trading-
+  engine-main`에서 첫 줄부터 정상 진행 확인(2026-09-16 실측정에서 검증).
 
 ### docker compose 프로젝트명이 디렉터리명에 묶여, 워크트리에서 돌리면 컨테이너 이름이 충돌한다
 - **context**: `run-v2.sh`가 이미 7일째 떠 있는 공유 인프라 컨테이너(`stock-trading-postgres`
