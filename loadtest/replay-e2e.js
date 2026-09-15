@@ -10,6 +10,10 @@ const TOKEN = __ENV.TOKEN || 'loadtest-token-1';
 const BASE = __ENV.BASE || 'http://localhost:8080';
 const VUS = parseInt(__ENV.VUS || '50');
 const INPUT_FILE = __ENV.INPUT_FILE || './results/e2e-input.jsonl';
+// 같은 입력 파일을 재기동 없이 여러 패스(워밍업+측정3) 연속 재생하므로, 원본 requestId를 그대로
+// 쓰면 두 번째 패스부터 멱등 캐시가 재전송으로 오인해 전부 duplicate로 스킵된다(계좌·예약 반영이
+// 안 되고 histogram에도 안 잡힘) — 패스마다 접미사를 붙여 서로 다른 요청으로 만든다.
+const PASS = __ENV.PASS || 'default';
 
 const orders = new SharedArray('e2e-orders', function () {
   return open(INPUT_FILE)
@@ -36,7 +40,7 @@ export default function () {
     orderType: 'LIMIT',
     price: order.price,
     quantity: order.quantity,
-    requestId: order.requestId,
+    requestId: `${order.requestId}-${PASS}`,
   });
   const res = http.post(`${BASE}/api/${VERSION}/orders/${path}`, body, {
     headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
