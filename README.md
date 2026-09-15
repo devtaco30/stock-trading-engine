@@ -24,6 +24,52 @@
 
 ---
 
+## v2 — 같은 엔진을 락 없이 다시 만들다 (2026-09)
+
+v1은 주문 하나를 처리할 때 계좌 행에 비관적 락(`PESSIMISTIC_WRITE`)을 걸고, 매칭·정산 사이를 Kafka로 이었습니다. 정합성은 지켜졌지만 락을 쥔 채 DB·브로커를 오가는 왕복이 처리 속도의 천장이었습니다(ADR-001. 2026-09-04 k6 실측: 매수 접수 479 req/s(50계좌) / 649 req/s(단일 계좌), p99 1,465 / 452 ms, 단일 머신).
+
+v2는 같은 정합성 요구를 반대 방식으로 만족시킵니다.
+
+- **single-writer**: 계좌 잔고와 종목 호가창을 프로세스 메모리에 두고, 계좌는 accountId·종목은 stockCode로 샤딩해 스레드 하나만 고치게 합니다. 락이 사라집니다. (LMAX Disruptor 링버퍼, ADR-014)
+- **핫패스 = Aeron**: 주문 접수 → 계좌 검증·예약 → 매칭 → 체결 반영은 Aeron(UDP, µs 단위)으로 잇고, 각 엔진은 입력 스트림을 Aeron Archive에 녹화합니다. 복구는 스냅샷 + 저널 replay입니다. (ADR-019·020, 저널·스냅샷 상세는 `decision_records/engine-journal-durability.md` · `snapshot.md`)
+- **off-path = Kafka**: T+2 정산 왕복과 계좌 조회모델 프로젝션만 Kafka입니다. 한 번 Kafka를 완전히 뗐다가 정산 경로에서 프로듀서를 손으로 재구현하게 되어 되돌렸습니다. (ADR-033)
+- **정합성은 락 대신**: 계좌당 소유자 하나, requestId·tradeId·settlementRef 멱등 집합, full-state + seq로 stale 거부하는 DB 프로젝션. (ADR-021, requestId 멱등은 `decision_records/id-idempotency-determinism.md`)
+
+### 모듈 (v2 추가분)
+
+| 모듈 | 역할 |
+|---|---|
+| `matching-disruptor` | 매칭 코어 라이브러리 (Disruptor, 프레임워크 0) |
+| `account-disruptor` | 계좌 코어 라이브러리 (검증·예약·체결 반영·멱등) |
+| `matching-worker` | 매칭 호스트 앱 (Spring Boot + Aeron Archive) |
+| `account-worker` | 계좌 호스트 앱 (Aeron 인테이크, 체결 수신, Kafka 정산·프로젝션 발행) |
+| `settlement-worker` | T+2 정산 (Kafka, PostgreSQL) |
+| `account-projection-worker` | 계좌 read model 프로젝션 (Kafka → DB) |
+
+api 모듈의 `/api/v2/orders/*`가 v2 진입점이고 `/api/v1/*`은 그대로 v1입니다.
+
+### 실행 (3-JVM, UDP)
+
+```bash
+docker compose up -d   # kafka · redis · postgres
+./gradlew :account-worker:bootRun  --args='--spring.profiles.active=udp'
+./gradlew :matching-worker:bootRun --args='--spring.profiles.active=udp'
+./gradlew :api:bootRun             --args='--spring.profiles.active=udp'
+```
+
+데모 시드(계좌 90001 매수 / 90002 매도, 종목 A900110)가 api와 account-worker에 같이 들어 있습니다. 정산·프로젝션 워커는 `local` 프로파일(PostgreSQL 9702)로 별도 기동합니다.
+
+### 측정
+
+- 매칭 코어 JMH: `./gradlew :matching-disruptor:jmh`, 지연 벤치 `:matching-disruptor:latencyBench` — 처리량 초당 약 97만~100만 주문, 저부하 지연 p50 13~30µs (Apple M1 Pro 10코어, OpenJDK 21.0.3, WaitStrategy 3종)
+- 부하: `loadtest/` (k6) — v1 vs v2 비교 [2026-09-16 측정 후 수치 삽입]
+
+### 결정 기록
+
+설계 결정은 `adr/`에 있습니다. v2 핵심은 ADR-014(single-writer 계좌), 019(매칭 내구성), 020(전송 반전), 021(계좌 영속), 031(샤딩), 033(하이브리드 복원)입니다. 아직 ADR 파일로 옮기지 않은 결정(저널 내구성·스냅샷·orderId 결정론·K8s HA·C5 조정 등)은 `decision_records/`에 원문이 있습니다.
+
+---
+
 ## 문서
 
 - [1. 주식 거래 기본 개념](docs/1_주식거래_기본개념.md)
@@ -35,10 +81,9 @@
 
 ## 기술 스택
 
-- Java 17+
-- Spring Boot 3.x
-- PostgreSQL
-- Spring Batch (결제일 배치)
+- Java 17 (Gradle toolchain) / Spring Boot 3.x
+- PostgreSQL · Kafka (KRaft) · Redis
+- v2: LMAX Disruptor · Aeron (+ Archive) · JMH · k6
 
 ---
 
