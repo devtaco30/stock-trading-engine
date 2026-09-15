@@ -2,7 +2,7 @@
 feature: c7-load-test-harness
 date: 2026-09-15
 branch: feat/c7-load-harness
-commits: []
+commits: [c9a00f6]
 feeds: [adr, blog]
 ---
 
@@ -133,4 +133,5 @@ k6 스크립트를 짰다. 애플리케이션 코드(AccountState·리스너)는
   안 잡히고 **실제로 두 번 기동해봐서** 잡았다.
 - **재료(커밋·도식·수치)**: `loadtest/run-v2.sh`·`stop-v2.sh`·`run-v1.sh`,
   `MetricsAccountResultListener`, 실기동 로그(202 응답, `dup=1` 카운트, `acceptedTotal=` 누적),
-  worktree 경로 `../stock-trading-engine-c7`. 커밋은 39 리뷰 승인 대기 중(이 flush 시점 기준).
+  worktree 경로 `../stock-trading-engine-c7`. 39 리뷰 승인 후 커밋 `c9a00f6`. U4(측정·리포트)는
+  아직 남음 — v1/v2 실제 처리량 수치는 이 flush 시점엔 미측정.
