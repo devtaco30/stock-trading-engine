@@ -1,0 +1,10 @@
+# 로컬 부하 테스트용 오버라이드.
+# 기본 docker-compose.yml의 postgres 5432가 다른 프로젝트(Sentinel)와 충돌 →
+# 포트 배정표(~/.claude/ports.md)의 stock-trading-engine 블록 97xx에 맞춰 9702로 노출.
+# run-v1.sh/run-v2.sh가 이 파일을 전제로 하므로 커밋해 둔다.
+# 사용: docker compose -f docker-compose.yml -f docker-compose.loadtest.yml up -d
+services:
+  postgres:
+    # !override: 기본 compose의 ports(5432)를 병합(append)하지 않고 교체
+    ports: !override
+      - "9702:5432"
