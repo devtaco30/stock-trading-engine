@@ -14,3 +14,16 @@ account:
   worker:
     archive:
       control-channel: aeron:udp?endpoint=localhost:8010
+
+# fork1, Unit 3b — 라이브 왕복 검증용 데모 계좌. api의 udp-demo-seed.sql(accountId 90001/90002,
+# 종목 A900110)과 반드시 일치해야 한다. 90001=매수 시드 잔고, 90002=매도용 보유 수량 시드.
+account-worker:
+  seed-accounts:
+    - account-id: 90001
+      balance: 100000000
+      margin-rate: 0.40
+    - account-id: 90002
+      balance: 100000000
+      margin-rate: 0.40
+      holdings:
+        A900110: 100

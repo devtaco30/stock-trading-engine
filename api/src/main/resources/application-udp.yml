@@ -7,8 +7,11 @@ transport:
 
 # fork1, Unit 3a — 기본(no-profile) application.yml의 data-scenario1-test.sql은 테스트 전용
 # 리소스라 런타임 jar/실행 클래스패스엔 없어 udp 프로파일 단독 기동이 이 초기화 단계에서 실패한다.
-# udp 프로파일에서만 건너뛴다(기본 프로파일·테스트는 영향 없음).
+# fork1, Unit 3b — 라이브 왕복 검증에 쓸 데모 계좌(90001 매수/90002 매도)·종목(A900110) 시드로 교체.
+# account-worker의 application-udp.yml `account-worker.seed-accounts`와 accountId·stockCode가
+# 반드시 일치해야 한다.
 spring:
   sql:
     init:
-      mode: never
+      mode: always
+      data-locations: classpath:udp-demo-seed.sql
