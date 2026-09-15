@@ -19,6 +19,7 @@ import com.flab.stocktradingengine.account.disruptor.domain.NoOpAccountResultLis
 import com.flab.stocktradingengine.account.disruptor.handler.AccountEventHandler;
 import com.flab.stocktradingengine.account.disruptor.handler.AccountExceptionHandler;
 import com.flab.stocktradingengine.account.disruptor.handler.AccountJournalEventHandler;
+import com.flab.stocktradingengine.account.disruptor.io.AccountSnapshotSink;
 import com.flab.stocktradingengine.account.disruptor.io.MatchingOrderSender;
 import com.flab.stocktradingengine.account.disruptor.journal.AccountJournal;
 import com.flab.stocktradingengine.account.disruptor.journal.InMemoryAccountJournal;
@@ -50,6 +51,21 @@ public class AccountEngine {
     private static final MatchingOrderSender NO_OP_MATCHING_ORDER_SENDER =
         (orderId, accountId, stockCode, side, price, quantity) -> {};
 
+    // 러닝 중 스냅샷 파이프라인(1-3)을 안 쓰는 생성자(대부분의 테스트)를 위한 기본값 — 큐잉을
+    // 항상 성공시키되(디스크에 실제로 안 쓰이니) durableSeq는 항상 0(아무것도 durable 아님)으로
+    // 둬, 실수로 가지치기가 진행돼 테스트가 세대 데이터를 잃는 일이 없게 한다(보수적 기본값).
+    private static final AccountSnapshotSink NO_OP_SNAPSHOT_SINK = new AccountSnapshotSink() {
+        @Override
+        public boolean offer(byte[] snapshotBytes, long fillPosition, long appliedSeq) {
+            return true;
+        }
+
+        @Override
+        public long durableSeq() {
+            return 0L;
+        }
+    };
+
     // blockUntilJournaled 최대 대기 시간. 저널 스레드가 죽어(fail-fast) 시퀀스가 영영 안 올라오는
     // 상황에서 호출 스레드가 무한 스핀하는 걸 막는다. Kafka max.poll.interval(기본 5분)보다 한참 짧아
     // 리밸런스를 유발하지 않는다.
@@ -78,9 +94,12 @@ public class AccountEngine {
      * @param journal 계좌 상태를 만드는 모든 입력을 처리 순서대로 기록하는 저널(2b-1) — matching과
      *                같은 결로 {@code handleEventsWith(journal).then(business)}로 배선해, 기록이
      *                끝난 이벤트만 비즈니스 핸들러가 본다.
+     * @param snapshotSink 러닝 중 스냅샷을 디스크에 내보내는 통로(1-3). 안 쓰면(테스트 등)
+     *                     {@link #NO_OP_SNAPSHOT_SINK}를 쓰는 오버로드를 대신 호출한다.
      */
     public AccountEngine(int bufferSize, WaitStrategy waitStrategy, ProducerType producerType, long nodeId,
-                         MatchingOrderSender matchingOrderSender, AccountResultListener listener, AccountJournal journal) {
+                         MatchingOrderSender matchingOrderSender, AccountResultListener listener, AccountJournal journal,
+                         AccountSnapshotSink snapshotSink) {
         this.journal = journal;
         this.orderIdGenerator = new AccountOrderIdGenerator(nodeId);
         ThreadFactory threadFactory = DaemonThreadFactory.INSTANCE;
@@ -98,8 +117,14 @@ public class AccountEngine {
         // 라이브가 그대로 이어받아야 발급 충돌이 없다.
         // blockUntilJournaled가 이 핸들러의 시퀀스를 읽어야 하므로 필드로 잡아둔다.
         this.journalHandler = new AccountJournalEventHandler(journal);
-        this.businessHandler = new AccountEventHandler(accounts, orderIdGenerator, matchingOrderSender, listener);
+        this.businessHandler = new AccountEventHandler(accounts, orderIdGenerator, matchingOrderSender, listener, snapshotSink);
         this.disruptor.handleEventsWith(journalHandler).then(businessHandler);
+    }
+
+    /** 러닝 중 스냅샷 파이프라인 없이(테스트 등) 생성한다. */
+    public AccountEngine(int bufferSize, WaitStrategy waitStrategy, ProducerType producerType, long nodeId,
+                         MatchingOrderSender matchingOrderSender, AccountResultListener listener, AccountJournal journal) {
+        this(bufferSize, waitStrategy, producerType, nodeId, matchingOrderSender, listener, journal, NO_OP_SNAPSHOT_SINK);
     }
 
     /** 기본 저널({@link InMemoryAccountJournal})로 생성한다. */
@@ -154,6 +179,17 @@ public class AccountEngine {
     }
 
     /**
+     * 복구 시(단일 스레드, {@link #start} 전) 소비자의 체결 수신 위치를 스냅샷이 가리키던 값으로
+     * 시드한다(1-3, 39 리뷰 지적) — 안 하면 복구 직후~첫 라이브 체결 사이에 러닝 중 스냅샷이
+     * 찍힐 때 위치가 0으로 저장돼, 다음 복구가 체결 스트림을 처음부터 다시 replay한다. 반드시
+     * {@link #restore} 이후, {@link #start} 이전에 부른다.
+     */
+    public void seedFillPosition(long fillConsumedPosition) {
+        requireNotStarted();
+        businessHandler.seedLastAppliedFillPosition(fillConsumedPosition);
+    }
+
+    /**
      * 현재 계좌들·orderId 발급기 카운터·저널 위치를 통째로 찍는다(2d-2, ADR-019 "자체 스냅샷").
      *
      * <p>graceful shutdown(소비자 스레드 quiescent) 시점에만 안전하다 — matching
@@ -200,8 +236,10 @@ public class AccountEngine {
      */
     public void recover(Iterable<AccountJournalEntry> entries) {
         requireNotStarted();
+        // 복구 replay는 저널을 그대로 재실행하는 것뿐, 아직 시작 전이라 리플레이 중 스냅샷을
+        // 찍을 이유가 없다(1-3) — no-op sink.
         AccountEventHandler recoveryHandler =
-            new AccountEventHandler(accounts, orderIdGenerator, NO_OP_MATCHING_ORDER_SENDER, NoOpAccountResultListener.INSTANCE);
+            new AccountEventHandler(accounts, orderIdGenerator, NO_OP_MATCHING_ORDER_SENDER, NoOpAccountResultListener.INSTANCE, NO_OP_SNAPSHOT_SINK);
         AccountEvent scratch = new AccountEvent();
         for (AccountJournalEntry entry : entries) {
             applyToScratch(scratch, entry);

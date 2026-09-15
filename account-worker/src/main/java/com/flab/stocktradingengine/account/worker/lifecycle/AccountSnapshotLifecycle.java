@@ -1,13 +1,12 @@
 package com.flab.stocktradingengine.account.worker.lifecycle;
 
+import java.util.concurrent.atomic.AtomicBoolean;
+
 import org.springframework.context.SmartLifecycle;
 
 import com.flab.stocktradingengine.account.disruptor.engine.AccountEngine;
 import com.flab.stocktradingengine.account.disruptor.io.AccountFillReceiver;
-import com.flab.stocktradingengine.account.worker.config.AccountJournalArchiveConfig;
 import com.flab.stocktradingengine.account.worker.recovery.AccountSnapshotStore;
-
-import io.aeron.archive.client.AeronArchive;
 
 /**
  * graceful stop 시점에 계좌 엔진 스냅샷을 찍어 저장한다(2d-2b, ADR-019 "자체 스냅샷"). matching
@@ -31,6 +30,16 @@ import io.aeron.archive.client.AeronArchive;
  * {@link AccountFillReceiver#consumedPosition()}은 이미 quiescent한 최종값이다 — 체결 스트림
  * (6001)에서 durable하게 반영이 끝난 위치를 그대로 스냅샷에 담아, 재기동 시 그 위치부터 fill을
  * replay하면 된다(U4b).</p>
+ *
+ * <h3>recordingId — 더 이상 이 클래스가 직접 조회하지 않는다 (1-3)</h3>
+ * <p>이전엔 stop() 때마다 카탈로그를 스캔했다. 러닝 중 스냅샷 쓰기({@code AccountSnapshotWriter})도
+ * 같은 recordingId가 필요해지면서, {@code AccountJournalArchiveConfig#accountJournalRecordingId}
+ * 빈으로 한 번만 조회해 공유한다 — 한 프로세스 실행 동안 이 값은 안 바뀐다.</p>
+ *
+ * <h3>running을 AtomicBoolean으로 (1-3)</h3>
+ * <p>{@link #isRunning()}은 Spring 라이프사이클 관리 스레드가 부를 수 있어 {@link #start}·
+ * {@link #stop}을 호출하는 스레드와 다를 수 있다 — plain boolean은 그 가시성을 보장 못 해
+ * {@link AtomicBoolean}으로 둔다.</p>
  */
 public class AccountSnapshotLifecycle implements SmartLifecycle {
 
@@ -39,52 +48,31 @@ public class AccountSnapshotLifecycle implements SmartLifecycle {
     private final AccountEngine engine;
     private final AccountFillReceiver fillReceiver;
     private final AccountSnapshotStore snapshotStore;
-    private final AeronArchive aeronArchive;
-    private boolean running = false;
+    private final long journalRecordingId;
+    private final AtomicBoolean running = new AtomicBoolean(false);
 
     public AccountSnapshotLifecycle(AccountEngine engine, AccountFillReceiver fillReceiver,
-            AccountSnapshotStore snapshotStore, AeronArchive aeronArchive) {
+            AccountSnapshotStore snapshotStore, Long journalRecordingId) {
         this.engine = engine;
         this.fillReceiver = fillReceiver;
         this.snapshotStore = snapshotStore;
-        this.aeronArchive = aeronArchive;
+        this.journalRecordingId = journalRecordingId;
     }
 
     @Override
     public void start() {
-        running = true;
+        running.set(true);
     }
 
     @Override
     public void stop() {
-        long recordingId = resolveCurrentJournalRecordingId();
-        snapshotStore.write(recordingId, fillReceiver.consumedPosition(), engine.snapshot());
-        running = false;
-    }
-
-    /** 저널 스트림의 현재(=이 프로세스가 기동 때 시작한) 녹화 ID — 카탈로그에서 가장 최근에 시작한 것. */
-    private long resolveCurrentJournalRecordingId() {
-        long[] latestRecordingId = {-1L};
-        long[] latestStartTimestamp = {Long.MIN_VALUE};
-        aeronArchive.listRecordingsForUri(0, 100,
-            AccountJournalArchiveConfig.JOURNAL_CHANNEL, AccountJournalArchiveConfig.JOURNAL_STREAM_ID,
-            (controlSessionId, correlationId, recordingId, startTimestamp, stopTimestamp,
-             startPosition, stopPosition, initialTermId, segmentFileLength, termBufferLength,
-             mtuLength, sessionId, streamId, strippedChannel, originalChannel, sourceIdentity) -> {
-                if (startTimestamp > latestStartTimestamp[0]) {
-                    latestStartTimestamp[0] = startTimestamp;
-                    latestRecordingId[0] = recordingId;
-                }
-            });
-        if (latestRecordingId[0] < 0) {
-            throw new IllegalStateException("저널 스트림의 녹화를 카탈로그에서 찾지 못했습니다 — 스냅샷을 찍을 수 없습니다");
-        }
-        return latestRecordingId[0];
+        snapshotStore.write(journalRecordingId, fillReceiver.consumedPosition(), engine.snapshot());
+        running.set(false);
     }
 
     @Override
     public boolean isRunning() {
-        return running;
+        return running.get();
     }
 
     @Override

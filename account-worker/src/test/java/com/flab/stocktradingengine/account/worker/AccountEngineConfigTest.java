@@ -18,6 +18,7 @@ import org.springframework.context.annotation.Configuration;
 import com.flab.stocktradingengine.account.disruptor.domain.AccountResultListener;
 import com.flab.stocktradingengine.account.disruptor.domain.RejectReason;
 import com.flab.stocktradingengine.account.disruptor.engine.AccountEngine;
+import com.flab.stocktradingengine.account.disruptor.io.AccountSnapshotSink;
 import com.flab.stocktradingengine.account.disruptor.io.MatchingOrderSender;
 import com.flab.stocktradingengine.account.disruptor.journal.AccountJournal;
 import com.flab.stocktradingengine.account.disruptor.journal.InMemoryAccountJournal;
@@ -52,6 +53,19 @@ class AccountEngineConfigTest {
             // 이 테스트는 real Aeron Archive 배선 없이 AccountEngineConfig만 가볍게 띄운다(2b-1b) —
             // 저널은 AccountJournalArchiveConfig가 없어도 되는 기본(인메모리) 구현으로 준다.
             .withBean(AccountJournal.class, InMemoryAccountJournal::new)
+            // 러닝 중 스냅샷 싱크(1-3)도 같은 이유로 실제 파일 쓰기 스레드 대신 아무것도 안 하는
+            // 대체 빈을 준다 — 이 테스트는 매수 검증 경로만 본다.
+            .withBean(AccountSnapshotSink.class, () -> new AccountSnapshotSink() {
+                @Override
+                public boolean offer(byte[] snapshotBytes, long fillPosition, long appliedSeq) {
+                    return true;
+                }
+
+                @Override
+                public long durableSeq() {
+                    return 0L;
+                }
+            })
             .run(context -> {
                 AccountEngine engine = context.getBean(AccountEngine.class);
 

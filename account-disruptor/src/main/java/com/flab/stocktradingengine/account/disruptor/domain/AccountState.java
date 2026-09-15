@@ -167,9 +167,13 @@ public final class AccountState {
     /**
      * 가장 오래된 세대부터 {@code keep}개를 넘는 세대를 버린다(1-3이 스냅샷 durable 확인 뒤 호출).
      * 현재 세대 + 직전 세대(기본 {@code keep=2})는 항상 남겨 재전송 창을 덮는다.
+     *
+     * @param keep 1 미만이 들어와도 최소 1로 clamp한다(39 리뷰 지적) — 0이면 현재 세대까지 버려져
+     *             {@link #isDuplicateTradeId}의 {@code peekFirst()}가 빈 deque에서 NPE를 낸다.
      */
     public void pruneOlderThan(int keep) {
-        while (tradeIdGenerations.size() > keep) {
+        int safeKeep = Math.max(keep, 1);
+        while (tradeIdGenerations.size() > safeKeep) {
             tradeIdGenerations.removeLast();
         }
     }
