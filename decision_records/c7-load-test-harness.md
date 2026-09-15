@@ -135,3 +135,9 @@ k6 스크립트를 짰다. 애플리케이션 코드(AccountState·리스너)는
   `MetricsAccountResultListener`, 실기동 로그(202 응답, `dup=1` 카운트, `acceptedTotal=` 누적),
   worktree 경로 `../stock-trading-engine-c7`. 39 리뷰 승인 후 커밋 `c9a00f6`. U4(측정·리포트)는
   아직 남음 — v1/v2 실제 처리량 수치는 이 flush 시점엔 미측정.
+- **추가 검증(같은 세션, 커밋 이후)**: `run-v1.sh` 실기동 검증 완료 — order-engine·matching-
+  engine·settlement-engine·api 4개 앱 기동, `api HTTP(8080)` READY, `curl /api/v1/orders/buy`
+  202 확인. `pkill -f <main클래스>`가 테스트 JVM을 잘못 잡을 위험(2b 우려)도 확인 —
+  `@SpringBootTest(classes = AccountWorkerApplication.class)`를 포함한 통합테스트 실행 중
+  `ps -ef | grep AccountWorkerApplication`가 0건이라, Gradle 테스트 워커 JVM의 커맨드라인엔
+  Spring 설정 클래스명이 안 나타남(안전 확인됨). v1 스모크 프로세스는 확인 후 정지시킴.
