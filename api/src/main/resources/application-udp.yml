@@ -1,0 +1,6 @@
+# fork1, Unit 2 — 로컬 3-JVM 실행용. --spring.profiles.active=udp 로 켠다.
+# 계좌 인테이크(account-worker)로 보내는 발신 목적지 endpoint. account-worker의 같은 속성값과
+# 반드시 같아야 한다(unicast, LLD §3-4).
+transport:
+  account-intake:
+    channel: aeron:udp?endpoint=localhost:20040

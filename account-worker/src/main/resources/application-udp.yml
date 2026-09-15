@@ -1,0 +1,16 @@
+# fork1, Unit 2 — 로컬 3-JVM 실행용. --spring.profiles.active=udp 로 켠다.
+# 계좌 인테이크·체결은 이 워커가 직접 bind하는 수신 endpoint, 매칭 인테이크는 matching-worker로
+# 보내는 발신 목적지 endpoint다. 세 값 모두 상대 앱의 같은 속성값과 반드시 같아야 한다(unicast,
+# LLD §3-4). Archive 제어 포트는 matching-worker(8011)와 겹치지 않게 8010으로 둔다.
+transport:
+  account-intake:
+    channel: aeron:udp?endpoint=localhost:20040
+  matching-intake:
+    channel: aeron:udp?endpoint=localhost:20020
+  fill:
+    channel: aeron:udp?endpoint=localhost:20060
+
+account:
+  worker:
+    archive:
+      control-channel: aeron:udp?endpoint=localhost:8010
