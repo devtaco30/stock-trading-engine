@@ -1,0 +1,159 @@
+# C7 부하 테스트 하네스 — v1 loadtest-seed.sql(계좌 1001~1050, 잔고 1e11, margin 1.00)과
+# 같은 계좌 집합을 이 워커의 인메모리 AccountState에도 시드한다. api가 보는 Postgres 계좌와
+# 이 워커가 아는 계좌가 같아야 주문이 ACCOUNT_NOT_FOUND 없이 접수된다.
+# --spring.profiles.active=udp,loadtest로 udp 프로파일(transport 채널)과 함께 켠다 —
+# udp 프로파일의 데모 계좌(90001/90002)는 이 계좌 목록이 같은 인덱스를 덮어써 대체된다.
+account-worker:
+  metrics:
+    enabled: true
+  seed-accounts:
+    - account-id: 1001
+      balance: 100000000000
+      margin-rate: 1.00
+    - account-id: 1002
+      balance: 100000000000
+      margin-rate: 1.00
+    - account-id: 1003
+      balance: 100000000000
+      margin-rate: 1.00
+    - account-id: 1004
+      balance: 100000000000
+      margin-rate: 1.00
+    - account-id: 1005
+      balance: 100000000000
+      margin-rate: 1.00
+    - account-id: 1006
+      balance: 100000000000
+      margin-rate: 1.00
+    - account-id: 1007
+      balance: 100000000000
+      margin-rate: 1.00
+    - account-id: 1008
+      balance: 100000000000
+      margin-rate: 1.00
+    - account-id: 1009
+      balance: 100000000000
+      margin-rate: 1.00
+    - account-id: 1010
+      balance: 100000000000
+      margin-rate: 1.00
+    - account-id: 1011
+      balance: 100000000000
+      margin-rate: 1.00
+    - account-id: 1012
+      balance: 100000000000
+      margin-rate: 1.00
+    - account-id: 1013
+      balance: 100000000000
+      margin-rate: 1.00
+    - account-id: 1014
+      balance: 100000000000
+      margin-rate: 1.00
+    - account-id: 1015
+      balance: 100000000000
+      margin-rate: 1.00
+    - account-id: 1016
+      balance: 100000000000
+      margin-rate: 1.00
+    - account-id: 1017
+      balance: 100000000000
+      margin-rate: 1.00
+    - account-id: 1018
+      balance: 100000000000
+      margin-rate: 1.00
+    - account-id: 1019
+      balance: 100000000000
+      margin-rate: 1.00
+    - account-id: 1020
+      balance: 100000000000
+      margin-rate: 1.00
+    - account-id: 1021
+      balance: 100000000000
+      margin-rate: 1.00
+    - account-id: 1022
+      balance: 100000000000
+      margin-rate: 1.00
+    - account-id: 1023
+      balance: 100000000000
+      margin-rate: 1.00
+    - account-id: 1024
+      balance: 100000000000
+      margin-rate: 1.00
+    - account-id: 1025
+      balance: 100000000000
+      margin-rate: 1.00
+    - account-id: 1026
+      balance: 100000000000
+      margin-rate: 1.00
+    - account-id: 1027
+      balance: 100000000000
+      margin-rate: 1.00
+    - account-id: 1028
+      balance: 100000000000
+      margin-rate: 1.00
+    - account-id: 1029
+      balance: 100000000000
+      margin-rate: 1.00
+    - account-id: 1030
+      balance: 100000000000
+      margin-rate: 1.00
+    - account-id: 1031
+      balance: 100000000000
+      margin-rate: 1.00
+    - account-id: 1032
+      balance: 100000000000
+      margin-rate: 1.00
+    - account-id: 1033
+      balance: 100000000000
+      margin-rate: 1.00
+    - account-id: 1034
+      balance: 100000000000
+      margin-rate: 1.00
+    - account-id: 1035
+      balance: 100000000000
+      margin-rate: 1.00
+    - account-id: 1036
+      balance: 100000000000
+      margin-rate: 1.00
+    - account-id: 1037
+      balance: 100000000000
+      margin-rate: 1.00
+    - account-id: 1038
+      balance: 100000000000
+      margin-rate: 1.00
+    - account-id: 1039
+      balance: 100000000000
+      margin-rate: 1.00
+    - account-id: 1040
+      balance: 100000000000
+      margin-rate: 1.00
+    - account-id: 1041
+      balance: 100000000000
+      margin-rate: 1.00
+    - account-id: 1042
+      balance: 100000000000
+      margin-rate: 1.00
+    - account-id: 1043
+      balance: 100000000000
+      margin-rate: 1.00
+    - account-id: 1044
+      balance: 100000000000
+      margin-rate: 1.00
+    - account-id: 1045
+      balance: 100000000000
+      margin-rate: 1.00
+    - account-id: 1046
+      balance: 100000000000
+      margin-rate: 1.00
+    - account-id: 1047
+      balance: 100000000000
+      margin-rate: 1.00
+    - account-id: 1048
+      balance: 100000000000
+      margin-rate: 1.00
+    - account-id: 1049
+      balance: 100000000000
+      margin-rate: 1.00
+    - account-id: 1050
+      balance: 100000000000
+      margin-rate: 1.00
