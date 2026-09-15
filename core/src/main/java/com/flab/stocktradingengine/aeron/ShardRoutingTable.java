@@ -1,5 +1,6 @@
 package com.flab.stocktradingengine.aeron;
 
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -33,6 +34,14 @@ public final class ShardRoutingTable {
      */
     public String endpointFor(long accountId) {
         return slotToEndpoint[slotFor(accountId)];
+    }
+
+    /**
+     * fork3, Unit 2 — 이 테이블이 가리키는 서로 다른 목적지 endpoint 전부(중복 제거). 발신측이
+     * "가능한 모든 목적지마다 Publication 1개"를 빠짐없이 만드는 데 쓴다.
+     */
+    public List<String> distinctEndpoints() {
+        return Arrays.stream(slotToEndpoint).distinct().toList();
     }
 
     private static String[] buildSlotToEndpoint(int slotCount, List<ShardRange> shards) {

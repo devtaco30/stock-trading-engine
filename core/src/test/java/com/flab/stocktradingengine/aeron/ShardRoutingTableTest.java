@@ -27,6 +27,43 @@ class ShardRoutingTableTest {
     private static final String ENDPOINT_B = "aeron:udp?endpoint=localhost:6002";
 
     @Nested
+    @DisplayName("distinctEndpoints")
+    class DistinctEndpoints {
+
+        @Test
+        void 서로_다른_endpoint_2개를_중복없이_반환한다() {
+            ShardRoutingTable table = new ShardRoutingTable(256, List.of(
+                new ShardRange(ENDPOINT_A, 0, 127),
+                new ShardRange(ENDPOINT_B, 128, 255)));
+
+            List<String> endpoints = table.distinctEndpoints();
+
+            assertEquals(Set.of(ENDPOINT_A, ENDPOINT_B), Set.copyOf(endpoints));
+            assertEquals(2, endpoints.size());
+        }
+
+        @Test
+        void 여러_슬롯_범위가_같은_endpoint를_공유해도_한_번만_반환한다() {
+            ShardRoutingTable table = new ShardRoutingTable(4, List.of(
+                new ShardRange(ENDPOINT_A, 0, 0),
+                new ShardRange(ENDPOINT_A, 1, 1),
+                new ShardRange(ENDPOINT_B, 2, 3)));
+
+            List<String> endpoints = table.distinctEndpoints();
+
+            assertEquals(Set.of(ENDPOINT_A, ENDPOINT_B), Set.copyOf(endpoints));
+            assertEquals(2, endpoints.size());
+        }
+
+        @Test
+        void slotCount가_1이면_endpoint도_1개다() {
+            ShardRoutingTable table = new ShardRoutingTable(1, List.of(new ShardRange(ENDPOINT_A, 0, 0)));
+
+            assertEquals(List.of(ENDPOINT_A), table.distinctEndpoints());
+        }
+    }
+
+    @Nested
     @DisplayName("결정론·분배")
     class RoutingBehavior {
 
