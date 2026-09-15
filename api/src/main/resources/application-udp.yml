@@ -4,3 +4,11 @@
 transport:
   account-intake:
     channel: aeron:udp?endpoint=localhost:20040
+
+# fork1, Unit 3a — 기본(no-profile) application.yml의 data-scenario1-test.sql은 테스트 전용
+# 리소스라 런타임 jar/실행 클래스패스엔 없어 udp 프로파일 단독 기동이 이 초기화 단계에서 실패한다.
+# udp 프로파일에서만 건너뛴다(기본 프로파일·테스트는 영향 없음).
+spring:
+  sql:
+    init:
+      mode: never

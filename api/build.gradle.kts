@@ -48,6 +48,15 @@ tasks.withType<Test>().configureEach {
 	)
 }
 
+// fork1, Unit 3a — bootRun은 별도 JVM으로 뜨는 실행 태스크라 위 test 개방 플래그가 안 미러된다.
+// v2 게이트웨이(AccountOrderPublishConfig)가 Aeron MediaDriver를 띄우므로 같은 플래그가 필요하다.
+tasks.named<org.springframework.boot.gradle.tasks.run.BootRun>("bootRun") {
+	jvmArgs(
+		"--add-opens", "java.base/jdk.internal.misc=ALL-UNNAMED",
+		"--add-opens", "java.base/sun.nio.ch=ALL-UNNAMED"
+	)
+}
+
 // 단위 테스트만 실행 (Mock 사용, Spring/H2 미사용). 서비스 패키지의 *Test만 포함.
 tasks.register<Test>("unitTest") {
 	group = "verification"
