@@ -393,6 +393,23 @@ class AccountStateTest {
             () -> state.applySettlement(9001L, new BigDecimal("60001")));
     }
 
+    // ---------- 정산 멱등 캐시 상한 (릭 수정 U1) ----------
+
+    @Test
+    @DisplayName("정산 멱등 캐시가 상한을 넘으면 가장 오래된 settlementRef가 밀려나 재도착 시 다시 반영된다")
+    void 정산멱등캐시_상한초과하면_오래된것밀려나_재도착시_다시반영() {
+        AccountState state = new AccountState(1L, new BigDecimal("1000000"), new BigDecimal("0.40"), 2); // 테스트 전용: 상한 2
+
+        assertTrue(state.applySettlement(1L, BigDecimal.ZERO));
+        assertTrue(state.applySettlement(2L, BigDecimal.ZERO));
+        assertTrue(state.applySettlement(3L, BigDecimal.ZERO)); // 상한 초과 → 가장 오래된 1L이 밀려남
+
+        assertTrue(state.applySettlement(1L, BigDecimal.ZERO),
+            "용량 초과로 밀려난 settlementRef는 재도착 시 새 이벤트로 취급되어야 한다");
+        assertFalse(state.applySettlement(3L, BigDecimal.ZERO),
+            "아직 용량 안에 남아있는 settlementRef는 여전히 멱등 무시되어야 한다");
+    }
+
     // ---------- 부분체결 반올림 누적 (Jack 지적: 리뷰가 "무시해도 됨"이라 했던 것 재검증) ----------
 
     @Test

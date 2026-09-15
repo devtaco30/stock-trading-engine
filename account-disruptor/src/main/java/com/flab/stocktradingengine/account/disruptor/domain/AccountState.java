@@ -2,8 +2,10 @@ package com.flab.stocktradingengine.account.disruptor.domain;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 
@@ -38,7 +40,15 @@ public final class AccountState {
     private final Map<Long, SellReservation> sellReservations = new HashMap<>(); // orderId → 매도 예약(종목·잔량) 장부
     private final Map<String, Integer> holdings = new HashMap<>();      // 종목코드 → 보유 수량
     private final Set<Long> processedTradeIds = new HashSet<>();        // 이미 반영한 체결(tradeId), 멱등용
-    private final Set<Long> processedSettlementRefs = new HashSet<>();  // 이미 반영한 정산(settlementRef), 멱등용
+    // AccountSettlementConsumer가 ack-mode=manual_immediate + enable-auto-commit=false라 정산 하나를
+    // 저널에 기록한 뒤 바로 offset을 커밋한다 → 크래시 시 재소비되는 건 "커밋 직전 처리 중이던 1건"뿐이다.
+    // max.poll.records를 따로 설정하지 않아 Kafka 기본값 500이라, 어떤 리밸런스·재조정이 겹쳐도 한 번의
+    // poll 배치(≤500)를 넘는 재소비는 없다 — 그래서 복구 겹침 상한을 500(=max.poll.records)으로 잡는다.
+    static final int SETTLEMENT_RETENTION_LIMIT = 500;
+    // 이미 반영한 정산(settlementRef), 멱등용. 상한 없는 HashSet은 장기 실행 시 무한 증가하므로(OOM 릭)
+    // OrderBook.filledOrderTimestamps와 같은 방식(LinkedHashMap 삽입순서 + removeEldestEntry)으로 상한을 둔다.
+    // LRU가 이 복구 겹침 상한(500)을 덮으므로, 밀려난 정산이 재도착해 멱등이 뚫릴 일은 없다.
+    private final Set<Long> processedSettlementRefs;
     private final Map<String, Long> requestIdToOrderId = new HashMap<>(); // requestId → 발급한 orderId, 재전송 멱등+orderId 조회용(C5-2a)
     private BigDecimal unpaid = BigDecimal.ZERO;                        // 미결제 미수금
     // 계좌별 단조 카운터(계좌 상태 영속/프로젝션 트랙 Unit 1). 상태를 실제로 바꾸는 연산마다
@@ -47,15 +57,21 @@ public final class AccountState {
     private long seq = 0L;
 
     public AccountState(long accountId, BigDecimal balance, BigDecimal marginRate) {
-        this.accountId = accountId;
-        this.balance = balance;
-        this.marginRate = marginRate;
+        this(accountId, balance, marginRate, SETTLEMENT_RETENTION_LIMIT);
     }
 
     /** 초기 보유(종목코드 → 수량)를 함께 시드한다. DB 없이 기존 보유를 미리 넣을 때 쓴다. */
     public AccountState(long accountId, BigDecimal balance, BigDecimal marginRate, Map<String, Integer> initialHoldings) {
         this(accountId, balance, marginRate);
         holdings.putAll(initialHoldings);
+    }
+
+    /** 테스트 전용. settlementRetentionLimit을 작게 지정해 정산 멱등 캐시의 LRU 퇴출 동작을 검증할 때 쓴다. */
+    AccountState(long accountId, BigDecimal balance, BigDecimal marginRate, int settlementRetentionLimit) {
+        this.accountId = accountId;
+        this.balance = balance;
+        this.marginRate = marginRate;
+        this.processedSettlementRefs = boundedSet(settlementRetentionLimit);
     }
 
     /**
@@ -65,9 +81,7 @@ public final class AccountState {
      * 만든 것과 그대로 바꿔 끼운다.
      */
     public AccountState(AccountStateSnapshot snapshot) {
-        this.accountId = snapshot.accountId();
-        this.balance = snapshot.balance();
-        this.marginRate = snapshot.marginRate();
+        this(snapshot.accountId(), snapshot.balance(), snapshot.marginRate(), SETTLEMENT_RETENTION_LIMIT);
         this.unpaid = snapshot.unpaid();
         this.seq = snapshot.seq();
         holdings.putAll(snapshot.holdings());
@@ -78,6 +92,17 @@ public final class AccountState {
             reservations.put(orderId, new Reservation(r.price(), r.remainingQuantity())));
         snapshot.sellReservations().forEach((orderId, r) ->
             sellReservations.put(orderId, new SellReservation(r.stockCode(), r.remainingQuantity())));
+    }
+
+    /** 삽입순서 상한 집합(LRU bounded) — OrderBook.filledOrderTimestamps와 같은 패턴. */
+    private static Set<Long> boundedSet(int limit) {
+        Map<Long, Boolean> boundedMap = new LinkedHashMap<>(limit, 0.75f, false) {
+            @Override
+            protected boolean removeEldestEntry(Map.Entry<Long, Boolean> eldest) {
+                return size() > limit;
+            }
+        };
+        return Collections.newSetFromMap(boundedMap);
     }
 
     /** 현재 상태를 스냅샷으로 찍는다(2d-2). {@link #reservations}·{@link #sellReservations}는
