@@ -21,6 +21,8 @@ public class AccountEvent {
     private int quantity;
     private String requestId;
     private long tradeId;
+    private long sourcePosition;
+    private long journaledPosition;
 
     /**
      * 매수 검증·예약 명령으로 슬롯을 채운다. orderId 는 아직 없다(C5-2a) — 핸들러가 첫 접수
@@ -51,8 +53,12 @@ public class AccountEvent {
         this.requestId = requestId;
     }
 
-    /** 매수 체결 반영 명령으로 슬롯을 채운다. tradeId 는 체결 신원(멱등키). */
-    public void setBuyFill(long tradeId, long orderId, long accountId, String stockCode, BigDecimal matchPrice, int quantity) {
+    /**
+     * 매수 체결 반영 명령으로 슬롯을 채운다. tradeId 는 체결 신원(멱등키). sourcePosition 은 이 체결을
+     * 실어 보낸 수신 스트림의 위치(1-2) — 소비자 스레드가 실제로 이 체결을 반영한 뒤에야 그 값을
+     * "적용 완료 위치"로 인정한다. 수신 스레드가 도착시킨 위치({@code image.position()})와는 다르다.
+     */
+    public void setBuyFill(long tradeId, long orderId, long accountId, String stockCode, BigDecimal matchPrice, int quantity, long sourcePosition) {
         this.type = AccountEventType.BUY_FILL;
         this.tradeId = tradeId;
         this.orderId = orderId;
@@ -60,16 +66,18 @@ public class AccountEvent {
         this.stockCode = stockCode;
         this.price = matchPrice;
         this.quantity = quantity;
+        this.sourcePosition = sourcePosition;
     }
 
-    /** 매도 체결 반영 명령으로 슬롯을 채운다. tradeId 는 체결 신원(멱등키). */
-    public void setSellFill(long tradeId, long orderId, long accountId, String stockCode, int quantity) {
+    /** 매도 체결 반영 명령으로 슬롯을 채운다. tradeId 는 체결 신원(멱등키). sourcePosition 은 {@link #setBuyFill}과 같다. */
+    public void setSellFill(long tradeId, long orderId, long accountId, String stockCode, int quantity, long sourcePosition) {
         this.type = AccountEventType.SELL_FILL;
         this.tradeId = tradeId;
         this.orderId = orderId;
         this.accountId = accountId;
         this.stockCode = stockCode;
         this.quantity = quantity;
+        this.sourcePosition = sourcePosition;
     }
 
     /**
@@ -84,6 +92,11 @@ public class AccountEvent {
         this.price = amount;
     }
 
+    /** 저널 핸들러가 기록을 마친 뒤 그 시점의 저널 위치를 슬롯에 남긴다(1-2). 비즈니스 핸들러가 읽는다. */
+    public void setJournaledPosition(long journaledPosition) {
+        this.journaledPosition = journaledPosition;
+    }
+
     /** 소비 직후 참조 필드를 비워 이전 명령을 붙들지 않게 한다. */
     public void clear() {
         this.type = null;
@@ -94,6 +107,8 @@ public class AccountEvent {
         this.quantity = 0;
         this.requestId = null;
         this.tradeId = 0L;
+        this.sourcePosition = 0L;
+        this.journaledPosition = 0L;
     }
 
     public AccountEventType getType() {
@@ -126,5 +141,13 @@ public class AccountEvent {
 
     public long getTradeId() {
         return tradeId;
+    }
+
+    public long getSourcePosition() {
+        return sourcePosition;
+    }
+
+    public long getJournaledPosition() {
+        return journaledPosition;
     }
 }

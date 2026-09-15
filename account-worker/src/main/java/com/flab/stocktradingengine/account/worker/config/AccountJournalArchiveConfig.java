@@ -71,6 +71,34 @@ public class AccountJournalArchiveConfig {
     }
 
     /**
+     * 이 프로세스가 이번 실행에서 시작한 저널 녹화의 recordingId(1-3) — 카탈로그에서 시작 시각이
+     * 가장 최근인 것. {@link #accountJournalRecordingSubscriptionId}에 의존해 그 녹화가 실제로
+     * 시작된 뒤에만(=카탈로그에 나타난 뒤에만) 조회한다. 한 프로세스 실행 동안 이 스트림에 recording이
+     * 정확히 하나뿐이라(재시작 없는 한 run) 기동 시 한 번만 조회해도 이후 값이 안 바뀐다 — graceful
+     * stop 스냅샷({@link com.flab.stocktradingengine.account.worker.lifecycle.AccountSnapshotLifecycle})과
+     * 러닝 중 스냅샷 쓰기({@code AccountSnapshotWriter}, 1-3) 둘 다 이 빈을 그대로 쓴다(이전엔 각자
+     * 따로 카탈로그를 스캔했다).
+     */
+    @Bean
+    public Long accountJournalRecordingId(AeronArchive aeronArchive, Long accountJournalRecordingSubscriptionId) {
+        long[] latestRecordingId = {-1L};
+        long[] latestStartTimestamp = {Long.MIN_VALUE};
+        aeronArchive.listRecordingsForUri(0, 100, JOURNAL_CHANNEL, JOURNAL_STREAM_ID,
+            (controlSessionId, correlationId, recordingId, startTimestamp, stopTimestamp,
+             startPosition, stopPosition, initialTermId, segmentFileLength, termBufferLength,
+             mtuLength, sessionId, streamId, strippedChannel, originalChannel, sourceIdentity) -> {
+                if (startTimestamp > latestStartTimestamp[0]) {
+                    latestStartTimestamp[0] = startTimestamp;
+                    latestRecordingId[0] = recordingId;
+                }
+            });
+        if (latestRecordingId[0] < 0) {
+            throw new IllegalStateException("저널 스트림의 녹화를 카탈로그에서 찾지 못했습니다");
+        }
+        return latestRecordingId[0];
+    }
+
+    /**
      * 저널러(2b-1 게이팅 핸들러) 단일 스레드만 쓰는 발행 스트림이라 {@link ExclusivePublication}으로
      * 연다({@code Publication}보다 락 없이 더 가볍다 — 단일 발행자 전제가 성립할 때만 안전하다).
      */
