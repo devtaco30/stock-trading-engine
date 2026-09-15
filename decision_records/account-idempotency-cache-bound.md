@@ -2,7 +2,7 @@
 feature: account-idempotency-cache-bound
 date: 2026-09-15
 branch: fix/account-idempotency-cache-bound
-commits: [8cae51e]
+commits: [8cae51e, 35da9bf]
 feeds: [adr, blog]
 ---
 
@@ -41,8 +41,8 @@ v2 계좌 엔진 `AccountState`는 각 계좌의 잔고·보유를 프로세스 
 - **context**: `requestIdToOrderId`(Map)도 무한 증가. 처음엔 "재전송 시 orderId를 되돌려주는 조회맵이라 워터마크(값 하나)로 못 접는다 → TTL(24h)"로 결론냈다.
 - **왜(재검토)**: Jack이 "같은 orderId가 생기는 것 자체가 이상하지 않냐 / 이미 처리된 requestId가 다시 오는 게 말이 되냐"고 물어 재검토. 정리하니 — 같은 requestId 재도착은 오직 "응답을 못 받은 짧은 미응답 재시도" 창에만 생긴다(응답 받으면 클라는 재전송 안 함, 연속 주문은 새 requestId). 그리고 그 재전송에 **orderId를 돌려줄 필요가 없다**: 재전송 응답은 202+requestId 비동기라 orderId가 클라에 안 가고, `onDuplicateRequest`의 orderId 소비처는 로그 한 줄뿐(리스너 2개 no-op, `LoggingAccountResultListener`만 로그). "TTL 지나면 새 주문 취급"이라던 첫 설명도 틀렸다 — 만료될 만큼 오래된 재전송은 애초에 안 온다.
 - **어떻게(결정)**: orderId 저장/반환을 제거. `Map<String,Long> requestIdToOrderId` → `Set<String> processedRequestIds`(settlement와 동일한 bounded LRU "봤나" 집합). `orderIdFor`/`rememberRequest` 폐기, `onDuplicateRequest(accountId, orderId, requestId)` → `onDuplicateRequest(accountId, requestId)`(구현체 15+ 시그니처 수정). 스냅샷·코덱의 requestId 블록에서 orderId 필드 제거. 셋 중 tradeId·settlement·requestId가 결국 다 같은 "봤나" 멱등 집합이고, tradeId만 복구 겹침이 커서 빠진 것.
-- **무엇을**: 위 변경 진행 중(U2). 통합테스트 6개가 `orderIdFor`를 관측 통로로 쓰던 걸 `seq()` 완료 대기 + 결정론적 orderId 예측(`(nodeId<<53)|counter`)으로 전환(테스트 편의로 프로덕션 조회 API를 남기지 않음).
-- **결과·수치**: LRU 상한 = 근거 미확정 임시값 5000. requestId가 덮어야 하는 "재전송 창"은 클라 재시도 정책·결과 폴링 조회 API(fork5 ⑤ 후속)에 묶이는데 둘 다 미구현이라 지금 근거를 못 댄다 → 임시임을 상수 주석·커밋에 명시, 폴링 API 설계 시 재산정. (settlement의 `max.poll.records` 같은 코드 상한이 requestId엔 없다.)
+- **무엇을**: 완료·커밋(`35da9bf`). 통합테스트 6개가 `orderIdFor`를 관측 통로로 쓰던 걸 `seq()` 완료 대기 + 결정론적 orderId 예측(`(nodeId<<53)|counter`)으로 전환(테스트 편의로 프로덕션 조회 API를 남기지 않는다는 원칙 — 39가 명시적으로 대안2(관측용 조회 API 잔류)를 거부). 드롭한 검증도 있다 — "재시작 뒤 재전송이 원본과 같은 orderId를 돌려주는지"는 그 기능(조회) 자체가 없어져 `isDuplicateRequest(requestId)`로 "dedup 잔존 여부"만 재확인하고, "새 orderId가 옛 값과 안 겹치는지"(카운터 유일성)는 리스너로 orderId를 직접 관측 가능한 인프로세스 단위테스트(`AccountEngineRecoveryTest.복구_뒤_신규_주문은_카운터를_이어받는다`)가 이미 검증해 중복이라 판단해 뺐다.
+- **결과·수치**: LRU 상한 = 근거 미확정 임시값 5000. requestId가 덮어야 하는 "재전송 창"은 클라 재시도 정책·결과 폴링 조회 API(fork5 ⑤ 후속)에 묶이는데 둘 다 미구현이라 지금 근거를 못 댄다 → 임시임을 상수 주석·커밋에 명시, 폴링 API 설계 시 재산정. (settlement의 `max.poll.records` 같은 코드 상한이 requestId엔 없다.) 회귀: `:account-disruptor:test :account-worker:test --rerun-tasks` 126개 GREEN.
 
 ## 블로그 네타
 
@@ -50,4 +50,4 @@ v2 계좌 엔진 `AccountState`는 각 계좌의 잔고·보유를 프로세스 
 - **훅·핵심 주장**: dedup 상태를 아무 숫자로 자르면 돈이 틀어진다(정합성 창). 소스마다 답이 다르다는 것까지는 설계로 나오지만, **그 설계가 검증 전엔 전부 가설**이다 — 이 작업에선 세 장부의 첫 결론(워터마크/LRU/TTL)이 코드·실측 앞에서 다 바뀌었다.
 - **context**: 계좌를 accountId로 샤딩해 상태를 인메모리로 들면(속도 축) 멱등 장부가 무한 증가한다. 세 장부가 각각 다른 소스(Aeron 체결 / Kafka 정산 / 클라 요청)라 답이 갈린다.
 - **어떻게(서사·근거)**: ①tradeId 워터마크가 "저널=단조 prefix"라는 그럴듯한 근거로 섰다가, 발급 소스가 Snowflake(다중 매칭노드)임을 보고 무너진다 — "순서 보장 ≠ 값 단조". ②LRU로 내려갔다가, N을 정하려 복구 겹침을 파보니 그게 스냅샷 정책과 한 덩어리고, JMH로 코어 처리량(초당 50만 체결)을 재보니 주기 스냅샷 없이는 어떤 고정 N도 못 덮는다는 게 나온다 → tradeId는 아예 뺀다. ③requestId는 "orderId를 돌려줘야 하니 TTL"이라던 게, 그 orderId가 실은 로그 한 줄 외엔 안 쓰인다는 확인으로 "봤나 집합"으로 축소된다. ④settlement만 LRU로 남되, 근거가 "빈도 낮음"에서 durable-before-ack(manual_immediate)로 바뀐다. 곁가지로 "이미 처리된 requestId가 왜 다시 오나"라는 질문이 멱등의 실제 수명(미응답 재시도 창)을 드러낸다.
-- **재료(커밋·도식·수치)**: `AccountState.java:40-42` / `AccountFillPublisher.java:63`(tradeId=Snowflake) / `AccountEngineConfig.java:85-87`(복구 3단계) / `AccountSnapshotLifecycle`(graceful-only 스냅샷) / `AccountSettlementConsumer`(manual_immediate) / 대조군 `OrderBook.java:63-77`(LRU 패턴) / JMH `MatchingThroughputBenchmark`(50만 체결/s, M1 Pro) / 도식 `docs/_recovery_overlap_flow.html`(복구 겹침 몸통·꼬리) / settlement 커밋 `8cae51e`. tradeId 별도 트랙 = 스냅샷 정책(주기 스냅샷 or 복구 전용 dedup).
+- **재료(커밋·도식·수치)**: `AccountState.java:40-42` / `AccountFillPublisher.java:63`(tradeId=Snowflake) / `AccountEngineConfig.java:85-87`(복구 3단계) / `AccountSnapshotLifecycle`(graceful-only 스냅샷) / `AccountSettlementConsumer`(manual_immediate) / 대조군 `OrderBook.java:63-77`(LRU 패턴) / JMH `MatchingThroughputBenchmark`(50만 체결/s, M1 Pro) / 도식 `docs/_recovery_overlap_flow.html`(복구 겹침 몸통·꼬리) / settlement 커밋 `8cae51e` / requestId 커밋 `35da9bf`(`AccountState.isDuplicateRequest`·`AccountResultListener.onDuplicateRequest` 시그니처). tradeId 별도 트랙 = 스냅샷 정책(주기 스냅샷 or 복구 전용 dedup).
