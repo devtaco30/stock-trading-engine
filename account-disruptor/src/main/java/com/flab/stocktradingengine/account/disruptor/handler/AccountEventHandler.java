@@ -168,6 +168,9 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
             return;
         }
         BuyFillResult result = state.applyBuyFill(tradeId, orderId, event.getStockCode(), event.getPrice(), event.getQuantity());
+        if (result.applied()) {
+            listener.onStateChanged(accountId, state.balance(), state.holdings(), state.seq());
+        }
         listener.onFillApplied(accountId, orderId, tradeId, result.applied());
         if (result.applied() && result.unpaidThis().signum() > 0) {
             listener.onUnpaidRecorded(accountId, tradeId, result.unpaidThis());
@@ -185,6 +188,9 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
             return;
         }
         boolean applied = state.applySellFill(tradeId, orderId, event.getStockCode(), event.getQuantity());
+        if (applied) {
+            listener.onStateChanged(accountId, state.balance(), state.holdings(), state.seq());
+        }
         listener.onFillApplied(accountId, orderId, tradeId, applied);
     }
 
@@ -198,6 +204,9 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
             return;
         }
         boolean applied = state.applySettlement(settlementRef, event.getPrice());
+        if (applied) {
+            listener.onStateChanged(accountId, state.balance(), state.holdings(), state.seq());
+        }
         listener.onSettlementApplied(accountId, settlementRef, applied);
     }
 }

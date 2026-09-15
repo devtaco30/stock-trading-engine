@@ -5,6 +5,7 @@ import static org.mockito.Mockito.verify;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 
@@ -27,5 +28,18 @@ class CompositeAccountResultListenerTest {
 
         verify(first).onUnpaidRecorded(1L, 9001L, new BigDecimal("60000"));
         verify(second).onUnpaidRecorded(1L, 9001L, new BigDecimal("60000"));
+    }
+
+    @Test
+    void 상태변경_콜백도_모든_delegate에게_전달된다() {
+        AccountResultListener first = mock(AccountResultListener.class);
+        AccountResultListener second = mock(AccountResultListener.class);
+        CompositeAccountResultListener composite = new CompositeAccountResultListener(List.of(first, second));
+        Map<String, Integer> holdings = Map.of("005930", 10);
+
+        composite.onStateChanged(1L, new BigDecimal("900000"), holdings, 3L);
+
+        verify(first).onStateChanged(1L, new BigDecimal("900000"), holdings, 3L);
+        verify(second).onStateChanged(1L, new BigDecimal("900000"), holdings, 3L);
     }
 }

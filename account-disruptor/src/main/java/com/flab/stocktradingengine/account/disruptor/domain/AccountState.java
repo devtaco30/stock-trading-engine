@@ -319,6 +319,11 @@ public final class AccountState {
         return holdings.getOrDefault(stockCode, 0);
     }
 
+    /** 현재 보유 전체의 불변 스냅샷(계좌 상태 영속/프로젝션 트랙 Unit 2) — full-state 캡처용. */
+    public Map<String, Integer> holdings() {
+        return Map.copyOf(holdings);
+    }
+
     public BigDecimal unpaid() {
         return unpaid;
     }

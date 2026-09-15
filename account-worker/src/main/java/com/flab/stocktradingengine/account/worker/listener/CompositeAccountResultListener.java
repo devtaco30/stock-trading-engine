@@ -2,6 +2,7 @@ package com.flab.stocktradingengine.account.worker.listener;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 
 import com.flab.stocktradingengine.account.disruptor.domain.AccountResultListener;
 import com.flab.stocktradingengine.account.disruptor.domain.RejectReason;
@@ -54,5 +55,10 @@ public class CompositeAccountResultListener implements AccountResultListener {
     @Override
     public void onDuplicateRequest(long accountId, long orderId, String requestId) {
         delegates.forEach(delegate -> delegate.onDuplicateRequest(accountId, orderId, requestId));
+    }
+
+    @Override
+    public void onStateChanged(long accountId, BigDecimal balance, Map<String, Integer> holdings, long seq) {
+        delegates.forEach(delegate -> delegate.onStateChanged(accountId, balance, holdings, seq));
     }
 }

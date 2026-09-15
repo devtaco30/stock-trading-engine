@@ -1,6 +1,7 @@
 package com.flab.stocktradingengine.account.disruptor.domain;
 
 import java.math.BigDecimal;
+import java.util.Map;
 
 /**
  * 검증·예약 결과를 계좌 워커 밖으로 내보내는 출구.
@@ -43,4 +44,15 @@ public interface AccountResultListener {
      * 무관) 재예약 없이 무시했다는 뜻. 클라이언트는 requestId 로 원래 결과를 폴링해서 본다.
      */
     void onDuplicateRequest(long accountId, long orderId, String requestId);
+
+    /**
+     * 잔고·보유가 실제로 바뀌었을 때 통지한다(계좌 상태 영속/프로젝션 트랙 Unit 2) —
+     * applyBuyFill·applySellFill·applySettlement가 실제로 반영됐을 때만(예약 accept·거부·멱등
+     * 무시는 잔고·보유가 안 바뀌므로 호출되지 않는다). 캡처는 반드시 호출 시점(엔진 스레드)의
+     * 값이어야 한다 — 호출부가 그 시점의 balance·holdings·seq를 그대로 넘긴다.
+     *
+     * <p>기본 구현은 no-op이다 — 이 통지가 필요 없는 기존 리스너(로깅 등)는 그대로 둘 수 있다.</p>
+     */
+    default void onStateChanged(long accountId, BigDecimal balance, Map<String, Integer> holdings, long seq) {
+    }
 }

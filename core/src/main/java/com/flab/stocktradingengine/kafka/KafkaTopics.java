@@ -24,4 +24,11 @@ public final class KafkaTopics {
      * 수동 repay API였다). accountId 가 파티션 키다.
      */
     public static String settlementRequests() { return "settlement-requests"; }
+
+    /**
+     * 계좌 상태 영속/프로젝션 트랙(off-path) full-state 토픽. account-worker가 잔고·보유가
+     * 실제로 바뀔 때마다 발행하고, account-projection-worker가 소비해 DB read model에
+     * upsert한다(Unit 2~3). accountId가 파티션 키다(같은 계좌 순서 보장).
+     */
+    public static String accountState() { return "account-state"; }
 }

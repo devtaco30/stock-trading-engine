@@ -47,6 +47,7 @@ class AccountEngineTest {
 
     private final List<Recorded> events = new CopyOnWriteArrayList<>();
     private final List<ForwardedOrder> forwardedOrders = new CopyOnWriteArrayList<>();
+    private final List<StateChange> stateChanges = new CopyOnWriteArrayList<>();
     private AccountEngine engine;
     private CountDownLatch latch;
 
@@ -67,7 +68,7 @@ class AccountEngineTest {
         engine = new AccountEngine(BUFFER_SIZE, NODE_ID,
             (orderId, accountId, stockCode, side, price, quantity) ->
                 forwardedOrders.add(new ForwardedOrder(orderId, accountId, stockCode, side, price, quantity)),
-            new Recorder(events, latch));
+            new Recorder(events, stateChanges, latch));
     }
 
     private void awaitResults() throws InterruptedException {
@@ -423,6 +424,78 @@ class AccountEngineTest {
         assertTrue(fillEvent.applied());
     }
 
+    // ---------- 상태변경 통지 (계좌 상태 영속/프로젝션 트랙 Unit 2) ----------
+
+    @Test
+    @DisplayName("매수 체결이 반영되면 onStateChanged가 그 시점 잔고·보유·seq로 호출된다")
+    void 매수체결_반영되면_상태변경_통지() throws InterruptedException {
+        prepare(2); // 매수 접수(1) + 체결 반영(1)
+        engine.seed(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
+        engine.start();
+
+        engine.publishBuy(1L, STOCK, new BigDecimal("10000"), 10, "r1"); // orderId=1
+        engine.publishBuyFill(9001L, 1L, 1L, STOCK, new BigDecimal("10000"), 10);
+        awaitResults();
+
+        assertEquals(1, stateChanges.size(), "체결 1건이 상태변경 통지도 1건 내야 한다");
+        StateChange change = stateChanges.get(0);
+        assertEquals(1L, change.accountId());
+        assertEquals(0, change.balance().compareTo(engine.accountState(1L).balance()));
+        assertEquals(Map.of(STOCK, 10), change.holdings());
+        assertEquals(engine.accountState(1L).seq(), change.seq());
+    }
+
+    @Test
+    @DisplayName("매도 체결이 반영되면 onStateChanged가 그 시점 보유로 호출된다")
+    void 매도체결_반영되면_상태변경_통지() throws InterruptedException {
+        prepare(4); // 매수 접수·체결로 보유 확보(2) + 매도 예약(1) + 매도 체결(1)
+        engine.seed(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
+        engine.start();
+
+        engine.publishBuy(1L, STOCK, new BigDecimal("10000"), 10, "r1");
+        engine.publishBuyFill(9001L, 1L, 1L, STOCK, new BigDecimal("10000"), 10); // 보유 10
+        engine.publishSell(1L, STOCK, new BigDecimal("10000"), 4, "r2");
+        engine.publishSellFill(9002L, 2L, 1L, STOCK, 4); // 보유 6
+        awaitResults();
+
+        assertEquals(2, stateChanges.size(), "체결 2건(매수·매도)이 상태변경 통지도 2건 내야 한다");
+        StateChange lastChange = stateChanges.get(1);
+        assertEquals(Map.of(STOCK, 6), lastChange.holdings());
+    }
+
+    @Test
+    @DisplayName("정산이 반영되면 onStateChanged가 그 시점 잔고로 호출된다")
+    void 정산_반영되면_상태변경_통지() throws InterruptedException {
+        prepare(3); // 매수 접수(1) + 매수 체결(1) + 정산(1)
+        engine.seed(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
+        engine.start();
+
+        engine.publishBuy(1L, STOCK, new BigDecimal("10000"), 10, "r1");
+        engine.publishBuyFill(9001L, 1L, 1L, STOCK, new BigDecimal("10000"), 10); // 미수금 60000 생김
+        engine.publishSettlement(7001L, 1L, new BigDecimal("60000"));
+        awaitResults();
+
+        assertEquals(2, stateChanges.size(), "체결 1건 + 정산 1건 = 상태변경 통지 2건");
+        StateChange settlementChange = stateChanges.get(1);
+        assertEquals(0, settlementChange.balance().compareTo(engine.accountState(1L).balance()));
+    }
+
+    @Test
+    @DisplayName("예약 accept·거부·재전송(멱등 무시)은 잔고·보유가 안 바뀌므로 onStateChanged를 호출하지 않는다")
+    void 예약accept_거부_재전송은_상태변경_통지_안함() throws InterruptedException {
+        prepare(4); // 매수 접수(1, accept) + 매수 접수2(1, 거부) + 재전송(1, duplicate) + 체결(1)
+        engine.seed(1L, new BigDecimal("30000"), new BigDecimal("0.40")); // buyLimit=75000
+        engine.start();
+
+        engine.publishBuy(1L, STOCK, new BigDecimal("10000"), 5, "r1"); // 50000 <= 75000 → accept
+        engine.publishBuy(1L, STOCK, new BigDecimal("10000"), 10, "r2"); // 100000 > 75000 → 거부
+        engine.publishBuy(1L, STOCK, new BigDecimal("10000"), 5, "r1"); // 재전송 → duplicate
+        engine.publishBuyFill(9001L, 1L, 1L, STOCK, new BigDecimal("10000"), 5); // 정상 체결(상태변경 1건)
+        awaitResults();
+
+        assertEquals(1, stateChanges.size(), "accept·거부·재전송은 상태변경 없이 체결 1건만 통지돼야 한다");
+    }
+
     // ---------- content-poison 방어: 도메인 예외 격리 (U1) ----------
 
     @Test
@@ -572,7 +645,7 @@ class AccountEngineTest {
             NODE_ID,
             (orderId, accountId, stockCode, side, price, quantity) ->
                 forwardedOrders.add(new ForwardedOrder(orderId, accountId, stockCode, side, price, quantity)),
-            new Recorder(events, latch));
+            new Recorder(events, stateChanges, latch));
         engine.seed(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
         engine.start();
 
@@ -634,10 +707,12 @@ class AccountEngineTest {
     /** 소비자 스레드가 낸 결과를 모으고 래치를 내리는 테스트용 리스너. */
     private static final class Recorder implements AccountResultListener {
         private final List<Recorded> events;
+        private final List<StateChange> stateChanges;
         private final CountDownLatch latch;
 
-        Recorder(List<Recorded> events, CountDownLatch latch) {
+        Recorder(List<Recorded> events, List<StateChange> stateChanges, CountDownLatch latch) {
             this.events = events;
+            this.stateChanges = stateChanges;
             this.latch = latch;
         }
 
@@ -680,11 +755,24 @@ class AccountEngineTest {
             events.add(new Recorded(accountId, orderId, requestId, false, null, null, null, null, null, true));
             latch.countDown();
         }
+
+        /**
+         * 공유 latch(결과 콜백 개수 기준)와 별도로 카운트한다 — onFillApplied·onSettlementApplied보다
+         * 먼저 불리므로(AccountEventHandler 호출 순서), latch가 풀리는 시점엔 이미 기록돼 있다.
+         */
+        @Override
+        public void onStateChanged(long accountId, BigDecimal balance, Map<String, Integer> holdings, long seq) {
+            stateChanges.add(new StateChange(accountId, balance, holdings, seq));
+        }
     }
 
     private record Recorded(long accountId, long orderId, String requestId, boolean accepted,
                             BigDecimal reservedMargin, RejectReason reason,
                             Long tradeId, Boolean applied, Integer reservedQuantity, boolean duplicate) {
+    }
+
+    /** onStateChanged 호출 한 건의 캡처(계좌 상태 영속/프로젝션 트랙 Unit 2). */
+    private record StateChange(long accountId, BigDecimal balance, Map<String, Integer> holdings, long seq) {
     }
 
     /** matchingOrderSender.forwardPlace 호출 한 건의 캡처(②-b). */
