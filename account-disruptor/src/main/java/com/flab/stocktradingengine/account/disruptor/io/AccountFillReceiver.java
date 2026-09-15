@@ -92,17 +92,25 @@ public final class AccountFillReceiver implements AutoCloseable {
         return consumedPosition;
     }
 
-    /** 패키지 가시성 — 단위 테스트가 실제 Subscription 없이 이 메서드를 직접 호출한다. */
+    /**
+     * 패키지 가시성 — 단위 테스트가 실제 Subscription 없이 이 메서드를 직접 호출한다.
+     *
+     * <p>{@code header.position()}(1-2)은 "이 메시지를 읽은 뒤 image가 도달한 위치"다({@code
+     * image.position()}과 같은 값) — 소비자(계좌 엔진)가 이 체결을 실제로 반영한 뒤 {@code
+     * lastAppliedFillPosition}으로 기억해, 아직 링에만 들어가고 처리는 안 된 체결의 위치와
+     * 구분한다. header가 null이면(Aeron 없이 디코딩만 검증하는 단위 테스트) 0으로 둔다.</p>
+     */
     void onFragment(DirectBuffer buffer, int offset, int length, Header header) {
         Optional<FilledTrade> decoded = codec.tryDecode(buffer, offset);
         if (decoded.isEmpty()) {
             return;
         }
         FilledTrade trade = decoded.get();
+        long sourcePosition = header != null ? header.position() : 0L;
         engine.publishBuyFill(trade.tradeId(), trade.buyOrderId(), trade.buyAccountId(),
-            trade.stockCode(), trade.matchPrice(), trade.filledQuantity());
+            trade.stockCode(), trade.matchPrice(), trade.filledQuantity(), sourcePosition);
         engine.publishSellFill(trade.tradeId(), trade.sellOrderId(), trade.sellAccountId(),
-            trade.stockCode(), trade.filledQuantity());
+            trade.stockCode(), trade.filledQuantity(), sourcePosition);
     }
 
     /** 폴링 스레드를 멈추고 종료를 기다린다. */

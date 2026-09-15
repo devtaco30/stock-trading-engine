@@ -10,10 +10,10 @@ import org.springframework.context.annotation.Configuration;
 import com.flab.stocktradingengine.account.disruptor.engine.AccountEngine;
 import com.flab.stocktradingengine.account.disruptor.io.AccountFillReceiver;
 import com.flab.stocktradingengine.account.worker.lifecycle.AccountSnapshotLifecycle;
+import com.flab.stocktradingengine.account.worker.lifecycle.AccountSnapshotWriterLifecycle;
 import com.flab.stocktradingengine.account.worker.recovery.AccountSnapshotStore;
+import com.flab.stocktradingengine.account.worker.recovery.AccountSnapshotWriter;
 import com.flab.stocktradingengine.account.worker.recovery.StoredAccountSnapshot;
-
-import io.aeron.archive.client.AeronArchive;
 
 /**
  * 계좌 엔진 스냅샷(2d-2b) 배선. {@link AccountOrderIntakeConfig}가 만든 archive-dir(저널과 같은
@@ -40,7 +40,24 @@ public class AccountSnapshotConfig {
 
     @Bean
     public SmartLifecycle accountSnapshotLifecycle(AccountEngine accountEngine, AccountFillReceiver accountFillReceiver,
-            AccountSnapshotStore accountSnapshotStore, AeronArchive aeronArchive) {
-        return new AccountSnapshotLifecycle(accountEngine, accountFillReceiver, accountSnapshotStore, aeronArchive);
+            AccountSnapshotStore accountSnapshotStore, Long accountJournalRecordingId) {
+        return new AccountSnapshotLifecycle(accountEngine, accountFillReceiver, accountSnapshotStore, accountJournalRecordingId);
+    }
+
+    /**
+     * 러닝 중 스냅샷 쓰기 스레드(1-3) — {@code AccountEngineConfig#accountEngine}이 이 빈을
+     * {@code AccountSnapshotSink}로 넘겨 소비자 스레드가 만든 스냅샷 바이트를 받는다. 시작·종료는
+     * {@link AccountSnapshotWriterLifecycle}이 맡는다(별도 SmartLifecycle — 엔진 소비자 스레드와
+     * 무관하게 이 쓰기 스레드는 엔진 시작 전부터 대기해도 안전하다, offer만 받고 실제 쓰기는
+     * start() 이후에나 일어나므로).
+     */
+    @Bean
+    public AccountSnapshotWriter accountSnapshotWriter(AccountSnapshotStore accountSnapshotStore, Long accountJournalRecordingId) {
+        return new AccountSnapshotWriter(accountSnapshotStore, accountJournalRecordingId);
+    }
+
+    @Bean
+    public SmartLifecycle accountSnapshotWriterLifecycle(AccountSnapshotWriter accountSnapshotWriter) {
+        return new AccountSnapshotWriterLifecycle(accountSnapshotWriter);
     }
 }

@@ -1,10 +1,16 @@
 package com.flab.stocktradingengine.api.messaging;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import org.agrona.DirectBuffer;
 import org.junit.jupiter.api.AfterEach;
@@ -81,7 +87,46 @@ class AeronAccountOrderSenderIntegrationTest {
         assertThat(decoded).isEqualTo(new DecodedAccountOrder(OrderSide.SELL, 2L, STOCK_CODE, new BigDecimal("11000"), 5, "req-sell-1"));
     }
 
+    /**
+     * 싱글톤 빈 하나에 여러 HTTP 요청 스레드가 동시에 send()를 부르는 실제 상황을 재현한다
+     * — 인코딩 버퍼를 스레드로컬로 재사용해도(39 리뷰) 동시 호출끼리 내용이 안 섞이는지 검증한다.
+     * 필드로 그냥 재사용했다면 이 테스트가 뒤섞인 필드(다른 스레드의 accountId·requestId)를
+     * 잡아냈을 것이다.
+     */
+    @Test
+    void 동시_다발_발신도_인코딩이_섞이지_않는다() throws InterruptedException {
+        AeronAccountOrderSender sender = new AeronAccountOrderSender(publication);
+        int threadCount = 20;
+        List<DecodedAccountOrder> expected = new CopyOnWriteArrayList<>();
+        ExecutorService pool = Executors.newFixedThreadPool(threadCount);
+        CountDownLatch ready = new CountDownLatch(threadCount);
+        CountDownLatch start = new CountDownLatch(1);
+
+        for (int i = 0; i < threadCount; i++) {
+            long accountId = i + 1L;
+            int quantity = i + 1;
+            String requestId = "req-concurrent-" + i;
+            expected.add(new DecodedAccountOrder(OrderSide.BUY, accountId, STOCK_CODE, new BigDecimal("10000"), quantity, requestId));
+            pool.submit(() -> {
+                ready.countDown();
+                awaitStart(start);
+                sender.send(OrderSide.BUY, accountId, STOCK_CODE, new BigDecimal("10000"), quantity, requestId);
+            });
+        }
+        assertTrue(ready.await(5, TimeUnit.SECONDS), "스레드 풀이 5초 안에 준비되지 않음");
+        start.countDown();
+        pool.shutdown();
+        assertTrue(pool.awaitTermination(5, TimeUnit.SECONDS), "발신 스레드들이 5초 안에 끝나지 않음");
+
+        List<DecodedAccountOrder> received = awaitN(threadCount);
+        assertThat(received).containsExactlyInAnyOrderElementsOf(expected);
+    }
+
     private DecodedAccountOrder awaitOne() {
+        return awaitN(1).get(0);
+    }
+
+    private List<DecodedAccountOrder> awaitN(int count) {
         List<DecodedAccountOrder> received = new ArrayList<>();
         FragmentHandler handler = (buffer, offset, length, header) -> {
             DirectBuffer directBuffer = buffer;
@@ -89,13 +134,22 @@ class AeronAccountOrderSenderIntegrationTest {
         };
 
         long deadline = System.nanoTime() + TIMEOUT_NANOS;
-        while (received.isEmpty()) {
-            subscription.poll(handler, 10);
-            if (received.isEmpty() && System.nanoTime() > deadline) {
-                throw new AssertionError("5초 안에 주문이 도착하지 않았습니다");
+        while (received.size() < count) {
+            subscription.poll(handler, count);
+            if (received.size() < count && System.nanoTime() > deadline) {
+                throw new AssertionError(count + "건 중 " + received.size() + "건만 5초 안에 도착함");
             }
         }
-        return received.get(0);
+        return received;
+    }
+
+    private void awaitStart(CountDownLatch start) {
+        try {
+            start.await();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new AssertionError("대기 중 인터럽트됨", e);
+        }
     }
 
     private void awaitConnected(Publication publication) {

@@ -4,9 +4,11 @@ import java.io.File;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.util.Arrays;
 import java.util.Optional;
 
@@ -43,15 +45,36 @@ public class AccountSnapshotStore {
     }
 
     public void write(long recordingId, long fillConsumedPosition, AccountSnapshot snapshot) {
-        byte[] snapshotBytes = codec.encode(snapshot);
+        write(recordingId, fillConsumedPosition, codec.encode(snapshot));
+    }
+
+    /**
+     * 이미 인코딩된 스냅샷 바이트를 그대로 쓴다(1-3) — 러닝 중 스냅샷 쓰기 스레드는 소비자
+     * 스레드가 이미 직렬화한 바이트를 받으므로 재인코딩하지 않는다({@code AccountSnapshotSink}
+     * 계약과 맞물림).
+     *
+     * <h3>fsync (1-3)</h3>
+     * <p>{@link FileChannel#force(boolean)}로 디스크에 실제로 박힌 뒤에야 이 메서드가 반환한다.
+     * durable-before-prune(tradeId 세대 가지치기)의 전제가 "durable = OS 캐시가 아니라 디스크에
+     * 실제로 쓰임"이라, rename만으로는 부족하다 — rename 자체는 원자적이지만 그 내용이 아직
+     * 페이지 캐시에만 있을 수 있다.</p>
+     */
+    public void write(long recordingId, long fillConsumedPosition, byte[] snapshotBytes) {
         ByteBuffer payload = ByteBuffer.allocate(Long.BYTES + Long.BYTES + snapshotBytes.length);
         payload.putLong(recordingId);
         payload.putLong(fillConsumedPosition);
         payload.put(snapshotBytes);
+        payload.flip();
 
         try {
             Path tempPath = tempFile.toPath();
-            Files.write(tempPath, payload.array());
+            try (FileChannel channel = FileChannel.open(tempPath,
+                    StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING)) {
+                while (payload.hasRemaining()) {
+                    channel.write(payload);
+                }
+                channel.force(true);
+            }
             Files.move(tempPath, file.toPath(),
                 StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
         } catch (IOException e) {

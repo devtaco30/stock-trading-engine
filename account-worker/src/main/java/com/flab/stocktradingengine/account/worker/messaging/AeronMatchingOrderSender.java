@@ -57,6 +57,9 @@ public class AeronMatchingOrderSender implements MatchingOrderSender, AutoClosea
     private final OneToOneConcurrentArrayQueue<JournaledOrder> outbox = new OneToOneConcurrentArrayQueue<>(OUTBOX_CAPACITY);
     private final IdleStrategy idleStrategy = new BackoffIdleStrategy();
     private final AtomicBoolean running = new AtomicBoolean(false);
+    // publish()가 publisherThread 하나만 호출하는 단일 writer라 인코딩 버퍼를 필드로 재사용해도
+    // 안전하다(호출마다 새로 allocateDirect하면 off-heap 네이티브 메모리가 누적된다).
+    private final UnsafeBuffer encodeBuffer = new UnsafeBuffer(ByteBuffer.allocateDirect(ENCODE_BUFFER_SIZE));
 
     private Thread publisherThread;
 
@@ -95,10 +98,9 @@ public class AeronMatchingOrderSender implements MatchingOrderSender, AutoClosea
 
     /** 전용 스레드에서만 돈다 — 여기서는 블로킹 재시도해도 계좌 로직 스레드를 막지 않는다. */
     private void publish(JournaledOrder order) {
-        UnsafeBuffer buffer = new UnsafeBuffer(ByteBuffer.allocateDirect(ENCODE_BUFFER_SIZE));
-        int length = codec.encode(buffer, 0, order);
+        int length = codec.encode(encodeBuffer, 0, order);
 
-        long result = matchingOrderPublication.offer(buffer, 0, length);
+        long result = matchingOrderPublication.offer(encodeBuffer, 0, length);
         if (result <= 0) {
             log.warn("[계좌] 매칭 발신 실패(best-effort): orderId={} accountId={} offer 반환={}",
                 order.orderId(), order.accountId(), result);
