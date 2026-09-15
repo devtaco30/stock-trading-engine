@@ -63,6 +63,7 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
     private final AccountResultListener listener;
     private final AccountSnapshotSink snapshotSink;
     private final AccountSnapshotCodec snapshotCodec = new AccountSnapshotCodec();
+    private final boolean snapshotTriggerEnabled;
 
     // 소비자 스레드(이 핸들러)만 쓰고, 호스트 스레드(그레이스풀 스톱)·1-3의 스냅샷 쓰기 스레드가
     // 읽는다 — 다른 스레드가 읽으므로 volatile.
@@ -76,11 +77,26 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
     public AccountEventHandler(Map<Long, AccountState> accounts, AccountOrderIdGenerator orderIdGenerator,
                                MatchingOrderSender matchingOrderSender, AccountResultListener listener,
                                AccountSnapshotSink snapshotSink) {
+        this(accounts, orderIdGenerator, matchingOrderSender, listener, snapshotSink, true);
+    }
+
+    /**
+     * @param snapshotTriggerEnabled N건마다 세대 경계를 열고 스냅샷을 직렬화+offer할지. {@link
+     *     com.flab.stocktradingengine.account.disruptor.engine.AccountEngine#recover}의 replay
+     *     전용 핸들러만 false를 준다 — 이미 지나간 저널을 다시 훑는 것뿐이라 새로 뜰 스냅샷이
+     *     없고, 그 핸들러의 싱크는 항상 durableSeq 0(NO_OP)이라 세대를 나눠도 가지치기가 아예
+     *     안 일어나 결과가 켜둔 것과 같다 — 다만 매 replay마다 전체 계좌 상태를 인코딩해 버리는
+     *     낭비(큰 저널일수록 복구 시간에 직접 얹힘)만 남으므로 끈다.
+     */
+    public AccountEventHandler(Map<Long, AccountState> accounts, AccountOrderIdGenerator orderIdGenerator,
+                               MatchingOrderSender matchingOrderSender, AccountResultListener listener,
+                               AccountSnapshotSink snapshotSink, boolean snapshotTriggerEnabled) {
         this.accounts = accounts;
         this.orderIdGenerator = orderIdGenerator;
         this.matchingOrderSender = matchingOrderSender;
         this.listener = listener;
         this.snapshotSink = snapshotSink;
+        this.snapshotTriggerEnabled = snapshotTriggerEnabled;
     }
 
     /** 소비자가 실제로 처리한 시점의 체결 수신 위치(1-2) — {@code AccountFillReceiver.consumedPosition()}과 달리 아직 처리 안 된 체결은 반영하지 않는다. */
@@ -126,7 +142,7 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
             event.clear();
         }
         appliedSeq++;
-        if (appliedSeq % SNAPSHOT_INTERVAL_JOURNAL_ENTRIES == 0) {
+        if (snapshotTriggerEnabled && appliedSeq % SNAPSHOT_INTERVAL_JOURNAL_ENTRIES == 0) {
             takeSnapshotAndStartNewGeneration();
         }
         pruneIfDurable();

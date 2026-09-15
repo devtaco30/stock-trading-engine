@@ -237,9 +237,11 @@ public class AccountEngine {
     public void recover(Iterable<AccountJournalEntry> entries) {
         requireNotStarted();
         // 복구 replay는 저널을 그대로 재실행하는 것뿐, 아직 시작 전이라 리플레이 중 스냅샷을
-        // 찍을 이유가 없다(1-3) — no-op sink.
+        // 찍을 이유가 없다(1-3) — no-op sink에 더해 스냅샷 트리거 자체를 끈다(39 리뷰 비블로킹 ①,
+        // 큰 저널일수록 매 N건마다 전체 계좌 상태를 인코딩해 버리는 낭비가 복구 시간에 직접 얹힘 —
+        // 자세한 근거는 AccountEventHandler의 snapshotTriggerEnabled 파라미터 문서 참고).
         AccountEventHandler recoveryHandler =
-            new AccountEventHandler(accounts, orderIdGenerator, NO_OP_MATCHING_ORDER_SENDER, NoOpAccountResultListener.INSTANCE, NO_OP_SNAPSHOT_SINK);
+            new AccountEventHandler(accounts, orderIdGenerator, NO_OP_MATCHING_ORDER_SENDER, NoOpAccountResultListener.INSTANCE, NO_OP_SNAPSHOT_SINK, false);
         AccountEvent scratch = new AccountEvent();
         for (AccountJournalEntry entry : entries) {
             applyToScratch(scratch, entry);

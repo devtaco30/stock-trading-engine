@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.math.BigDecimal;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -15,7 +16,9 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import com.flab.stocktradingengine.account.disruptor.domain.AccountState;
 import com.flab.stocktradingengine.account.disruptor.domain.NoOpAccountResultListener;
+import com.flab.stocktradingengine.account.disruptor.handler.AccountEventHandler;
 import com.flab.stocktradingengine.account.disruptor.io.AccountSnapshotSink;
 import com.flab.stocktradingengine.account.disruptor.io.MatchingOrderSender;
 import com.flab.stocktradingengine.account.disruptor.snapshot.AccountSnapshot;
@@ -127,6 +130,24 @@ class AccountEngineSnapshotTriggerTest {
 
         assertFalse(engine.accountState(1L).balance().compareTo(balanceBeforeReplay) == 0,
             "가지치기된 tradeId 재도착은 새 체결로 취급돼 잔고가 바뀌어야 한다");
+    }
+
+    @Test
+    @DisplayName("snapshotTriggerEnabled=false면 N건 경계를 넘겨도 싱크에 offer하지 않는다 (39 리뷰 비블로킹 ① — 복구 replay 전용 경로)")
+    void snapshotTriggerEnabled_false면_offer_안_한다() {
+        RecordingSnapshotSink sink = new RecordingSnapshotSink();
+        Map<Long, AccountState> accounts = new HashMap<>();
+        accounts.put(1L, new AccountState(1L, new BigDecimal("1000000"), new BigDecimal("0.40")));
+        AccountEventHandler handler = new AccountEventHandler(accounts, new AccountOrderIdGenerator(NODE_ID),
+            NO_OP_SENDER, NoOpAccountResultListener.INSTANCE, sink, false);
+
+        AccountEvent scratch = new AccountEvent();
+        for (long i = 0; i < SNAPSHOT_INTERVAL * 2; i++) {
+            scratch.setBuy(1L, STOCK, new BigDecimal("10000"), 1, "r" + i);
+            handler.onEvent(scratch, i, false);
+        }
+
+        assertTrue(sink.offers.isEmpty(), "트리거를 꺼두면 N건 경계를 두 번 넘어가도 offer가 없어야 한다(복구 replay 낭비 제거)");
     }
 
     /** 이미 처리된 requestId("r1")를 반복 재전송해 appliedSeq만 밀어 올린다 — 매번 빠른 dup 경로(빠름). */
