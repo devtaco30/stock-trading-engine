@@ -65,7 +65,7 @@ class AeronAccountEndToEndTest {
             awaitConnected(publication);
 
             send(publication, new DecodedAccountOrder(
-                OrderSide.BUY, 1L, STOCK, new BigDecimal("10000"), 10, "req-1"));
+                OrderSide.BUY, 1L, STOCK, new BigDecimal("10000"), 10, "req-1", 1L));
 
             assertTrue(latch.await(5, TimeUnit.SECONDS), "5초 안에 결과가 도착해야 한다");
             assertEquals(1, events.size());
@@ -104,9 +104,9 @@ class AeronAccountEndToEndTest {
             awaitConnected(publication);
 
             send(publication, new DecodedAccountOrder(
-                OrderSide.BUY, 1L, STOCK, new BigDecimal("10000"), 10, "req-dup"));
+                OrderSide.BUY, 1L, STOCK, new BigDecimal("10000"), 10, "req-dup", 1L));
             send(publication, new DecodedAccountOrder(
-                OrderSide.BUY, 1L, STOCK, new BigDecimal("10000"), 10, "req-dup")); // 같은 requestId 재전송
+                OrderSide.BUY, 1L, STOCK, new BigDecimal("10000"), 10, "req-dup", 1L)); // 같은 requestId 재전송
 
             assertTrue(latch.await(5, TimeUnit.SECONDS), "5초 안에 결과 2개가 도착해야 한다");
             assertEquals(2, events.size());

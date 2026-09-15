@@ -10,6 +10,7 @@ import org.agrona.concurrent.UnsafeBuffer;
 import com.flab.stocktradingengine.api.exception.OrderPublishException;
 import com.flab.stocktradingengine.codec.AccountOrderCodec;
 import com.flab.stocktradingengine.codec.DecodedAccountOrder;
+import com.flab.stocktradingengine.time.EpochNanos;
 import com.flab.stocktradingengine.trading.entity.OrderSide;
 
 import io.aeron.Publication;
@@ -63,10 +64,15 @@ public class AeronAccountOrderSender {
      * 안 되지만, 호출 하나 안에서만 쓰고 버리므로(다음 호출과 상태를 안 주고받음) 스레드당
      * 하나씩만 있으면 충분해 ThreadLocal로 재사용한다.</p>
      *
+     * <p>{@code publishedAtEpochNanos}는 v1/v2 전 과정 측정(decision_records/
+     * v1-v2-e2e-measurement.md)의 끝점① 지연 계산용 발행 시각이다. 이 메서드가 실제 발행
+     * 시점이라 여기서 {@link EpochNanos#now()}로 찍는다.</p>
+     *
      * @throws OrderPublishException {@link #MAX_ATTEMPTS}번 재시도해도 offer가 성공하지 못하면
      */
     public void send(OrderSide side, long accountId, String stockCode, BigDecimal price, int quantity, String requestId) {
-        DecodedAccountOrder order = new DecodedAccountOrder(side, accountId, stockCode, price, quantity, requestId);
+        DecodedAccountOrder order = new DecodedAccountOrder(
+            side, accountId, stockCode, price, quantity, requestId, EpochNanos.now());
         UnsafeBuffer buffer = encodeBuffer.get();
         int length = codec.encode(buffer, 0, order);
 

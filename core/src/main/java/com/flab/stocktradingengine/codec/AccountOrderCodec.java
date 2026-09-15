@@ -21,11 +21,13 @@ import com.flab.stocktradingengine.trading.entity.OrderSide;
  * 첫 접수 시점에 직접 발급한다. 맨 앞 1바이트는 {@link OrderSide}(BUY/SELL)를 구분한다 — 매칭의
  * {@link EventType}(PLACE/CANCEL)과는 다른 명령 종류다. 매도도 price를 싣는다(②-a) — 매칭이
  * 지정가 엔진이라 호가창 가격레벨에 필요하고, 매수·매도 전달용 필드이지 계좌 예약(트리거)이
- * 매도 price를 쓰는 건 아니다. stockCode·requestId는 둘 다 가변 길이라 맨 뒤에 순서대로 두고
- * (Agrona {@code putStringAscii}: 4바이트 길이 + ASCII 바이트), 디코딩 때 각자의 길이 접두어로
- * 다음 필드 오프셋을 계산한다.</p>
+ * 매도 price를 쓰는 건 아니다. {@code publishedAtEpochNanos}는 v1/v2 전 과정 측정용 발행
+ * 시각(decision_records/v1-v2-e2e-measurement.md)이라 고정 폭(8바이트)으로 가변 필드 앞에 둔다.
+ * stockCode·requestId는 둘 다 가변 길이라 맨 뒤에 순서대로 두고(Agrona {@code putStringAscii}:
+ * 4바이트 길이 + ASCII 바이트), 디코딩 때 각자의 길이 접두어로 다음 필드 오프셋을 계산한다.</p>
  * <pre>
- * BUY·SELL: [type:1][accountId:8][priceUnscaled:8][priceScale:4][quantity:4][stockCode:4+N][requestId:4+M]
+ * BUY·SELL: [type:1][accountId:8][priceUnscaled:8][priceScale:4][quantity:4][publishedAtEpochNanos:8]
+ *           [stockCode:4+N][requestId:4+M]
  * </pre>
  */
 public final class AccountOrderCodec {
@@ -53,6 +55,9 @@ public final class AccountOrderCodec {
         buffer.putInt(position, order.quantity());
         position += Integer.BYTES;
 
+        buffer.putLong(position, order.publishedAtEpochNanos());
+        position += Long.BYTES;
+
         position += buffer.putStringAscii(position, order.stockCode());
         position += buffer.putStringAscii(position, order.requestId());
         return position - offset;
@@ -76,13 +81,16 @@ public final class AccountOrderCodec {
         int quantity = buffer.getInt(position);
         position += Integer.BYTES;
 
+        long publishedAtEpochNanos = buffer.getLong(position);
+        position += Long.BYTES;
+
         int stockCodeLength = buffer.getInt(position);
         String stockCode = buffer.getStringAscii(position);
         position += Integer.BYTES + stockCodeLength;
 
         String requestId = buffer.getStringAscii(position);
 
-        return new DecodedAccountOrder(type, accountId, stockCode, price, quantity, requestId);
+        return new DecodedAccountOrder(type, accountId, stockCode, price, quantity, requestId, publishedAtEpochNanos);
     }
 
     /**
