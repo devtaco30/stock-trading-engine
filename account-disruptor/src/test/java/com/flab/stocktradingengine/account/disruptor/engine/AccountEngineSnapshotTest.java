@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -76,7 +77,9 @@ class AccountEngineSnapshotTest {
         AccountSnapshot snapshot = original.snapshot();
         AccountSnapshot decoded = codec.decode(codec.encode(snapshot));
 
-        restored = new AccountEngine(1024, new BlockingWaitStrategy(), ProducerType.SINGLE, NODE_ID, NO_OP_SENDER, NoOpAccountResultListener.INSTANCE, new InMemoryAccountJournal());
+        // 상한(1) + 나중에 r3 accept(1)까지 이 리스너 하나로 받는다.
+        CapturingListener restoredListener = new CapturingListener(1, 0, 1);
+        restored = new AccountEngine(1024, new BlockingWaitStrategy(), ProducerType.SINGLE, NODE_ID, NO_OP_SENDER, restoredListener, new InMemoryAccountJournal());
         restored.restore(decoded);
         restored.start();
 
@@ -88,11 +91,15 @@ class AccountEngineSnapshotTest {
         assertEquals(0, originalState.reservedMargin().compareTo(restoredState.reservedMargin()));
         assertEquals(originalState.holding(STOCK), restoredState.holding(STOCK));
         assertEquals(originalState.reservedSellQuantity(STOCK), restoredState.reservedSellQuantity(STOCK));
-        assertEquals(buyOrderId, restoredState.orderIdFor("r1"));
+
+        // requestId 멱등 캐시 복원 확인: 재전송하면 재예약 없이 duplicate로 통지돼야 한다.
+        restored.publishBuy(1L, STOCK, new BigDecimal("10000"), 10, "r1");
+        assertTrue(restoredListener.duplicateLatch.await(1, TimeUnit.SECONDS), "복원된 상태에도 r1이 재전송으로 처리돼야 한다");
 
         // 발급기 카운터 복원: 복원 뒤 새 requestId는 원본이 이어 발급했을 다음 orderId와 같아야 한다(결정론).
         restored.publishBuy(1L, STOCK, new BigDecimal("10000"), 1, "r3");
-        long newOrderId = awaitOrderId(restored, "r3");
+        assertTrue(restoredListener.acceptLatch.await(1, TimeUnit.SECONDS), "r3 accept가 도착해야 한다");
+        long newOrderId = restoredListener.orderIds.get("r3");
         assertEquals(listener.orderIds.get("r2") + 1, newOrderId);
     }
 
@@ -124,14 +131,16 @@ class AccountEngineSnapshotTest {
 
     @Test
     @DisplayName("스냅샷 복원 뒤 그 이후 저널만 재적용해도 seq가 크래시 전 최종 상태와 같아진다 (계좌 상태 영속/프로젝션 트랙 Unit 1)")
-    void 스냅샷_복원_후_나머지_저널만_재적용해도_seq가_재현된다() {
+    void 스냅샷_복원_후_나머지_저널만_재적용해도_seq가_재현된다() throws InterruptedException {
         InMemoryAccountJournal journal = new InMemoryAccountJournal();
-        original = new AccountEngine(1024, new BlockingWaitStrategy(), ProducerType.SINGLE, NODE_ID, NO_OP_SENDER, NoOpAccountResultListener.INSTANCE, journal);
+        CapturingListener listener = new CapturingListener(1, 0);
+        original = new AccountEngine(1024, new BlockingWaitStrategy(), ProducerType.SINGLE, NODE_ID, NO_OP_SENDER, listener, journal);
         original.seed(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
         original.start();
 
         original.publishBuy(1L, STOCK, new BigDecimal("10000"), 10, "r1");
-        long buyOrderId = awaitOrderId(original, "r1");
+        assertTrue(listener.acceptLatch.await(1, TimeUnit.SECONDS));
+        long buyOrderId = listener.orderIds.get("r1");
         original.publishBuyFill(9001L, buyOrderId, 1L, STOCK, new BigDecimal("10000"), 10);
         awaitSeq(original, 2L); // 예약 accept(1) + 체결 반영(1)
 
@@ -166,27 +175,22 @@ class AccountEngineSnapshotTest {
         }
     }
 
-    private long awaitOrderId(AccountEngine engine, String requestId) {
-        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(1);
-        Long orderId;
-        while ((orderId = engine.accountState(1L).orderIdFor(requestId)) == null) {
-            if (System.nanoTime() > deadline) {
-                throw new AssertionError("1초 안에 " + requestId + "의 orderId가 발급되지 않음");
-            }
-            Thread.onSpinWait();
-        }
-        return orderId;
-    }
-
-    /** onAccepted·onSellAccepted에서 requestId→orderId를 기록하고, accept·fill 두 단계로 래치를 내리는 리스너. */
+    /** onAccepted·onSellAccepted에서 requestId→orderId를 기록하고, accept·fill·duplicate 세 단계로 래치를 내리는 리스너. */
     private static final class CapturingListener implements AccountResultListener {
         private final Map<String, Long> orderIds = new ConcurrentHashMap<>();
+        private final Set<String> duplicateRequestIds = ConcurrentHashMap.newKeySet();
         private final CountDownLatch acceptLatch;
         private final CountDownLatch fillLatch;
+        private final CountDownLatch duplicateLatch;
 
         CapturingListener(int acceptCount, int fillCount) {
+            this(acceptCount, fillCount, 0);
+        }
+
+        CapturingListener(int acceptCount, int fillCount, int duplicateCount) {
             this.acceptLatch = new CountDownLatch(acceptCount);
             this.fillLatch = new CountDownLatch(fillCount);
+            this.duplicateLatch = new CountDownLatch(duplicateCount);
         }
 
         @Override
@@ -219,7 +223,9 @@ class AccountEngineSnapshotTest {
         }
 
         @Override
-        public void onDuplicateRequest(long accountId, long orderId, String requestId) {
+        public void onDuplicateRequest(long accountId, String requestId) {
+            duplicateRequestIds.add(requestId);
+            duplicateLatch.countDown();
         }
     }
 }

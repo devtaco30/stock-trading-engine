@@ -117,6 +117,6 @@ public class AccountStatePublisher implements AccountResultListener, AutoCloseab
     }
 
     @Override
-    public void onDuplicateRequest(long accountId, long orderId, String requestId) {
+    public void onDuplicateRequest(long accountId, String requestId) {
     }
 }

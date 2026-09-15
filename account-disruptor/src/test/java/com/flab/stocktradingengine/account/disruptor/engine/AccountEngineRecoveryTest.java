@@ -90,14 +90,14 @@ class AccountEngineRecoveryTest {
         assertEquals(originalHolding, recoveredState.holding(STOCK), "보유 수량이 원본과 같아야 한다");
         assertEquals(0, originalReservedMargin.compareTo(recoveredState.reservedMargin()), "예약증거금이 원본과 같아야 한다");
         assertEquals(0, originalUnpaid.compareTo(recoveredState.unpaid()), "미수금이 원본과 같아야 한다");
-        assertEquals(buyOrderId, recoveredState.orderIdFor("r1"), "r1의 orderId가 원본과 같이 재현돼야 한다");
-        assertEquals(sellOrderId, recoveredState.orderIdFor("r2"), "r2의 orderId가 원본과 같이 재현돼야 한다");
+        assertTrue(recoveredState.isDuplicateRequest("r1"), "r1이 원본과 같이 재전송 멱등 캐시에 남아있어야 한다");
+        assertTrue(recoveredState.isDuplicateRequest("r2"), "r2가 원본과 같이 재전송 멱등 캐시에 남아있어야 한다");
         assertEquals(originalState.seq(), recoveredState.seq(), "seq가 원본과 같이 재현돼야 한다");
     }
 
     @Test
-    @DisplayName("재전송하면 리플레이로 재현된 것과 같은 orderId로 중복 통지된다(결정론 발급기 이월)")
-    void 재전송하면_같은_orderId로_중복통지() throws InterruptedException {
+    @DisplayName("복구 뒤 재전송하면 재예약 없이 onDuplicateRequest로만 통지된다")
+    void 복구_뒤_재전송하면_중복통지() throws InterruptedException {
         InMemoryAccountJournal journal = new InMemoryAccountJournal();
         OrderIdCapturingListener originalListener = new OrderIdCapturingListener(1, 0);
         original = new AccountEngine(1024, new BlockingWaitStrategy(), ProducerType.SINGLE, NODE_ID, NO_OP_SENDER, originalListener, journal);
@@ -105,14 +105,11 @@ class AccountEngineRecoveryTest {
         original.start();
         original.publishBuy(1L, STOCK, new BigDecimal("10000"), 10, "r1");
         assertTrue(originalListener.acceptLatch.await(1, TimeUnit.SECONDS));
-        long originalOrderId = originalListener.orderIdFor("r1");
 
         CountDownLatch dupLatch = new CountDownLatch(1);
-        long[] captured = new long[1];
         AccountResultListener listener = new NoOpAccountResultListener() {
             @Override
-            public void onDuplicateRequest(long accountId, long orderId, String requestId) {
-                captured[0] = orderId;
+            public void onDuplicateRequest(long accountId, String requestId) {
                 dupLatch.countDown();
             }
         };
@@ -122,8 +119,7 @@ class AccountEngineRecoveryTest {
         recovered.start();
 
         recovered.publishBuy(1L, STOCK, new BigDecimal("10000"), 10, "r1");
-        assertTrue(dupLatch.await(1, TimeUnit.SECONDS), "재전송이 중복 통지로 와야 한다");
-        assertEquals(originalOrderId, captured[0], "재전송의 orderId가 원본과 같아야 한다(결정론)");
+        assertTrue(dupLatch.await(1, TimeUnit.SECONDS), "재전송이 복구 뒤에도 중복 통지로 와야 한다");
     }
 
     @Test
@@ -207,7 +203,7 @@ class AccountEngineRecoveryTest {
 
         recovered.start();
         AccountState recoveredState = recovered.accountState(1L);
-        assertNotEquals(0L, recoveredState.orderIdFor("r1"), "poison 앞의 정상 BUY 엔트리는 반영돼 orderId가 발급돼 있어야 한다");
+        assertTrue(recoveredState.isDuplicateRequest("r1"), "poison 앞의 정상 BUY 엔트리는 반영돼 requestId가 기록돼 있어야 한다");
     }
 
     /** onAccepted·onSellAccepted에서 requestId→orderId를 기록하고, 지정한 두 단계로 래치를 내리는 리스너. */
@@ -257,7 +253,7 @@ class AccountEngineRecoveryTest {
         }
 
         @Override
-        public void onDuplicateRequest(long accountId, long orderId, String requestId) {
+        public void onDuplicateRequest(long accountId, String requestId) {
         }
     }
 
@@ -288,7 +284,7 @@ class AccountEngineRecoveryTest {
         }
 
         @Override
-        public void onDuplicateRequest(long accountId, long orderId, String requestId) {
+        public void onDuplicateRequest(long accountId, String requestId) {
         }
     }
 }

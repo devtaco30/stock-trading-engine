@@ -51,6 +51,10 @@ class AccountFillReplayRecoveryIntegrationTest {
     // 매도 계좌는 이 워커가 소유하지 않은 값(999)으로 둔다 — 매도 쪽 보유·검증은 U4b의 관심사가
     // 아니고, 엔진이 ACCOUNT_NOT_FOUND로 알아서 격리해 매수 쪽 검증만 단순하게 볼 수 있다.
     private static final long SELL_ACCOUNT_ID = 999L;
+    // orderIdFor 조회를 뺀 뒤(릭 수정 U2), AccountOrderIdGenerator의 결정론 규칙((nodeId<<53)|counter,
+    // account-worker snowflake.node-id=3 고정)으로 orderId를 예측한다 — publishBuyFill에 넘길 값이
+    // 필요한데, 프로덕션 리스너 배선엔 orderId를 밖으로 돌려주는 통로가 없어졌다.
+    private static final long NODE_ID = 3L;
 
     // 결정적 기준값 — seed 잔고 1,000,000 · margin-rate 0.40.
     // fill#1(10주 @ 10,000): 예약증거금 40,000 → 지급되어 잔고 -40,000, 나머지 60,000은 미수금.
@@ -76,7 +80,8 @@ class AccountFillReplayRecoveryIntegrationTest {
             AeronArchive aeronArchive = run1.getBean(AeronArchive.class);
 
             engine.publishBuy(1L, STOCK, new BigDecimal("10000"), 10, "r1");
-            long buyOrderId1 = awaitOrderId(engine, "r1");
+            awaitSeq(engine, 1L); // r1 예약 accept — 이 엔진의 첫 발급이라 counter=1
+            long buyOrderId1 = orderId(1);
 
             // 프로덕션 REMOTE 녹화(AccountFillIntakeConfig.accountFillRecordingSubscriptionId)는
             // 컨텍스트 기동 때 이미 시작돼 있다 — 실제로 image가 붙어야(=발행자가 나타나야) 카탈로그에
@@ -97,7 +102,8 @@ class AccountFillReplayRecoveryIntegrationTest {
                 receiver.close();
 
                 engine.publishBuy(1L, STOCK, new BigDecimal("9000"), 5, "r2");
-                long buyOrderId2 = awaitOrderId(engine, "r2");
+                awaitSeq(engine, 3L); // r2 예약 accept — 이 엔진의 두 번째 발급이라 counter=2
+                long buyOrderId2 = orderId(2);
 
                 // fill#2 — 수신기가 죽어 있어 라이브로는 못 받지만, 이 recording에는 남는다.
                 send(publication, new FilledTrade(9002L, STOCK, buyOrderId2, 1L, 102L, SELL_ACCOUNT_ID, 5, new BigDecimal("9000")));
@@ -185,17 +191,20 @@ class AccountFillReplayRecoveryIntegrationTest {
         return found[0];
     }
 
-    /** requestId에 orderId가 발급될(=accept 처리가 끝날) 때까지 기다린 뒤 그 orderId를 돌려준다. */
-    private long awaitOrderId(AccountEngine engine, String requestId) {
+    /** 계좌 seq가 기대값 이상이 될 때까지 기다린다(비동기 소비자 스레드 처리 대기). */
+    private void awaitSeq(AccountEngine engine, long expectedSeq) {
         long deadline = System.nanoTime() + TIMEOUT_NANOS;
-        Long orderId;
-        while ((orderId = engine.accountState(1L).orderIdFor(requestId)) == null) {
+        while (engine.accountState(1L).seq() < expectedSeq) {
             if (System.nanoTime() > deadline) {
-                throw new AssertionError("5초 안에 " + requestId + "의 orderId가 발급되지 않음");
+                throw new AssertionError("5초 안에 seq가 " + expectedSeq + "에 도달하지 않음");
             }
             Thread.yield();
         }
-        return orderId;
+    }
+
+    /** AccountOrderIdGenerator의 결정론 규칙((nodeId&lt;&lt;53)|counter)으로 orderId를 예측한다. */
+    private static long orderId(long counter) {
+        return (NODE_ID << 53) | counter;
     }
 
     /** 보유 수량이 기대치에 도달할(=체결 반영이 끝날) 때까지 기다린다. */

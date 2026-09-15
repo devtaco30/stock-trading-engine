@@ -154,7 +154,7 @@ class AccountEngineTest {
     // ---------- requestId 재전송 멱등 하네스 배선 (C5-1a) ----------
 
     @Test
-    @DisplayName("같은 requestId로 매수가 두 번 오면 둘째는 재예약 없이 onDuplicateRequest로 알리고 첫째와 같은 orderId를 돌려준다")
+    @DisplayName("같은 requestId로 매수가 두 번 오면 둘째는 재예약 없이 onDuplicateRequest로만 알린다")
     void 매수_같은requestId_재전송하면_중복통지() throws InterruptedException {
         prepare(2); // 매수 접수(1) + 재전송(1)
         engine.seed(1L, new BigDecimal("1000000"), new BigDecimal("1.00")); // buyLimit = 가용(재예약됐다면 둘째가 거부됐을 금액)
@@ -166,8 +166,9 @@ class AccountEngineTest {
 
         assertEquals(2, events.size());
         assertTrue(events.get(0).accepted());
+        // 재예약됐다면 가용 초과로 거부(accepted=false)가 나왔을 것 — duplicate로만 통지됐다는 게
+        // 재예약을 안 했다는 증거다.
         assertTrue(events.get(1).duplicate());
-        assertEquals(events.get(0).orderId(), events.get(1).orderId()); // 재전송은 새 orderId를 발급하지 않고 원래 값을 돌려준다(C5-2a)
     }
 
     @Test
@@ -186,25 +187,25 @@ class AccountEngineTest {
         assertEquals(4, events.size());
         assertTrue(events.get(2).accepted());
         assertTrue(events.get(3).duplicate());
-        assertEquals(events.get(2).orderId(), events.get(3).orderId());
     }
 
     @Test
-    @DisplayName("거부됐던 requestId가 재전송돼도 재처리하지 않고 같은 orderId로 onDuplicateRequest 알린다")
+    @DisplayName("거부됐던 requestId가 재전송돼도 재처리하지 않고 onDuplicateRequest로만 알린다")
     void 거부된requestId_재전송해도_재처리안함() throws InterruptedException {
         prepare(2); // 거부(1) + 재전송(1)
         engine.seed(1L, new BigDecimal("30000"), new BigDecimal("0.40")); // buyLimit = 75000
         engine.start();
 
-        engine.publishBuy(1L, STOCK, new BigDecimal("10000"), 10, "r1"); // 100000 > 75000 → 거부(orderId=1 발급·기억은 됨)
+        engine.publishBuy(1L, STOCK, new BigDecimal("10000"), 10, "r1"); // 100000 > 75000 → 거부(requestId는 기억됨)
         engine.publishBuy(1L, STOCK, new BigDecimal("10000"), 10, "r1"); // 같은 requestId 재전송
         awaitResults();
 
         assertEquals(2, events.size());
         assertFalse(events.get(0).accepted());
         assertEquals(RejectReason.INSUFFICIENT, events.get(0).reason());
+        // 재전송이 다시 검증됐다면 또 INSUFFICIENT 거부가 나왔을 것 — duplicate로만 통지됐다는 게
+        // 재처리를 안 했다는 증거다.
         assertTrue(events.get(1).duplicate());
-        assertEquals(events.get(0).orderId(), events.get(1).orderId()); // 거부된 주문도 orderId는 발급·기억되어 재전송 시 같은 값을 돌려준다(C5-2a)
     }
 
     // ---------- requestId 빈값 가드 (C5-1c) ----------
@@ -751,8 +752,8 @@ class AccountEngineTest {
         }
 
         @Override
-        public void onDuplicateRequest(long accountId, long orderId, String requestId) {
-            events.add(new Recorded(accountId, orderId, requestId, false, null, null, null, null, null, true));
+        public void onDuplicateRequest(long accountId, String requestId) {
+            events.add(new Recorded(accountId, 0L, requestId, false, null, null, null, null, null, true));
             latch.countDown();
         }
 

@@ -42,8 +42,11 @@ public interface AccountResultListener {
     /**
      * 매수·매도 접수 재전송을 통지한다 — 같은 requestId 가 이미 처리된 적이 있어(accept·reject
      * 무관) 재예약 없이 무시했다는 뜻. 클라이언트는 requestId 로 원래 결과를 폴링해서 본다.
+     *
+     * <p>orderId 는 안 싣는다(릭 수정 U2) — 재전송의 원래 orderId를 실제로 쓰는 소비자가 없었다
+     * (로그 한 줄뿐, 클라이언트 응답 경로로도 안 나감).</p>
      */
-    void onDuplicateRequest(long accountId, long orderId, String requestId);
+    void onDuplicateRequest(long accountId, String requestId);
 
     /**
      * 잔고·보유가 실제로 바뀌었을 때 통지한다(계좌 상태 영속/프로젝션 트랙 Unit 2) —

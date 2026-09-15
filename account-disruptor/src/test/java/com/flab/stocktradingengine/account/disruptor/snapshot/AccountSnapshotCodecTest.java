@@ -40,7 +40,7 @@ class AccountSnapshotCodecTest {
     }
 
     @Test
-    @DisplayName("여러 계좌·여러 예약·멱등 캐시·requestId맵이 뒤섞여도 정확히 왕복된다")
+    @DisplayName("여러 계좌·여러 예약·멱등 캐시·requestId 집합이 뒤섞여도 정확히 왕복된다")
     void 다중_계좌_다중_예약_왕복() {
         AccountStateSnapshot account1 = new AccountStateSnapshot(
             1L, 42L, new BigDecimal("1000000"), new BigDecimal("0.40"),
@@ -49,13 +49,13 @@ class AccountSnapshotCodecTest {
             Map.of(STOCK, 10),
             Set.of(9001L, 9002L),
             Set.of(8001L),
-            Map.of("r1", 10L, "r2", 20L),
+            Set.of("r1", "r2"),
             new BigDecimal("1500"));
 
         AccountStateSnapshot account2 = new AccountStateSnapshot(
             2L, 0L, new BigDecimal("500000"), new BigDecimal("1.00"),
             Map.of(), Map.of(), Map.of(),
-            Set.of(), Set.of(), Map.of(),
+            Set.of(), Set.of(), Set.of(),
             BigDecimal.ZERO);
 
         AccountSnapshot snapshot = new AccountSnapshot(Map.of(1L, account1, 2L, account2), 99L, 555L);
@@ -73,7 +73,7 @@ class AccountSnapshotCodecTest {
         assertEquals(account1.holdings(), decodedAccount1.holdings());
         assertEquals(account1.processedTradeIds(), decodedAccount1.processedTradeIds());
         assertEquals(account1.processedSettlementRefs(), decodedAccount1.processedSettlementRefs());
-        assertEquals(account1.requestIdToOrderId(), decodedAccount1.requestIdToOrderId());
+        assertEquals(account1.processedRequestIds(), decodedAccount1.processedRequestIds());
         assertEquals(account1.reservations().get(10L), decodedAccount1.reservations().get(10L));
         assertEquals(account1.sellReservations().get(20L), decodedAccount1.sellReservations().get(20L));
 

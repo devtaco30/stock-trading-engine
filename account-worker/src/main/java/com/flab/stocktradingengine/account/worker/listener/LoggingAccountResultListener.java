@@ -50,7 +50,7 @@ public class LoggingAccountResultListener implements AccountResultListener {
     }
 
     @Override
-    public void onDuplicateRequest(long accountId, long orderId, String requestId) {
-        log.warn("[계좌 워커] 요청 재전송 무시: accountId={} orderId={} requestId={}", accountId, orderId, requestId);
+    public void onDuplicateRequest(long accountId, String requestId) {
+        log.warn("[계좌 워커] 요청 재전송 무시: accountId={} requestId={}", accountId, requestId);
     }
 }

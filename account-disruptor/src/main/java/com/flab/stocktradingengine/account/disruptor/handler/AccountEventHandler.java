@@ -27,10 +27,11 @@ import com.flab.stocktradingengine.trading.entity.OrderSide;
  *
  * <h3>orderId 발급 (C5-2a, 2b-0)</h3>
  * <p>v2 핫패스엔 DB가 없어 orderId(주문 신원) 발급 위치를 계좌 워커(single-writer)로 뒀다.
- * requestId가 처음 등장하면 {@link #orderIdGenerator}(결정론적, 2b-0)로 orderId를 발급해
- * {@link AccountState}에 기억시키고, 재전송이면 기억해둔 orderId를 그대로 돌려준다 — accept·reject
- * 결과와 무관하게 발급 자체는 첫 등장에서 한 번뿐이다(리플레이 때도 카운터가 같은 횟수만 증가해
- * 같은 orderId가 나오는 이유).</p>
+ * requestId가 처음 등장하면(=재전송이 아니면, {@link AccountState#isDuplicateRequest}) {@link
+ * #orderIdGenerator}(결정론적, 2b-0)로 orderId를 발급한다 — 재전송이면 발급 없이 {@code
+ * onDuplicateRequest}로만 알린다(릭 수정 U2 — 재전송의 원래 orderId를 돌려주는 조회는 실제로 쓰는
+ * 소비자가 없어 뺐다). 발급 자체는 첫 등장에서 한 번뿐이다(리플레이 때도 카운터가 같은 횟수만
+ * 증가해 같은 orderId가 나오는 이유).</p>
  *
  * <h3>매칭으로 발신 (②-b)</h3>
  * <p>매수·매도가 accept됐을 때만(onAccepted·onSellAccepted 뒤) {@link #matchingOrderSender}로
@@ -84,7 +85,7 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
         String requestId = event.getRequestId();
 
         if (requestId == null || requestId.isBlank()) {
-            // 재전송 멱등키가 없으면 requestIdToOrderId에 빈 키가 들어가 서로 다른 주문의
+            // 재전송 멱등키가 없으면 processedRequestIds에 빈 키가 들어가 서로 다른 주문의
             // 둘째가 재전송으로 오인될 수 있다 — orderId를 발급하지 않고 검증 전에 거부한다.
             listener.onRejected(accountId, NO_ORDER_ID, requestId, RejectReason.INVALID_REQUEST_ID);
             return;
@@ -96,13 +97,11 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
             listener.onRejected(accountId, NO_ORDER_ID, requestId, RejectReason.ACCOUNT_NOT_FOUND);
             return;
         }
-        Long existingOrderId = state.orderIdFor(requestId);
-        if (existingOrderId != null) {
-            listener.onDuplicateRequest(accountId, existingOrderId, requestId);
+        if (state.isDuplicateRequest(requestId)) {
+            listener.onDuplicateRequest(accountId, requestId);
             return;
         }
         long orderId = orderIdGenerator.next();
-        state.rememberRequest(requestId, orderId);
 
         BigDecimal price = event.getPrice();
         if (event.getQuantity() <= 0 || price == null || price.signum() <= 0) {
@@ -133,13 +132,11 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
             listener.onRejected(accountId, NO_ORDER_ID, requestId, RejectReason.ACCOUNT_NOT_FOUND);
             return;
         }
-        Long existingOrderId = state.orderIdFor(requestId);
-        if (existingOrderId != null) {
-            listener.onDuplicateRequest(accountId, existingOrderId, requestId);
+        if (state.isDuplicateRequest(requestId)) {
+            listener.onDuplicateRequest(accountId, requestId);
             return;
         }
         long orderId = orderIdGenerator.next();
-        state.rememberRequest(requestId, orderId);
 
         // 예약(트리거)엔 price를 안 쓰지만, 매칭 전달용 필드라 여기서도 매수와 대칭으로 검증한다(②-a).
         BigDecimal price = event.getPrice();

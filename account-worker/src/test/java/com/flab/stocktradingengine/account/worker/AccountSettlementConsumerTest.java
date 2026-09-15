@@ -108,7 +108,7 @@ class AccountSettlementConsumerTest {
         }
 
         @Override
-        public void onDuplicateRequest(long accountId, long orderId, String requestId) {
+        public void onDuplicateRequest(long accountId, String requestId) {
         }
     }
 

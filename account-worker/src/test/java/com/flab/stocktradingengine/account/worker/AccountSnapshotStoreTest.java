@@ -43,7 +43,7 @@ class AccountSnapshotStoreTest {
         AccountStateSnapshot account = new AccountStateSnapshot(
             1L, 3L, new BigDecimal("1000000"), new BigDecimal("0.40"),
             Map.of(), Map.of(), Map.of("005930", 5), Set.of(), Set.of(),
-            Map.of("r1", 10L), BigDecimal.ZERO);
+            Set.of("r1"), BigDecimal.ZERO);
         AccountSnapshot snapshot = new AccountSnapshot(Map.of(1L, account), 3L, 555L);
 
         AccountSnapshotStore store = store();

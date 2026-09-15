@@ -49,7 +49,14 @@ public final class AccountState {
     // OrderBook.filledOrderTimestamps와 같은 방식(LinkedHashMap 삽입순서 + removeEldestEntry)으로 상한을 둔다.
     // LRU가 이 복구 겹침 상한(500)을 덮으므로, 밀려난 정산이 재도착해 멱등이 뚫릴 일은 없다.
     private final Set<Long> processedSettlementRefs;
-    private final Map<String, Long> requestIdToOrderId = new HashMap<>(); // requestId → 발급한 orderId, 재전송 멱등+orderId 조회용(C5-2a)
+    // ⚠️ 이 값은 근거 있는 상한이 아니라 릭(무한증가) 방지용 임시값이다. requestId 상한이 덮어야
+    // 하는 "재전송 창"은 클라 재시도 정책·결과 폴링 조회 API(fork5 ⑤ 후속)에 묶이는데 둘 다
+    // 미구현이라 지금 근거를 못 댄다. 폴링 조회 API 설계 시 그 창 크기로 재산정할 것.
+    static final int REQUEST_ID_RETENTION_LIMIT = 5000;
+    // 이미 처리한 매수·매도 접수 requestId, 재전송 멱등용(C5-1a). orderId는 안 담는다 — 재전송의
+    // 원래 orderId를 실제로 쓰는 소비자가 없었다(릭 수정 U2, 로그 한 줄뿐이고 클라 응답 경로로도
+    // 안 나감). settlementRefs와 같은 삽입순서 상한 Set(LRU bounded).
+    private final Set<String> processedRequestIds;
     private BigDecimal unpaid = BigDecimal.ZERO;                        // 미결제 미수금
     // 계좌별 단조 카운터(계좌 상태 영속/프로젝션 트랙 Unit 1). 상태를 실제로 바꾸는 연산마다
     // 1씩 증가한다 — 나중에 이 계좌의 full-state를 캡처해 발행할 때 stale-guard(더 큰 seq만
@@ -57,7 +64,7 @@ public final class AccountState {
     private long seq = 0L;
 
     public AccountState(long accountId, BigDecimal balance, BigDecimal marginRate) {
-        this(accountId, balance, marginRate, SETTLEMENT_RETENTION_LIMIT);
+        this(accountId, balance, marginRate, SETTLEMENT_RETENTION_LIMIT, REQUEST_ID_RETENTION_LIMIT);
     }
 
     /** 초기 보유(종목코드 → 수량)를 함께 시드한다. DB 없이 기존 보유를 미리 넣을 때 쓴다. */
@@ -68,10 +75,16 @@ public final class AccountState {
 
     /** 테스트 전용. settlementRetentionLimit을 작게 지정해 정산 멱등 캐시의 LRU 퇴출 동작을 검증할 때 쓴다. */
     AccountState(long accountId, BigDecimal balance, BigDecimal marginRate, int settlementRetentionLimit) {
+        this(accountId, balance, marginRate, settlementRetentionLimit, REQUEST_ID_RETENTION_LIMIT);
+    }
+
+    /** 테스트 전용. settlement·requestId 멱등 캐시 상한을 모두 작게 지정해 LRU 퇴출 동작을 검증할 때 쓴다. */
+    AccountState(long accountId, BigDecimal balance, BigDecimal marginRate, int settlementRetentionLimit, int requestIdRetentionLimit) {
         this.accountId = accountId;
         this.balance = balance;
         this.marginRate = marginRate;
         this.processedSettlementRefs = boundedSet(settlementRetentionLimit);
+        this.processedRequestIds = boundedSet(requestIdRetentionLimit);
     }
 
     /**
@@ -81,13 +94,13 @@ public final class AccountState {
      * 만든 것과 그대로 바꿔 끼운다.
      */
     public AccountState(AccountStateSnapshot snapshot) {
-        this(snapshot.accountId(), snapshot.balance(), snapshot.marginRate(), SETTLEMENT_RETENTION_LIMIT);
+        this(snapshot.accountId(), snapshot.balance(), snapshot.marginRate(), SETTLEMENT_RETENTION_LIMIT, REQUEST_ID_RETENTION_LIMIT);
         this.unpaid = snapshot.unpaid();
         this.seq = snapshot.seq();
         holdings.putAll(snapshot.holdings());
         processedTradeIds.addAll(snapshot.processedTradeIds());
         processedSettlementRefs.addAll(snapshot.processedSettlementRefs());
-        requestIdToOrderId.putAll(snapshot.requestIdToOrderId());
+        processedRequestIds.addAll(snapshot.processedRequestIds());
         snapshot.reservations().forEach((orderId, r) ->
             reservations.put(orderId, new Reservation(r.price(), r.remainingQuantity())));
         snapshot.sellReservations().forEach((orderId, r) ->
@@ -95,10 +108,10 @@ public final class AccountState {
     }
 
     /** 삽입순서 상한 집합(LRU bounded) — OrderBook.filledOrderTimestamps와 같은 패턴. */
-    private static Set<Long> boundedSet(int limit) {
-        Map<Long, Boolean> boundedMap = new LinkedHashMap<>(limit, 0.75f, false) {
+    private static <T> Set<T> boundedSet(int limit) {
+        Map<T, Boolean> boundedMap = new LinkedHashMap<>(limit, 0.75f, false) {
             @Override
-            protected boolean removeEldestEntry(Map.Entry<Long, Boolean> eldest) {
+            protected boolean removeEldestEntry(Map.Entry<T, Boolean> eldest) {
                 return size() > limit;
             }
         };
@@ -118,31 +131,20 @@ public final class AccountState {
             accountId, seq, balance, marginRate,
             reservationSnapshots, sellReservationSnapshots,
             Map.copyOf(holdings), Set.copyOf(processedTradeIds), Set.copyOf(processedSettlementRefs),
-            Map.copyOf(requestIdToOrderId), unpaid);
+            Set.copyOf(processedRequestIds), unpaid);
     }
 
     /**
-     * 이 requestId에 이전에 발급한 orderId를 조회한다(C5-2a).
+     * 이 requestId가 재전송인지 판정하면서, 동시에 처음 보는 것이면 장부에 기록한다(C5-1a).
      *
-     * <p>매수·매도 접수(handleBuy·handleSell) 맨 앞에서 호출한다 — null이면 처음 보는
-     * requestId라는 뜻이라 호출부가 새 orderId를 발급해 {@link #rememberRequest}로 기억시킨다.
-     * null이 아니면(재전송) 이 값을 그대로 onDuplicateRequest에 실어 돌려주고 재예약하지 않는다
-     * (클라이언트는 requestId로 원래 결과를 폴링해서 본다).</p>
+     * <p>매수·매도 접수(handleBuy·handleSell) 맨 앞에서 호출한다 — {@link Set#add}가 이미 있으면
+     * false를 돌려주는 것을 그대로 이용해 조회와 기록을 한 번에 한다. accept·reject 결과와
+     * 무관하게 첫 등장에서 한 번만 장부에 남는다 — 거부된 주문도 재전송이면 재예약하지 않는다.</p>
      *
-     * @return 처음 보는 requestId면 null, 이미 발급한 적 있으면 그 orderId
+     * @return 이미 처리한 적 있는(재전송) requestId면 true, 처음 보는 것이면 false
      */
-    public Long orderIdFor(String requestId) {
-        return requestIdToOrderId.get(requestId);
-    }
-
-    /**
-     * 이 requestId에 새로 발급한 orderId를 기억한다(첫 등장 마킹, C5-2a).
-     *
-     * <p>accept·reject 결과와 무관하게 첫 등장에서 한 번만 호출한다 — 거부된 주문도 재전송 시
-     * 같은 orderId를 돌려줘야 하므로 기억은 검증 전에 이뤄진다.</p>
-     */
-    public void rememberRequest(String requestId, long orderId) {
-        requestIdToOrderId.put(requestId, orderId);
+    public boolean isDuplicateRequest(String requestId) {
+        return !processedRequestIds.add(requestId);
     }
 
     /**

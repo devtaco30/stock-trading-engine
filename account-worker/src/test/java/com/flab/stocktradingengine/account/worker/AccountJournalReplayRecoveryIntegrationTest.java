@@ -36,20 +36,22 @@ class AccountJournalReplayRecoveryIntegrationTest {
     private static final BigDecimal EXPECTED_BALANCE = new BigDecimal("960000");
     private static final BigDecimal EXPECTED_UNPAID = new BigDecimal("60000");
     private static final int EXPECTED_HOLDING = 10;
+    // orderIdFor 조회를 뺀 뒤(릭 수정 U2), AccountOrderIdGenerator의 결정론 규칙((nodeId<<53)|counter,
+    // account-worker snowflake.node-id=3 기본값)으로 publishBuyFill에 넘길 orderId를 예측한다.
+    private static final long NODE_ID = 3L;
 
     @TempDir
     private Path archiveDir;
 
     @Test
     void 재기동하면_저널을_리플레이해서_잔고와_dedup을_복원한다() {
-        long buyOrderId;
-
         ConfigurableApplicationContext run1 = launch();
         try {
             AccountEngine engine = run1.getBean(AccountEngine.class);
 
             engine.publishBuy(1L, STOCK, new BigDecimal("10000"), 10, "r1");
-            buyOrderId = awaitOrderId(engine, "r1");
+            awaitSeq(engine, 1L); // r1 예약 accept — 이 엔진의 첫 발급이라 counter=1
+            long buyOrderId = orderId(1);
 
             engine.publishBuyFill(9001L, buyOrderId, 1L, STOCK, new BigDecimal("10000"), 10);
             // 체결이 처리(→저널에 durable 기록)될 때까지만 기다린다. 잔고·미수금을 여기서 라이브로
@@ -64,16 +66,19 @@ class AccountJournalReplayRecoveryIntegrationTest {
             AccountEngine engine = run2.getBean(AccountEngine.class);
             AccountState state = engine.accountState(1L);
 
-            assertThat(state.orderIdFor("r1")).as("r1의 orderId가 재시작 뒤에도 재현돼야 한다").isEqualTo(buyOrderId);
+            assertThat(state.isDuplicateRequest("r1")).as("r1이 재시작 뒤에도 재전송 멱등 캐시에 남아있어야 한다").isTrue();
             assertThat(state.balance().compareTo(EXPECTED_BALANCE)).as("잔고가 복원돼야 한다").isZero();
             assertThat(state.reservedMargin().compareTo(BigDecimal.ZERO)).as("예약증거금이 복원돼야 한다").isZero();
             assertThat(state.unpaid().compareTo(EXPECTED_UNPAID)).as("미수금이 복원돼야 한다").isZero();
             assertThat(state.holding(STOCK)).as("보유 수량이 복원돼야 한다").isEqualTo(EXPECTED_HOLDING);
 
-            // 발급기 이월: 새 requestId는 리플레이가 진행시킨 카운터 다음 값을 받아야 한다(재시작 전과 안 겹침).
+            // 재시작 뒤에도 새 requestId가 정상 접수되는지 확인한다. 발급기 카운터가 리플레이로
+            // 정확히 이어지는지(옛 값과 안 겹치는지)는 리스너로 orderId를 직접 관측할 수 있는
+            // AccountEngineRecoveryTest.복구_뒤_신규_주문은_카운터를_이어받는다에서 이미 검증한다 —
+            // 이 블랙박스 테스트엔 orderId를 관측할 통로가 없다(릭 수정 U2로 조회 API 자체가 빠짐).
+            long seqBeforeR2 = state.seq();
             engine.publishBuy(1L, STOCK, new BigDecimal("10000"), 5, "r2");
-            long newOrderId = awaitOrderId(engine, "r2");
-            assertThat(newOrderId).as("새 주문 orderId는 이전 실행의 orderId와 달라야 한다").isNotEqualTo(buyOrderId);
+            awaitSeq(engine, seqBeforeR2 + 1);
         } finally {
             run2.close();
         }
@@ -90,17 +95,20 @@ class AccountJournalReplayRecoveryIntegrationTest {
             .run();
     }
 
-    /** requestId에 orderId가 발급될(=accept 처리가 끝날) 때까지 기다린다. */
-    private long awaitOrderId(AccountEngine engine, String requestId) {
+    /** 계좌 seq가 기대값 이상이 될 때까지 기다린다(비동기 소비자 스레드 처리 대기). */
+    private void awaitSeq(AccountEngine engine, long expectedSeq) {
         long deadline = System.nanoTime() + TIMEOUT_NANOS;
-        Long orderId;
-        while ((orderId = engine.accountState(1L).orderIdFor(requestId)) == null) {
+        while (engine.accountState(1L).seq() < expectedSeq) {
             if (System.nanoTime() > deadline) {
-                throw new AssertionError("5초 안에 " + requestId + "의 orderId가 발급되지 않음");
+                throw new AssertionError("5초 안에 seq가 " + expectedSeq + "에 도달하지 않음");
             }
             Thread.yield();
         }
-        return orderId;
+    }
+
+    /** AccountOrderIdGenerator의 결정론 규칙((nodeId&lt;&lt;53)|counter)으로 orderId를 예측한다. */
+    private static long orderId(long counter) {
+        return (NODE_ID << 53) | counter;
     }
 
     /** 보유 수량이 기대치에 도달할(=체결 반영이 끝날) 때까지 기다린다. */

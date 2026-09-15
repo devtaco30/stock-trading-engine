@@ -111,8 +111,7 @@ class AeronAccountEndToEndTest {
             assertTrue(latch.await(5, TimeUnit.SECONDS), "5초 안에 결과 2개가 도착해야 한다");
             assertEquals(2, events.size());
             assertTrue(events.get(0).accepted());
-            assertTrue(events.get(1).duplicate());
-            assertEquals(events.get(0).orderId(), events.get(1).orderId()); // 재전송도 같은 orderId(C5-2a)
+            assertTrue(events.get(1).duplicate()); // 재전송은 재예약 없이 duplicate로만 통지된다(orderId는 안 실음, 릭 수정 U2)
         } finally {
             publication.close();
             receiver.close();
@@ -195,8 +194,8 @@ class AeronAccountEndToEndTest {
         }
 
         @Override
-        public void onDuplicateRequest(long accountId, long orderId, String requestId) {
-            events.add(new Recorded(false, orderId, null, true));
+        public void onDuplicateRequest(long accountId, String requestId) {
+            events.add(new Recorded(false, 0L, null, true));
             latch.countDown();
         }
     }

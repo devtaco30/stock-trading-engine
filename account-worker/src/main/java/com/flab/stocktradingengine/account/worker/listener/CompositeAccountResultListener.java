@@ -53,8 +53,8 @@ public class CompositeAccountResultListener implements AccountResultListener {
     }
 
     @Override
-    public void onDuplicateRequest(long accountId, long orderId, String requestId) {
-        delegates.forEach(delegate -> delegate.onDuplicateRequest(accountId, orderId, requestId));
+    public void onDuplicateRequest(long accountId, String requestId) {
+        delegates.forEach(delegate -> delegate.onDuplicateRequest(accountId, requestId));
     }
 
     @Override

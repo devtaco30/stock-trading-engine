@@ -2,7 +2,6 @@ package com.flab.stocktradingengine.account.disruptor.domain;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -84,23 +83,36 @@ class AccountStateTest {
         assertFalse(overLimit.tryReserve(20L, new BigDecimal("100001"), 1).accepted());
     }
 
-    // ---------- requestId 재전송 멱등 + orderId 발급 조회 (C5-1a, C5-2a) ----------
+    // ---------- requestId 재전송 멱등 (C5-1a, 릭 수정 U2) ----------
 
     @Test
-    @DisplayName("처음 보는 requestId면 null을 돌려준다")
-    void 처음보는requestId_null() {
+    @DisplayName("처음 보는 requestId는 재전송이 아니다(false)")
+    void 처음보는requestId_재전송아님() {
         AccountState state = new AccountState(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
 
-        assertNull(state.orderIdFor("r1"));
+        assertFalse(state.isDuplicateRequest("r1"));
     }
 
     @Test
-    @DisplayName("기억한 requestId는 발급했던 orderId를 그대로 돌려준다")
-    void 기억한requestId_발급했던orderId_반환() {
+    @DisplayName("한 번 본 requestId가 다시 오면 재전송이다(true)")
+    void 본적있는requestId_재도착하면_재전송() {
         AccountState state = new AccountState(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
-        state.rememberRequest("r1", 42L);
+        state.isDuplicateRequest("r1"); // 첫 등장 — 이 호출 자체가 기록한다
 
-        assertEquals(42L, state.orderIdFor("r1"));
+        assertTrue(state.isDuplicateRequest("r1"));
+    }
+
+    @Test
+    @DisplayName("requestId 멱등 캐시가 상한을 넘으면 가장 오래된 requestId가 밀려나 재도착 시 처음 보는 것으로 취급한다")
+    void requestId멱등캐시_상한초과하면_오래된것밀려나_처음보는것으로취급() {
+        AccountState state = new AccountState(1L, new BigDecimal("1000000"), new BigDecimal("0.40"), 500, 2); // 테스트 전용: requestId 상한 2
+
+        state.isDuplicateRequest("r1");
+        state.isDuplicateRequest("r2");
+        state.isDuplicateRequest("r3"); // 상한 초과 → 가장 오래된 r1이 밀려남
+
+        assertFalse(state.isDuplicateRequest("r1"), "용량 초과로 밀려난 requestId는 재도착 시 처음 보는 것으로 취급되어야 한다");
+        assertTrue(state.isDuplicateRequest("r3"), "아직 용량 안에 남아있는 requestId는 여전히 재전송으로 판정되어야 한다");
     }
 
     // ---------- 체결 반영 (B3a, 전량) ----------
@@ -434,14 +446,14 @@ class AccountStateTest {
     // ---------- 스냅샷 복원 (2d-2a) ----------
 
     @Test
-    @DisplayName("toSnapshot으로 찍고 스냅샷 생성자로 복원하면 잔고·예약·보유·미수금·멱등 캐시·requestId맵이 원본과 같다")
+    @DisplayName("toSnapshot으로 찍고 스냅샷 생성자로 복원하면 잔고·예약·보유·미수금·멱등 캐시가 원본과 같다")
     void 스냅샷_왕복하면_모든_필드가_원본과_같다() {
         AccountState original = new AccountState(1L, new BigDecimal("1000000"), new BigDecimal("0.40"), Map.of(STOCK, 10));
         original.tryReserve(1L, new BigDecimal("10000"), 10); // 매수 예약(부분체결로 잔량 남김)
         original.applyBuyFill(9001L, 1L, STOCK, new BigDecimal("10000"), 4); // 미수금 생성 + 예약 잔량 6
         original.trySellReserve(2L, STOCK, 5); // 매도 예약(부분체결로 잔량 남김)
         original.applySellFill(9002L, 2L, STOCK, 2); // 매도 예약 잔량 3
-        original.rememberRequest("r1", 1L);
+        original.isDuplicateRequest("r1"); // 첫 등장 기록
 
         AccountStateSnapshot snapshot = original.toSnapshot();
         AccountState restored = new AccountState(snapshot);
@@ -451,7 +463,7 @@ class AccountStateTest {
         assertEquals(0, original.reservedMargin().compareTo(restored.reservedMargin()));
         assertEquals(original.holding(STOCK), restored.holding(STOCK));
         assertEquals(original.reservedSellQuantity(STOCK), restored.reservedSellQuantity(STOCK));
-        assertEquals(original.orderIdFor("r1"), restored.orderIdFor("r1"));
+        assertTrue(restored.isDuplicateRequest("r1"), "복원된 상태에도 이미 본 requestId가 멱등 캐시로 남아있어야 한다");
 
         // 멱등 캐시 복원 확인: 같은 tradeId·settlementRef를 다시 반영하면 무시(false)돼야 한다.
         BuyFillResult replayedFill = restored.applyBuyFill(9001L, 1L, STOCK, new BigDecimal("10000"), 4);

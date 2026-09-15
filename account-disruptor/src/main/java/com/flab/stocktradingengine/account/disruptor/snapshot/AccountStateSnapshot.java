@@ -28,7 +28,7 @@ public record AccountStateSnapshot(
     Map<String, Integer> holdings,
     Set<Long> processedTradeIds,
     Set<Long> processedSettlementRefs,
-    Map<String, Long> requestIdToOrderId,
+    Set<String> processedRequestIds,
     BigDecimal unpaid
 ) {
 }

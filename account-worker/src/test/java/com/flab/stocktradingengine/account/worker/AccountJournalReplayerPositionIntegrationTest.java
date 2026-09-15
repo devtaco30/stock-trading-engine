@@ -58,7 +58,7 @@ class AccountJournalReplayerPositionIntegrationTest {
 
             engine.publishBuy(1L, STOCK, new BigDecimal("9000"), 5, "r2");
             engine.publishBuy(1L, STOCK, new BigDecimal("8000"), 3, "r3");
-            awaitOrderId(engine, "r3");
+            awaitSeq(engine, 3L); // r1·r2·r3 예약 accept 셋 다 반영될 때까지(=r3 접수 완료)
         } finally {
             run1.close(); // 녹화를 멈춰 stopPosition을 확정 짓는다
         }
@@ -131,11 +131,12 @@ class AccountJournalReplayerPositionIntegrationTest {
         return position;
     }
 
-    private void awaitOrderId(AccountEngine engine, String requestId) {
+    /** 계좌 seq가 기대값 이상이 될 때까지 기다린다(비동기 소비자 스레드 처리 대기). */
+    private void awaitSeq(AccountEngine engine, long expectedSeq) {
         long deadline = System.nanoTime() + TIMEOUT_NANOS;
-        while (engine.accountState(1L).orderIdFor(requestId) == null) {
+        while (engine.accountState(1L).seq() < expectedSeq) {
             if (System.nanoTime() > deadline) {
-                throw new AssertionError("5초 안에 " + requestId + "의 orderId가 발급되지 않음");
+                throw new AssertionError("5초 안에 seq가 " + expectedSeq + "에 도달하지 않음");
             }
             Thread.yield();
         }

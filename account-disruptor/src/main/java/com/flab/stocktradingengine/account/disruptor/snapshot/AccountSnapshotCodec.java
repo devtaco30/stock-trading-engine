@@ -29,7 +29,7 @@ import org.agrona.concurrent.UnsafeBuffer;
  *  holdingCount:4, (stockCode:4+N, quantity:4) × N,
  *  processedTradeIdCount:4, (tradeId:8) × N,
  *  processedSettlementRefCount:4, (settlementRef:8) × N,
- *  requestIdCount:4, (requestId:4+N, orderId:8) × N) × accountCount
+ *  processedRequestIdCount:4, (requestId:4+N) × N) × accountCount
  * </pre>
  */
 public final class AccountSnapshotCodec {
@@ -115,12 +115,10 @@ public final class AccountSnapshotCodec {
             position += Long.BYTES;
         }
 
-        buffer.putInt(position, account.requestIdToOrderId().size());
+        buffer.putInt(position, account.processedRequestIds().size());
         position += Integer.BYTES;
-        for (Map.Entry<String, Long> entry : account.requestIdToOrderId().entrySet()) {
-            position += buffer.putStringAscii(position, entry.getKey());
-            buffer.putLong(position, entry.getValue());
-            position += Long.BYTES;
+        for (String requestId : account.processedRequestIds()) {
+            position += buffer.putStringAscii(position, requestId);
         }
 
         return position;
@@ -225,20 +223,18 @@ public final class AccountSnapshotCodec {
             position += Long.BYTES;
         }
 
-        int requestIdCount = buffer.getInt(position);
+        int processedRequestIdCount = buffer.getInt(position);
         position += Integer.BYTES;
-        Map<String, Long> requestIdToOrderId = new HashMap<>();
-        for (int i = 0; i < requestIdCount; i++) {
+        Set<String> processedRequestIds = new HashSet<>();
+        for (int i = 0; i < processedRequestIdCount; i++) {
             String requestId = buffer.getStringAscii(position);
             position += Integer.BYTES + requestId.length();
-            long orderId = buffer.getLong(position);
-            position += Long.BYTES;
-            requestIdToOrderId.put(requestId, orderId);
+            processedRequestIds.add(requestId);
         }
 
         AccountStateSnapshot account = new AccountStateSnapshot(accountId, seq, balance, marginRate,
             reservations, sellReservations, holdings, processedTradeIds, processedSettlementRefs,
-            requestIdToOrderId, unpaid);
+            processedRequestIds, unpaid);
         return new DecodeResult<>(account, position);
     }
 

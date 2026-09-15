@@ -53,6 +53,10 @@ class CrossShardFillFanoutIntegrationTest {
     private static final BigDecimal SEED_BALANCE = new BigDecimal("1000000");
     private static final BigDecimal MARGIN_RATE = new BigDecimal("0.40");
     private static final int SEEDED_HOLDING = 10;
+    // orderIdFor 조회를 뺀 뒤(릭 수정 U2), AccountOrderIdGenerator의 결정론 규칙((nodeId<<53)|counter,
+    // account-worker snowflake.node-id=3 기본값)으로 orderId를 예측한다 — 두 샤드 각각 독립된
+    // 엔진·발급기 인스턴스라 이 테스트 안에서는 둘 다 첫 발급(counter=1)이다.
+    private static final long NODE_ID = 3L;
 
     // 결정적 기준값 — seed 잔고 1,000,000 · margin-rate 0.40, 4주 @ 10,000(=40,000).
     // 예약증거금 40,000*0.40=16,000 → 지급되어 잔고 -16,000, 나머지 24,000은 미수금.
@@ -92,9 +96,11 @@ class CrossShardFillFanoutIntegrationTest {
                     AccountEngine engineB = shardB.getBean(AccountEngine.class);
 
                     engineA.publishBuy(BUY_ACCOUNT_ID, STOCK, TRADE_PRICE, TRADE_QUANTITY, "rb");
-                    long buyOrderId = awaitOrderId(engineA, BUY_ACCOUNT_ID, "rb");
+                    awaitSeq(engineA, BUY_ACCOUNT_ID, 1L); // rb 예약 accept — 이 엔진의 첫 발급이라 counter=1
+                    long buyOrderId = orderId(1);
                     engineB.publishSell(SELL_ACCOUNT_ID, STOCK, TRADE_PRICE, TRADE_QUANTITY, "rs");
-                    long sellOrderId = awaitOrderId(engineB, SELL_ACCOUNT_ID, "rs");
+                    awaitSeq(engineB, SELL_ACCOUNT_ID, 1L); // rs 예약 accept — 이 엔진의 첫 발급이라 counter=1
+                    long sellOrderId = orderId(1);
 
                     Publication pubA = matchingAeron.addPublication(
                         "aeron:udp?endpoint=localhost:" + fillPortA, AeronStreamIds.FILL);
@@ -187,17 +193,20 @@ class CrossShardFillFanoutIntegrationTest {
         }
     }
 
-    /** requestId에 orderId가 발급될(=accept 처리가 끝날) 때까지 기다린 뒤 그 orderId를 돌려준다. */
-    private long awaitOrderId(AccountEngine engine, long accountId, String requestId) {
+    /** 계좌 seq가 기대값 이상이 될 때까지 기다린다(비동기 소비자 스레드 처리 대기). */
+    private void awaitSeq(AccountEngine engine, long accountId, long expectedSeq) {
         long deadline = System.nanoTime() + TIMEOUT_NANOS;
-        Long orderId;
-        while ((orderId = engine.accountState(accountId).orderIdFor(requestId)) == null) {
+        while (engine.accountState(accountId).seq() < expectedSeq) {
             if (System.nanoTime() > deadline) {
-                throw new AssertionError("5초 안에 " + requestId + "의 orderId가 발급되지 않음");
+                throw new AssertionError("5초 안에 계좌 " + accountId + "의 seq가 " + expectedSeq + "에 도달하지 않음");
             }
             Thread.yield();
         }
-        return orderId;
+    }
+
+    /** AccountOrderIdGenerator의 결정론 규칙((nodeId&lt;&lt;53)|counter)으로 orderId를 예측한다. */
+    private static long orderId(long counter) {
+        return (NODE_ID << 53) | counter;
     }
 
     /** 보유 수량이 기대치에 도달할(=체결 반영이 끝날) 때까지 기다린다. */
