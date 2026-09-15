@@ -24,3 +24,4 @@ spring:
         spring.json.trusted.packages: "com.flab.stocktradingengine.kafka.event"
     listener:
       ack-mode: manual_immediate
+      type: batch # 배치 coalesce(U3-ii) — 리스너가 List<AccountStateEvent>로 한 poll 배치를 통째로 받는다

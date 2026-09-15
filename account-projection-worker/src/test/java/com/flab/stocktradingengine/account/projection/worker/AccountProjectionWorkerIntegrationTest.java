@@ -84,6 +84,25 @@ class AccountProjectionWorkerIntegrationTest {
     }
 
     @Test
+    void 같은_계좌_이벤트_여러개가_한_배치로_묶여도_최신_seq만_반영된다() throws Exception {
+        long accountId = System.nanoTime();
+        // 컨슈머가 폴링하기 전에 연속으로 발행 — 실제 poll 배치 하나로 묶여 소비될 가능성이 높다
+        // (배치로 안 묶여도 각 이벤트가 순서대로 stale-guard를 통과해 결국 같은 최종 상태가 된다 —
+        // 이 테스트는 "배치여도 결과가 맞다"를 보는 것이지, 배치 크기를 직접 관측하지 않는다).
+        for (long seq = 1; seq <= 5; seq++) {
+            publish(new AccountStateEvent(accountId, BigDecimal.valueOf(seq * 100), Map.of(STOCK, (int) seq), seq, 100L * seq));
+        }
+
+        AccountProjection projection = awaitProjection(accountId, 5L);
+
+        assertThat(projection.getSeq()).isEqualTo(5L);
+        assertThat(projection.getBalance()).isEqualByComparingTo("500");
+        List<AccountProjectionHolding> holdings = accountProjectionHoldingRepository.findByAccountId(accountId);
+        assertThat(holdings).hasSize(1);
+        assertThat(holdings.get(0).getQuantity()).isEqualTo(5);
+    }
+
+    @Test
     void 같은_이벤트가_재도착해도_멱등하게_무시한다() throws Exception {
         long accountId = System.nanoTime();
         AccountStateEvent event = new AccountStateEvent(accountId, new BigDecimal("900000"), Map.of(STOCK, 10), 1L, 123L);

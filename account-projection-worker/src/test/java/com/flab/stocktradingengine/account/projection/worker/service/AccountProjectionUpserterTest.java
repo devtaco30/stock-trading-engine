@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -102,5 +103,42 @@ class AccountProjectionUpserterTest {
         ArgumentCaptor<List<AccountProjectionHolding>> holdingsCaptor = ArgumentCaptor.forClass(List.class);
         verify(holdingRepository).saveAll(holdingsCaptor.capture());
         assertThat(holdingsCaptor.getValue()).isEmpty();
+    }
+
+    // ---------- 배치 coalesce (계좌 상태 영속/프로젝션 트랙 U3-ii) ----------
+
+    @Test
+    void 같은_계좌_이벤트가_배치에_여러개면_최신_seq_하나로_합쳐_한_번만_반영한다() {
+        when(accountProjectionRepository.findById(1L)).thenReturn(Optional.empty());
+        AccountStateEvent seq1 = new AccountStateEvent(1L, new BigDecimal("100"), Map.of(STOCK, 1), 1L, 100L);
+        AccountStateEvent seq3 = new AccountStateEvent(1L, new BigDecimal("900000"), Map.of(STOCK, 10), 3L, 300L);
+        AccountStateEvent seq2 = new AccountStateEvent(1L, new BigDecimal("500000"), Map.of(STOCK, 5), 2L, 200L);
+
+        upserter.upsertBatch(List.of(seq1, seq3, seq2)); // 순서 섞여 들어와도 최신(seq=3)만 반영
+
+        verify(accountProjectionRepository, times(1)).save(any());
+        ArgumentCaptor<AccountProjection> captor = ArgumentCaptor.forClass(AccountProjection.class);
+        verify(accountProjectionRepository).save(captor.capture());
+        assertThat(captor.getValue().getSeq()).isEqualTo(3L);
+        assertThat(captor.getValue().getBalance()).isEqualByComparingTo("900000");
+
+        verify(holdingRepository, times(1)).deleteByAccountId(1L);
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<AccountProjectionHolding>> holdingsCaptor = ArgumentCaptor.forClass(List.class);
+        verify(holdingRepository, times(1)).saveAll(holdingsCaptor.capture());
+        assertThat(holdingsCaptor.getValue()).hasSize(1);
+        assertThat(holdingsCaptor.getValue().get(0).getQuantity()).isEqualTo(10); // seq=3 이벤트의 보유
+    }
+
+    @Test
+    void 서로_다른_계좌_이벤트는_배치_안에서도_각각_반영한다() {
+        when(accountProjectionRepository.findById(1L)).thenReturn(Optional.empty());
+        when(accountProjectionRepository.findById(2L)).thenReturn(Optional.empty());
+        AccountStateEvent event1 = new AccountStateEvent(1L, new BigDecimal("100"), Map.of(), 1L, 100L);
+        AccountStateEvent event2 = new AccountStateEvent(2L, new BigDecimal("200"), Map.of(), 1L, 100L);
+
+        upserter.upsertBatch(List.of(event1, event2));
+
+        verify(accountProjectionRepository, times(2)).save(any());
     }
 }
