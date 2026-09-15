@@ -18,6 +18,12 @@ import com.flab.stocktradingengine.codec.AccountJournalEntry;
  * <h3>슬롯을 비우지 않는 이유</h3>
  * <p>이 핸들러는 마지막 소비자가 아니다. 뒤이어 비즈니스 핸들러가 같은 슬롯을 읽어야 하므로
  * 여기서 {@code clear()}를 호출하지 않는다. 슬롯 비우기는 마지막 소비자(비즈니스 핸들러)가 맡는다.</p>
+ *
+ * <h3>기록 후 저널 위치를 슬롯에 남긴다 (1-2)</h3>
+ * <p>기록이 끝난 시점의 {@link AccountJournal#position()}을 이벤트 슬롯에 써 넣는다. 비즈니스
+ * 핸들러는 이 값을 읽어 "소비자가 실제로 처리한 시점의 저널 위치"를 기억한다({@code
+ * AccountEventHandler#lastJournaledPosition()}) — 호스트 스레드가 {@code journal.position()}을
+ * 직접 읽으면 저널러가 이미 앞서 나간(비즈니스 핸들러는 아직 못 본) 위치를 가리킬 수 있다.</p>
  */
 public class AccountJournalEventHandler implements EventHandler<AccountEvent> {
 
@@ -32,5 +38,6 @@ public class AccountJournalEventHandler implements EventHandler<AccountEvent> {
         journal.append(new AccountJournalEntry(
             event.getType(), event.getOrderId(), event.getAccountId(), event.getStockCode(),
             event.getPrice(), event.getQuantity(), event.getRequestId(), event.getTradeId()));
+        event.setJournaledPosition(journal.position());
     }
 }

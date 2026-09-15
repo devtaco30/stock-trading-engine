@@ -49,6 +49,11 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
     private final MatchingOrderSender matchingOrderSender;
     private final AccountResultListener listener;
 
+    // 소비자 스레드(이 핸들러)만 쓰고, 호스트 스레드(그레이스풀 스톱)·1-3의 스냅샷 쓰기 스레드가
+    // 읽는다 — 다른 스레드가 읽으므로 volatile.
+    private volatile long lastAppliedFillPosition;
+    private volatile long lastJournaledPosition;
+
     public AccountEventHandler(Map<Long, AccountState> accounts, AccountOrderIdGenerator orderIdGenerator,
                                MatchingOrderSender matchingOrderSender, AccountResultListener listener) {
         this.accounts = accounts;
@@ -57,8 +62,19 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
         this.listener = listener;
     }
 
+    /** 소비자가 실제로 처리한 시점의 체결 수신 위치(1-2) — {@code AccountFillReceiver.consumedPosition()}과 달리 아직 처리 안 된 체결은 반영하지 않는다. */
+    public long lastAppliedFillPosition() {
+        return lastAppliedFillPosition;
+    }
+
+    /** 소비자가 실제로 처리한 시점의 저널 위치(1-2). */
+    public long lastJournaledPosition() {
+        return lastJournaledPosition;
+    }
+
     @Override
     public void onEvent(AccountEvent event, long sequence, boolean endOfBatch) {
+        lastJournaledPosition = event.getJournaledPosition();
         try {
             switch (event.getType()) {
                 case BUY -> handleBuy(event);
@@ -158,6 +174,7 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
         long accountId = event.getAccountId();
         long orderId = event.getOrderId();
         long tradeId = event.getTradeId();
+        lastAppliedFillPosition = event.getSourcePosition();
 
         AccountState state = accounts.get(accountId);
         if (state == null) {
@@ -178,6 +195,7 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
         long accountId = event.getAccountId();
         long orderId = event.getOrderId();
         long tradeId = event.getTradeId();
+        lastAppliedFillPosition = event.getSourcePosition();
 
         AccountState state = accounts.get(accountId);
         if (state == null) {
