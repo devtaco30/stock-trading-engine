@@ -23,6 +23,7 @@ import com.flab.stocktradingengine.codec.AccountEventType;
 import com.flab.stocktradingengine.codec.AccountJournalEntry;
 import com.flab.stocktradingengine.codec.FilledTrade;
 import com.flab.stocktradingengine.support.SnowflakeNodeIdResolver;
+import com.flab.stocktradingengine.time.LatencyHistogram;
 import com.lmax.disruptor.BlockingWaitStrategy;
 import com.lmax.disruptor.dsl.ProducerType;
 
@@ -78,12 +79,13 @@ public class AccountEngineConfig {
     @Bean
     public AccountEngine accountEngine(AccountWorkerProperties properties, @Value("${snowflake.node-id:}") String nodeIdConfig,
                                        MatchingOrderSender matchingOrderSender, AccountResultListener listener, AccountJournal journal,
-                                       AccountSnapshotSink accountSnapshotSink,
+                                       AccountSnapshotSink accountSnapshotSink, LatencyHistogram accountLatencyHistogram,
                                        Optional<StoredAccountSnapshot> accountLoadedSnapshot, List<AccountJournalEntry> accountJournalRecoveredEntries,
                                        List<FilledTrade> accountFillReplayedEntries) {
         long nodeId = SnowflakeNodeIdResolver.resolve(nodeIdConfig);
         AccountEngine engine = new AccountEngine(
-            BUFFER_SIZE, new BlockingWaitStrategy(), ProducerType.MULTI, nodeId, matchingOrderSender, listener, journal, accountSnapshotSink);
+            BUFFER_SIZE, new BlockingWaitStrategy(), ProducerType.MULTI, nodeId, matchingOrderSender, listener, journal,
+            accountSnapshotSink, accountLatencyHistogram);
         for (AccountWorkerProperties.SeedAccount seed : properties.seedAccounts()) {
             if (seed.holdings() == null || seed.holdings().isEmpty()) {
                 engine.seed(seed.accountId(), seed.balance(), seed.marginRate());

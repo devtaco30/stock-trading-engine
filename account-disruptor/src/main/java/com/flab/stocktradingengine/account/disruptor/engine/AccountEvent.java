@@ -23,12 +23,17 @@ public class AccountEvent {
     private long tradeId;
     private long sourcePosition;
     private long journaledPosition;
+    private long publishedAtEpochNanos;
 
     /**
      * 매수 검증·예약 명령으로 슬롯을 채운다. orderId 는 아직 없다(C5-2a) — 핸들러가 첫 접수
      * 시점에 직접 발급하므로, 슬롯 재사용으로 이전 명령의 orderId 가 남지 않게 명시적으로 비운다.
+     *
+     * @param publishedAtEpochNanos 이 주문이 발행된 시각(끝점① 접수 지연 측정용, decision_records/
+     *                              v1-v2-e2e-measurement.md). 발행 시각을 모르는 발행자(복구 replay
+     *                              등)는 0을 넘긴다 — {@code sourcePosition}과 같은 관례.
      */
-    public void setBuy(long accountId, String stockCode, BigDecimal price, int quantity, String requestId) {
+    public void setBuy(long accountId, String stockCode, BigDecimal price, int quantity, String requestId, long publishedAtEpochNanos) {
         this.type = AccountEventType.BUY;
         this.orderId = 0L;
         this.accountId = accountId;
@@ -36,14 +41,15 @@ public class AccountEvent {
         this.price = price;
         this.quantity = quantity;
         this.requestId = requestId;
+        this.publishedAtEpochNanos = publishedAtEpochNanos;
     }
 
     /**
      * 매도 검증·예약 명령으로 슬롯을 채운다. price 는 계좌 예약(담보=보유 수량)엔 안 쓰이지만,
      * 매칭 전달용으로 실어 둔다(②-a — 매칭은 지정가 엔진이라 호가창 가격레벨에 필요하다).
-     * orderId 는 {@link #setBuy}와 같은 이유로 비운다.
+     * orderId 는 {@link #setBuy}와 같은 이유로 비운다. publishedAtEpochNanos 도 {@link #setBuy}와 같다.
      */
-    public void setSell(long accountId, String stockCode, BigDecimal price, int quantity, String requestId) {
+    public void setSell(long accountId, String stockCode, BigDecimal price, int quantity, String requestId, long publishedAtEpochNanos) {
         this.type = AccountEventType.SELL;
         this.orderId = 0L;
         this.accountId = accountId;
@@ -51,6 +57,7 @@ public class AccountEvent {
         this.price = price;
         this.quantity = quantity;
         this.requestId = requestId;
+        this.publishedAtEpochNanos = publishedAtEpochNanos;
     }
 
     /**
@@ -109,6 +116,7 @@ public class AccountEvent {
         this.tradeId = 0L;
         this.sourcePosition = 0L;
         this.journaledPosition = 0L;
+        this.publishedAtEpochNanos = 0L;
     }
 
     public AccountEventType getType() {
@@ -149,5 +157,9 @@ public class AccountEvent {
 
     public long getJournaledPosition() {
         return journaledPosition;
+    }
+
+    public long getPublishedAtEpochNanos() {
+        return publishedAtEpochNanos;
     }
 }

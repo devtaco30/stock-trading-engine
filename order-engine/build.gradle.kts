@@ -10,6 +10,7 @@ dependencies {
 
 	implementation(libs.spring.boot.starter.data.jpa)
 	implementation(libs.spring.kafka)
+	implementation("com.fasterxml.jackson.core:jackson-databind") // 접수 지연 측정 결과(JSON) 파일 출력용(버전은 Spring Boot BOM)
 
 	runtimeOnly(libs.postgresql)
 	runtimeOnly("com.h2database:h2")

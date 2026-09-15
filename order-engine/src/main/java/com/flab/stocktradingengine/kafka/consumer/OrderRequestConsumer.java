@@ -14,6 +14,8 @@ import com.flab.stocktradingengine.kafka.event.OrderCancelRequestEvent;
 import com.flab.stocktradingengine.kafka.event.OrderCancelledEvent;
 import com.flab.stocktradingengine.kafka.event.OrderPlacedEvent;
 import com.flab.stocktradingengine.kafka.event.OrderRequestEvent;
+import com.flab.stocktradingengine.time.EpochNanos;
+import com.flab.stocktradingengine.time.LatencyHistogram;
 import com.flab.stocktradingengine.trading.command.BuyOrderCommand;
 import com.flab.stocktradingengine.trading.command.SellOrderCommand;
 import com.flab.stocktradingengine.trading.entity.OrderSide;
@@ -42,6 +44,12 @@ import lombok.extern.slf4j.Slf4j;
  * <h3>unpaidSum</h3>
  * <p>settlement 모듈 의존 금지(모듈 계층 제약)로 미결제 미수금은 0 으로 처리한다.
  * Phase 3 Saga 패턴 도입 시 개선 예정.</p>
+ *
+ * <h3>접수 지연 측정 (끝점①)</h3>
+ * <p>{@link OrderCommandService#placeBuyOrder}·{@link OrderCommandService#placeSellOrder}가
+ * 정상 반환한 직후(거부는 {@link BusinessException}으로 여기 도달하지 못해 자연히 모집단에서
+ * 빠진다) {@link #latencyHistogram}에 {@code event.requestedAt()}부터의 경과를 기록한다
+ * (decision_records/v1-v2-e2e-measurement.md 끝점①, v2 계좌 엔진의 accept 지점과 대응).</p>
  */
 @Slf4j
 @Component
@@ -50,6 +58,7 @@ public class OrderRequestConsumer {
 
     private final OrderCommandService orderCommandService;
     private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final LatencyHistogram latencyHistogram;
 
     @KafkaListener(topics = "order-requests", groupId = "order-engine")
     public void consume(ConsumerRecord<String, Object> record, Acknowledgment ack) {
@@ -82,11 +91,13 @@ public class OrderRequestConsumer {
                 event.orderType(), event.price(), event.quantity(), event.requestedAt(), event.requestId());
             // unpaidSum: settlement 모듈 접근 불가(모듈 계층 제약) → 0 처리
             result = orderCommandService.placeBuyOrder(command, () -> BigDecimal.ZERO);
+            latencyHistogram.record(EpochNanos.of(event.requestedAt()));
         } else {
             SellOrderCommand command = new SellOrderCommand(
                 event.accountId(), event.stockCode(),
                 event.orderType(), event.price(), event.quantity(), event.requestedAt(), event.requestId());
             result = orderCommandService.placeSellOrder(command);
+            latencyHistogram.record(EpochNanos.of(event.requestedAt()));
         }
 
         kafkaTemplate.send(

@@ -13,6 +13,7 @@ disruptor = "4.0.0"
 jmh = "1.37"
 aeron = "1.48.0"
 agrona = "2.2.1"
+hdrhistogram = "2.2.2"
 
 [libraries]
 spring-boot-starter = { module = "org.springframework.boot:spring-boot-starter", version.ref = "spring-boot" }
@@ -49,6 +50,7 @@ aeron-driver = { module = "io.aeron:aeron-driver", version.ref = "aeron" }
 aeron-client = { module = "io.aeron:aeron-client", version.ref = "aeron" }
 aeron-archive = { module = "io.aeron:aeron-archive", version.ref = "aeron" }
 agrona = { module = "org.agrona:agrona", version.ref = "agrona" }
+hdrhistogram = { module = "org.hdrhistogram:HdrHistogram", version.ref = "hdrhistogram" }
 
 [plugins]
 spring-boot = { id = "org.springframework.boot", version.ref = "spring-boot" }
