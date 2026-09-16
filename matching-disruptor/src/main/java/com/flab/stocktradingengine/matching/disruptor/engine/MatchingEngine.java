@@ -3,7 +3,6 @@ package com.flab.stocktradingengine.matching.disruptor.engine;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
@@ -23,10 +22,9 @@ import com.flab.stocktradingengine.matching.disruptor.handler.MatchingExceptionH
 import com.flab.stocktradingengine.matching.disruptor.io.MatchListener;
 import com.flab.stocktradingengine.matching.disruptor.journal.InMemoryJournal;
 import com.flab.stocktradingengine.matching.disruptor.journal.Journal;
-import com.flab.stocktradingengine.matching.disruptor.snapshot.BookSnapshot;
 import com.flab.stocktradingengine.matching.disruptor.snapshot.MatchingSnapshot;
+import com.flab.stocktradingengine.matching.disruptor.snapshot.MatchingSnapshotFactory;
 import com.flab.stocktradingengine.matching.disruptor.snapshot.RestingOrder;
-import com.flab.stocktradingengine.matching.disruptor.journal.Journal;
 import com.flab.stocktradingengine.trading.entity.OrderSide;
 import com.flab.stocktradingengine.trading.matching.OrderBook;
 import com.flab.stocktradingengine.trading.matching.OrderEntry;
@@ -148,27 +146,7 @@ public class MatchingEngine {
      * 된다. 언제가 안전한지 판단하는 건 호출부(matching-worker 호스트) 책임이다.</p>
      */
     public MatchingSnapshot snapshot() {
-        Map<String, BookSnapshot> booksByStock = new HashMap<>();
-        for (Map.Entry<String, OrderBook> entry : books.entrySet()) {
-            String stockCode = entry.getKey();
-            OrderBook book = entry.getValue();
-
-            List<RestingOrder> restingOrders = book.restingOrders().stream()
-                .map(MatchingEngine::toRestingOrder)
-                .toList();
-
-            Map<Long, Long> filledTimestampsEpochMillis = new HashMap<>();
-            book.filledOrderTimestamps().forEach((orderId, filledAt) ->
-                filledTimestampsEpochMillis.put(orderId, filledAt.toEpochMilli()));
-
-            booksByStock.put(stockCode, new BookSnapshot(restingOrders, filledTimestampsEpochMillis));
-        }
-        return new MatchingSnapshot(booksByStock, journal.position());
-    }
-
-    private static RestingOrder toRestingOrder(OrderEntry entry) {
-        return new RestingOrder(entry.getOrderId(), entry.getAccountId(), entry.getSide(), entry.getPrice(),
-            entry.getQuantity(), entry.getOrderAt().toEpochMilli(), entry.getFilledQuantity(), entry.isCancelled());
+        return MatchingSnapshotFactory.capture(books, journal.position());
     }
 
     /**
