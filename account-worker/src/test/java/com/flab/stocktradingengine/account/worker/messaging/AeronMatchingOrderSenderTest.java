@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.timeout;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -17,10 +18,15 @@ import org.agrona.DirectBuffer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.slf4j.LoggerFactory;
 
 import com.flab.stocktradingengine.trading.entity.OrderSide;
 
 import io.aeron.Publication;
+
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 
 /**
  * I2(발신측) U1 — 안 버린다(D1)·전용 스레드가 재시도(D2)·복구 불가는 계좌 스레드로 전파(D3).
@@ -117,5 +123,47 @@ class AeronMatchingOrderSenderTest {
         assertThatThrownBy(() ->
             sender.forwardPlace(2L, ACCOUNT_ID, STOCK_CODE, OrderSide.BUY, new BigDecimal("10000"), 10))
             .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void 종료_시_큐에_남은_주문을_전부_드레인한다() {
+        Publication publication = mock(Publication.class);
+        when(publication.offer(any(DirectBuffer.class), anyInt(), anyInt())).thenReturn(100L);
+        sender = new AeronMatchingOrderSender(publication);
+
+        for (int i = 0; i < 5; i++) {
+            sender.forwardPlace(i, ACCOUNT_ID, STOCK_CODE, OrderSide.BUY, new BigDecimal("10000"), 1);
+        }
+        sender.start();
+        sender.close(2000);
+
+        verify(publication, times(5)).offer(any(DirectBuffer.class), anyInt(), anyInt());
+    }
+
+    @Test
+    void 드레인이_타임아웃_안에_못_끝나면_처리_중이던_것까지_포함해_남은_개수를_ERROR로_남긴다() {
+        // 첫 주문이 발신 재시도에 영원히 갇혀 큐에서는 이미 빠졌지만(poll은 됐음) 아직 나가지
+        // 못한 상태를 만든다 — 이 "처리 중" 1건도 드레인 실패로 잡혀야 한다(큐 안에 있는 것만
+        // 세면 이 경우 큐가 비어 있어 0건으로 보인다, I4 FillOutbox.close()가 이 자리에서 버그였다).
+        Publication publication = mock(Publication.class);
+        when(publication.offer(any(DirectBuffer.class), anyInt(), anyInt())).thenReturn(Publication.BACK_PRESSURED);
+        AeronMatchingOrderSender localSender = new AeronMatchingOrderSender(publication);
+        localSender.forwardPlace(1L, ACCOUNT_ID, STOCK_CODE, OrderSide.BUY, new BigDecimal("10000"), 10);
+        localSender.start();
+
+        Logger senderLogger = (Logger) LoggerFactory.getLogger(AeronMatchingOrderSender.class);
+        ListAppender<ILoggingEvent> logAppender = new ListAppender<>();
+        logAppender.start();
+        senderLogger.addAppender(logAppender);
+
+        try {
+            localSender.close(200);
+        } finally {
+            senderLogger.detachAppender(logAppender);
+        }
+
+        assertThat(logAppender.list)
+            .extracting(ILoggingEvent::getFormattedMessage)
+            .anyMatch(message -> message.contains("1건"));
     }
 }
