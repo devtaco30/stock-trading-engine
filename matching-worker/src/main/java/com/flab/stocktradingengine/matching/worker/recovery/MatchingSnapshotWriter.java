@@ -2,6 +2,7 @@ package com.flab.stocktradingengine.matching.worker.recovery;
 
 import java.lang.System.Logger;
 import java.lang.System.Logger.Level;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.agrona.concurrent.BackoffIdleStrategy;
@@ -50,8 +51,8 @@ public class MatchingSnapshotWriter implements MatchingSnapshotSink, AutoCloseab
 
     /** 매칭 엔진 소비자 스레드가 호출한다 — 큐에 넣기만 하고 즉시 돌아간다(논블로킹). */
     @Override
-    public boolean offer(byte[] snapshotBytes, long appliedSeq) {
-        return queue.offer(new SnapshotWriteTask(snapshotBytes, appliedSeq));
+    public boolean offer(byte[] snapshotBytes, Map<Integer, Long> orderIntakePositions, long appliedSeq) {
+        return queue.offer(new SnapshotWriteTask(snapshotBytes, orderIntakePositions, appliedSeq));
     }
 
     @Override
@@ -79,7 +80,7 @@ public class MatchingSnapshotWriter implements MatchingSnapshotSink, AutoCloseab
 
     private void writeTask(SnapshotWriteTask task) {
         try {
-            snapshotStore.write(journalRecordingId, task.snapshotBytes());
+            snapshotStore.write(journalRecordingId, task.orderIntakePositions(), task.snapshotBytes());
             durableSeq = task.appliedSeq(); // fsync까지 끝난 뒤에만 durable로 보고한다
         } catch (RuntimeException e) {
             // 이번 회차 쓰기가 실패해도 프로세스는 계속 돈다 — 다음 스냅샷 주기가 다시 시도한다.
@@ -100,6 +101,6 @@ public class MatchingSnapshotWriter implements MatchingSnapshotSink, AutoCloseab
         }
     }
 
-    private record SnapshotWriteTask(byte[] snapshotBytes, long appliedSeq) {
+    private record SnapshotWriteTask(byte[] snapshotBytes, Map<Integer, Long> orderIntakePositions, long appliedSeq) {
     }
 }

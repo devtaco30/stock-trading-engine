@@ -29,10 +29,16 @@ public class MatchingEngineConfig {
      * 구현({@code AeronArchiveMatchingJournal})을 명시적으로 넘긴다(2c-1) — 프로세스가 죽어도
      * 저널이 디스크에 남아야 2c-2 리플레이가 성립한다.</p>
      *
-     * <p>스냅샷이 있으면(2d-1b) 먼저 그걸로 호가창을 복원한 뒤, 그 스냅샷 이후분(delta)만 담긴
-     * {@link MatchingJournalArchiveConfig#matchingJournalRecoveredEntries}를 재적용한다. 스냅샷이
+     * <p>스냅샷이 있으면(2d-1b) 먼저 그걸로 호가창을 복원하고 {@code engine.seedOrderIntakePositions}
+     * 로 주문 인테이크 수신 위치(발행자별 맵, I2 U1)를 그 스냅샷 값으로 시드한다 — 안 하면 복구
+     * 직후~첫 라이브 주문 사이에 러닝 중 스냅샷이 찍힐 때 위치가 빈 채로 저장돼, 다음 복구가
+     * 인테이크 스트림을 처음부터 다시 replay한다(account-worker {@code AccountEngineConfig}의
+     * {@code seedFillPositions}와 같은 이유). 그다음 그 스냅샷 이후분(delta)만 담긴
+     * {@link MatchingJournalArchiveConfig#matchingJournalRecoveredEntries}를 재적용하고, 마지막으로
+     * {@link MatchingOrderIntakeConfig#matchingOrderIntakeReplayedEntries}(매칭이 받았지만 반영
+     * 전에 죽어 놓친 주문, I2 U2b — U1 시점엔 항상 빈 리스트라 no-op)를 재적용한다. 스냅샷이
      * 없으면(2c-2, 하위호환) 저널 전체가 그대로 recover 입력이 된다. 계좌 축과 달리 시드할 상태가
-     * 없어(호가창은 주문 리플레이만으로 전부 재구성된다) seed 단계는 없다.</p>
+     * 없어(호가창은 주문 리플레이만으로 전부 재구성된다) 계좌 seed 단계는 없다.</p>
      *
      * <p>{@link MatchingSnapshotSink}(I6 U1~U2, 실제 구현은 {@code MatchingSnapshotWriter})를
      * 러닝 중 스냅샷 싱크로 넘기고 트리거를 켠다(true) — 이제 라이브 파이프라인도 저널 N건마다
@@ -41,11 +47,16 @@ public class MatchingEngineConfig {
      */
     @Bean
     public MatchingEngine matchingEngine(MatchListener listener, Journal journal, MatchingSnapshotSink matchingSnapshotWriter,
-            Optional<StoredMatchingSnapshot> matchingLoadedSnapshot, List<JournaledOrder> matchingJournalRecoveredEntries) {
+            Optional<StoredMatchingSnapshot> matchingLoadedSnapshot, List<JournaledOrder> matchingJournalRecoveredEntries,
+            List<JournaledOrder> matchingOrderIntakeReplayedEntries) {
         MatchingEngine engine = new MatchingEngine(BUFFER_SIZE, new BlockingWaitStrategy(), listener, journal,
             matchingSnapshotWriter, true);
-        matchingLoadedSnapshot.ifPresent(stored -> engine.restore(stored.snapshot()));
+        matchingLoadedSnapshot.ifPresent(stored -> {
+            engine.restore(stored.snapshot());
+            engine.seedOrderIntakePositions(stored.orderIntakePosition());
+        });
         engine.recover(matchingJournalRecoveredEntries);
+        engine.recover(matchingOrderIntakeReplayedEntries);
         return engine;
     }
 

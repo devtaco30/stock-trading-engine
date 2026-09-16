@@ -4,6 +4,7 @@ import java.lang.System.Logger;
 import java.lang.System.Logger.Level;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 
 import com.lmax.disruptor.EventHandler;
 
@@ -44,7 +45,7 @@ public class MatchingEventHandler implements EventHandler<OrderEvent> {
 
     private static final MatchingSnapshotSink NO_OP_SINK = new MatchingSnapshotSink() {
         @Override
-        public boolean offer(byte[] snapshotBytes, long appliedSeq) {
+        public boolean offer(byte[] snapshotBytes, Map<Integer, Long> orderIntakePositions, long appliedSeq) {
             return true;
         }
 
@@ -72,6 +73,10 @@ public class MatchingEventHandler implements EventHandler<OrderEvent> {
     private long lastJournaledPosition;
     // 저널 적용 순번(I6 U1) — 처리 결과와 무관하게 이벤트 하나를 소비할 때마다 1씩 증가한다.
     private long appliedSeq;
+    // 소비자가 실제로 반영한 주문의 인테이크 수신 위치를 발행자(계좌 샤드 Aeron sessionId)별로
+    // 담는다(I2 U1, account-disruptor AccountEventHandler.lastAppliedFillPositions과 같은 이유).
+    // 스냅샷 쓰기 스레드가 takeSnapshot() 호출 시점에 이 맵을 읽어가므로(다른 스레드) 동시성 맵.
+    private final Map<Integer, Long> lastAppliedOrderIntakePositions = new ConcurrentHashMap<>();
 
     public MatchingEventHandler(Map<String, OrderBook> books, MatchListener listener) {
         this(books, listener, NO_OP_SINK, false);
@@ -119,13 +124,38 @@ public class MatchingEventHandler implements EventHandler<OrderEvent> {
     private void takeSnapshot() {
         MatchingSnapshot snapshot = MatchingSnapshotFactory.capture(books, lastJournaledPosition);
         byte[] snapshotBytes = snapshotCodec.encode(snapshot);
-        boolean offered = snapshotSink.offer(snapshotBytes, appliedSeq);
+        boolean offered = snapshotSink.offer(snapshotBytes, lastAppliedOrderIntakePositions(), appliedSeq);
         if (!offered) {
             log.log(Level.WARNING, "[매칭] 스냅샷 쓰기 큐가 가득 차 이번 회차 스킵: appliedSeq=" + appliedSeq);
         }
     }
 
+    /**
+     * 지금까지 이 소비자가 실제로 반영한 주문의 인테이크 수신 위치를 발행자별로 담은 스냅샷
+     * 사본(I2 U1). 아직 처리 전인 주문의 위치는 담기지 않는다 — account-disruptor
+     * {@code AccountEventHandler#lastAppliedFillPositions()}와 같은 이유.
+     */
+    public Map<Integer, Long> lastAppliedOrderIntakePositions() {
+        return Map.copyOf(lastAppliedOrderIntakePositions);
+    }
+
+    /**
+     * 복구 시(단일 스레드, 엔진 start 전) 소비자의 주문 인테이크 수신 위치를 스냅샷이 가리키던
+     * 값으로 시드한다 — 안 하면 복구 직후~첫 라이브 주문 사이에 러닝 중 스냅샷이 찍힐 때 위치가
+     * 빈 채로 저장돼, 다음 복구가 인테이크 스트림을 처음부터 다시 replay한다(account-disruptor
+     * {@code AccountEventHandler#seedLastAppliedFillPositions}와 같은 이유).
+     */
+    public void seedLastAppliedOrderIntakePositions(Map<Integer, Long> orderIntakePositions) {
+        this.lastAppliedOrderIntakePositions.putAll(orderIntakePositions);
+    }
+
     private void handlePlace(OrderEvent event) {
+        // 이 이벤트를 실제로 처리하기 시작하는 시점에 위치를 기억한다(account-disruptor
+        // AccountEventHandler.handleBuyFill과 같은 자리) — 이후 중복이라 반영을 건너뛰어도
+        // "이 위치까지는 이미 살펴봤다"는 사실은 그대로 남아야, 재기동 리플레이가 같은 주문을
+        // 다시 들이밀지 않는다.
+        lastAppliedOrderIntakePositions.put(event.getSourceSessionId(), event.getSourcePosition());
+
         OrderBook book = books.computeIfAbsent(event.getStockCode(), k -> new OrderBook());
         if (book.containsOrder(event.getOrderId())) {
             // 멱등성: 같은 주문이 중복 도착하면 무시한다.

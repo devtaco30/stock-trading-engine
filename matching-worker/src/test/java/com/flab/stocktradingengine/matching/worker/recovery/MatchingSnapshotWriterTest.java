@@ -42,12 +42,13 @@ class MatchingSnapshotWriterTest {
         writer.start();
 
         MatchingSnapshot snapshot = new MatchingSnapshot(Map.of(), 777L);
-        assertThat(writer.offer(CODEC.encode(snapshot), 10_000L)).isTrue();
+        assertThat(writer.offer(CODEC.encode(snapshot), Map.of(0, 111L), 10_000L)).isTrue();
         awaitDurableSeq(10_000L);
 
         Optional<StoredMatchingSnapshot> found = store.read();
         assertThat(found).isPresent();
         assertThat(found.get().recordingId()).isEqualTo(42L);
+        assertThat(found.get().orderIntakePosition()).isEqualTo(Map.of(0, 111L));
         assertThat(found.get().snapshot()).isEqualTo(snapshot);
     }
 
@@ -56,7 +57,7 @@ class MatchingSnapshotWriterTest {
         MatchingSnapshotStore store = new MatchingSnapshotStore(archiveDir.toFile());
         writer = new MatchingSnapshotWriter(store, 1L);
 
-        writer.offer(CODEC.encode(new MatchingSnapshot(Map.of(), 0L)), 5_000L);
+        writer.offer(CODEC.encode(new MatchingSnapshot(Map.of(), 0L)), Map.of(), 5_000L);
         assertThat(writer.durableSeq()).isZero();
 
         writer.start();
@@ -68,22 +69,22 @@ class MatchingSnapshotWriterTest {
         AtomicInteger callCount = new AtomicInteger(0);
         MatchingSnapshotStore failingOnceStore = new MatchingSnapshotStore(archiveDir.toFile()) {
             @Override
-            public void write(long recordingId, byte[] snapshotBytes) {
+            public void write(long recordingId, Map<Integer, Long> orderIntakePositions, byte[] snapshotBytes) {
                 if (callCount.getAndIncrement() == 0) {
                     throw new RuntimeException("의도적 쓰기 실패(테스트)");
                 }
-                super.write(recordingId, snapshotBytes);
+                super.write(recordingId, orderIntakePositions, snapshotBytes);
             }
         };
         writer = new MatchingSnapshotWriter(failingOnceStore, 7L);
         writer.start();
 
         byte[] bytes = CODEC.encode(new MatchingSnapshot(Map.of(), 0L));
-        writer.offer(bytes, 1_000L); // 이 회차는 실패
+        writer.offer(bytes, Map.of(), 1_000L); // 이 회차는 실패
         awaitCallCount(callCount, 1);
         assertThat(writer.durableSeq()).isZero();
 
-        writer.offer(bytes, 2_000L); // 다음 회차는 성공해야 한다 — 쓰기 스레드가 안 죽었다는 증거
+        writer.offer(bytes, Map.of(), 2_000L); // 다음 회차는 성공해야 한다 — 쓰기 스레드가 안 죽었다는 증거
         awaitDurableSeq(2_000L);
     }
 

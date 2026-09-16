@@ -67,12 +67,25 @@ public final class AeronOrderReceiver implements AutoCloseable {
         }
     }
 
-    private void onFragment(DirectBuffer buffer, int offset, int length, Header header) {
+    /**
+     * 패키지 가시성 — 단위 테스트가 실제 Subscription 없이 이 메서드를 직접 호출한다.
+     *
+     * <p>{@code header.position()}(I2 U1)은 "이 메시지를 읽은 뒤 image가 도달한 위치"다 — 소비자
+     * (매칭 엔진)가 이 주문을 실제로 반영한 뒤 발행자별 위치 맵으로 기억해, 아직 링에만 들어가고
+     * 처리는 안 된 주문의 위치와 구분한다. {@code header.sessionId()}는 이 위치가 어느
+     * 발행자(Aeron 연결, 계좌 샤드마다 다르다)의 것인지 구분하는 키다(account-disruptor
+     * {@code AccountFillReceiver}와 같은 이유). 취소는 아직 Aeron으로 오지 않아(계좌 쪽에
+     * forwardCancel이 없다) sourcePosition·sourceSessionId를 붙이지 않는다.</p>
+     */
+    void onFragment(DirectBuffer buffer, int offset, int length, Header header) {
         JournaledOrder order = codec.decode(buffer, offset);
         if (order.type() == EventType.PLACE) {
+            long sourcePosition = header != null ? header.position() : 0L;
+            int sourceSessionId = header != null ? header.sessionId() : 0;
             engine.publishPlace(
                 order.orderId(), order.accountId(), order.stockCode(),
-                order.side(), order.price(), order.quantity(), order.orderAt());
+                order.side(), order.price(), order.quantity(), order.orderAt(),
+                sourcePosition, sourceSessionId);
         } else {
             engine.publishCancel(order.orderId(), order.stockCode());
         }

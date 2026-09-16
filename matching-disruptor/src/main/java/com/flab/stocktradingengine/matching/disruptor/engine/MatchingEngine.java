@@ -53,7 +53,7 @@ public class MatchingEngine {
 
     private static final MatchingSnapshotSink NO_OP_SNAPSHOT_SINK = new MatchingSnapshotSink() {
         @Override
-        public boolean offer(byte[] snapshotBytes, long appliedSeq) {
+        public boolean offer(byte[] snapshotBytes, Map<Integer, Long> orderIntakePositions, long appliedSeq) {
             return true;
         }
 
@@ -74,6 +74,9 @@ public class MatchingEngine {
     // 라이브 배선과 같은 맵을 써야 그 위에서 라이브 매칭이 이어진다(account-disruptor AccountEngine
     // 의 accounts 맵과 같은 이유) — 그래서 핸들러가 자체 생성하지 않고 엔진이 필드로 들고 넘긴다.
     private final Map<String, OrderBook> books = new HashMap<>();
+    // 라이브 배선에 쓴 것과 같은 인스턴스를 들고 있어야 lastAppliedOrderIntakePositions()가 실제
+    // 소비자 스레드가 반영한 값을 읽는다(account-disruptor AccountEngine.businessHandler와 같은 이유).
+    private final MatchingEventHandler matchingEventHandler;
     private RingBuffer<OrderEvent> ringBuffer;
 
     /**
@@ -98,8 +101,8 @@ public class MatchingEngine {
         // handleEventsWith 배선 전에 설정해야 이후 등록되는 모든 핸들러에 적용된다.
         this.disruptor.setDefaultExceptionHandler(new MatchingExceptionHandler());
         // 저널러가 먼저 기록 → 매처가 그 뒤에 매칭 (SequenceBarrier 로 게이팅)
-        this.disruptor.handleEventsWith(new JournalEventHandler(journal))
-            .then(new MatchingEventHandler(books, listener, snapshotSink, snapshotTriggerEnabled));
+        this.matchingEventHandler = new MatchingEventHandler(books, listener, snapshotSink, snapshotTriggerEnabled);
+        this.disruptor.handleEventsWith(new JournalEventHandler(journal)).then(matchingEventHandler);
     }
 
     /** 러닝 중 스냅샷 없이(트리거 꺼짐) 생성한다 — 테스트·recover() 전용 핸들러가 쓰는 편의 생성자. */
@@ -137,6 +140,26 @@ public class MatchingEngine {
     /** 저널을 반환한다. 테스트·복구 검증용. */
     public Journal journal() {
         return journal;
+    }
+
+    /**
+     * 지금까지 소비자가 실제로 반영한 주문의 인테이크 수신 위치를 발행자(계좌 샤드 Aeron
+     * sessionId)별로 담은 맵(I2 U1). account-disruptor {@link
+     * com.flab.stocktradingengine.account.disruptor.engine.AccountEngine#lastAppliedFillPositions}과
+     * 같은 이유 — 러닝 중 스냅샷·graceful stop 스냅샷 둘 다 이 값을 파일에 남겨야, 재기동
+     * 리플레이가 이미 반영한 주문을 다시 들이밀지 않는다.
+     */
+    public Map<Integer, Long> lastAppliedOrderIntakePositions() {
+        return matchingEventHandler.lastAppliedOrderIntakePositions();
+    }
+
+    /**
+     * 복구 시(단일 스레드, {@link #start} 전) 소비자의 주문 인테이크 수신 위치를 스냅샷이 가리키던
+     * 값으로 시드한다 — 반드시 {@link #restore} 이후, {@link #start} 이전에 부른다.
+     */
+    public void seedOrderIntakePositions(Map<Integer, Long> orderIntakePositions) {
+        requireNotStarted();
+        matchingEventHandler.seedLastAppliedOrderIntakePositions(orderIntakePositions);
     }
 
     /** 종목의 호가창에 해당 주문이 미체결로 남아있는지 확인한다. 테스트·복구 검증용 — {@link #journal()}과 같은 자리. */
@@ -222,17 +245,30 @@ public class MatchingEngine {
     }
 
     /**
-     * 주문 접수를 링버퍼에 발행한다.
+     * 주문 접수를 링버퍼에 발행한다. sourcePosition·sourceSessionId 를 모르는 발행자(테스트,
+     * 저널 replay 등)를 위한 오버로드 — 둘 다 0으로 채운다.
      *
      * <p>빈 슬롯 자리를 예약({@code next})하고, 그 슬롯에 값을 채운 뒤 발행({@code publish})한다.
      * publish 를 finally 에 두어, 값 채우는 중 예외가 나도 예약한 자리가 막히지 않게 한다.</p>
      */
     public void publishPlace(long orderId, long accountId, String stockCode,
                              OrderSide side, BigDecimal price, int quantity, Instant orderAt) {
+        publishPlace(orderId, accountId, stockCode, side, price, quantity, orderAt, 0L, 0);
+    }
+
+    /**
+     * 주문 접수를 링버퍼에 발행한다. sourcePosition 은 이 주문을 실어 보낸 인테이크 수신 스트림의
+     * 위치(I2 U1, {@code AeronOrderReceiver}가 {@code Header.position()}으로 실어 보낸다).
+     * sourceSessionId 는 그 위치가 어느 발행자(Aeron sessionId=계좌 샤드)의 것인지 구분하는 키
+     * ({@code Header.sessionId()}).
+     */
+    public void publishPlace(long orderId, long accountId, String stockCode,
+                             OrderSide side, BigDecimal price, int quantity, Instant orderAt,
+                             long sourcePosition, int sourceSessionId) {
         long sequence = ringBuffer.next();
         try {
             OrderEvent event = ringBuffer.get(sequence);
-            event.setPlace(orderId, accountId, stockCode, side, price, quantity, orderAt);
+            event.setPlace(orderId, accountId, stockCode, side, price, quantity, orderAt, sourcePosition, sourceSessionId);
         } finally {
             ringBuffer.publish(sequence);
         }

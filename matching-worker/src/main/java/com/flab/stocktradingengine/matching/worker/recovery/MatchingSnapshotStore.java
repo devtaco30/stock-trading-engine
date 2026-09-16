@@ -10,6 +10,8 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Optional;
 
 import com.flab.stocktradingengine.matching.disruptor.snapshot.MatchingSnapshot;
@@ -19,7 +21,8 @@ import com.flab.stocktradingengine.matching.worker.lifecycle.MatchingEngineLifec
 /**
  * 매칭 엔진 스냅샷(2d-1)을 archive-dir(저널과 같은 durable 디스크)에 파일로 저장·조회한다.
  * Aeron Archive는 건드리지 않는 순수 파일 I/O — recordingId 해석(현재 저널 녹화가 무엇인지)은
- * 이 클래스의 책임이 아니라 호출부({@link MatchingEngineLifecycle})가 넘겨준다.
+ * 이 클래스의 책임이 아니라 호출부({@link MatchingEngineLifecycle})가 넘겨준다. account
+ * {@code AccountSnapshotStore}와 같은 결.
  *
  * <h3>원자적 쓰기</h3>
  * <p>임시 파일에 다 쓴 뒤 최종 이름으로 rename한다({@link StandardCopyOption#ATOMIC_MOVE}) — 쓰는
@@ -34,13 +37,21 @@ import com.flab.stocktradingengine.matching.worker.lifecycle.MatchingEngineLifec
  * §4) 여기서 실제로 디스크까지 박아둔다. 정상 종료 경로({@link MatchingSnapshotLifecycle}의 stop)도
  * 이 메서드를 그대로 쓰므로 종료가 그만큼(디스크에 박힐 때까지) 느려지는 게 의도한 대가다.</p>
  *
- * <h3>파일 레이아웃</h3>
- * <pre>[recordingId:8][MatchingSnapshotCodec가 인코딩한 스냅샷 바이트...]</pre>
+ * <h3>파일 레이아웃 (버전 1, I2 U1)</h3>
+ * <pre>
+ * [version:1 = 1][recordingId:8][orderIntakeSourceCount:4]
+ *   [(sessionId:4)(position:8)] × orderIntakeSourceCount
+ *   [MatchingSnapshotCodec가 인코딩한 스냅샷 바이트...]
+ * </pre>
+ * <p>이전(무버전, I6까지의 {@code [recordingId:8][스냅샷 바이트...]}) 파일을 읽으면 첫 바이트가
+ * 1과 다르게 나와(옛 recordingId의 최상위 바이트) {@link MatchingSnapshotFormatException}이 난다 —
+ * 의도한 동작이다, 클래스 javadoc·그 예외 클래스 javadoc 참고.</p>
  */
 public class MatchingSnapshotStore {
 
     private static final String FILE_NAME = "matching-snapshot.dat";
     private static final String TEMP_FILE_NAME = "matching-snapshot.dat.tmp";
+    private static final byte FORMAT_VERSION = 1;
 
     private final File file;
     private final File tempFile;
@@ -51,8 +62,8 @@ public class MatchingSnapshotStore {
         this.tempFile = new File(archiveDir, TEMP_FILE_NAME);
     }
 
-    public void write(long recordingId, MatchingSnapshot snapshot) {
-        write(recordingId, codec.encode(snapshot));
+    public void write(long recordingId, Map<Integer, Long> orderIntakePositions, MatchingSnapshot snapshot) {
+        write(recordingId, orderIntakePositions, codec.encode(snapshot));
     }
 
     /**
@@ -60,9 +71,18 @@ public class MatchingSnapshotStore {
      * 스레드가 이미 직렬화한 바이트를 받으므로 재인코딩하지 않는다({@code MatchingSnapshotSink}
      * 계약과 맞물림, account-worker {@code AccountSnapshotStore}와 같은 결).
      */
-    public void write(long recordingId, byte[] snapshotBytes) {
-        ByteBuffer payload = ByteBuffer.allocate(Long.BYTES + snapshotBytes.length);
+    public void write(long recordingId, Map<Integer, Long> orderIntakePositions, byte[] snapshotBytes) {
+        int sourceCount = orderIntakePositions.size();
+        int sourcesBytes = sourceCount * (Integer.BYTES + Long.BYTES);
+        ByteBuffer payload = ByteBuffer.allocate(
+            Byte.BYTES + Long.BYTES + Integer.BYTES + sourcesBytes + snapshotBytes.length);
+        payload.put(FORMAT_VERSION);
         payload.putLong(recordingId);
+        payload.putInt(sourceCount);
+        orderIntakePositions.forEach((sessionId, position) -> {
+            payload.putInt(sessionId);
+            payload.putLong(position);
+        });
         payload.put(snapshotBytes);
         payload.flip();
 
@@ -89,10 +109,22 @@ public class MatchingSnapshotStore {
         try {
             byte[] payload = Files.readAllBytes(file.toPath());
             ByteBuffer buffer = ByteBuffer.wrap(payload);
+            byte version = buffer.get();
+            if (version != FORMAT_VERSION) {
+                throw new MatchingSnapshotFormatException(file, version, FORMAT_VERSION);
+            }
             long recordingId = buffer.getLong();
-            byte[] snapshotBytes = Arrays.copyOfRange(payload, Long.BYTES, payload.length);
+            int sourceCount = buffer.getInt();
+            Map<Integer, Long> orderIntakePositions = new LinkedHashMap<>();
+            for (int i = 0; i < sourceCount; i++) {
+                int sessionId = buffer.getInt();
+                long position = buffer.getLong();
+                orderIntakePositions.put(sessionId, position);
+            }
+            int headerBytes = Byte.BYTES + Long.BYTES + Integer.BYTES + sourceCount * (Integer.BYTES + Long.BYTES);
+            byte[] snapshotBytes = Arrays.copyOfRange(payload, headerBytes, payload.length);
             MatchingSnapshot snapshot = codec.decode(snapshotBytes);
-            return Optional.of(new StoredMatchingSnapshot(recordingId, snapshot));
+            return Optional.of(new StoredMatchingSnapshot(recordingId, orderIntakePositions, snapshot));
         } catch (IOException e) {
             throw new UncheckedIOException("매칭 스냅샷 파일 읽기 실패: " + file, e);
         }

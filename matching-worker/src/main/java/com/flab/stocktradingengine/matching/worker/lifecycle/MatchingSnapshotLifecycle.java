@@ -49,7 +49,7 @@ public class MatchingSnapshotLifecycle implements SmartLifecycle {
 
     @Override
     public void stop() {
-        snapshotStore.write(journalRecordingId, engine.snapshot());
+        snapshotStore.write(journalRecordingId, engine.lastAppliedOrderIntakePositions(), engine.snapshot());
         running.set(false);
     }
 
