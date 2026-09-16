@@ -17,6 +17,13 @@ import com.flab.stocktradingengine.matching.disruptor.journal.Journal;
  * <h3>슬롯을 비우지 않는 이유</h3>
  * <p>이 핸들러는 마지막 소비자가 아니다. 뒤이어 매처가 같은 슬롯을 읽어야 하므로
  * 여기서 {@code clear()} 를 호출하지 않는다. 슬롯 비우기는 마지막 소비자(매처)가 맡는다.</p>
+ *
+ * <h3>저널 위치를 슬롯에 싣는 이유(I6 U1)</h3>
+ * <p>기록 직후 {@link Journal#position()}을 읽어 슬롯에 싣는다 — 매칭 핸들러가 러닝 중 스냅샷을
+ * 찍을 때 "이 지점까지 저널에 반영됐다"를 알아야 하는데, 그 값을 소비자 스레드가 직접
+ * {@code journal.position()}을 불러 얻지 않고 슬롯에서 읽게 한다(account-disruptor
+ * AccountJournalEventHandler와 같은 이유 — 저널 위치를 만드는 스레드와 읽는 스레드를 슬롯 하나로
+ * 넘겨, 소비자가 다른 스레드의 상태를 직접 조회하지 않게 한다).</p>
  */
 public class JournalEventHandler implements EventHandler<OrderEvent> {
 
@@ -32,5 +39,6 @@ public class JournalEventHandler implements EventHandler<OrderEvent> {
         journal.append(new JournaledOrder(
             event.getType(), event.getOrderId(), event.getAccountId(), event.getStockCode(),
             event.getSide(), event.getPrice(), event.getQuantity(), event.getOrderAt()));
+        event.setJournaledPosition(journal.position());
     }
 }

@@ -29,6 +29,10 @@ public class OrderEvent {
     private BigDecimal price;
     private int quantity;
     private Instant orderAt;
+    // JournalEventHandler(저널 게이팅 단계)가 기록 직후 채운다. 매칭 핸들러(마지막 소비자)는 이
+    // 슬롯을 그대로 읽어 "이 이벤트까지 저널에 반영됐다"는 위치를 얻는다 — account-disruptor
+    // AccountEvent.journaledPosition과 같은 이유(I6 U1).
+    private long journaledPosition;
 
     /** 주문 접수 명령으로 슬롯을 채운다. */
     public void setPlace(long orderId, long accountId, String stockCode,
@@ -63,6 +67,15 @@ public class OrderEvent {
         this.price = null;
         this.quantity = 0;
         this.orderAt = null;
+        this.journaledPosition = 0L;
+    }
+
+    public void setJournaledPosition(long journaledPosition) {
+        this.journaledPosition = journaledPosition;
+    }
+
+    public long getJournaledPosition() {
+        return journaledPosition;
     }
 
     public EventType getType() {

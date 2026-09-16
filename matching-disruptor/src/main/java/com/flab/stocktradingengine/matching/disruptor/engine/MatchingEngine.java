@@ -3,7 +3,6 @@ package com.flab.stocktradingengine.matching.disruptor.engine;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
@@ -21,12 +20,12 @@ import com.flab.stocktradingengine.matching.disruptor.handler.JournalEventHandle
 import com.flab.stocktradingengine.matching.disruptor.handler.MatchingEventHandler;
 import com.flab.stocktradingengine.matching.disruptor.handler.MatchingExceptionHandler;
 import com.flab.stocktradingengine.matching.disruptor.io.MatchListener;
+import com.flab.stocktradingengine.matching.disruptor.io.MatchingSnapshotSink;
 import com.flab.stocktradingengine.matching.disruptor.journal.InMemoryJournal;
 import com.flab.stocktradingengine.matching.disruptor.journal.Journal;
-import com.flab.stocktradingengine.matching.disruptor.snapshot.BookSnapshot;
 import com.flab.stocktradingengine.matching.disruptor.snapshot.MatchingSnapshot;
+import com.flab.stocktradingengine.matching.disruptor.snapshot.MatchingSnapshotFactory;
 import com.flab.stocktradingengine.matching.disruptor.snapshot.RestingOrder;
-import com.flab.stocktradingengine.matching.disruptor.journal.Journal;
 import com.flab.stocktradingengine.trading.entity.OrderSide;
 import com.flab.stocktradingengine.trading.matching.OrderBook;
 import com.flab.stocktradingengine.trading.matching.OrderEntry;
@@ -52,6 +51,18 @@ public class MatchingEngine {
 
     private static final MatchListener NO_OP_LISTENER = (stockCode, fill) -> {};
 
+    private static final MatchingSnapshotSink NO_OP_SNAPSHOT_SINK = new MatchingSnapshotSink() {
+        @Override
+        public boolean offer(byte[] snapshotBytes, long appliedSeq) {
+            return true;
+        }
+
+        @Override
+        public long durableSeq() {
+            return 0L;
+        }
+    };
+
     // 소비자 스레드가 fail-fast로 죽으면 disruptor.shutdown()이 hasBacklog() 스핀에서 무한 대기할 수
     // 있다 — 죽은 소비자 뒤에 물린 핸들러가 그 시퀀스를 영원히 기다리며 블록되기 때문. 이 타임아웃
     // 안에 못 끝나면 halt()로 강제 정지한다.
@@ -65,7 +76,15 @@ public class MatchingEngine {
     private final Map<String, OrderBook> books = new HashMap<>();
     private RingBuffer<OrderEvent> ringBuffer;
 
-    public MatchingEngine(int bufferSize, WaitStrategy waitStrategy, MatchListener listener, Journal journal) {
+    /**
+     * @param snapshotSink 러닝 중 스냅샷을 내보낼 싱크(I6 U1~U2). {@link #snapshot()}과 달리
+     *     소비자 스레드가 N건마다 직접 부른다 — 실제 파일 쓰기는 matching-worker의 전용 쓰기
+     *     스레드(구현체)가 맡는다(ADR-024).
+     * @param snapshotTriggerEnabled N건마다 스냅샷을 찍을지. recover()의 replay 전용 핸들러는
+     *     항상 false로 둔다(이미 지나간 저널을 다시 훑는 것뿐이라 새로 찍을 스냅샷이 없다).
+     */
+    public MatchingEngine(int bufferSize, WaitStrategy waitStrategy, MatchListener listener, Journal journal,
+                          MatchingSnapshotSink snapshotSink, boolean snapshotTriggerEnabled) {
         this.journal = journal;
         ThreadFactory threadFactory = DaemonThreadFactory.INSTANCE;
         this.disruptor = new Disruptor<>(
@@ -80,7 +99,12 @@ public class MatchingEngine {
         this.disruptor.setDefaultExceptionHandler(new MatchingExceptionHandler());
         // 저널러가 먼저 기록 → 매처가 그 뒤에 매칭 (SequenceBarrier 로 게이팅)
         this.disruptor.handleEventsWith(new JournalEventHandler(journal))
-            .then(new MatchingEventHandler(books, listener));
+            .then(new MatchingEventHandler(books, listener, snapshotSink, snapshotTriggerEnabled));
+    }
+
+    /** 러닝 중 스냅샷 없이(트리거 꺼짐) 생성한다 — 테스트·recover() 전용 핸들러가 쓰는 편의 생성자. */
+    public MatchingEngine(int bufferSize, WaitStrategy waitStrategy, MatchListener listener, Journal journal) {
+        this(bufferSize, waitStrategy, listener, journal, NO_OP_SNAPSHOT_SINK, false);
     }
 
     /** 기본 저널({@link InMemoryJournal})로 생성한다. */
@@ -148,27 +172,7 @@ public class MatchingEngine {
      * 된다. 언제가 안전한지 판단하는 건 호출부(matching-worker 호스트) 책임이다.</p>
      */
     public MatchingSnapshot snapshot() {
-        Map<String, BookSnapshot> booksByStock = new HashMap<>();
-        for (Map.Entry<String, OrderBook> entry : books.entrySet()) {
-            String stockCode = entry.getKey();
-            OrderBook book = entry.getValue();
-
-            List<RestingOrder> restingOrders = book.restingOrders().stream()
-                .map(MatchingEngine::toRestingOrder)
-                .toList();
-
-            Map<Long, Long> filledTimestampsEpochMillis = new HashMap<>();
-            book.filledOrderTimestamps().forEach((orderId, filledAt) ->
-                filledTimestampsEpochMillis.put(orderId, filledAt.toEpochMilli()));
-
-            booksByStock.put(stockCode, new BookSnapshot(restingOrders, filledTimestampsEpochMillis));
-        }
-        return new MatchingSnapshot(booksByStock, journal.position());
-    }
-
-    private static RestingOrder toRestingOrder(OrderEntry entry) {
-        return new RestingOrder(entry.getOrderId(), entry.getAccountId(), entry.getSide(), entry.getPrice(),
-            entry.getQuantity(), entry.getOrderAt().toEpochMilli(), entry.getFilledQuantity(), entry.isCancelled());
+        return MatchingSnapshotFactory.capture(books, journal.position());
     }
 
     /**
