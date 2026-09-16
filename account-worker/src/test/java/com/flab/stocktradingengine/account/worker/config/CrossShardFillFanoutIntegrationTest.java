@@ -20,6 +20,7 @@ import org.springframework.context.ConfigurableApplicationContext;
 import com.flab.stocktradingengine.account.disruptor.domain.AccountState;
 import com.flab.stocktradingengine.account.disruptor.engine.AccountEngine;
 import com.flab.stocktradingengine.account.worker.AccountWorkerApplication;
+import com.flab.stocktradingengine.account.worker.support.NoOpMatchingOrderSenderTestConfig;
 import com.flab.stocktradingengine.aeron.AeronStreamIds;
 import com.flab.stocktradingengine.codec.FillCodec;
 import com.flab.stocktradingengine.codec.FilledTrade;
@@ -153,6 +154,7 @@ class CrossShardFillFanoutIntegrationTest {
         properties.addAll(List.of(seedProperties));
         return new SpringApplicationBuilder(AccountWorkerApplication.class)
             .web(WebApplicationType.NONE)
+            .sources(NoOpMatchingOrderSenderTestConfig.class)
             .properties(properties.toArray(new String[0]))
             .run();
     }

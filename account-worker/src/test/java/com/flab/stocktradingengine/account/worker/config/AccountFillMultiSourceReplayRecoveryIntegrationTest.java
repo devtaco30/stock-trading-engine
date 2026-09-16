@@ -19,6 +19,7 @@ import com.flab.stocktradingengine.account.disruptor.domain.AccountState;
 import com.flab.stocktradingengine.account.disruptor.engine.AccountEngine;
 import com.flab.stocktradingengine.account.disruptor.io.AccountFillReceiver;
 import com.flab.stocktradingengine.account.worker.AccountWorkerApplication;
+import com.flab.stocktradingengine.account.worker.support.NoOpMatchingOrderSenderTestConfig;
 import com.flab.stocktradingengine.aeron.AeronStreamIds;
 import com.flab.stocktradingengine.codec.FillCodec;
 import com.flab.stocktradingengine.codec.FilledTrade;
@@ -153,6 +154,7 @@ class AccountFillMultiSourceReplayRecoveryIntegrationTest {
     private ConfigurableApplicationContext launch(String fillChannel) {
         return new SpringApplicationBuilder(AccountWorkerApplication.class)
             .web(WebApplicationType.NONE)
+            .sources(NoOpMatchingOrderSenderTestConfig.class)
             .properties(
                 "account-worker.seed-accounts[0].account-id=1",
                 "account-worker.seed-accounts[0].balance=1000000",

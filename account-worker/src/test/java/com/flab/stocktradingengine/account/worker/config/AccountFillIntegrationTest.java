@@ -21,6 +21,7 @@ import com.flab.stocktradingengine.account.disruptor.domain.AccountResultListene
 import com.flab.stocktradingengine.account.disruptor.domain.RejectReason;
 import com.flab.stocktradingengine.account.disruptor.engine.AccountEngine;
 import com.flab.stocktradingengine.account.worker.AccountWorkerApplication;
+import com.flab.stocktradingengine.account.worker.support.NoOpMatchingOrderSenderTestConfig;
 import com.flab.stocktradingengine.aeron.AeronStreamIds;
 import com.flab.stocktradingengine.codec.FillCodec;
 import com.flab.stocktradingengine.codec.FilledTrade;
@@ -56,7 +57,7 @@ import io.aeron.Publication;
     }
 )
 @DirtiesContext
-@Import(AccountFillIntegrationTest.RecorderConfig.class)
+@Import({AccountFillIntegrationTest.RecorderConfig.class, NoOpMatchingOrderSenderTestConfig.class})
 class AccountFillIntegrationTest {
 
     private static final String STOCK = "005930";

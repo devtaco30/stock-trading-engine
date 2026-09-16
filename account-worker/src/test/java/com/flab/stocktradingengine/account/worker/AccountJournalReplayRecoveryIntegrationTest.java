@@ -13,6 +13,7 @@ import org.springframework.context.ConfigurableApplicationContext;
 
 import com.flab.stocktradingengine.account.disruptor.domain.AccountState;
 import com.flab.stocktradingengine.account.disruptor.engine.AccountEngine;
+import com.flab.stocktradingengine.account.worker.support.NoOpMatchingOrderSenderTestConfig;
 
 /**
  * 2b-2b 핵심 — 계좌 워커가 재시작하면, 이전 프로세스가 Archive에 남긴 저널을 실제로 읽어
@@ -87,6 +88,7 @@ class AccountJournalReplayRecoveryIntegrationTest {
     private ConfigurableApplicationContext launch() {
         return new SpringApplicationBuilder(AccountWorkerApplication.class)
             .web(WebApplicationType.NONE)
+            .sources(NoOpMatchingOrderSenderTestConfig.class)
             .properties(
                 "account-worker.seed-accounts[0].account-id=1",
                 "account-worker.seed-accounts[0].balance=1000000",

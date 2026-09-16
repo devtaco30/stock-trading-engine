@@ -16,6 +16,7 @@ import com.flab.stocktradingengine.account.disruptor.domain.AccountState;
 import com.flab.stocktradingengine.account.disruptor.engine.AccountEngine;
 import com.flab.stocktradingengine.account.worker.AccountWorkerApplication;
 import com.flab.stocktradingengine.account.worker.recovery.AccountSnapshotWriter;
+import com.flab.stocktradingengine.account.worker.support.NoOpMatchingOrderSenderTestConfig;
 
 /**
  * ADR-032 I5 U3 — 저널 Archive 세그먼트가 실제로 회수된(purge된) 뒤에도 재기동 복구가 정상
@@ -114,6 +115,7 @@ class AccountArchivePurgeRecoveryIntegrationTest {
     private ConfigurableApplicationContext launch() {
         return new SpringApplicationBuilder(AccountWorkerApplication.class)
             .web(WebApplicationType.NONE)
+            .sources(NoOpMatchingOrderSenderTestConfig.class)
             .properties(
                 "account-worker.seed-accounts[0].account-id=1",
                 "account-worker.seed-accounts[0].balance=1000000",
