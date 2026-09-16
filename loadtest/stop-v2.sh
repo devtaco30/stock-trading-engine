@@ -28,10 +28,12 @@ for module in api matching-worker account-worker; do
     main_class=$(main_class_for "$module")
     # main_class_for가 아는 모듈만 case에 있다 — 빈 문자열이면 pkill -f ""가 전체 프로세스를
     # 매칭해버리니(파멸적) 건너뛴다. 지금 루프는 고정 3개 모듈이라 실제로는 안 비지만 방어로 둔다.
+    # I8 U3 — account-worker를 WORKER_COUNT=2로 띄우면 같은 main 클래스의 JVM이 둘이라, 이
+    # pkill 한 번으로 A·B 둘 다 잡힌다(라벨은 pid/로그 파일명에만 쓰고, main 클래스는 공유).
     if [ -n "$main_class" ] && pkill -f "$main_class" 2>/dev/null; then
         echo "${module} 정지(${main_class})"
     fi
-    rm -f "${PID_DIR}/${module}.pid"
+    rm -f "${PID_DIR}/${module}.pid" "${PID_DIR}/${module}-a.pid" "${PID_DIR}/${module}-b.pid"
 done
 
 echo "v2 프로세스 정지 완료 (인프라는 유지 — 인프라까지 내리려면 docker compose -f docker-compose.yml -f docker-compose.loadtest.yml down)"
