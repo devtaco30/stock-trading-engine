@@ -11,6 +11,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 
+import com.flab.stocktradingengine.aeron.ShardRoutingTable;
 import com.flab.stocktradingengine.account.disruptor.domain.AccountResultListener;
 import com.flab.stocktradingengine.account.disruptor.engine.AccountEngine;
 import com.flab.stocktradingengine.account.disruptor.io.AccountSnapshotSink;
@@ -27,6 +28,9 @@ import com.flab.stocktradingengine.time.LatencyHistogram;
 import com.lmax.disruptor.BlockingWaitStrategy;
 import com.lmax.disruptor.dsl.ProducerType;
 
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
 @Configuration
 @EnableConfigurationProperties(AccountWorkerProperties.class)
 public class AccountEngineConfig {
@@ -80,19 +84,30 @@ public class AccountEngineConfig {
     public AccountEngine accountEngine(AccountWorkerProperties properties, @Value("${snowflake.node-id:}") String nodeIdConfig,
                                        MatchingOrderSender matchingOrderSender, AccountResultListener listener, AccountJournal journal,
                                        AccountSnapshotSink accountSnapshotSink, LatencyHistogram accountLatencyHistogram,
+                                       ShardRoutingTable shardRoutingTable, ShardRoutingConfig.OwnedShard ownedShard,
                                        Optional<StoredAccountSnapshot> accountLoadedSnapshot, List<AccountJournalEntry> accountJournalRecoveredEntries,
                                        List<FilledTrade> accountFillReplayedEntries) {
         long nodeId = SnowflakeNodeIdResolver.resolve(nodeIdConfig);
         AccountEngine engine = new AccountEngine(
             BUFFER_SIZE, new BlockingWaitStrategy(), ProducerType.MULTI, nodeId, matchingOrderSender, listener, journal,
-            accountSnapshotSink, accountLatencyHistogram);
+            accountSnapshotSink, accountLatencyHistogram, shardRoutingTable, ownedShard.endpoint());
+        int seededCount = 0;
+        int skippedCount = 0;
         for (AccountWorkerProperties.SeedAccount seed : properties.seedAccounts()) {
+            if (!engine.owns(seed.accountId())) {
+                skippedCount++;
+                continue;
+            }
             if (seed.holdings() == null || seed.holdings().isEmpty()) {
                 engine.seed(seed.accountId(), seed.balance(), seed.marginRate());
             } else {
                 engine.seed(seed.accountId(), seed.balance(), seed.marginRate(), seed.holdings());
             }
+            seededCount++;
         }
+        // 설정이 어긋나 0건이 올라가도 조용히 뜨면 모든 주문이 거부되고 원인을 못 찾는다(I8 U2).
+        log.info("[계좌] 시드 대상 {}건 중 {}건 담당으로 시드, {}건 담당 아니라 건너뜀",
+            properties.seedAccounts().size(), seededCount, skippedCount);
         accountLoadedSnapshot.ifPresent(stored -> {
             engine.restore(stored.snapshot());
             engine.seedFillPositions(stored.fillConsumedPosition());
