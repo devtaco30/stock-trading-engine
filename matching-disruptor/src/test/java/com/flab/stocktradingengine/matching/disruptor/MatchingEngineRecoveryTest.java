@@ -133,6 +133,44 @@ class MatchingEngineRecoveryTest {
         assertEquals(2L, fills.get(0).sellOrderId());
     }
 
+    @Test
+    @DisplayName("recover를 두 번(저널·인테이크) 연달아 불러도 겹치는 주문은 한 번만 반영된다")
+    void recover를_두번_불러도_겹치는_주문은_한번만_반영된다() throws InterruptedException {
+        // 저널 리플레이(이미 반영·저널까지 된 주문)와 인테이크 리플레이(반영 여부가 불확실한
+        // 주문) 사이에 경합 구간이 생기면 같은 orderId가 양쪽에 다 들어올 수 있다(I2 U2b LLD
+        // §4-1) — OrderBook.containsOrder의 기존 멱등 체크가 그 경우에도 지켜지는지 확인한다.
+        //
+        // containsOrder는 "최근 전량 체결"도 true로 취급하는 멱등 캐시라(OrderBook 106행)
+        // 체결 후 상태를 직접 구분할 수 없다 — 대신 recover 뒤 라이브로 전환해, 1이 두 번
+        // 반영됐다면 남았을 잔량(BUY 10)을 새 매도 주문으로 건드려 체결 유무로 확인한다
+        // ("recover_중엔_리스너가_안_불린다" 테스트와 같은 기법).
+        List<JournaledOrder> journalEntries = List.of(
+            new JournaledOrder(EventType.PLACE, 1L, 100L, STOCK, OrderSide.BUY, new BigDecimal("10000"), 10, Instant.now())
+        );
+        List<JournaledOrder> intakeEntries = List.of(
+            new JournaledOrder(EventType.PLACE, 1L, 100L, STOCK, OrderSide.BUY, new BigDecimal("10000"), 10, Instant.now()), // 겹침
+            new JournaledOrder(EventType.PLACE, 2L, 200L, STOCK, OrderSide.SELL, new BigDecimal("10000"), 10, Instant.now())
+        );
+
+        List<FillResult> fills = new CopyOnWriteArrayList<>();
+        CountDownLatch latch = new CountDownLatch(1);
+        recovered = new MatchingEngine(BUFFER_SIZE, (stockCode, fill) -> {
+            fills.add(fill);
+            latch.countDown();
+        });
+        recovered.recover(journalEntries);
+        recovered.recover(intakeEntries);
+        recovered.start();
+
+        recovered.publishPlace(3L, 300L, STOCK, OrderSide.SELL, new BigDecimal("10000"), 1, Instant.now());
+        boolean arrived = latch.await(300, TimeUnit.MILLISECONDS);
+
+        assertFalse(arrived,
+            "1이 두 번 반영됐다면 2(수량 10)와 상계되고도 BUY 10 잔량이 남아 방금 넣은 SELL 1이 체결돼야 한다 — "
+                + "한 번만 반영됐어야 1·2가 정확히 상계돼 매칭될 잔량이 없다");
+        assertTrue(fills.isEmpty());
+    }
+
     /** 매칭 소비자 스레드가 주문을 호가창에 반영할 때까지 기다린다. */
     private void awaitContainsOrder(MatchingEngine engine, long orderId) {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(1);

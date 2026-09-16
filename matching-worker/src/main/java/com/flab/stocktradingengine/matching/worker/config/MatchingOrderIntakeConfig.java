@@ -2,10 +2,10 @@ package com.flab.stocktradingengine.matching.worker.config;
 
 import java.io.File;
 import java.io.IOException;
-import java.lang.System.Logger;
-import java.lang.System.Logger.Level;
 import java.nio.file.Files;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.SmartLifecycle;
@@ -17,6 +17,8 @@ import com.flab.stocktradingengine.codec.JournaledOrder;
 import com.flab.stocktradingengine.matching.disruptor.engine.MatchingEngine;
 import com.flab.stocktradingengine.matching.disruptor.io.AeronOrderReceiver;
 import com.flab.stocktradingengine.matching.worker.lifecycle.MatchingOrderReceiverLifecycle;
+import com.flab.stocktradingengine.matching.worker.recovery.MatchingOrderIntakeReplayer;
+import com.flab.stocktradingengine.matching.worker.recovery.StoredMatchingSnapshot;
 
 import io.aeron.Aeron;
 import io.aeron.CommonContext;
@@ -65,8 +67,6 @@ import io.aeron.driver.MediaDriver;
  */
 @Configuration
 public class MatchingOrderIntakeConfig {
-
-    private static final Logger log = System.getLogger(MatchingOrderIntakeConfig.class.getName());
 
     // 패키지 가시성 — 테스트(같은 패키지)가 프로덕션과 같은 채널로 발행하도록 이 기본값을 그대로
     // 참조한다. 실제 채널은 transport.matching-intake.channel 속성에서 해석된다(fork1 Unit 1).
@@ -133,20 +133,23 @@ public class MatchingOrderIntakeConfig {
     /**
      * 매칭이 아직 한 번도 뜬 적이 없으면(카탈로그에 recording이 하나도 없음) 빈 리스트를 돌려준다
      * — 예외가 아니라 복구할 gap 자체가 없는 정상 상태다(account
-     * {@code AccountFillReplayer.readFrom}과 같은 결).
+     * {@code AccountFillReplayer.readFrom}과 같은 결, I2 U2b).
      *
-     * <p><b>I2 U1 시점엔 항상 빈 리스트다</b> — recording을 발행자(계좌 샤드)별 위치부터 여러 개
-     * 읽어 합치는 실제 구현은 I2 U2b가 채운다({@code MatchingOrderIntakeReplayer} 신설 예정,
-     * account {@code AccountFillReplayer} 미러). 지금은 "녹화 배선 + 위치를 담을 자리"만 만드는
-     * 단계라, 이 빈이 하는 일 없이도 다음 단계(U2b)가 시그니처를 안 바꾸고 본문만 채울 수 있게
-     * 자리만 잡아 둔다 — 그래서 아직은 매칭 재기동 복구가 예전처럼 "자기 저널만" 본다(I3는 U2b가
-     * 닫는다). 같은 브랜치의 다음 커밋이 바로 이어 닫으므로 main에는 이 중간 상태가 나가지 않는다.
+     * <p>스냅샷이 있으면(2d-1b) 그 시점의 발행자(계좌 샤드)별 위치({@link
+     * StoredMatchingSnapshot#orderIntakePosition()})부터 recording마다 읽는다 — 스냅샷이 없으면
+     * (하위호환, 첫 기동) 모든 recording을 시작 위치부터 읽는다({@link MatchingOrderIntakeReplayer}가
+     * 빈 맵을 그렇게 해석한다).</p>
      */
     @Bean
-    public List<JournaledOrder> matchingOrderIntakeReplayedEntries() {
-        log.log(Level.WARNING, "[매칭] 주문 인테이크 리플레이가 아직 배선되지 않았다 — 재기동해도 "
-            + "매칭이 못 받은 주문은 복구되지 않는다 (I2 U2b에서 채움)");
-        return List.of();
+    public List<JournaledOrder> matchingOrderIntakeReplayedEntries(
+            AeronArchive aeronArchive,
+            Optional<StoredMatchingSnapshot> matchingLoadedSnapshot,
+            @Value("${transport.matching-intake.channel:" + DEFAULT_INTAKE_CHANNEL + "}") String intakeChannel) {
+        Map<Integer, Long> orderIntakePositions = matchingLoadedSnapshot
+            .map(StoredMatchingSnapshot::orderIntakePosition)
+            .orElse(Map.of());
+        MatchingOrderIntakeReplayer replayer = new MatchingOrderIntakeReplayer(aeronArchive);
+        return replayer.readFrom(intakeChannel, AeronStreamIds.MATCHING_INTAKE, orderIntakePositions);
     }
 
     /**
