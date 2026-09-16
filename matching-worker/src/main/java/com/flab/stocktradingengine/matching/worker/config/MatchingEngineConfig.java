@@ -10,6 +10,7 @@ import org.springframework.context.annotation.Configuration;
 import com.flab.stocktradingengine.codec.JournaledOrder;
 import com.flab.stocktradingengine.matching.disruptor.engine.MatchingEngine;
 import com.flab.stocktradingengine.matching.disruptor.io.MatchListener;
+import com.flab.stocktradingengine.matching.disruptor.io.MatchingSnapshotSink;
 import com.flab.stocktradingengine.matching.disruptor.journal.Journal;
 import com.flab.stocktradingengine.matching.worker.lifecycle.MatchingEngineLifecycle;
 import com.flab.stocktradingengine.matching.worker.recovery.StoredMatchingSnapshot;
@@ -32,11 +33,17 @@ public class MatchingEngineConfig {
      * {@link MatchingJournalArchiveConfig#matchingJournalRecoveredEntries}를 재적용한다. 스냅샷이
      * 없으면(2c-2, 하위호환) 저널 전체가 그대로 recover 입력이 된다. 계좌 축과 달리 시드할 상태가
      * 없어(호가창은 주문 리플레이만으로 전부 재구성된다) seed 단계는 없다.</p>
+     *
+     * <p>{@link MatchingSnapshotSink}(I6 U1~U2, 실제 구현은 {@code MatchingSnapshotWriter})를
+     * 러닝 중 스냅샷 싱크로 넘기고 트리거를 켠다(true) — 이제 라이브 파이프라인도 저널 N건마다
+     * 실제로 스냅샷을 찍는다. 인터페이스로 받아, Archive 없이 가볍게 띄우는 테스트가 간단한
+     * 대체 빈을 넣을 수 있게 한다(account-worker {@code AccountEngineConfig}와 같은 결).</p>
      */
     @Bean
-    public MatchingEngine matchingEngine(MatchListener listener, Journal journal,
+    public MatchingEngine matchingEngine(MatchListener listener, Journal journal, MatchingSnapshotSink matchingSnapshotWriter,
             Optional<StoredMatchingSnapshot> matchingLoadedSnapshot, List<JournaledOrder> matchingJournalRecoveredEntries) {
-        MatchingEngine engine = new MatchingEngine(BUFFER_SIZE, new BlockingWaitStrategy(), listener, journal);
+        MatchingEngine engine = new MatchingEngine(BUFFER_SIZE, new BlockingWaitStrategy(), listener, journal,
+            matchingSnapshotWriter, true);
         matchingLoadedSnapshot.ifPresent(stored -> engine.restore(stored.snapshot()));
         engine.recover(matchingJournalRecoveredEntries);
         return engine;

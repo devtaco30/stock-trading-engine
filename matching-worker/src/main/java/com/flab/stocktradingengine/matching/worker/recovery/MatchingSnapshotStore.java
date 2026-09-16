@@ -4,9 +4,11 @@ import java.io.File;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.util.Arrays;
 import java.util.Optional;
 
@@ -23,6 +25,14 @@ import com.flab.stocktradingengine.matching.worker.lifecycle.MatchingEngineLifec
  * <p>임시 파일에 다 쓴 뒤 최종 이름으로 rename한다({@link StandardCopyOption#ATOMIC_MOVE}) — 쓰는
  * 도중 프로세스가 죽어도 절반만 쓰인 파일이 최종 이름으로 남는 일이 없다. 최신 스냅샷 하나만
  * 유지한다(이전 스냅샷은 rename이 덮어쓴다).</p>
+ *
+ * <h3>fsync (I6 U2)</h3>
+ * <p>{@link FileChannel#force(boolean)}로 디스크에 실제로 박힌 뒤에야 {@link #write} 가 반환한다
+ * (account-worker {@code AccountSnapshotStore}와 같은 이유). rename 자체는 원자적이지만 그 내용이
+ * 아직 페이지 캐시에만 있을 수 있어 rename만으로는 "디스크에 확정됐다"는 보고가 거짓일 수 있다 —
+ * 이 보고를 나중에 매칭 쪽 디스크 회수(저널 recording 정리)가 경계로 믿고 쓰게 되므로(I6 D3, LLD
+ * §4) 여기서 실제로 디스크까지 박아둔다. 정상 종료 경로({@link MatchingSnapshotLifecycle}의 stop)도
+ * 이 메서드를 그대로 쓰므로 종료가 그만큼(디스크에 박힐 때까지) 느려지는 게 의도한 대가다.</p>
  *
  * <h3>파일 레이아웃</h3>
  * <pre>[recordingId:8][MatchingSnapshotCodec가 인코딩한 스냅샷 바이트...]</pre>
@@ -42,14 +52,29 @@ public class MatchingSnapshotStore {
     }
 
     public void write(long recordingId, MatchingSnapshot snapshot) {
-        byte[] snapshotBytes = codec.encode(snapshot);
+        write(recordingId, codec.encode(snapshot));
+    }
+
+    /**
+     * 이미 인코딩된 스냅샷 바이트를 그대로 쓴다(I6 U2) — 러닝 중 스냅샷 쓰기 스레드는 소비자
+     * 스레드가 이미 직렬화한 바이트를 받으므로 재인코딩하지 않는다({@code MatchingSnapshotSink}
+     * 계약과 맞물림, account-worker {@code AccountSnapshotStore}와 같은 결).
+     */
+    public void write(long recordingId, byte[] snapshotBytes) {
         ByteBuffer payload = ByteBuffer.allocate(Long.BYTES + snapshotBytes.length);
         payload.putLong(recordingId);
         payload.put(snapshotBytes);
+        payload.flip();
 
         try {
             Path tempPath = tempFile.toPath();
-            Files.write(tempPath, payload.array());
+            try (FileChannel channel = FileChannel.open(tempPath,
+                    StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING)) {
+                while (payload.hasRemaining()) {
+                    channel.write(payload);
+                }
+                channel.force(true);
+            }
             Files.move(tempPath, file.toPath(),
                 StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
         } catch (IOException e) {

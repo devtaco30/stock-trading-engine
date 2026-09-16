@@ -19,6 +19,7 @@ import org.springframework.context.annotation.Configuration;
 import com.flab.stocktradingengine.codec.JournaledOrder;
 import com.flab.stocktradingengine.matching.disruptor.engine.MatchingEngine;
 import com.flab.stocktradingengine.matching.disruptor.io.MatchListener;
+import com.flab.stocktradingengine.matching.disruptor.io.MatchingSnapshotSink;
 import com.flab.stocktradingengine.matching.disruptor.journal.InMemoryJournal;
 import com.flab.stocktradingengine.matching.disruptor.journal.Journal;
 import com.flab.stocktradingengine.matching.worker.config.MatchingEngineConfig;
@@ -49,6 +50,19 @@ class MatchingEngineConfigTest {
             // 이 테스트는 real Aeron Archive 배선 없이 MatchingEngineConfig만 가볍게 띄운다(2c-1) —
             // 저널은 MatchingJournalArchiveConfig가 없어도 되는 기본(인메모리) 구현으로 준다.
             .withBean(Journal.class, InMemoryJournal::new)
+            // 러닝 중 스냅샷 싱크(I6 U2)도 같은 이유로 실제 파일 쓰기 스레드 대신 아무것도 안 하는
+            // 대체 빈을 준다 — 이 테스트는 매칭·셧다운 경로만 본다.
+            .withBean(MatchingSnapshotSink.class, () -> new MatchingSnapshotSink() {
+                @Override
+                public boolean offer(byte[] snapshotBytes, long appliedSeq) {
+                    return true;
+                }
+
+                @Override
+                public long durableSeq() {
+                    return 0L;
+                }
+            })
             .run(context -> {
                 MatchingEngine engine = context.getBean(MatchingEngine.class);
                 Instant now = Instant.now();

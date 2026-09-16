@@ -5,10 +5,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.springframework.context.SmartLifecycle;
 
 import com.flab.stocktradingengine.matching.disruptor.engine.MatchingEngine;
-import com.flab.stocktradingengine.matching.worker.config.MatchingJournalArchiveConfig;
 import com.flab.stocktradingengine.matching.worker.recovery.MatchingSnapshotStore;
-
-import io.aeron.archive.client.AeronArchive;
 
 /**
  * graceful stop 시점에 매칭 엔진 스냅샷을 찍어 저장한다(2d-1b, ADR-019 "자체 스냅샷").
@@ -23,7 +20,12 @@ import io.aeron.archive.client.AeronArchive;
  * 엔진(phase 0)·수신 스레드(phase 1)가 먼저 멈춘 뒤에야 이 빈이 멈춘다 — {@link MatchingEngine#shutdown}
  * (Disruptor drain)이 끝나 소비자 스레드가 quiescent 상태가 된 다음에만 다른 스레드(이 stop() 호출
  * 스레드)가 books 를 안전하게 읽을 수 있어서다. 크래시(ungraceful)면 스냅샷을 못 찍고 직전
- * 스냅샷 + 그 뒤 저널 replay로 복구한다(메커니즘 먼저 — 주기적 라이브 스냅샷은 나중 리파인).</p>
+ * 스냅샷 + 그 뒤 저널 replay로 복구한다 — 그 공백을 줄이는 게 I6(주기 스냅샷)다.</p>
+ *
+ * <h3>recordingId — 더 이상 이 클래스가 직접 조회하지 않는다(I6 U2)</h3>
+ * <p>이전엔 stop() 때마다 카탈로그를 스캔했다. 러닝 중 스냅샷 쓰기({@code MatchingSnapshotWriter})도
+ * 같은 recordingId가 필요해지면서, {@code MatchingJournalArchiveConfig#matchingJournalRecordingId}
+ * 빈으로 한 번만 조회해 공유한다(account-worker {@code AccountSnapshotLifecycle}과 같은 구조).</p>
  */
 public class MatchingSnapshotLifecycle implements SmartLifecycle {
 
@@ -31,13 +33,13 @@ public class MatchingSnapshotLifecycle implements SmartLifecycle {
 
     private final MatchingEngine engine;
     private final MatchingSnapshotStore snapshotStore;
-    private final AeronArchive aeronArchive;
+    private final long journalRecordingId;
     private final AtomicBoolean running = new AtomicBoolean(false);
 
-    public MatchingSnapshotLifecycle(MatchingEngine engine, MatchingSnapshotStore snapshotStore, AeronArchive aeronArchive) {
+    public MatchingSnapshotLifecycle(MatchingEngine engine, MatchingSnapshotStore snapshotStore, Long journalRecordingId) {
         this.engine = engine;
         this.snapshotStore = snapshotStore;
-        this.aeronArchive = aeronArchive;
+        this.journalRecordingId = journalRecordingId;
     }
 
     @Override
@@ -47,29 +49,8 @@ public class MatchingSnapshotLifecycle implements SmartLifecycle {
 
     @Override
     public void stop() {
-        long recordingId = resolveCurrentJournalRecordingId();
-        snapshotStore.write(recordingId, engine.snapshot());
+        snapshotStore.write(journalRecordingId, engine.snapshot());
         running.set(false);
-    }
-
-    /** 저널 스트림의 현재(=이 프로세스가 기동 때 시작한) 녹화 ID — 카탈로그에서 가장 최근에 시작한 것. */
-    private long resolveCurrentJournalRecordingId() {
-        long[] latestRecordingId = {-1L};
-        long[] latestStartTimestamp = {Long.MIN_VALUE};
-        aeronArchive.listRecordingsForUri(0, 100,
-            MatchingJournalArchiveConfig.JOURNAL_CHANNEL, MatchingJournalArchiveConfig.JOURNAL_STREAM_ID,
-            (controlSessionId, correlationId, recordingId, startTimestamp, stopTimestamp,
-             startPosition, stopPosition, initialTermId, segmentFileLength, termBufferLength,
-             mtuLength, sessionId, streamId, strippedChannel, originalChannel, sourceIdentity) -> {
-                if (startTimestamp > latestStartTimestamp[0]) {
-                    latestStartTimestamp[0] = startTimestamp;
-                    latestRecordingId[0] = recordingId;
-                }
-            });
-        if (latestRecordingId[0] < 0) {
-            throw new IllegalStateException("저널 스트림의 녹화를 카탈로그에서 찾지 못했습니다 — 스냅샷을 찍을 수 없습니다");
-        }
-        return latestRecordingId[0];
     }
 
     @Override

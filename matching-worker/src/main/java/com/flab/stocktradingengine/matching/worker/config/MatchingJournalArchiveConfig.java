@@ -86,4 +86,32 @@ public class MatchingJournalArchiveConfig {
     public AeronArchiveMatchingJournal matchingJournal(ExclusivePublication matchingJournalPublication) {
         return new AeronArchiveMatchingJournal(matchingJournalPublication);
     }
+
+    /**
+     * 이 프로세스가 이번 실행에서 시작한 저널 녹화의 recordingId(I6 U2) — 카탈로그에서 시작 시각이
+     * 가장 최근인 것. {@link #matchingJournalRecordingSubscriptionId}에 의존해 그 녹화가 실제로
+     * 시작된 뒤에만(=카탈로그에 나타난 뒤에만) 조회한다. 한 프로세스 실행 동안 이 스트림에 recording이
+     * 정확히 하나뿐이라(재시작 없는 한 run) 기동 시 한 번만 조회해도 이후 값이 안 바뀐다 — graceful
+     * stop 스냅샷({@code MatchingSnapshotLifecycle})과 러닝 중 스냅샷 쓰기({@code
+     * MatchingSnapshotWriter}) 둘 다 이 빈을 그대로 쓴다(이전엔 stop() 시점에 각자 카탈로그를
+     * 스캔했다 — account-worker {@code accountJournalRecordingId}와 같은 구조로 맞췄다).
+     */
+    @Bean
+    public Long matchingJournalRecordingId(AeronArchive aeronArchive, Long matchingJournalRecordingSubscriptionId) {
+        long[] latestRecordingId = {-1L};
+        long[] latestStartTimestamp = {Long.MIN_VALUE};
+        aeronArchive.listRecordingsForUri(0, 100, JOURNAL_CHANNEL, JOURNAL_STREAM_ID,
+            (controlSessionId, correlationId, recordingId, startTimestamp, stopTimestamp,
+             startPosition, stopPosition, initialTermId, segmentFileLength, termBufferLength,
+             mtuLength, sessionId, streamId, strippedChannel, originalChannel, sourceIdentity) -> {
+                if (startTimestamp > latestStartTimestamp[0]) {
+                    latestStartTimestamp[0] = startTimestamp;
+                    latestRecordingId[0] = recordingId;
+                }
+            });
+        if (latestRecordingId[0] < 0) {
+            throw new IllegalStateException("저널 스트림의 녹화를 카탈로그에서 찾지 못했습니다");
+        }
+        return latestRecordingId[0];
+    }
 }
