@@ -16,6 +16,9 @@ const INPUT_FILE = __ENV.INPUT_FILE || './results/e2e-input.jsonl';
 // 쓰면 두 번째 패스부터 멱등 캐시가 재전송으로 오인해 전부 duplicate로 스킵된다(계좌·예약 반영이
 // 안 되고 histogram에도 안 잡힘) — 패스마다 접미사를 붙여 서로 다른 요청으로 만든다.
 const PASS = __ENV.PASS || 'default';
+// A(용량 측정)는 비율만 보면 되므로 전체 10만 건을 다 안 쏴도 된다 — N으로 앞에서부터
+// 잘라 쏘는 건수를 줄인다(2b 지시, 2026-09-16). 안 주면 파일 전체.
+const N = __ENV.N ? parseInt(__ENV.N) : null;
 
 const orders = new SharedArray('e2e-orders', function () {
   return open(INPUT_FILE)
@@ -23,10 +26,11 @@ const orders = new SharedArray('e2e-orders', function () {
     .filter((line) => line.trim().length > 0)
     .map((line) => JSON.parse(line));
 });
+const ITERATIONS = N ? Math.min(N, orders.length) : orders.length;
 
 export const options = {
   scenarios: {
-    replay: { executor: 'shared-iterations', vus: VUS, iterations: orders.length, maxDuration: '600s' },
+    replay: { executor: 'shared-iterations', vus: VUS, iterations: ITERATIONS, maxDuration: '600s' },
   },
   summaryTrendStats: ['avg', 'p(95)', 'p(99)', 'max'],
 };
