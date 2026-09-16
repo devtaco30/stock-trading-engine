@@ -17,6 +17,7 @@ import org.junit.jupiter.api.Test;
 
 import com.lmax.disruptor.BlockingWaitStrategy;
 import com.lmax.disruptor.dsl.ProducerType;
+import com.flab.stocktradingengine.aeron.ShardRoutingTable;
 import com.flab.stocktradingengine.account.disruptor.domain.AccountResultListener;
 import com.flab.stocktradingengine.account.disruptor.domain.NoOpAccountResultListener;
 import com.flab.stocktradingengine.account.disruptor.domain.RejectReason;
@@ -104,6 +105,71 @@ class AccountEngineTest {
         assertEquals(1, events.size());
         assertFalse(events.get(0).accepted());
         assertEquals(RejectReason.ACCOUNT_NOT_FOUND, events.get(0).reason());
+    }
+
+    @Test
+    @DisplayName("담당 슬롯이 아닌 계좌면 NOT_OWNED로 거부한다(I8 U2)")
+    void 담당_슬롯이_아니면_NOT_OWNED로_거부() throws InterruptedException {
+        latch = new CountDownLatch(1);
+        String ownedEndpoint = "aeron:udp?endpoint=localhost:20040";
+        String otherEndpoint = "aeron:udp?endpoint=localhost:20041";
+        ShardRoutingTable routingTable = new ShardRoutingTable(2, List.of(
+            new ShardRoutingTable.ShardRange(ownedEndpoint, 0, 0),
+            new ShardRoutingTable.ShardRange(otherEndpoint, 1, 1)));
+        long ownedAccountId = firstAccountIdInSlot(routingTable, 0);
+        long notOwnedAccountId = firstAccountIdInSlot(routingTable, 1);
+        engine = new AccountEngine(BUFFER_SIZE, NODE_ID,
+            (orderId, accountId, stockCode, side, price, quantity) ->
+                forwardedOrders.add(new ForwardedOrder(orderId, accountId, stockCode, side, price, quantity)),
+            new Recorder(events, stateChanges, latch), routingTable, ownedEndpoint);
+        engine.seed(ownedAccountId, new BigDecimal("1000000"), new BigDecimal("0.40"));
+        engine.start();
+
+        engine.publishBuy(notOwnedAccountId, STOCK, new BigDecimal("10000"), 10, "r1");
+        awaitResults();
+
+        assertEquals(1, events.size());
+        assertFalse(events.get(0).accepted());
+        assertEquals(RejectReason.NOT_OWNED, events.get(0).reason());
+    }
+
+    @Test
+    @DisplayName("시드 필터를 우회해 담당 아닌 계좌가 메모리에 올라와 있어도 NOT_OWNED로 거부한다(I8 U2, 시드 단계와 독립적인 런타임 판정)")
+    void 시드_필터_우회해도_담당_아니면_거부() throws InterruptedException {
+        // account-worker의 실제 배선(AccountEngineConfig)은 시드 전에 owns()로 걸러 담당 아닌
+        // 계좌는 애초에 seed()를 안 부른다. 하지만 그 필터가 유일한 방어선이면, 필터에 버그가
+        // 생기거나 나중에 다른 경로로 시드하게 됐을 때 담당 아닌 계좌가 그냥 메모리에 올라온다.
+        // 이 테스트는 그 필터를 일부러 건너뛰고(seed를 직접 불러 담당 아닌 계좌를 강제로 올림)
+        // 그래도 런타임 판정(rejectIfNotOwned)이 독립적으로 막는지 확인한다.
+        latch = new CountDownLatch(1);
+        String ownedEndpoint = "aeron:udp?endpoint=localhost:20040";
+        String otherEndpoint = "aeron:udp?endpoint=localhost:20041";
+        ShardRoutingTable routingTable = new ShardRoutingTable(2, List.of(
+            new ShardRoutingTable.ShardRange(ownedEndpoint, 0, 0),
+            new ShardRoutingTable.ShardRange(otherEndpoint, 1, 1)));
+        long notOwnedAccountId = firstAccountIdInSlot(routingTable, 1);
+        engine = new AccountEngine(BUFFER_SIZE, NODE_ID,
+            (orderId, accountId, stockCode, side, price, quantity) ->
+                forwardedOrders.add(new ForwardedOrder(orderId, accountId, stockCode, side, price, quantity)),
+            new Recorder(events, stateChanges, latch), routingTable, ownedEndpoint);
+        engine.seed(notOwnedAccountId, new BigDecimal("1000000"), new BigDecimal("0.40")); // 시드 필터 우회 — 강제로 메모리에 올림
+        engine.start();
+
+        engine.publishBuy(notOwnedAccountId, STOCK, new BigDecimal("10000"), 10, "r1");
+        awaitResults();
+
+        assertEquals(1, events.size());
+        assertFalse(events.get(0).accepted());
+        assertEquals(RejectReason.NOT_OWNED, events.get(0).reason());
+    }
+
+    private long firstAccountIdInSlot(ShardRoutingTable table, int targetSlot) {
+        for (long accountId = 0; accountId < 10_000; accountId++) {
+            if (table.slotFor(accountId) == targetSlot) {
+                return accountId;
+            }
+        }
+        throw new IllegalStateException("탐색 범위 내에 슬롯 " + targetSlot + "에 해당하는 accountId가 없다");
     }
 
     @Test

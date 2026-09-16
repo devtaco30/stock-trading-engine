@@ -2,11 +2,13 @@ package com.flab.stocktradingengine.api.messaging;
 
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
+import java.util.Map;
 
 import org.agrona.concurrent.BackoffIdleStrategy;
 import org.agrona.concurrent.IdleStrategy;
 import org.agrona.concurrent.UnsafeBuffer;
 
+import com.flab.stocktradingengine.aeron.ShardRoutingTable;
 import com.flab.stocktradingengine.api.exception.OrderPublishException;
 import com.flab.stocktradingengine.codec.AccountOrderCodec;
 import com.flab.stocktradingengine.codec.DecodedAccountOrder;
@@ -31,13 +33,20 @@ import io.aeron.Publication;
  * {@link OrderPublishException}을 던져 503으로 응답한다 — 여기서 로그만 남기고 넘어가면(계좌
  * 워커의 best-effort와 같은 방식) 이 요청의 유일한 발신 기회가 조용히 사라진다(돈). 클라이언트가
  * 같은 requestId로 재전송하면 계좌 엔진의 멱등이 중복 예약을 막아준다.</p>
+ *
+ * <h3>계좌번호로 목적지를 고른다 (I8 U1)</h3>
+ * <p>{@link ShardRoutingTable#endpointFor}로 accountId가 속한 계좌 샤드 endpoint를 계산해, 그
+ * endpoint의 {@link Publication}으로만 보낸다. 계좌 워커가 하나뿐이던 예전에는 {@code shard-routing.shards}가
+ * 비어 있어 {@link com.flab.stocktradingengine.api.config.ShardRoutingConfig}가 슬롯 1개짜리 표로
+ * 폴백한다 — 이 경우 모든 계좌가 같은 endpoint로 간다(예전과 동일한 동작).</p>
  */
 public class AeronAccountOrderSender {
 
     private static final int ENCODE_BUFFER_SIZE = 256;
     private static final int MAX_ATTEMPTS = 3;
 
-    private final Publication accountOrderPublication;
+    private final ShardRoutingTable shardRoutingTable;
+    private final Map<String, Publication> publicationsByEndpoint;
     private final AccountOrderCodec codec = new AccountOrderCodec();
     // 요청마다 새로 allocateDirect하면 off-heap 네이티브 메모리 할당·해제가 매번 반복된다(39 리뷰
     // 비블로킹 — ec가 AeronMatchingOrderSender에서 고친 것과 같은 유형). 단, 그쪽은 발행 전용
@@ -48,8 +57,9 @@ public class AeronAccountOrderSender {
     private final ThreadLocal<UnsafeBuffer> encodeBuffer =
         ThreadLocal.withInitial(() -> new UnsafeBuffer(ByteBuffer.allocateDirect(ENCODE_BUFFER_SIZE)));
 
-    public AeronAccountOrderSender(Publication accountOrderPublication) {
-        this.accountOrderPublication = accountOrderPublication;
+    public AeronAccountOrderSender(ShardRoutingTable shardRoutingTable, Map<String, Publication> publicationsByEndpoint) {
+        this.shardRoutingTable = shardRoutingTable;
+        this.publicationsByEndpoint = publicationsByEndpoint;
     }
 
     /**
@@ -75,11 +85,12 @@ public class AeronAccountOrderSender {
             side, accountId, stockCode, price, quantity, requestId, EpochNanos.now());
         UnsafeBuffer buffer = encodeBuffer.get();
         int length = codec.encode(buffer, 0, order);
+        Publication publication = publicationFor(accountId);
 
         IdleStrategy idleStrategy = new BackoffIdleStrategy();
         long result = -1;
         for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-            result = accountOrderPublication.offer(buffer, 0, length);
+            result = publication.offer(buffer, 0, length);
             if (result > 0) {
                 return;
             }
@@ -88,5 +99,14 @@ public class AeronAccountOrderSender {
         throw new OrderPublishException(
             "계좌 인테이크로 주문 발신 실패(재시도 " + MAX_ATTEMPTS + "회 소진): accountId=" + accountId
                 + " requestId=" + requestId + " offer 결과=" + result);
+    }
+
+    private Publication publicationFor(long accountId) {
+        String endpoint = shardRoutingTable.endpointFor(accountId);
+        Publication publication = publicationsByEndpoint.get(endpoint);
+        if (publication == null) {
+            throw new IllegalStateException("계좌 인테이크 fan-out 목적지에 대응하는 발행 스트림이 없습니다: " + endpoint);
+        }
+        return publication;
     }
 }

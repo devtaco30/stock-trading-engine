@@ -4,10 +4,12 @@ import java.lang.System.Logger;
 import java.lang.System.Logger.Level;
 import java.math.BigDecimal;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 import com.lmax.disruptor.EventHandler;
+import com.flab.stocktradingengine.aeron.ShardRoutingTable;
 import com.flab.stocktradingengine.account.disruptor.domain.AccountResultListener;
 import com.flab.stocktradingengine.account.disruptor.domain.AccountState;
 import com.flab.stocktradingengine.account.disruptor.domain.BuyFillResult;
@@ -51,6 +53,13 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
     /** orderId가 발급되지 못했을 때(requestId 빈값·null, 모르는 계좌) 리스너에 싣는 값 — 발급기는 0을 내지 않는다. */
     private static final long NO_ORDER_ID = 0L;
 
+    // 샤딩을 안 쓰는 생성자(대부분의 테스트, I8 이전 코드)를 위한 기본값 — 슬롯 1개짜리 표 하나에
+    // 모든 accountId가 매핑되고, 이 워커가 그 표의 유일한 endpoint를 담당한다고 둬서 "모든 계좌를
+    // 내가 담당한다"는 예전 동작(암묵적 전제)을 그대로 재현한다.
+    private static final String DEFAULT_OWNED_ENDPOINT = "*";
+    private static final ShardRoutingTable DEFAULT_SHARD_ROUTING_TABLE =
+        new ShardRoutingTable(1, List.of(new ShardRoutingTable.ShardRange(DEFAULT_OWNED_ENDPOINT, 0, 0)));
+
     // 접수 지연 측정(끝점①)을 안 쓰는 생성자(대부분의 테스트)를 위한 기본값 — 꺼진 채로 두면
     // record가 분기 하나만 타고 즉시 반환한다.
     private static final LatencyHistogram NO_OP_LATENCY_HISTOGRAM = new LatencyHistogram(false);
@@ -71,6 +80,8 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
     private final AccountSnapshotCodec snapshotCodec = new AccountSnapshotCodec();
     private final boolean snapshotTriggerEnabled;
     private final LatencyHistogram latencyHistogram;
+    private final ShardRoutingTable shardRoutingTable;
+    private final String ownedEndpoint;
 
     // sessionId(Aeron 발행자 구분키, ADR-032 I1 D1) → 그 발행자로부터 마지막으로 반영한 체결 수신
     // 위치. 소비자 스레드(이 핸들러)만 쓰고, 호스트 스레드(그레이스풀 스톱)·1-3의 스냅샷 쓰기
@@ -83,13 +94,21 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
     // "상태가 몇 번 바뀌었나"(그건 AccountState.seq)를 뜻하지 않는다.
     private long appliedSeq;
 
+    /**
+     * ⚠️ 계좌 샤딩 없이(모든 계좌를 담당) 만든다 — 테스트 전용. 실제 워커 배선은 {@code
+     * AccountEngine}을 통해 shardRoutingTable·ownedEndpoint를 받는 생성자로 가야 한다(직접
+     * 이 생성자를 프로덕션 배선에 쓰면 조용히 샤딩이 안 걸린다).
+     */
     public AccountEventHandler(Map<Long, AccountState> accounts, AccountOrderIdGenerator orderIdGenerator,
                                MatchingOrderSender matchingOrderSender, AccountResultListener listener,
                                AccountSnapshotSink snapshotSink) {
-        this(accounts, orderIdGenerator, matchingOrderSender, listener, snapshotSink, true, NO_OP_LATENCY_HISTOGRAM);
+        this(accounts, orderIdGenerator, matchingOrderSender, listener, snapshotSink, true, NO_OP_LATENCY_HISTOGRAM,
+            DEFAULT_SHARD_ROUTING_TABLE, DEFAULT_OWNED_ENDPOINT);
     }
 
     /**
+     * ⚠️ 위와 같은 이유로 테스트 전용(모든 계좌를 담당).
+     *
      * @param snapshotTriggerEnabled N건마다 세대 경계를 열고 스냅샷을 직렬화+offer할지. {@link
      *     com.flab.stocktradingengine.account.disruptor.engine.AccountEngine#recover}의 replay
      *     전용 핸들러만 false를 준다 — 이미 지나간 저널을 다시 훑는 것뿐이라 새로 뜰 스냅샷이
@@ -100,17 +119,24 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
     public AccountEventHandler(Map<Long, AccountState> accounts, AccountOrderIdGenerator orderIdGenerator,
                                MatchingOrderSender matchingOrderSender, AccountResultListener listener,
                                AccountSnapshotSink snapshotSink, boolean snapshotTriggerEnabled) {
-        this(accounts, orderIdGenerator, matchingOrderSender, listener, snapshotSink, snapshotTriggerEnabled, NO_OP_LATENCY_HISTOGRAM);
+        this(accounts, orderIdGenerator, matchingOrderSender, listener, snapshotSink, snapshotTriggerEnabled, NO_OP_LATENCY_HISTOGRAM,
+            DEFAULT_SHARD_ROUTING_TABLE, DEFAULT_OWNED_ENDPOINT);
     }
 
     /**
      * @param latencyHistogram 끝점①(접수·예약) 지연 측정기(decision_records/v1-v2-e2e-measurement.md).
      *     매수·매도가 accept됐을 때만 기록한다(거부·중복은 모집단에서 뺀다 — v1의 대응 지점이
      *     같은 이유로 거부 시 그 지점에 도달하지 않는 것과 모집단을 맞춘다).
+     * @param shardRoutingTable accountId가 속한 슬롯의 담당 endpoint를 계산하는 표(I8 U2). api가
+     *     체결 fan-out에 쓰는 것과 같은 종류의 표를 계좌 워커도 그대로 읽는다 — 담당 슬롯을 적는
+     *     별도 프로퍼티를 새로 만들지 않는다(같은 사실이 두 곳에 각자 적히면 어긋날 수 있다).
+     * @param ownedEndpoint 이 워커 자신의 endpoint(자기 인테이크 채널). {@code shardRoutingTable}에서
+     *     이 값과 일치하는 슬롯 범위가 이 워커의 담당이다.
      */
     public AccountEventHandler(Map<Long, AccountState> accounts, AccountOrderIdGenerator orderIdGenerator,
                                MatchingOrderSender matchingOrderSender, AccountResultListener listener,
-                               AccountSnapshotSink snapshotSink, boolean snapshotTriggerEnabled, LatencyHistogram latencyHistogram) {
+                               AccountSnapshotSink snapshotSink, boolean snapshotTriggerEnabled, LatencyHistogram latencyHistogram,
+                               ShardRoutingTable shardRoutingTable, String ownedEndpoint) {
         this.accounts = accounts;
         this.orderIdGenerator = orderIdGenerator;
         this.matchingOrderSender = matchingOrderSender;
@@ -118,6 +144,28 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
         this.snapshotSink = snapshotSink;
         this.snapshotTriggerEnabled = snapshotTriggerEnabled;
         this.latencyHistogram = latencyHistogram;
+        this.shardRoutingTable = shardRoutingTable;
+        this.ownedEndpoint = ownedEndpoint;
+    }
+
+    /** 이 워커가 accountId가 속한 슬롯을 담당하는지 — "내 담당인가"를 묻는 자리를 이 메서드 하나로 모은다(D2). */
+    private boolean isOwned(long accountId) {
+        return ownedEndpoint.equals(shardRoutingTable.endpointFor(accountId));
+    }
+
+    /**
+     * 담당이 아니면 {@link RejectReason#NOT_OWNED}로 거부하고 {@code true}를 돌려준다(호출부가
+     * 그 자리에서 return하게). 계좌가 메모리에 없는 것({@link RejectReason#ACCOUNT_NOT_FOUND})과는
+     * 다른 사실이라 사유를 분리한다 — 라우팅이 잘못 왔을 때 둘이 같은 사유로 보이면 원인을 못
+     * 찾는다(D3).
+     */
+    private boolean rejectIfNotOwned(long accountId, long orderId, String requestId) {
+        if (!isOwned(accountId)) {
+            log.log(Level.WARNING, "[계좌] 담당 슬롯이 아닌 계좌로 이벤트가 왔습니다(라우팅 확인 필요): accountId=" + accountId);
+            listener.onRejected(accountId, orderId, requestId, RejectReason.NOT_OWNED);
+            return true;
+        }
+        return false;
     }
 
     /**
@@ -218,9 +266,11 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
             return;
         }
 
+        if (rejectIfNotOwned(accountId, NO_ORDER_ID, requestId)) {
+            return;
+        }
         AccountState state = accounts.get(accountId);
         if (state == null) {
-            // 워커가 소유하지 않은 계좌 — 라우팅이 잘못됐거나 시드 누락
             listener.onRejected(accountId, NO_ORDER_ID, requestId, RejectReason.ACCOUNT_NOT_FOUND);
             return;
         }
@@ -255,6 +305,9 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
             return;
         }
 
+        if (rejectIfNotOwned(accountId, NO_ORDER_ID, requestId)) {
+            return;
+        }
         AccountState state = accounts.get(accountId);
         if (state == null) {
             listener.onRejected(accountId, NO_ORDER_ID, requestId, RejectReason.ACCOUNT_NOT_FOUND);
@@ -289,6 +342,9 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
         long tradeId = event.getTradeId();
         lastAppliedFillPositions.put(event.getSourceSessionId(), event.getSourcePosition());
 
+        if (rejectIfNotOwned(accountId, orderId, event.getRequestId())) {
+            return;
+        }
         AccountState state = accounts.get(accountId);
         if (state == null) {
             listener.onRejected(accountId, orderId, event.getRequestId(), RejectReason.ACCOUNT_NOT_FOUND);
@@ -310,6 +366,9 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
         long tradeId = event.getTradeId();
         lastAppliedFillPositions.put(event.getSourceSessionId(), event.getSourcePosition());
 
+        if (rejectIfNotOwned(accountId, orderId, event.getRequestId())) {
+            return;
+        }
         AccountState state = accounts.get(accountId);
         if (state == null) {
             listener.onRejected(accountId, orderId, event.getRequestId(), RejectReason.ACCOUNT_NOT_FOUND);
@@ -326,9 +385,12 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
         long accountId = event.getAccountId();
         long settlementRef = event.getTradeId(); // settlementRef 는 tradeId 필드 재사용(AccountEvent 참고)
 
+        if (rejectIfNotOwned(accountId, NO_ORDER_ID, event.getRequestId())) {
+            return;
+        }
         AccountState state = accounts.get(accountId);
         if (state == null) {
-            listener.onRejected(accountId, 0L, event.getRequestId(), RejectReason.ACCOUNT_NOT_FOUND);
+            listener.onRejected(accountId, NO_ORDER_ID, event.getRequestId(), RejectReason.ACCOUNT_NOT_FOUND);
             return;
         }
         boolean applied = state.applySettlement(settlementRef, event.getPrice());

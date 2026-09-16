@@ -25,6 +25,7 @@ import com.flab.stocktradingengine.account.disruptor.journal.AccountJournal;
 import com.flab.stocktradingengine.account.disruptor.journal.InMemoryAccountJournal;
 import com.flab.stocktradingengine.account.worker.config.AccountEngineConfig;
 import com.flab.stocktradingengine.account.worker.config.AccountLatencyMeasurementConfig;
+import com.flab.stocktradingengine.account.worker.config.ShardRoutingConfig;
 import com.flab.stocktradingengine.account.worker.recovery.StoredAccountSnapshot;
 import com.flab.stocktradingengine.codec.AccountJournalEntry;
 
@@ -37,7 +38,7 @@ class AccountEngineConfigTest {
     private static final String STOCK = "005930";
 
     private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
-        .withUserConfiguration(AccountEngineConfig.class, AccountLatencyMeasurementConfig.class, EmptyRecoveredEntriesConfig.class)
+        .withUserConfiguration(AccountEngineConfig.class, AccountLatencyMeasurementConfig.class, EmptyRecoveredEntriesConfig.class, ShardRoutingConfig.class)
         .withPropertyValues(
             "account-worker.seed-accounts[0].account-id=1",
             "account-worker.seed-accounts[0].balance=1000000",
