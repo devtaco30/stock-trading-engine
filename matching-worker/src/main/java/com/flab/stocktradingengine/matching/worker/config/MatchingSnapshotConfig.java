@@ -3,6 +3,7 @@ package com.flab.stocktradingengine.matching.worker.config;
 import java.io.File;
 import java.util.Optional;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.SmartLifecycle;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -38,7 +39,21 @@ public class MatchingSnapshotConfig {
         return matchingSnapshotStore.read();
     }
 
+    /**
+     * {@code matching.worker.graceful-snapshot-enabled=false}면 이 빈 자체가 등록되지 않는다(I6
+     * U3) — graceful stop 때 찍는 최종 스냅샷을 완전히 빼서, "정상 종료를 거치지 않고 러닝 중
+     * 스냅샷만으로 복구되는지"를 증명하는 통합 테스트가 쓴다. 프로덕션 기본값은 true(항상 켜짐) —
+     * 이 스위치를 끄는 건 그 테스트 하나뿐이다.
+     *
+     * <h3>⚠️ 운영에서는 끄지 말 것</h3>
+     * <p>테스트에서 비정상 종료(크래시)를 흉내내려고 둔 스위치다. 이 값을 false로 두고 실제로
+     * 운영하면, 프로세스가 정상 종료할 때도 그 시점의 최종 스냅샷이 남지 않는다 — 다음 기동이
+     * 마지막 러닝 중 스냅샷(최대 10,000건 전) 이후 구간을 전부 저널에서 다시 읽어야 해 복구가
+     * 그만큼 길어진다. 기본값이 true라 실수로 꺼질 일은 없지만, "종료를 빠르게 하려고" 끄는
+     * 용도로 오해하지 말 것 — 이건 종료 속도를 위한 스위치가 아니라 테스트 전용 스위치다.
+     */
     @Bean
+    @ConditionalOnProperty(name = "matching.worker.graceful-snapshot-enabled", havingValue = "true", matchIfMissing = true)
     public SmartLifecycle matchingSnapshotLifecycle(
             MatchingEngine matchingEngine, MatchingSnapshotStore matchingSnapshotStore, Long matchingJournalRecordingId) {
         return new MatchingSnapshotLifecycle(matchingEngine, matchingSnapshotStore, matchingJournalRecordingId);
