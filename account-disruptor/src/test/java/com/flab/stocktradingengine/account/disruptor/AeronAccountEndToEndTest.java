@@ -46,7 +46,7 @@ class AeronAccountEndToEndTest {
 
     @Test
     void Aeron으로_들어온_매수주문이_검증되고_예약된다() throws InterruptedException {
-        MediaDriver driver = MediaDriver.launchEmbedded();
+        MediaDriver driver = MediaDriver.launchEmbedded(cleanEmbeddedMediaDriverContext());
         Aeron aeron = Aeron.connect(new Aeron.Context().aeronDirectoryName(driver.aeronDirectoryName()));
 
         List<Recorded> events = new CopyOnWriteArrayList<>();
@@ -85,7 +85,7 @@ class AeronAccountEndToEndTest {
 
     @Test
     void 같은_requestId로_두번_발신하면_둘째는_재예약없이_중복통지된다() throws InterruptedException {
-        MediaDriver driver = MediaDriver.launchEmbedded();
+        MediaDriver driver = MediaDriver.launchEmbedded(cleanEmbeddedMediaDriverContext());
         Aeron aeron = Aeron.connect(new Aeron.Context().aeronDirectoryName(driver.aeronDirectoryName()));
 
         List<Recorded> events = new CopyOnWriteArrayList<>();
@@ -198,5 +198,10 @@ class AeronAccountEndToEndTest {
             events.add(new Recorded(false, 0L, null, true));
             latch.countDown();
         }
+    }
+
+    /** Aeron 드라이버 통신용 임시 디렉터리(aeron-*)를 시작·종료 시 지운다(I10) — 기본값은 안 지운다. */
+    private static MediaDriver.Context cleanEmbeddedMediaDriverContext() {
+        return new MediaDriver.Context().dirDeleteOnStart(true).dirDeleteOnShutdown(true);
     }
 }

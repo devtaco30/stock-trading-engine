@@ -71,8 +71,8 @@ class AccountFillMultiSessionRecordingIntegrationTest {
     void 서로_다른_프로세스가_발행하면_recording이_세션별로_따로_생기는지_실측() {
         String fillChannel = "aeron:udp?endpoint=localhost:" + fillPort;
 
-        MediaDriver matchingDriverA = MediaDriver.launchEmbedded();
-        MediaDriver matchingDriverB = MediaDriver.launchEmbedded();
+        MediaDriver matchingDriverA = MediaDriver.launchEmbedded(cleanEmbeddedMediaDriverContext());
+        MediaDriver matchingDriverB = MediaDriver.launchEmbedded(cleanEmbeddedMediaDriverContext());
         try {
             Aeron matchingAeronA = Aeron.connect(new Aeron.Context().aeronDirectoryName(matchingDriverA.aeronDirectoryName()));
             Aeron matchingAeronB = Aeron.connect(new Aeron.Context().aeronDirectoryName(matchingDriverB.aeronDirectoryName()));
@@ -163,5 +163,10 @@ class AccountFillMultiSessionRecordingIntegrationTest {
              mtuLength, sessionId, streamId, strippedChannel, originalChannel, sourceIdentity) ->
                 ids.add(recordingId));
         return ids;
+    }
+
+    /** Aeron 드라이버 통신용 임시 디렉터리(aeron-*)를 시작·종료 시 지운다(I10) — 기본값은 안 지운다. */
+    private static MediaDriver.Context cleanEmbeddedMediaDriverContext() {
+        return new MediaDriver.Context().dirDeleteOnStart(true).dirDeleteOnShutdown(true);
     }
 }

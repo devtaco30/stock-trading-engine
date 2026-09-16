@@ -39,7 +39,7 @@ class AeronIpcRoundtripTest {
 
     @Test
     void IPC로_메시지_한_건이_왕복한다() {
-        MediaDriver driver = MediaDriver.launchEmbedded();
+        MediaDriver driver = MediaDriver.launchEmbedded(cleanEmbeddedMediaDriverContext());
         Aeron aeron = Aeron.connect(new Aeron.Context().aeronDirectoryName(driver.aeronDirectoryName()));
 
         try (Publication publication = aeron.addPublication(CHANNEL, STREAM_ID);
@@ -106,5 +106,10 @@ class AeronIpcRoundtripTest {
             }
         }
         return assembled.toString();
+    }
+
+    /** Aeron 드라이버 통신용 임시 디렉터리(aeron-*)를 시작·종료 시 지운다(I10) — 기본값은 안 지운다. */
+    private static MediaDriver.Context cleanEmbeddedMediaDriverContext() {
+        return new MediaDriver.Context().dirDeleteOnStart(true).dirDeleteOnShutdown(true);
     }
 }

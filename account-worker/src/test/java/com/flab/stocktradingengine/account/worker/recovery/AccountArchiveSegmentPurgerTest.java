@@ -61,7 +61,9 @@ class AccountArchiveSegmentPurgerTest {
         controlRequestChannel = "aeron:udp?endpoint=localhost:" + controlPort;
 
         archivingMediaDriver = ArchivingMediaDriver.launch(
-            new MediaDriver.Context().aeronDirectoryName(aeronDirectoryName),
+            new MediaDriver.Context().aeronDirectoryName(aeronDirectoryName)
+                .dirDeleteOnStart(true)
+                .dirDeleteOnShutdown(true),
             new Archive.Context()
                 .controlChannel(controlRequestChannel)
                 .replicationChannel("aeron:udp?endpoint=localhost:0")

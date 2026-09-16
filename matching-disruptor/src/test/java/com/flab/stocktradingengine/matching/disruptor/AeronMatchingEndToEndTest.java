@@ -47,7 +47,7 @@ class AeronMatchingEndToEndTest {
 
     @Test
     void Aeron으로_들어온_교차_주문이_매칭돼_체결난다() throws InterruptedException {
-        MediaDriver driver = MediaDriver.launchEmbedded();
+        MediaDriver driver = MediaDriver.launchEmbedded(cleanEmbeddedMediaDriverContext());
         Aeron aeron = Aeron.connect(new Aeron.Context().aeronDirectoryName(driver.aeronDirectoryName()));
 
         List<FillResult> fills = new CopyOnWriteArrayList<>();
@@ -119,5 +119,10 @@ class AeronMatchingEndToEndTest {
             }
             Thread.yield();
         }
+    }
+
+    /** Aeron 드라이버 통신용 임시 디렉터리(aeron-*)를 시작·종료 시 지운다(I10) — 기본값은 안 지운다. */
+    private static MediaDriver.Context cleanEmbeddedMediaDriverContext() {
+        return new MediaDriver.Context().dirDeleteOnStart(true).dirDeleteOnShutdown(true);
     }
 }
