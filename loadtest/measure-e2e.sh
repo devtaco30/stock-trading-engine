@@ -17,10 +17,14 @@ set -uo pipefail
 #   측정 훅 트리거 파일 폴링(latency-trigger-{v1,v2}) (a4)
 cd "$(dirname "$0")/.."
 
-RESULTS_DIR="loadtest/results"
+# 절대경로로 고정 — gradlew bootRun의 JVM 작업 디렉터리가 리포 루트가 아니라 모듈
+# 서브디렉터리라, 트리거 파일에 담는 목적지 경로가 상대경로면 앱이 자기 서브디렉터리 밑에
+# 써버린다(실측 확인, 2026-09-16 — 첫 실측정에서 latency-*.json 8개가 전부
+# order-engine/loadtest/results/·account-worker/loadtest/results/ 밑에 잘못 쓰인 걸 발견).
+RESULTS_DIR="$(pwd)/loadtest/results"
 mkdir -p "$RESULTS_DIR"
 
-INPUT_FILE="$(pwd)/${RESULTS_DIR}/e2e-input.jsonl"
+INPUT_FILE="${RESULTS_DIR}/e2e-input.jsonl"
 if [ ! -f "$INPUT_FILE" ]; then
     echo "경고: ${INPUT_FILE} 없음 — ec의 입력 생성기를 먼저 돌려야 한다" >&2
 fi
