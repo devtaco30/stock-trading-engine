@@ -58,7 +58,7 @@ public class AccountEngine {
     // 둬, 실수로 가지치기가 진행돼 테스트가 세대 데이터를 잃는 일이 없게 한다(보수적 기본값).
     private static final AccountSnapshotSink NO_OP_SNAPSHOT_SINK = new AccountSnapshotSink() {
         @Override
-        public boolean offer(byte[] snapshotBytes, long fillPosition, long appliedSeq) {
+        public boolean offer(byte[] snapshotBytes, Map<Integer, Long> fillPositions, long appliedSeq) {
             return true;
         }
 
@@ -184,24 +184,24 @@ public class AccountEngine {
     }
 
     /**
-     * 소비자(비즈니스 핸들러)가 실제로 처리한 시점의 체결 수신 위치(1-2). {@code
-     * AccountFillReceiver#consumedPosition()}은 수신 스레드가 링에 넣은 위치라 소비자가 아직 처리
-     * 안 한 체결까지 포함할 수 있다 — 러닝 중 스냅샷(1-3)은 이 값을 써야 그 체결을 replay 대상에서
-     * 빠뜨리지 않는다.
+     * 소비자(비즈니스 핸들러)가 실제로 처리한 시점의 체결 수신 위치를 발행자(Aeron sessionId)별로
+     * 담은 맵(1-2, ADR-032 I1 D1). 발행자가 여럿이면(매칭 프로세스가 둘 이상) recording이 여럿
+     * 생기므로 값 하나로는 어느 recording의 위치인지 구분할 수 없다 — 러닝 중 스냅샷(1-3)은 이
+     * 맵을 써야 그 체결들을 replay 대상에서 빠뜨리지 않는다.
      */
-    public long lastAppliedFillPosition() {
-        return businessHandler.lastAppliedFillPosition();
+    public Map<Integer, Long> lastAppliedFillPositions() {
+        return businessHandler.lastAppliedFillPositions();
     }
 
     /**
      * 복구 시(단일 스레드, {@link #start} 전) 소비자의 체결 수신 위치를 스냅샷이 가리키던 값으로
      * 시드한다(1-3, 39 리뷰 지적) — 안 하면 복구 직후~첫 라이브 체결 사이에 러닝 중 스냅샷이
-     * 찍힐 때 위치가 0으로 저장돼, 다음 복구가 체결 스트림을 처음부터 다시 replay한다. 반드시
+     * 찍힐 때 위치가 빈 채로 저장돼, 다음 복구가 체결 스트림을 처음부터 다시 replay한다. 반드시
      * {@link #restore} 이후, {@link #start} 이전에 부른다.
      */
-    public void seedFillPosition(long fillConsumedPosition) {
+    public void seedFillPositions(Map<Integer, Long> fillPositions) {
         requireNotStarted();
-        businessHandler.seedLastAppliedFillPosition(fillConsumedPosition);
+        businessHandler.seedLastAppliedFillPositions(fillPositions);
     }
 
     /**
@@ -272,10 +272,11 @@ public class AccountEngine {
             // 저널 엔트리엔 발행 시각도 없다(리플레이 대상은 저널이지 발행 스트림이 아니다) — 0으로 채운다.
             case BUY -> event.setBuy(entry.accountId(), entry.stockCode(), entry.price(), entry.quantity(), entry.requestId(), 0L);
             case SELL -> event.setSell(entry.accountId(), entry.stockCode(), entry.price(), entry.quantity(), entry.requestId(), 0L);
-            // 저널 엔트리엔 sourcePosition이 없다(리플레이 대상 자체가 저널이지 체결 수신 스트림이
-            // 아니다) — 0으로 채운다. start() 전에만 도는 복구 경로라 이후 라이브 첫 체결이 곧 덮어쓴다.
-            case BUY_FILL -> event.setBuyFill(entry.tradeId(), entry.orderId(), entry.accountId(), entry.stockCode(), entry.price(), entry.quantity(), 0L);
-            case SELL_FILL -> event.setSellFill(entry.tradeId(), entry.orderId(), entry.accountId(), entry.stockCode(), entry.quantity(), 0L);
+            // 저널 엔트리엔 sourcePosition·sourceSessionId가 없다(리플레이 대상 자체가 저널이지
+            // 체결 수신 스트림이 아니다) — 0으로 채운다. start() 전에만 도는 복구 경로라 이후 라이브
+            // 첫 체결이 곧 덮어쓴다.
+            case BUY_FILL -> event.setBuyFill(entry.tradeId(), entry.orderId(), entry.accountId(), entry.stockCode(), entry.price(), entry.quantity(), 0L, 0);
+            case SELL_FILL -> event.setSellFill(entry.tradeId(), entry.orderId(), entry.accountId(), entry.stockCode(), entry.quantity(), 0L, 0);
             case SETTLEMENT -> event.setSettlement(entry.tradeId(), entry.accountId(), entry.price());
         }
     }
@@ -352,7 +353,7 @@ public class AccountEngine {
 
     /**
      * 매수 체결 반영을 링버퍼에 발행한다. tradeId 는 체결 신원(멱등키). sourcePosition을 모르는
-     * 발행자(테스트 등)를 위한 오버로드 — 0으로 채운다({@link #lastAppliedFillPosition()}이 이
+     * 발행자(테스트 등)를 위한 오버로드 — 0으로 채운다({@link #lastAppliedFillPositions()}이 이
      * 체결의 위치를 모른다는 뜻).
      *
      * @return 발행한 링버퍼 시퀀스. {@link #blockUntilJournaled}에 넘겨 이 이벤트가 저널에 기록될
@@ -365,13 +366,23 @@ public class AccountEngine {
     /**
      * 매수 체결 반영을 링버퍼에 발행한다. sourcePosition은 이 체결을 실어 보낸 수신 스트림의 위치(1-2,
      * {@code AccountFillReceiver}가 {@code Header.position()}으로 실어 보낸다) — 소비자가 처리한 뒤
-     * {@link #lastAppliedFillPosition()}로 읽힌다.
+     * {@link #lastAppliedFillPositions()}로 읽힌다. sourceSessionId를 모르는 발행자(테스트 등)를
+     * 위한 오버로드 — 0으로 채운다(ADR-032 I1 D1, 발행자가 하나뿐이면 항상 0이라 구분이 필요 없다).
      */
     public long publishBuyFill(long tradeId, long orderId, long accountId, String stockCode, BigDecimal matchPrice, int quantity, long sourcePosition) {
+        return publishBuyFill(tradeId, orderId, accountId, stockCode, matchPrice, quantity, sourcePosition, 0);
+    }
+
+    /**
+     * 매수 체결 반영을 링버퍼에 발행한다. sourceSessionId는 sourcePosition이 어느 발행자(Aeron
+     * sessionId)의 것인지 구분하는 키(ADR-032 I1 D1) — {@code AccountFillReceiver}가 {@code
+     * Header.sessionId()}로 실어 보낸다.
+     */
+    public long publishBuyFill(long tradeId, long orderId, long accountId, String stockCode, BigDecimal matchPrice, int quantity, long sourcePosition, int sourceSessionId) {
         long sequence = ringBuffer.next();
         try {
             AccountEvent event = ringBuffer.get(sequence);
-            event.setBuyFill(tradeId, orderId, accountId, stockCode, matchPrice, quantity, sourcePosition);
+            event.setBuyFill(tradeId, orderId, accountId, stockCode, matchPrice, quantity, sourcePosition, sourceSessionId);
         } finally {
             ringBuffer.publish(sequence);
         }
@@ -383,12 +394,17 @@ public class AccountEngine {
         return publishSellFill(tradeId, orderId, accountId, stockCode, quantity, 0L);
     }
 
-    /** 매도 체결 반영을 링버퍼에 발행한다. tradeId 는 체결 신원(멱등키). sourcePosition은 {@link #publishBuyFill(long, long, long, String, BigDecimal, int, long)}과 같다. */
+    /** 매도 체결 반영을 링버퍼에 발행한다. sourceSessionId를 모르는 발행자를 위한 오버로드 — {@link #publishBuyFill(long, long, long, String, BigDecimal, int, long)}과 같은 이유. */
     public long publishSellFill(long tradeId, long orderId, long accountId, String stockCode, int quantity, long sourcePosition) {
+        return publishSellFill(tradeId, orderId, accountId, stockCode, quantity, sourcePosition, 0);
+    }
+
+    /** 매도 체결 반영을 링버퍼에 발행한다. tradeId 는 체결 신원(멱등키). sourcePosition·sourceSessionId는 {@link #publishBuyFill(long, long, long, String, BigDecimal, int, long, int)}과 같다. */
+    public long publishSellFill(long tradeId, long orderId, long accountId, String stockCode, int quantity, long sourcePosition, int sourceSessionId) {
         long sequence = ringBuffer.next();
         try {
             AccountEvent event = ringBuffer.get(sequence);
-            event.setSellFill(tradeId, orderId, accountId, stockCode, quantity, sourcePosition);
+            event.setSellFill(tradeId, orderId, accountId, stockCode, quantity, sourcePosition, sourceSessionId);
         } finally {
             ringBuffer.publish(sequence);
         }

@@ -179,9 +179,9 @@ class AccountEngineSnapshotTriggerTest {
 
     private void awaitFillPosition(long expected) {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
-        while (engine.lastAppliedFillPosition() < expected) {
+        while (engine.lastAppliedFillPositions().getOrDefault(0, 0L) < expected) {
             if (System.nanoTime() > deadline) {
-                throw new AssertionError("2초 안에 lastAppliedFillPosition이 " + expected + "에 도달하지 않음");
+                throw new AssertionError("2초 안에 lastAppliedFillPositions이 " + expected + "에 도달하지 않음");
             }
             Thread.onSpinWait();
         }
@@ -208,8 +208,8 @@ class AccountEngineSnapshotTriggerTest {
         private final AtomicLong durableSeq = new AtomicLong(0L);
 
         @Override
-        public boolean offer(byte[] snapshotBytes, long fillPosition, long appliedSeq) {
-            offers.add(new Offer(snapshotBytes, fillPosition, appliedSeq));
+        public boolean offer(byte[] snapshotBytes, Map<Integer, Long> fillPositions, long appliedSeq) {
+            offers.add(new Offer(snapshotBytes, fillPositions, appliedSeq));
             return true;
         }
 
@@ -218,7 +218,7 @@ class AccountEngineSnapshotTriggerTest {
             return durableSeq.get();
         }
 
-        private record Offer(byte[] snapshotBytes, long fillPosition, long appliedSeq) {
+        private record Offer(byte[] snapshotBytes, Map<Integer, Long> fillPositions, long appliedSeq) {
         }
     }
 }

@@ -10,6 +10,8 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Optional;
 
 import com.flab.stocktradingengine.account.disruptor.snapshot.AccountSnapshot;
@@ -27,13 +29,22 @@ import com.flab.stocktradingengine.account.worker.lifecycle.AccountSnapshotLifec
  * 도중 프로세스가 죽어도 절반만 쓰인 파일이 최종 이름으로 남는 일이 없다. 최신 스냅샷 하나만
  * 유지한다(이전 스냅샷은 rename이 덮어쓴다).</p>
  *
- * <h3>파일 레이아웃</h3>
- * <pre>[recordingId:8][fillConsumedPosition:8][AccountSnapshotCodec가 인코딩한 스냅샷 바이트...]</pre>
+ * <h3>파일 레이아웃 (버전 2, ADR-032 I1 D2)</h3>
+ * <pre>
+ * [version:1 = 2][journalRecordingId:8][fillSourceCount:4]
+ *   [(sessionId:4)(position:8)] × fillSourceCount
+ *   [AccountSnapshotCodec가 인코딩한 스냅샷 바이트...]
+ * </pre>
+ * <p>버전 1(발행자별 체결 위치 맵이 없던 시절, {@code [recordingId:8][fillConsumedPosition:8]...})
+ * 파일을 읽으면 첫 바이트가 2와 다르게 나와(옛 recordingId의 최상위 바이트) {@link
+ * AccountSnapshotFormatException}이 난다 — 의도한 동작이다, 클래스 javadoc·그 예외 클래스
+ * javadoc 참고.</p>
  */
 public class AccountSnapshotStore {
 
     private static final String FILE_NAME = "account-snapshot.dat";
     private static final String TEMP_FILE_NAME = "account-snapshot.dat.tmp";
+    private static final byte FORMAT_VERSION = 2;
 
     private final File file;
     private final File tempFile;
@@ -44,8 +55,8 @@ public class AccountSnapshotStore {
         this.tempFile = new File(archiveDir, TEMP_FILE_NAME);
     }
 
-    public void write(long recordingId, long fillConsumedPosition, AccountSnapshot snapshot) {
-        write(recordingId, fillConsumedPosition, codec.encode(snapshot));
+    public void write(long recordingId, Map<Integer, Long> fillPositions, AccountSnapshot snapshot) {
+        write(recordingId, fillPositions, codec.encode(snapshot));
     }
 
     /**
@@ -59,10 +70,18 @@ public class AccountSnapshotStore {
      * 실제로 쓰임"이라, rename만으로는 부족하다 — rename 자체는 원자적이지만 그 내용이 아직
      * 페이지 캐시에만 있을 수 있다.</p>
      */
-    public void write(long recordingId, long fillConsumedPosition, byte[] snapshotBytes) {
-        ByteBuffer payload = ByteBuffer.allocate(Long.BYTES + Long.BYTES + snapshotBytes.length);
+    public void write(long recordingId, Map<Integer, Long> fillPositions, byte[] snapshotBytes) {
+        int fillSourceCount = fillPositions.size();
+        int fillSourcesBytes = fillSourceCount * (Integer.BYTES + Long.BYTES);
+        ByteBuffer payload = ByteBuffer.allocate(
+            Byte.BYTES + Long.BYTES + Integer.BYTES + fillSourcesBytes + snapshotBytes.length);
+        payload.put(FORMAT_VERSION);
         payload.putLong(recordingId);
-        payload.putLong(fillConsumedPosition);
+        payload.putInt(fillSourceCount);
+        fillPositions.forEach((sessionId, position) -> {
+            payload.putInt(sessionId);
+            payload.putLong(position);
+        });
         payload.put(snapshotBytes);
         payload.flip();
 
@@ -89,11 +108,22 @@ public class AccountSnapshotStore {
         try {
             byte[] payload = Files.readAllBytes(file.toPath());
             ByteBuffer buffer = ByteBuffer.wrap(payload);
+            byte version = buffer.get();
+            if (version != FORMAT_VERSION) {
+                throw new AccountSnapshotFormatException(file, version, FORMAT_VERSION);
+            }
             long recordingId = buffer.getLong();
-            long fillConsumedPosition = buffer.getLong();
-            byte[] snapshotBytes = Arrays.copyOfRange(payload, Long.BYTES + Long.BYTES, payload.length);
+            int fillSourceCount = buffer.getInt();
+            Map<Integer, Long> fillPositions = new LinkedHashMap<>();
+            for (int i = 0; i < fillSourceCount; i++) {
+                int sessionId = buffer.getInt();
+                long position = buffer.getLong();
+                fillPositions.put(sessionId, position);
+            }
+            int headerBytes = Byte.BYTES + Long.BYTES + Integer.BYTES + fillSourceCount * (Integer.BYTES + Long.BYTES);
+            byte[] snapshotBytes = Arrays.copyOfRange(payload, headerBytes, payload.length);
             AccountSnapshot snapshot = codec.decode(snapshotBytes);
-            return Optional.of(new StoredAccountSnapshot(recordingId, fillConsumedPosition, snapshot));
+            return Optional.of(new StoredAccountSnapshot(recordingId, fillPositions, snapshot));
         } catch (IOException e) {
             throw new UncheckedIOException("계좌 스냅샷 파일 읽기 실패: " + file, e);
         }

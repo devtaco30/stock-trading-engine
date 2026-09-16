@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
@@ -58,7 +59,7 @@ class AccountEngineConfigTest {
             // 대체 빈을 준다 — 이 테스트는 매수 검증 경로만 본다.
             .withBean(AccountSnapshotSink.class, () -> new AccountSnapshotSink() {
                 @Override
-                public boolean offer(byte[] snapshotBytes, long fillPosition, long appliedSeq) {
+                public boolean offer(byte[] snapshotBytes, Map<Integer, Long> fillPositions, long appliedSeq) {
                     return true;
                 }
 

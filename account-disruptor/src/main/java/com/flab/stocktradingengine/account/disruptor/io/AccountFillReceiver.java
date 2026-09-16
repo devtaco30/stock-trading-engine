@@ -9,7 +9,6 @@ import org.agrona.DirectBuffer;
 import org.agrona.concurrent.BackoffIdleStrategy;
 import org.agrona.concurrent.IdleStrategy;
 
-import io.aeron.Image;
 import io.aeron.Subscription;
 import io.aeron.logbuffer.FragmentHandler;
 import io.aeron.logbuffer.Header;
@@ -39,10 +38,12 @@ import com.flab.stocktradingengine.codec.FilledTrade;
  * 저널 뒤로 미뤄 유실 창을 닫는 규약이었다. Aeron Archive에는 그 규약이 없다 — position 추적·
  * 크래시 복구는 U4 몫이고, 이 유닛은 라이브 경로만 닫는다.</p>
  *
- * <h3>소비 position 추적 (U4a)</h3>
- * <p>{@link #consumedPosition()}은 이 수신기가 지금까지 소비한 스트림 위치를 돌려준다 — graceful
- * shutdown(quiescent) 시점에 스냅샷 라이프사이클(다른 스레드)이 읽어 저장한다({@code
- * AccountSnapshotLifecycle}). 폴 스레드가 쓰고 다른 스레드가 읽으므로 필드를 volatile로 둔다.</p>
+ * <h3>소비 position 추적은 엔진이 한다 (ADR-032 I1)</h3>
+ * <p>이전엔 이 수신기가 {@code image.position()}(링에 넣은 위치)을 자체 필드로 들고 있었다.
+ * 매칭 프로세스가 둘 이상이면 recording(따라서 image)이 여럿 생기는데, 그중 하나만 보던 구조라
+ * I1에서 없앴다 — graceful shutdown 시점에 필요한 "어디까지 반영했나"는 {@link AccountEngine
+ * #lastAppliedFillPositions()}(소비자 스레드가 실제로 반영한 뒤에야 기록하는 sessionId별 맵)가
+ * 대신한다. 수신기는 디코딩·발행만 책임진다.</p>
  */
 public final class AccountFillReceiver implements AutoCloseable {
 
@@ -57,7 +58,6 @@ public final class AccountFillReceiver implements AutoCloseable {
     private final AtomicBoolean running = new AtomicBoolean(false);
     private final FragmentHandler fragmentHandler = this::onFragment;
 
-    private volatile long consumedPosition = 0L;
     private Thread pollThread;
 
     public AccountFillReceiver(Subscription subscription, AccountEngine engine) {
@@ -76,32 +76,19 @@ public final class AccountFillReceiver implements AutoCloseable {
     private void pollLoop() {
         while (running.get()) {
             int fragments = subscription.poll(fragmentHandler, FRAGMENT_LIMIT);
-            updateConsumedPosition();
             idleStrategy.idle(fragments);
         }
-    }
-
-    /** image가 아직 연결되기 전(발행자가 아직 안 붙음)이면 건드리지 않는다 — 초기값 0이 안전하다. */
-    private void updateConsumedPosition() {
-        if (subscription.imageCount() == 0) {
-            return;
-        }
-        Image image = subscription.imageAtIndex(0);
-        consumedPosition = image.position();
-    }
-
-    /** 이 수신기가 지금까지 소비한 스트림 위치. 스냅샷 라이프사이클(다른 스레드)이 읽는다. */
-    public long consumedPosition() {
-        return consumedPosition;
     }
 
     /**
      * 패키지 가시성 — 단위 테스트가 실제 Subscription 없이 이 메서드를 직접 호출한다.
      *
      * <p>{@code header.position()}(1-2)은 "이 메시지를 읽은 뒤 image가 도달한 위치"다({@code
-     * image.position()}과 같은 값) — 소비자(계좌 엔진)가 이 체결을 실제로 반영한 뒤 {@code
-     * lastAppliedFillPosition}으로 기억해, 아직 링에만 들어가고 처리는 안 된 체결의 위치와
-     * 구분한다. header가 null이면(Aeron 없이 디코딩만 검증하는 단위 테스트) 0으로 둔다.</p>
+     * image.position()}과 같은 값) — 소비자(계좌 엔진)가 이 체결을 실제로 반영한 뒤 sessionId별
+     * 위치 맵으로 기억해, 아직 링에만 들어가고 처리는 안 된 체결의 위치와 구분한다.
+     * {@code header.sessionId()}(ADR-032 I1 D1)는 이 위치가 어느 발행자(Aeron 연결, 매칭
+     * 프로세스마다 다르다)의 것인지 구분하는 키다. header가 null이면(Aeron 없이 디코딩만
+     * 검증하는 단위 테스트) 둘 다 0으로 둔다.</p>
      */
     void onFragment(DirectBuffer buffer, int offset, int length, Header header) {
         Optional<FilledTrade> decoded = codec.tryDecode(buffer, offset);
@@ -110,10 +97,11 @@ public final class AccountFillReceiver implements AutoCloseable {
         }
         FilledTrade trade = decoded.get();
         long sourcePosition = header != null ? header.position() : 0L;
+        int sourceSessionId = header != null ? header.sessionId() : 0;
         engine.publishBuyFill(trade.tradeId(), trade.buyOrderId(), trade.buyAccountId(),
-            trade.stockCode(), trade.matchPrice(), trade.filledQuantity(), sourcePosition);
+            trade.stockCode(), trade.matchPrice(), trade.filledQuantity(), sourcePosition, sourceSessionId);
         engine.publishSellFill(trade.tradeId(), trade.sellOrderId(), trade.sellAccountId(),
-            trade.stockCode(), trade.filledQuantity(), sourcePosition);
+            trade.stockCode(), trade.filledQuantity(), sourcePosition, sourceSessionId);
     }
 
     /**

@@ -19,10 +19,12 @@ import com.lmax.disruptor.BlockingWaitStrategy;
 import com.lmax.disruptor.dsl.ProducerType;
 
 /**
- * 1-2 — 소비자가 실제로 처리한 체결의 위치({@link AccountEngine#lastAppliedFillPosition()})는
- * 아직 처리하지 않은 체결의 위치를 앞서 반영하면 안 된다. {@code AccountFillReceiver.consumedPosition()}
- * (수신 스레드가 링에 넣은 위치)을 그대로 쓰면 소비자가 못 따라간 체결이 스냅샷 경계 안쪽으로
- * 잘못 들어가 복구 때 빠진다 — 이 테스트는 그 경계가 소비자 처리 시점에 정확히 멈춰서는지 본다.
+ * 1-2 — 소비자가 실제로 처리한 체결의 위치({@link AccountEngine#lastAppliedFillPositions()})는
+ * 아직 처리하지 않은 체결의 위치를 앞서 반영하면 안 된다. 수신 스레드가 링에 넣은 시점의 위치를
+ * 그대로 쓰면 소비자가 못 따라간 체결이 스냅샷 경계 안쪽으로 잘못 들어가 복구 때 빠진다 — 이
+ * 테스트는 그 경계가 소비자 처리 시점에 정확히 멈춰서는지 본다. 이 테스트는 발행자 하나만
+ * 쓰므로 sessionId는 항상 0이다(ADR-032 I1 D1) — 여러 발행자를 구분하는 검증은
+ * {@code AccountFillReceiverTest}·{@code AccountFillReplayRecoveryIntegrationTest}(U3) 몫이다.
  */
 class AccountEngineFillPositionTest {
 
@@ -62,20 +64,20 @@ class AccountEngineFillPositionTest {
         engine.publishBuyFill(9003L, orderId, 1L, STOCK, new BigDecimal("10000"), 1, 300L); // 소비자 스레드가 아직 못 옴
 
         assertTrue(reachedSecondFill.await(1, TimeUnit.SECONDS), "2번째 체결까지는 처리돼야 한다");
-        assertEquals(200L, engine.lastAppliedFillPosition(),
-            "3번째 체결이 아직 처리 전이므로 lastAppliedFillPosition이 300을 앞서 가리키면 안 된다");
+        assertEquals(200L, engine.lastAppliedFillPositions().getOrDefault(0, 0L),
+            "3번째 체결이 아직 처리 전이므로 lastAppliedFillPositions이 300을 앞서 가리키면 안 된다");
 
         releaseSecondFill.countDown();
 
         awaitPosition(300L);
-        assertEquals(300L, engine.lastAppliedFillPosition(), "3번째 체결까지 처리되면 위치가 따라잡혀야 한다");
+        assertEquals(300L, engine.lastAppliedFillPositions().getOrDefault(0, 0L), "3번째 체결까지 처리되면 위치가 따라잡혀야 한다");
     }
 
     private void awaitPosition(long expected) {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(1);
-        while (engine.lastAppliedFillPosition() < expected) {
+        while (engine.lastAppliedFillPositions().getOrDefault(0, 0L) < expected) {
             if (System.nanoTime() > deadline) {
-                throw new AssertionError("1초 안에 lastAppliedFillPosition이 " + expected + "에 도달하지 않음");
+                throw new AssertionError("1초 안에 lastAppliedFillPositions이 " + expected + "에 도달하지 않음");
             }
             Thread.onSpinWait();
         }

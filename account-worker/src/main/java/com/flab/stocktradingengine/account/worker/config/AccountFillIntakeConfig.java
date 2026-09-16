@@ -1,6 +1,9 @@
 package com.flab.stocktradingengine.account.worker.config;
 
+import java.lang.System.Logger;
+import java.lang.System.Logger.Level;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -50,6 +53,8 @@ import io.aeron.archive.codecs.SourceLocation;
  */
 @Configuration
 public class AccountFillIntakeConfig {
+
+    private static final Logger log = System.getLogger(AccountFillIntakeConfig.class.getName());
 
     // 패키지 가시성 — 테스트(같은 패키지)가 이 기본값을 그대로 참조해 matching-worker 체결
     // 채널과 맞춘다. 실제 채널은 transport.fill.channel 속성에서 해석된다(fork1 Unit 1). 스트림
@@ -118,7 +123,19 @@ public class AccountFillIntakeConfig {
         if (accountLoadedSnapshot.isEmpty()) {
             return List.of();
         }
+        // ADR-032 I1 임시 다리 — AccountFillReplayer는 아직(U3 전) recording 하나만 읽는다.
+        // 매칭 프로세스가 하나뿐인 지금은 맵에 항목이 최대 하나뿐이라 안전하다. U3가 readFrom을
+        // 위치 맵을 받는 형태로 바꾸면 이 추출 없이 맵을 그대로 넘긴다.
+        Map<Integer, Long> fillConsumedPositions = accountLoadedSnapshot.get().fillConsumedPosition();
+        if (fillConsumedPositions.size() > 1) {
+            // 조용히 하나만 골라 나머지를 버리면 지금 고치는 버그(recording 여럿 중 하나만 읽어
+            // 체결이 빠짐)와 같은 모양이 된다 — 못 하는 걸 못 한다고 드러낸다(D2와 같은 원칙).
+            log.log(Level.WARNING, "[계좌] 체결 위치가 발행자 " + fillConsumedPositions.size()
+                + "개분 있는데 U3(ADR-032 I1) 전까지는 그중 하나만 읽습니다 — 나머지 발행자의 체결은 이번 복구에서 빠집니다: "
+                + fillConsumedPositions);
+        }
+        long fromPosition = fillConsumedPositions.values().stream().findFirst().orElse(0L);
         AccountFillReplayer replayer = new AccountFillReplayer(aeronArchive);
-        return replayer.readFrom(fillChannel, AeronStreamIds.FILL, accountLoadedSnapshot.get().fillConsumedPosition());
+        return replayer.readFrom(fillChannel, AeronStreamIds.FILL, fromPosition);
     }
 }

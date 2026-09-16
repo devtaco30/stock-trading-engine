@@ -39,7 +39,7 @@ class AccountEngineLatencyHistogramTest {
     private static final MatchingOrderSender NO_OP_SENDER = (orderId, accountId, stockCode, side, price, quantity) -> {};
     private static final AccountSnapshotSink NO_OP_SINK = new AccountSnapshotSink() {
         @Override
-        public boolean offer(byte[] snapshotBytes, long fillPosition, long appliedSeq) {
+        public boolean offer(byte[] snapshotBytes, Map<Integer, Long> fillPositions, long appliedSeq) {
             return true;
         }
 

@@ -5,6 +5,7 @@ import java.lang.System.Logger.Level;
 import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import com.lmax.disruptor.EventHandler;
 import com.flab.stocktradingengine.account.disruptor.domain.AccountResultListener;
@@ -71,9 +72,11 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
     private final boolean snapshotTriggerEnabled;
     private final LatencyHistogram latencyHistogram;
 
-    // 소비자 스레드(이 핸들러)만 쓰고, 호스트 스레드(그레이스풀 스톱)·1-3의 스냅샷 쓰기 스레드가
-    // 읽는다 — 다른 스레드가 읽으므로 volatile.
-    private volatile long lastAppliedFillPosition;
+    // sessionId(Aeron 발행자 구분키, ADR-032 I1 D1) → 그 발행자로부터 마지막으로 반영한 체결 수신
+    // 위치. 소비자 스레드(이 핸들러)만 쓰고, 호스트 스레드(그레이스풀 스톱)·1-3의 스냅샷 쓰기
+    // 스레드가 읽는다 — 다른 스레드가 읽으므로 ConcurrentHashMap(단일 필드 volatile로는 맵
+    // 내부 갱신의 가시성을 보장 못 한다).
+    private final Map<Integer, Long> lastAppliedFillPositions = new ConcurrentHashMap<>();
     private volatile long lastJournaledPosition;
     // 저널 적용 순번(1-3) — 이 핸들러(소비자 스레드)만 읽고 쓴다. 처리 결과(성공·거부·중복·예외)와
     // 무관하게 이벤트 하나를 소비할 때마다 1씩 증가한다 — "저널을 얼마나 소비했나"를 뜻하지
@@ -117,9 +120,13 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
         this.latencyHistogram = latencyHistogram;
     }
 
-    /** 소비자가 실제로 처리한 시점의 체결 수신 위치(1-2) — {@code AccountFillReceiver.consumedPosition()}과 달리 아직 처리 안 된 체결은 반영하지 않는다. */
-    public long lastAppliedFillPosition() {
-        return lastAppliedFillPosition;
+    /**
+     * 소비자가 실제로 처리한 시점의 체결 수신 위치를 sessionId별로 담은 맵(1-2, ADR-032 I1 D1) —
+     * 아직 처리 안 된 체결은 반영하지 않는다. 호출부가 내부 맵을 직접 변경하지 못하게 복사본을
+     * 돌려준다.
+     */
+    public Map<Integer, Long> lastAppliedFillPositions() {
+        return Map.copyOf(lastAppliedFillPositions);
     }
 
     /** 소비자가 실제로 처리한 시점의 저널 위치(1-2). */
@@ -129,12 +136,12 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
 
     /**
      * 복구 직후(start() 전, 단일 스레드) 체결 수신 위치를 스냅샷이 가리키던 값으로 시드한다(1-3).
-     * 안 하면 복구~첫 라이브 체결 사이에 러닝 중 스냅샷이 찍힐 때 fillPosition이 0으로 저장돼,
-     * 다음 복구가 체결 스트림을 처음부터 다시 replay한다 — 그사이 이미 가지치기된 tradeId가 있으면
-     * 이중 반영(돈)으로 이어질 수 있다.
+     * 안 하면 복구~첫 라이브 체결 사이에 러닝 중 스냅샷이 찍힐 때 그 sessionId의 위치가 빈 채로
+     * 저장돼, 다음 복구가 그 발행자의 체결 스트림을 처음부터 다시 replay한다 — 그사이 이미
+     * 가지치기된 tradeId가 있으면 이중 반영(돈)으로 이어질 수 있다.
      */
-    public void seedLastAppliedFillPosition(long fillPosition) {
-        this.lastAppliedFillPosition = fillPosition;
+    public void seedLastAppliedFillPositions(Map<Integer, Long> fillPositions) {
+        this.lastAppliedFillPositions.putAll(fillPositions);
     }
 
     @Override
@@ -179,7 +186,7 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
         accounts.forEach((accountId, state) -> accountsById.put(accountId, state.toSnapshot()));
         AccountSnapshot snapshot = new AccountSnapshot(accountsById, orderIdGenerator.counter(), lastJournaledPosition);
         byte[] snapshotBytes = snapshotCodec.encode(snapshot);
-        boolean offered = snapshotSink.offer(snapshotBytes, lastAppliedFillPosition, appliedSeq);
+        boolean offered = snapshotSink.offer(snapshotBytes, lastAppliedFillPositions(), appliedSeq);
         if (!offered) {
             log.log(Level.WARNING, "[계좌] 스냅샷 쓰기 큐가 가득 차 이번 회차 스킵: appliedSeq=" + appliedSeq);
         }
@@ -280,7 +287,7 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
         long accountId = event.getAccountId();
         long orderId = event.getOrderId();
         long tradeId = event.getTradeId();
-        lastAppliedFillPosition = event.getSourcePosition();
+        lastAppliedFillPositions.put(event.getSourceSessionId(), event.getSourcePosition());
 
         AccountState state = accounts.get(accountId);
         if (state == null) {
@@ -301,7 +308,7 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
         long accountId = event.getAccountId();
         long orderId = event.getOrderId();
         long tradeId = event.getTradeId();
-        lastAppliedFillPosition = event.getSourcePosition();
+        lastAppliedFillPositions.put(event.getSourceSessionId(), event.getSourcePosition());
 
         AccountState state = accounts.get(accountId);
         if (state == null) {
