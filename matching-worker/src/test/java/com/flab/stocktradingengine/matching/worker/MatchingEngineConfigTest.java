@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
@@ -54,7 +55,7 @@ class MatchingEngineConfigTest {
             // 대체 빈을 준다 — 이 테스트는 매칭·셧다운 경로만 본다.
             .withBean(MatchingSnapshotSink.class, () -> new MatchingSnapshotSink() {
                 @Override
-                public boolean offer(byte[] snapshotBytes, long appliedSeq) {
+                public boolean offer(byte[] snapshotBytes, Map<Integer, Long> orderIntakePositions, long appliedSeq) {
                     return true;
                 }
 
@@ -92,6 +93,14 @@ class MatchingEngineConfigTest {
     static class EmptyRecoveredEntriesConfig {
         @Bean
         List<JournaledOrder> matchingJournalRecoveredEntries() {
+            return List.of();
+        }
+
+        // I2 U1 — MatchingEngineConfig#matchingEngine이 새로 받는 두 번째 List<JournaledOrder>
+        // 파라미터. 파라미터 이름(matchingOrderIntakeReplayedEntries)으로 이 빈 이름과 맞춰
+        // Spring이 matchingJournalRecoveredEntries와 구분한다(둘 다 같은 타입이라 이름으로 갈린다).
+        @Bean
+        List<JournaledOrder> matchingOrderIntakeReplayedEntries() {
             return List.of();
         }
 

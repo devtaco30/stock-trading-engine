@@ -86,8 +86,8 @@ class MatchingEventHandlerSnapshotTriggerTest {
         private final List<Offer> offers = new CopyOnWriteArrayList<>();
 
         @Override
-        public boolean offer(byte[] snapshotBytes, long appliedSeq) {
-            offers.add(new Offer(snapshotBytes, appliedSeq));
+        public boolean offer(byte[] snapshotBytes, Map<Integer, Long> orderIntakePositions, long appliedSeq) {
+            offers.add(new Offer(snapshotBytes, orderIntakePositions, appliedSeq));
             return true;
         }
 
@@ -96,7 +96,7 @@ class MatchingEventHandlerSnapshotTriggerTest {
             return 0L;
         }
 
-        private record Offer(byte[] snapshotBytes, long appliedSeq) {
+        private record Offer(byte[] snapshotBytes, Map<Integer, Long> orderIntakePositions, long appliedSeq) {
         }
     }
 }

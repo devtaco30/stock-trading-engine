@@ -33,10 +33,32 @@ public class OrderEvent {
     // 슬롯을 그대로 읽어 "이 이벤트까지 저널에 반영됐다"는 위치를 얻는다 — account-disruptor
     // AccountEvent.journaledPosition과 같은 이유(I6 U1).
     private long journaledPosition;
+    // 이 주문을 실어 보낸 인테이크 수신 스트림의 위치·발행자(I2 U1) — account-disruptor
+    // AccountEvent.sourcePosition/sourceSessionId와 같은 이유. 소비자(매칭 핸들러)가 이 주문을
+    // 실제로 반영한 뒤에야 "적용 완료 위치"로 인정한다.
+    private long sourcePosition;
+    private int sourceSessionId;
 
-    /** 주문 접수 명령으로 슬롯을 채운다. */
+    /**
+     * 주문 접수 명령으로 슬롯을 채운다. sourcePosition·sourceSessionId 를 모르는 발행자(저널 replay,
+     * 테스트 등)를 위한 오버로드 — 둘 다 0으로 채운다(발행자가 하나뿐이면 항상 0이라 구분이
+     * 필요 없다, account-disruptor {@code AccountEvent}와 같은 관례).
+     */
     public void setPlace(long orderId, long accountId, String stockCode,
                          OrderSide side, BigDecimal price, int quantity, Instant orderAt) {
+        setPlace(orderId, accountId, stockCode, side, price, quantity, orderAt, 0L, 0);
+    }
+
+    /**
+     * 주문 접수 명령으로 슬롯을 채운다. sourcePosition 은 이 주문을 실어 보낸 인테이크 수신
+     * 스트림의 위치(I2 U1) — 소비자가 실제로 이 주문을 반영한 뒤에야 "적용 완료 위치"로 인정한다.
+     * sourceSessionId 는 그 위치가 어느 발행자(Aeron 연결=계좌 샤드)의 것인지 구분하는 키 — 계좌가
+     * 여럿이면 recording 이 여럿 생기고, position 값 하나만으로는 어느 recording의 위치인지
+     * 구분할 수 없다(account-disruptor {@code AccountEvent.setBuyFill}과 같은 이유).
+     */
+    public void setPlace(long orderId, long accountId, String stockCode,
+                         OrderSide side, BigDecimal price, int quantity, Instant orderAt,
+                         long sourcePosition, int sourceSessionId) {
         this.type = EventType.PLACE;
         this.orderId = orderId;
         this.accountId = accountId;
@@ -45,6 +67,8 @@ public class OrderEvent {
         this.price = price;
         this.quantity = quantity;
         this.orderAt = orderAt;
+        this.sourcePosition = sourcePosition;
+        this.sourceSessionId = sourceSessionId;
     }
 
     /** 주문 취소 명령으로 슬롯을 채운다. 취소는 orderId·stockCode 만 필요하다. */
@@ -68,6 +92,8 @@ public class OrderEvent {
         this.quantity = 0;
         this.orderAt = null;
         this.journaledPosition = 0L;
+        this.sourcePosition = 0L;
+        this.sourceSessionId = 0;
     }
 
     public void setJournaledPosition(long journaledPosition) {
@@ -76,6 +102,14 @@ public class OrderEvent {
 
     public long getJournaledPosition() {
         return journaledPosition;
+    }
+
+    public long getSourcePosition() {
+        return sourcePosition;
+    }
+
+    public int getSourceSessionId() {
+        return sourceSessionId;
     }
 
     public EventType getType() {
