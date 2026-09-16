@@ -13,6 +13,7 @@ import org.springframework.context.annotation.Primary;
 
 import com.flab.stocktradingengine.account.disruptor.domain.AccountResultListener;
 import com.flab.stocktradingengine.account.disruptor.engine.AccountEngine;
+import com.flab.stocktradingengine.account.disruptor.io.AccountSnapshotSink;
 import com.flab.stocktradingengine.account.disruptor.io.MatchingOrderSender;
 import com.flab.stocktradingengine.account.disruptor.journal.AccountJournal;
 import com.flab.stocktradingengine.account.worker.lifecycle.AccountEngineLifecycle;
@@ -22,6 +23,7 @@ import com.flab.stocktradingengine.codec.AccountEventType;
 import com.flab.stocktradingengine.codec.AccountJournalEntry;
 import com.flab.stocktradingengine.codec.FilledTrade;
 import com.flab.stocktradingengine.support.SnowflakeNodeIdResolver;
+import com.flab.stocktradingengine.time.LatencyHistogram;
 import com.lmax.disruptor.BlockingWaitStrategy;
 import com.lmax.disruptor.dsl.ProducerType;
 
@@ -66,15 +68,24 @@ public class AccountEngineConfig {
      * 재적용한다 — tradeId 멱등(계좌별)이 이미 저널로 반영된 체결과의 중복을 흡수하므로, 저널
      * recover와 fill recover를 두 번 나눠 불러도 안전하다. 재시작 전 상태·dedup·orderId 발급기를
      * 되살린 뒤에야 라이브 트래픽을 받는다.</p>
+     *
+     * <p>{@link AccountSnapshotSink}(1-3, 실제 구현은 {@code AccountSnapshotWriter})를 러닝 중
+     * 스냅샷 싱크로 넘긴다 — 인터페이스로 받아, Archive 없이 가볍게 띄우는 테스트가 {@link
+     * AccountJournal}처럼 간단한 대체 빈을 넣을 수 있게 한다. 스냅샷이 있었으면
+     * {@code engine.seedFillPosition}으로 소비자의 체결 수신 위치를 그 스냅샷 값으로 시드한다 —
+     * 안 하면 복구 직후~첫 라이브 체결 사이에 러닝 중 스냅샷이 찍힐 때 위치가 0으로 저장돼, 다음
+     * 복구가 체결 스트림을 처음부터 다시 replay한다(39 리뷰 지적).</p>
      */
     @Bean
     public AccountEngine accountEngine(AccountWorkerProperties properties, @Value("${snowflake.node-id:}") String nodeIdConfig,
                                        MatchingOrderSender matchingOrderSender, AccountResultListener listener, AccountJournal journal,
+                                       AccountSnapshotSink accountSnapshotSink, LatencyHistogram accountLatencyHistogram,
                                        Optional<StoredAccountSnapshot> accountLoadedSnapshot, List<AccountJournalEntry> accountJournalRecoveredEntries,
                                        List<FilledTrade> accountFillReplayedEntries) {
         long nodeId = SnowflakeNodeIdResolver.resolve(nodeIdConfig);
         AccountEngine engine = new AccountEngine(
-            BUFFER_SIZE, new BlockingWaitStrategy(), ProducerType.MULTI, nodeId, matchingOrderSender, listener, journal);
+            BUFFER_SIZE, new BlockingWaitStrategy(), ProducerType.MULTI, nodeId, matchingOrderSender, listener, journal,
+            accountSnapshotSink, accountLatencyHistogram);
         for (AccountWorkerProperties.SeedAccount seed : properties.seedAccounts()) {
             if (seed.holdings() == null || seed.holdings().isEmpty()) {
                 engine.seed(seed.accountId(), seed.balance(), seed.marginRate());
@@ -82,7 +93,10 @@ public class AccountEngineConfig {
                 engine.seed(seed.accountId(), seed.balance(), seed.marginRate(), seed.holdings());
             }
         }
-        accountLoadedSnapshot.ifPresent(stored -> engine.restore(stored.snapshot()));
+        accountLoadedSnapshot.ifPresent(stored -> {
+            engine.restore(stored.snapshot());
+            engine.seedFillPosition(stored.fillConsumedPosition());
+        });
         engine.recover(accountJournalRecoveredEntries);
         engine.recover(toFillJournalEntries(accountFillReplayedEntries));
         return engine;

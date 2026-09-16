@@ -10,6 +10,7 @@ import org.agrona.concurrent.UnsafeBuffer;
 import com.flab.stocktradingengine.api.exception.OrderPublishException;
 import com.flab.stocktradingengine.codec.AccountOrderCodec;
 import com.flab.stocktradingengine.codec.DecodedAccountOrder;
+import com.flab.stocktradingengine.time.EpochNanos;
 import com.flab.stocktradingengine.trading.entity.OrderSide;
 
 import io.aeron.Publication;
@@ -38,6 +39,14 @@ public class AeronAccountOrderSender {
 
     private final Publication accountOrderPublication;
     private final AccountOrderCodec codec = new AccountOrderCodec();
+    // 요청마다 새로 allocateDirect하면 off-heap 네이티브 메모리 할당·해제가 매번 반복된다(39 리뷰
+    // 비블로킹 — ec가 AeronMatchingOrderSender에서 고친 것과 같은 유형). 단, 그쪽은 발행 전용
+    // 스레드 하나뿐이라 필드 재사용이 그대로 안전했지만, 여기는 싱글톤 빈에 HTTP 요청 스레드
+    // 여럿이 동시에 send()를 부른다 — 필드로 그냥 빼면 서로 다른 요청이 같은 버퍼에 동시에
+    // encode해 주문 내용이 섞인다(돈). 그래서 스레드마다 독립된 버퍼를 주는 ThreadLocal로 뺀다 —
+    // 스레드풀 크기 × 256바이트라 절대량은 무시할 수준이다.
+    private final ThreadLocal<UnsafeBuffer> encodeBuffer =
+        ThreadLocal.withInitial(() -> new UnsafeBuffer(ByteBuffer.allocateDirect(ENCODE_BUFFER_SIZE)));
 
     public AeronAccountOrderSender(Publication accountOrderPublication) {
         this.accountOrderPublication = accountOrderPublication;
@@ -51,13 +60,20 @@ public class AeronAccountOrderSender {
      * {@link BackoffIdleStrategy}는 내부에 spin/yield/park 카운터를 갖는 비스레드안전 객체라
      * 필드로 공유하면 동시 재시도 때 백오프 상태가 서로 덮어써 뒤섞인다 — 그래서 호출마다
      * 지역 변수로 새로 만든다({@link AccountOrderCodec}은 필드가 없는 순수 인코더라 공유해도
-     * 안전하다).</p>
+     * 안전하다). 인코딩 버퍼({@link #encodeBuffer})는 같은 동시성 이유로 스레드 간 공유는
+     * 안 되지만, 호출 하나 안에서만 쓰고 버리므로(다음 호출과 상태를 안 주고받음) 스레드당
+     * 하나씩만 있으면 충분해 ThreadLocal로 재사용한다.</p>
+     *
+     * <p>{@code publishedAtEpochNanos}는 v1/v2 전 과정 측정(decision_records/
+     * v1-v2-e2e-measurement.md)의 끝점① 지연 계산용 발행 시각이다. 이 메서드가 실제 발행
+     * 시점이라 여기서 {@link EpochNanos#now()}로 찍는다.</p>
      *
      * @throws OrderPublishException {@link #MAX_ATTEMPTS}번 재시도해도 offer가 성공하지 못하면
      */
     public void send(OrderSide side, long accountId, String stockCode, BigDecimal price, int quantity, String requestId) {
-        DecodedAccountOrder order = new DecodedAccountOrder(side, accountId, stockCode, price, quantity, requestId);
-        UnsafeBuffer buffer = new UnsafeBuffer(ByteBuffer.allocateDirect(ENCODE_BUFFER_SIZE));
+        DecodedAccountOrder order = new DecodedAccountOrder(
+            side, accountId, stockCode, price, quantity, requestId, EpochNanos.now());
+        UnsafeBuffer buffer = encodeBuffer.get();
         int length = codec.encode(buffer, 0, order);
 
         IdleStrategy idleStrategy = new BackoffIdleStrategy();

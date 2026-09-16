@@ -46,8 +46,10 @@ class AeronAccountOrderSenderTest {
         AccountOrderCodec codec = new AccountOrderCodec();
         DecodedAccountOrder decoded = codec.decode(bufferCaptor.getValue(), 0);
         DecodedAccountOrder expected = new DecodedAccountOrder(
-            OrderSide.BUY, ACCOUNT_ID, STOCK_CODE, new BigDecimal("10000"), 10, "req-1");
-        org.assertj.core.api.Assertions.assertThat(decoded).isEqualTo(expected);
+            OrderSide.BUY, ACCOUNT_ID, STOCK_CODE, new BigDecimal("10000"), 10, "req-1", 0L);
+        org.assertj.core.api.Assertions.assertThat(decoded)
+            .usingRecursiveComparison().ignoringFields("publishedAtEpochNanos")
+            .isEqualTo(expected);
     }
 
     @Test

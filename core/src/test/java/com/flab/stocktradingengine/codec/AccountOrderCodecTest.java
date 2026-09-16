@@ -23,7 +23,7 @@ class AccountOrderCodecTest {
     void 매수_라운드트립() {
         UnsafeBuffer buffer = new UnsafeBuffer(new byte[256]);
         DecodedAccountOrder order = new DecodedAccountOrder(
-            OrderSide.BUY, 1L, STOCK, new BigDecimal("10000.50"), 10, "req-1");
+            OrderSide.BUY, 1L, STOCK, new BigDecimal("10000.50"), 10, "req-1", 1_700_000_000_123_456_789L);
 
         int length = codec.encode(buffer, 0, order);
         DecodedAccountOrder decoded = codec.decode(buffer, 0);
@@ -34,6 +34,7 @@ class AccountOrderCodecTest {
         assertEquals(0, new BigDecimal("10000.50").compareTo(decoded.price()));
         assertEquals(10, decoded.quantity());
         assertEquals("req-1", decoded.requestId());
+        assertEquals(1_700_000_000_123_456_789L, decoded.publishedAtEpochNanos());
         assertEquals(length, codec.encode(buffer, 0, decoded)); // 재인코딩 길이도 같아야 한다
     }
 
@@ -42,7 +43,7 @@ class AccountOrderCodecTest {
     void 매도_라운드트립_price도_왕복() {
         UnsafeBuffer buffer = new UnsafeBuffer(new byte[256]);
         DecodedAccountOrder order = new DecodedAccountOrder(
-            OrderSide.SELL, 1L, STOCK, new BigDecimal("10000.50"), 4, "req-2");
+            OrderSide.SELL, 1L, STOCK, new BigDecimal("10000.50"), 4, "req-2", 1L);
 
         codec.encode(buffer, 0, order);
         DecodedAccountOrder decoded = codec.decode(buffer, 0);
@@ -60,13 +61,14 @@ class AccountOrderCodecTest {
     void 오프셋_있어도_라운드트립() {
         UnsafeBuffer buffer = new UnsafeBuffer(new byte[256]);
         DecodedAccountOrder order = new DecodedAccountOrder(
-            OrderSide.BUY, 1L, STOCK, new BigDecimal("10000"), 10, "req-3");
+            OrderSide.BUY, 1L, STOCK, new BigDecimal("10000"), 10, "req-3", 2L);
 
         codec.encode(buffer, 13, order);
         DecodedAccountOrder decoded = codec.decode(buffer, 13);
 
         assertEquals(1L, decoded.accountId());
         assertEquals("req-3", decoded.requestId());
+        assertEquals(2L, decoded.publishedAtEpochNanos());
     }
 
     @Test
@@ -74,7 +76,7 @@ class AccountOrderCodecTest {
     void tryDecode_정상바이트는_값을_돌려준다() {
         UnsafeBuffer buffer = new UnsafeBuffer(new byte[256]);
         DecodedAccountOrder order = new DecodedAccountOrder(
-            OrderSide.BUY, 1L, STOCK, new BigDecimal("10000"), 10, "req-4");
+            OrderSide.BUY, 1L, STOCK, new BigDecimal("10000"), 10, "req-4", 3L);
         codec.encode(buffer, 0, order);
 
         Optional<DecodedAccountOrder> decoded = codec.tryDecode(buffer, 0);
@@ -88,7 +90,7 @@ class AccountOrderCodecTest {
     void tryDecode_손상된_type바이트는_빈값() {
         UnsafeBuffer buffer = new UnsafeBuffer(new byte[256]);
         DecodedAccountOrder order = new DecodedAccountOrder(
-            OrderSide.BUY, 1L, STOCK, new BigDecimal("10000"), 10, "req-5");
+            OrderSide.BUY, 1L, STOCK, new BigDecimal("10000"), 10, "req-5", 4L);
         codec.encode(buffer, 0, order);
         buffer.putByte(0, (byte) 99); // OrderSide.values().length(2)를 벗어난 값
 

@@ -19,6 +19,7 @@ import com.flab.stocktradingengine.account.disruptor.domain.NoOpAccountResultLis
 import com.flab.stocktradingengine.account.disruptor.handler.AccountEventHandler;
 import com.flab.stocktradingengine.account.disruptor.handler.AccountExceptionHandler;
 import com.flab.stocktradingengine.account.disruptor.handler.AccountJournalEventHandler;
+import com.flab.stocktradingengine.account.disruptor.io.AccountSnapshotSink;
 import com.flab.stocktradingengine.account.disruptor.io.MatchingOrderSender;
 import com.flab.stocktradingengine.account.disruptor.journal.AccountJournal;
 import com.flab.stocktradingengine.account.disruptor.journal.InMemoryAccountJournal;
@@ -26,6 +27,8 @@ import com.flab.stocktradingengine.account.disruptor.journal.JournalUnavailableE
 import com.flab.stocktradingengine.account.disruptor.snapshot.AccountSnapshot;
 import com.flab.stocktradingengine.account.disruptor.snapshot.AccountStateSnapshot;
 import com.flab.stocktradingengine.codec.AccountJournalEntry;
+import com.flab.stocktradingengine.time.EpochNanos;
+import com.flab.stocktradingengine.time.LatencyHistogram;
 
 /**
  * 계좌 축 워커의 진입점.
@@ -50,6 +53,25 @@ public class AccountEngine {
     private static final MatchingOrderSender NO_OP_MATCHING_ORDER_SENDER =
         (orderId, accountId, stockCode, side, price, quantity) -> {};
 
+    // 러닝 중 스냅샷 파이프라인(1-3)을 안 쓰는 생성자(대부분의 테스트)를 위한 기본값 — 큐잉을
+    // 항상 성공시키되(디스크에 실제로 안 쓰이니) durableSeq는 항상 0(아무것도 durable 아님)으로
+    // 둬, 실수로 가지치기가 진행돼 테스트가 세대 데이터를 잃는 일이 없게 한다(보수적 기본값).
+    private static final AccountSnapshotSink NO_OP_SNAPSHOT_SINK = new AccountSnapshotSink() {
+        @Override
+        public boolean offer(byte[] snapshotBytes, long fillPosition, long appliedSeq) {
+            return true;
+        }
+
+        @Override
+        public long durableSeq() {
+            return 0L;
+        }
+    };
+
+    // 접수 지연 측정(끝점①)을 안 쓰는 생성자(대부분의 테스트)를 위한 기본값 — 꺼진 채로 두면
+    // record가 분기 하나만 타고 즉시 반환한다(LatencyHistogram 참고).
+    private static final LatencyHistogram NO_OP_LATENCY_HISTOGRAM = new LatencyHistogram(false);
+
     // blockUntilJournaled 최대 대기 시간. 저널 스레드가 죽어(fail-fast) 시퀀스가 영영 안 올라오는
     // 상황에서 호출 스레드가 무한 스핀하는 걸 막는다. Kafka max.poll.interval(기본 5분)보다 한참 짧아
     // 리밸런스를 유발하지 않는다.
@@ -64,6 +86,7 @@ public class AccountEngine {
     private final Map<Long, AccountState> accounts = new HashMap<>();
     private final AccountJournal journal;
     private final AccountJournalEventHandler journalHandler;
+    private final AccountEventHandler businessHandler;
     private final AccountOrderIdGenerator orderIdGenerator;
     private RingBuffer<AccountEvent> ringBuffer;
 
@@ -77,9 +100,14 @@ public class AccountEngine {
      * @param journal 계좌 상태를 만드는 모든 입력을 처리 순서대로 기록하는 저널(2b-1) — matching과
      *                같은 결로 {@code handleEventsWith(journal).then(business)}로 배선해, 기록이
      *                끝난 이벤트만 비즈니스 핸들러가 본다.
+     * @param snapshotSink 러닝 중 스냅샷을 디스크에 내보내는 통로(1-3). 안 쓰면(테스트 등)
+     *                     {@link #NO_OP_SNAPSHOT_SINK}를 쓰는 오버로드를 대신 호출한다.
+     * @param latencyHistogram 끝점①(접수·예약) 지연 측정기(decision_records/v1-v2-e2e-measurement.md).
+     *                         안 쓰면(테스트 등) {@link #NO_OP_LATENCY_HISTOGRAM}을 쓰는 오버로드를 대신 호출한다.
      */
     public AccountEngine(int bufferSize, WaitStrategy waitStrategy, ProducerType producerType, long nodeId,
-                         MatchingOrderSender matchingOrderSender, AccountResultListener listener, AccountJournal journal) {
+                         MatchingOrderSender matchingOrderSender, AccountResultListener listener, AccountJournal journal,
+                         AccountSnapshotSink snapshotSink, LatencyHistogram latencyHistogram) {
         this.journal = journal;
         this.orderIdGenerator = new AccountOrderIdGenerator(nodeId);
         ThreadFactory threadFactory = DaemonThreadFactory.INSTANCE;
@@ -97,8 +125,21 @@ public class AccountEngine {
         // 라이브가 그대로 이어받아야 발급 충돌이 없다.
         // blockUntilJournaled가 이 핸들러의 시퀀스를 읽어야 하므로 필드로 잡아둔다.
         this.journalHandler = new AccountJournalEventHandler(journal);
-        this.disruptor.handleEventsWith(journalHandler)
-            .then(new AccountEventHandler(accounts, orderIdGenerator, matchingOrderSender, listener));
+        this.businessHandler = new AccountEventHandler(accounts, orderIdGenerator, matchingOrderSender, listener, snapshotSink, true, latencyHistogram);
+        this.disruptor.handleEventsWith(journalHandler).then(businessHandler);
+    }
+
+    /** 접수 지연 측정 없이(테스트 등) 생성한다. */
+    public AccountEngine(int bufferSize, WaitStrategy waitStrategy, ProducerType producerType, long nodeId,
+                         MatchingOrderSender matchingOrderSender, AccountResultListener listener, AccountJournal journal,
+                         AccountSnapshotSink snapshotSink) {
+        this(bufferSize, waitStrategy, producerType, nodeId, matchingOrderSender, listener, journal, snapshotSink, NO_OP_LATENCY_HISTOGRAM);
+    }
+
+    /** 러닝 중 스냅샷 파이프라인 없이(테스트 등) 생성한다. */
+    public AccountEngine(int bufferSize, WaitStrategy waitStrategy, ProducerType producerType, long nodeId,
+                         MatchingOrderSender matchingOrderSender, AccountResultListener listener, AccountJournal journal) {
+        this(bufferSize, waitStrategy, producerType, nodeId, matchingOrderSender, listener, journal, NO_OP_SNAPSHOT_SINK);
     }
 
     /** 기본 저널({@link InMemoryAccountJournal})로 생성한다. */
@@ -143,15 +184,41 @@ public class AccountEngine {
     }
 
     /**
+     * 소비자(비즈니스 핸들러)가 실제로 처리한 시점의 체결 수신 위치(1-2). {@code
+     * AccountFillReceiver#consumedPosition()}은 수신 스레드가 링에 넣은 위치라 소비자가 아직 처리
+     * 안 한 체결까지 포함할 수 있다 — 러닝 중 스냅샷(1-3)은 이 값을 써야 그 체결을 replay 대상에서
+     * 빠뜨리지 않는다.
+     */
+    public long lastAppliedFillPosition() {
+        return businessHandler.lastAppliedFillPosition();
+    }
+
+    /**
+     * 복구 시(단일 스레드, {@link #start} 전) 소비자의 체결 수신 위치를 스냅샷이 가리키던 값으로
+     * 시드한다(1-3, 39 리뷰 지적) — 안 하면 복구 직후~첫 라이브 체결 사이에 러닝 중 스냅샷이
+     * 찍힐 때 위치가 0으로 저장돼, 다음 복구가 체결 스트림을 처음부터 다시 replay한다. 반드시
+     * {@link #restore} 이후, {@link #start} 이전에 부른다.
+     */
+    public void seedFillPosition(long fillConsumedPosition) {
+        requireNotStarted();
+        businessHandler.seedLastAppliedFillPosition(fillConsumedPosition);
+    }
+
+    /**
      * 현재 계좌들·orderId 발급기 카운터·저널 위치를 통째로 찍는다(2d-2, ADR-019 "자체 스냅샷").
      *
      * <p>graceful shutdown(소비자 스레드 quiescent) 시점에만 안전하다 — matching
      * {@code MatchingEngine#snapshot}과 같은 이유(단일 스레드 전제가 깨진 채로 읽게 된다).</p>
+     *
+     * <p>저널 위치는 호스트 스레드가 {@code journal.position()}을 직접 읽지 않고 {@link
+     * #businessHandler}가 처리 시점에 기억해 둔 값({@link AccountEventHandler#lastJournaledPosition()})을
+     * 쓴다(1-2) — 러닝 중에는 저널러가 비즈니스 핸들러보다 앞서 나갈 수 있어, 직접 읽으면 아직
+     * 반영 안 된 이벤트까지 스냅샷 경계에 포함될 수 있다.</p>
      */
     public AccountSnapshot snapshot() {
         Map<Long, AccountStateSnapshot> accountsById = new HashMap<>();
         accounts.forEach((accountId, state) -> accountsById.put(accountId, state.toSnapshot()));
-        return new AccountSnapshot(accountsById, orderIdGenerator.counter(), journal.position());
+        return new AccountSnapshot(accountsById, orderIdGenerator.counter(), businessHandler.lastJournaledPosition());
     }
 
     /**
@@ -184,8 +251,14 @@ public class AccountEngine {
      */
     public void recover(Iterable<AccountJournalEntry> entries) {
         requireNotStarted();
-        AccountEventHandler recoveryHandler =
-            new AccountEventHandler(accounts, orderIdGenerator, NO_OP_MATCHING_ORDER_SENDER, NoOpAccountResultListener.INSTANCE);
+        // 복구 replay는 저널을 그대로 재실행하는 것뿐, 아직 시작 전이라 리플레이 중 스냅샷을
+        // 찍을 이유가 없다(1-3) — no-op sink에 더해 스냅샷 트리거 자체를 끈다(39 리뷰 비블로킹 ①,
+        // 큰 저널일수록 매 N건마다 전체 계좌 상태를 인코딩해 버리는 낭비가 복구 시간에 직접 얹힘 —
+        // 자세한 근거는 AccountEventHandler의 snapshotTriggerEnabled 파라미터 문서 참고).
+        // 발행 시각 정보가 없는 replay라 접수 지연 측정도 의미가 없다 — no-op 히스토그램.
+        AccountEventHandler recoveryHandler = new AccountEventHandler(
+            accounts, orderIdGenerator, NO_OP_MATCHING_ORDER_SENDER, NoOpAccountResultListener.INSTANCE,
+            NO_OP_SNAPSHOT_SINK, false, NO_OP_LATENCY_HISTOGRAM);
         AccountEvent scratch = new AccountEvent();
         for (AccountJournalEntry entry : entries) {
             applyToScratch(scratch, entry);
@@ -196,10 +269,13 @@ public class AccountEngine {
     /** 저널 엔트리 하나를 스크래치 슬롯에 채운다 — {@code AccountEvent}의 타입별 setter와 1:1 대응. */
     private void applyToScratch(AccountEvent event, AccountJournalEntry entry) {
         switch (entry.type()) {
-            case BUY -> event.setBuy(entry.accountId(), entry.stockCode(), entry.price(), entry.quantity(), entry.requestId());
-            case SELL -> event.setSell(entry.accountId(), entry.stockCode(), entry.price(), entry.quantity(), entry.requestId());
-            case BUY_FILL -> event.setBuyFill(entry.tradeId(), entry.orderId(), entry.accountId(), entry.stockCode(), entry.price(), entry.quantity());
-            case SELL_FILL -> event.setSellFill(entry.tradeId(), entry.orderId(), entry.accountId(), entry.stockCode(), entry.quantity());
+            // 저널 엔트리엔 발행 시각도 없다(리플레이 대상은 저널이지 발행 스트림이 아니다) — 0으로 채운다.
+            case BUY -> event.setBuy(entry.accountId(), entry.stockCode(), entry.price(), entry.quantity(), entry.requestId(), 0L);
+            case SELL -> event.setSell(entry.accountId(), entry.stockCode(), entry.price(), entry.quantity(), entry.requestId(), 0L);
+            // 저널 엔트리엔 sourcePosition이 없다(리플레이 대상 자체가 저널이지 체결 수신 스트림이
+            // 아니다) — 0으로 채운다. start() 전에만 도는 복구 경로라 이후 라이브 첫 체결이 곧 덮어쓴다.
+            case BUY_FILL -> event.setBuyFill(entry.tradeId(), entry.orderId(), entry.accountId(), entry.stockCode(), entry.price(), entry.quantity(), 0L);
+            case SELL_FILL -> event.setSellFill(entry.tradeId(), entry.orderId(), entry.accountId(), entry.stockCode(), entry.quantity(), 0L);
             case SETTLEMENT -> event.setSettlement(entry.tradeId(), entry.accountId(), entry.price());
         }
     }
@@ -229,16 +305,26 @@ public class AccountEngine {
     }
 
     /**
-     * 매수 검증·예약을 링버퍼에 발행한다.
+     * 매수 검증·예약을 링버퍼에 발행한다. 발행 시각을 모르는 발행자(테스트 등)를 위한 오버로드 —
+     * 지금(EpochNanos.now())을 발행 시각으로 채운다.
      *
      * <p>빈 슬롯을 예약({@code next})하고 값을 채운 뒤 발행({@code publish})한다.
      * publish 를 finally 에 둬, 값 채우는 중 예외가 나도 예약한 자리가 막히지 않게 한다.</p>
      */
     public void publishBuy(long accountId, String stockCode, BigDecimal price, int quantity, String requestId) {
+        publishBuy(accountId, stockCode, price, quantity, requestId, EpochNanos.now());
+    }
+
+    /**
+     * 매수 검증·예약을 링버퍼에 발행한다. publishedAtEpochNanos는 이 주문이 실제로 발행된 시각
+     * (끝점① 접수 지연 측정용, decision_records/v1-v2-e2e-measurement.md) — 발신자(API 게이트웨이)가
+     * 발행 직전에 찍어 와이어에 실어 보낸 값을 그대로 넘긴다.
+     */
+    public void publishBuy(long accountId, String stockCode, BigDecimal price, int quantity, String requestId, long publishedAtEpochNanos) {
         long sequence = ringBuffer.next();
         try {
             AccountEvent event = ringBuffer.get(sequence);
-            event.setBuy(accountId, stockCode, price, quantity, requestId);
+            event.setBuy(accountId, stockCode, price, quantity, requestId, publishedAtEpochNanos);
         } finally {
             ringBuffer.publish(sequence);
         }
@@ -246,41 +332,63 @@ public class AccountEngine {
 
     /**
      * 매도 검증·예약을 링버퍼에 발행한다. 담보는 보유 수량이라 예약 자체엔 price 를 안 쓰지만,
-     * 매칭 전달용으로 함께 싣는다(②-a).
+     * 매칭 전달용으로 함께 싣는다(②-a). publishedAtEpochNanos을 모르는 발행자를 위한 오버로드 —
+     * {@link #publishBuy(long, String, BigDecimal, int, String)}과 같은 이유.
      */
     public void publishSell(long accountId, String stockCode, BigDecimal price, int quantity, String requestId) {
+        publishSell(accountId, stockCode, price, quantity, requestId, EpochNanos.now());
+    }
+
+    /** 매도 검증·예약을 링버퍼에 발행한다. publishedAtEpochNanos는 {@link #publishBuy(long, String, BigDecimal, int, String, long)}과 같다. */
+    public void publishSell(long accountId, String stockCode, BigDecimal price, int quantity, String requestId, long publishedAtEpochNanos) {
         long sequence = ringBuffer.next();
         try {
             AccountEvent event = ringBuffer.get(sequence);
-            event.setSell(accountId, stockCode, price, quantity, requestId);
+            event.setSell(accountId, stockCode, price, quantity, requestId, publishedAtEpochNanos);
         } finally {
             ringBuffer.publish(sequence);
         }
     }
 
     /**
-     * 매수 체결 반영을 링버퍼에 발행한다. tradeId 는 체결 신원(멱등키).
+     * 매수 체결 반영을 링버퍼에 발행한다. tradeId 는 체결 신원(멱등키). sourcePosition을 모르는
+     * 발행자(테스트 등)를 위한 오버로드 — 0으로 채운다({@link #lastAppliedFillPosition()}이 이
+     * 체결의 위치를 모른다는 뜻).
      *
      * @return 발행한 링버퍼 시퀀스. {@link #blockUntilJournaled}에 넘겨 이 이벤트가 저널에 기록될
      *         때까지 기다리는 데 쓴다(Kafka ack를 저널 뒤로 미루는 A안).
      */
     public long publishBuyFill(long tradeId, long orderId, long accountId, String stockCode, BigDecimal matchPrice, int quantity) {
+        return publishBuyFill(tradeId, orderId, accountId, stockCode, matchPrice, quantity, 0L);
+    }
+
+    /**
+     * 매수 체결 반영을 링버퍼에 발행한다. sourcePosition은 이 체결을 실어 보낸 수신 스트림의 위치(1-2,
+     * {@code AccountFillReceiver}가 {@code Header.position()}으로 실어 보낸다) — 소비자가 처리한 뒤
+     * {@link #lastAppliedFillPosition()}로 읽힌다.
+     */
+    public long publishBuyFill(long tradeId, long orderId, long accountId, String stockCode, BigDecimal matchPrice, int quantity, long sourcePosition) {
         long sequence = ringBuffer.next();
         try {
             AccountEvent event = ringBuffer.get(sequence);
-            event.setBuyFill(tradeId, orderId, accountId, stockCode, matchPrice, quantity);
+            event.setBuyFill(tradeId, orderId, accountId, stockCode, matchPrice, quantity, sourcePosition);
         } finally {
             ringBuffer.publish(sequence);
         }
         return sequence;
     }
 
-    /** 매도 체결 반영을 링버퍼에 발행한다. tradeId 는 체결 신원(멱등키). {@link #publishBuyFill}과 같은 이유로 발행 시퀀스를 돌려준다. */
+    /** 매도 체결 반영을 링버퍼에 발행한다. sourcePosition을 모르는 발행자를 위한 오버로드 — {@link #publishBuyFill(long, long, long, String, BigDecimal, int)}과 같은 이유. */
     public long publishSellFill(long tradeId, long orderId, long accountId, String stockCode, int quantity) {
+        return publishSellFill(tradeId, orderId, accountId, stockCode, quantity, 0L);
+    }
+
+    /** 매도 체결 반영을 링버퍼에 발행한다. tradeId 는 체결 신원(멱등키). sourcePosition은 {@link #publishBuyFill(long, long, long, String, BigDecimal, int, long)}과 같다. */
+    public long publishSellFill(long tradeId, long orderId, long accountId, String stockCode, int quantity, long sourcePosition) {
         long sequence = ringBuffer.next();
         try {
             AccountEvent event = ringBuffer.get(sequence);
-            event.setSellFill(tradeId, orderId, accountId, stockCode, quantity);
+            event.setSellFill(tradeId, orderId, accountId, stockCode, quantity, sourcePosition);
         } finally {
             ringBuffer.publish(sequence);
         }

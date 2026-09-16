@@ -1,0 +1,30 @@
+# 39 설계(decision_records/v1-v2-e2e-measurement.md) 전 과정(e2e) 측정 프로파일 — application-loadtest.yml과
+# 같은 결이되 계좌 시드만 다르다(1001~1050 대신 2001~2100, generate-e2e-input.py 산출물).
+# 기동: ./gradlew :api:bootRun --args='--spring.profiles.active=e2e'
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:9702/stock_trading
+    driver-class-name: org.postgresql.Driver
+    username: postgres
+    password: postgres
+  jpa:
+    hibernate:
+      ddl-auto: update
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    defer-datasource-initialization: true
+  sql:
+    init:
+      mode: always
+      data-locations: classpath:stocks.sql, classpath:quotes.sql, classpath:e2e-seed.sql
+  data:
+    redis:
+      host: localhost
+      port: 6379
+  kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+
+snowflake:
+  node-id: 0

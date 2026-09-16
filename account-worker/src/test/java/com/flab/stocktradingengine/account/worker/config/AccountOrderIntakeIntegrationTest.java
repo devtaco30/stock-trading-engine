@@ -66,7 +66,7 @@ class AccountOrderIntakeIntegrationTest {
         try {
             awaitConnected(publication);
             send(publication, new DecodedAccountOrder(
-                OrderSide.BUY, 1L, STOCK, new BigDecimal("10000"), 10, "r1"));
+                OrderSide.BUY, 1L, STOCK, new BigDecimal("10000"), 10, "r1", 1L));
 
             assertThat(recorder.await()).as("5초 안에 결과가 도착해야 한다").isTrue();
             assertThat(recorder.rejections()).isEmpty();

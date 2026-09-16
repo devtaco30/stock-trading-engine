@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.io.File;
 import java.math.BigDecimal;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -14,6 +15,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import com.flab.stocktradingengine.account.disruptor.snapshot.AccountSnapshot;
 import com.flab.stocktradingengine.account.disruptor.snapshot.AccountStateSnapshot;
+import com.flab.stocktradingengine.account.disruptor.snapshot.TradeIdGenerationSnapshot;
 import com.flab.stocktradingengine.account.worker.lifecycle.AccountSnapshotLifecycle;
 import com.flab.stocktradingengine.account.worker.recovery.AccountSnapshotStore;
 import com.flab.stocktradingengine.account.worker.recovery.StoredAccountSnapshot;
@@ -42,7 +44,8 @@ class AccountSnapshotStoreTest {
     void write_후_read하면_recordingId와_fillConsumedPosition과_스냅샷이_그대로_돌아온다() {
         AccountStateSnapshot account = new AccountStateSnapshot(
             1L, 3L, new BigDecimal("1000000"), new BigDecimal("0.40"),
-            Map.of(), Map.of(), Map.of("005930", 5), Set.of(), Set.of(),
+            Map.of(), Map.of(), Map.of("005930", 5),
+            List.of(new TradeIdGenerationSnapshot(0L, Set.of())), Set.of(),
             Set.of("r1"), BigDecimal.ZERO);
         AccountSnapshot snapshot = new AccountSnapshot(Map.of(1L, account), 3L, 555L);
 

@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -42,12 +43,17 @@ class AccountSnapshotCodecTest {
     @Test
     @DisplayName("여러 계좌·여러 예약·멱등 캐시·requestId 집합이 뒤섞여도 정확히 왕복된다")
     void 다중_계좌_다중_예약_왕복() {
+        // 세대 2개(현재 세대가 0번째) — tradeId 세대 경계(boundarySeq)까지 같이 왕복되는지 본다(1-4).
+        List<TradeIdGenerationSnapshot> tradeIdGenerations = List.of(
+            new TradeIdGenerationSnapshot(50L, Set.of(9002L)),
+            new TradeIdGenerationSnapshot(0L, Set.of(9001L)));
+
         AccountStateSnapshot account1 = new AccountStateSnapshot(
             1L, 42L, new BigDecimal("1000000"), new BigDecimal("0.40"),
             Map.of(10L, new BuyReservationSnapshot(new BigDecimal("70000"), 3)),
             Map.of(20L, new SellReservationSnapshot(STOCK, 5)),
             Map.of(STOCK, 10),
-            Set.of(9001L, 9002L),
+            tradeIdGenerations,
             Set.of(8001L),
             Set.of("r1", "r2"),
             new BigDecimal("1500"));
@@ -55,7 +61,8 @@ class AccountSnapshotCodecTest {
         AccountStateSnapshot account2 = new AccountStateSnapshot(
             2L, 0L, new BigDecimal("500000"), new BigDecimal("1.00"),
             Map.of(), Map.of(), Map.of(),
-            Set.of(), Set.of(), Set.of(),
+            List.of(new TradeIdGenerationSnapshot(0L, Set.of())),
+            Set.of(), Set.of(),
             BigDecimal.ZERO);
 
         AccountSnapshot snapshot = new AccountSnapshot(Map.of(1L, account1, 2L, account2), 99L, 555L);
@@ -71,7 +78,7 @@ class AccountSnapshotCodecTest {
         assertEquals(0, account1.balance().compareTo(decodedAccount1.balance()));
         assertEquals(0, account1.unpaid().compareTo(decodedAccount1.unpaid()));
         assertEquals(account1.holdings(), decodedAccount1.holdings());
-        assertEquals(account1.processedTradeIds(), decodedAccount1.processedTradeIds());
+        assertEquals(account1.tradeIdGenerations(), decodedAccount1.tradeIdGenerations());
         assertEquals(account1.processedSettlementRefs(), decodedAccount1.processedSettlementRefs());
         assertEquals(account1.processedRequestIds(), decodedAccount1.processedRequestIds());
         assertEquals(account1.reservations().get(10L), decodedAccount1.reservations().get(10L));
