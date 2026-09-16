@@ -5,7 +5,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.springframework.context.SmartLifecycle;
 
 import com.flab.stocktradingengine.account.disruptor.engine.AccountEngine;
-import com.flab.stocktradingengine.account.disruptor.io.AccountFillReceiver;
 import com.flab.stocktradingengine.account.worker.recovery.AccountSnapshotStore;
 
 /**
@@ -25,11 +24,12 @@ import com.flab.stocktradingengine.account.worker.recovery.AccountSnapshotStore;
  * (ungraceful)면 스냅샷을 못 찍고 직전 스냅샷 + 그 뒤 저널 replay로 복구한다(메커니즘 먼저 —
  * 주기적 라이브 스냅샷은 나중 리파인).</p>
  *
- * <h3>fillConsumedPosition (ADR-032, U4a)</h3>
- * <p>{@link AccountFillReceiver}(phase 1)가 이 빈보다 먼저 멈추므로, 그 시점의
- * {@link AccountFillReceiver#consumedPosition()}은 이미 quiescent한 최종값이다 — 체결 스트림
- * (6001)에서 durable하게 반영이 끝난 위치를 그대로 스냅샷에 담아, 재기동 시 그 위치부터 fill을
- * replay하면 된다(U4b).</p>
+ * <h3>fillConsumedPosition (ADR-032, U4a·I1)</h3>
+ * <p>{@link AccountEngine#lastAppliedFillPositions()}(소비자 스레드가 실제로 반영한 뒤에야 기록,
+ * 발행자별 맵)를 쓴다 — 수신 스레드가 링에 넣은 위치({@code AccountFillReceiver}가 예전에 자체
+ * 추적하던 값)를 쓰면 소비자가 아직 처리 안 한 체결까지 스냅샷 경계 안쪽으로 잘못 들어갈 수
+ * 있다. 엔진(phase 0)이 이 빈(phase -1)보다 먼저 멈추므로, 그 시점의 이 값은 이미 quiescent한
+ * 최종값이다 — 재기동 시 이 위치들부터 각 발행자의 체결 스트림을 replay하면 된다(U4b, I1 U3).</p>
  *
  * <h3>recordingId — 더 이상 이 클래스가 직접 조회하지 않는다 (1-3)</h3>
  * <p>이전엔 stop() 때마다 카탈로그를 스캔했다. 러닝 중 스냅샷 쓰기({@code AccountSnapshotWriter})도
@@ -46,15 +46,12 @@ public class AccountSnapshotLifecycle implements SmartLifecycle {
     private static final int PHASE = -1; // AccountEngineLifecycle(phase 0)보다 늦게 멈춘다
 
     private final AccountEngine engine;
-    private final AccountFillReceiver fillReceiver;
     private final AccountSnapshotStore snapshotStore;
     private final long journalRecordingId;
     private final AtomicBoolean running = new AtomicBoolean(false);
 
-    public AccountSnapshotLifecycle(AccountEngine engine, AccountFillReceiver fillReceiver,
-            AccountSnapshotStore snapshotStore, Long journalRecordingId) {
+    public AccountSnapshotLifecycle(AccountEngine engine, AccountSnapshotStore snapshotStore, Long journalRecordingId) {
         this.engine = engine;
-        this.fillReceiver = fillReceiver;
         this.snapshotStore = snapshotStore;
         this.journalRecordingId = journalRecordingId;
     }
@@ -66,7 +63,7 @@ public class AccountSnapshotLifecycle implements SmartLifecycle {
 
     @Override
     public void stop() {
-        snapshotStore.write(journalRecordingId, fillReceiver.consumedPosition(), engine.snapshot());
+        snapshotStore.write(journalRecordingId, engine.lastAppliedFillPositions(), engine.snapshot());
         running.set(false);
     }
 

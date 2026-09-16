@@ -72,7 +72,7 @@ public class AccountEngineConfig {
      * <p>{@link AccountSnapshotSink}(1-3, 실제 구현은 {@code AccountSnapshotWriter})를 러닝 중
      * 스냅샷 싱크로 넘긴다 — 인터페이스로 받아, Archive 없이 가볍게 띄우는 테스트가 {@link
      * AccountJournal}처럼 간단한 대체 빈을 넣을 수 있게 한다. 스냅샷이 있었으면
-     * {@code engine.seedFillPosition}으로 소비자의 체결 수신 위치를 그 스냅샷 값으로 시드한다 —
+     * {@code engine.seedFillPositions}으로 소비자의 체결 수신 위치(발행자별 맵)를 그 스냅샷 값으로 시드한다 —
      * 안 하면 복구 직후~첫 라이브 체결 사이에 러닝 중 스냅샷이 찍힐 때 위치가 0으로 저장돼, 다음
      * 복구가 체결 스트림을 처음부터 다시 replay한다(39 리뷰 지적).</p>
      */
@@ -95,7 +95,7 @@ public class AccountEngineConfig {
         }
         accountLoadedSnapshot.ifPresent(stored -> {
             engine.restore(stored.snapshot());
-            engine.seedFillPosition(stored.fillConsumedPosition());
+            engine.seedFillPositions(stored.fillConsumedPosition());
         });
         engine.recover(accountJournalRecoveredEntries);
         engine.recover(toFillJournalEntries(accountFillReplayedEntries));

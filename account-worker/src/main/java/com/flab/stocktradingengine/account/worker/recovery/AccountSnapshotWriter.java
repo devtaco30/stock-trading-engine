@@ -2,6 +2,7 @@ package com.flab.stocktradingengine.account.worker.recovery;
 
 import java.lang.System.Logger;
 import java.lang.System.Logger.Level;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.agrona.concurrent.BackoffIdleStrategy;
@@ -50,8 +51,8 @@ public class AccountSnapshotWriter implements AccountSnapshotSink, AutoCloseable
 
     /** 계좌 엔진 소비자 스레드가 호출한다 — 큐에 넣기만 하고 즉시 돌아간다(논블로킹). */
     @Override
-    public boolean offer(byte[] snapshotBytes, long fillPosition, long appliedSeq) {
-        return queue.offer(new SnapshotWriteTask(snapshotBytes, fillPosition, appliedSeq));
+    public boolean offer(byte[] snapshotBytes, Map<Integer, Long> fillPositions, long appliedSeq) {
+        return queue.offer(new SnapshotWriteTask(snapshotBytes, fillPositions, appliedSeq));
     }
 
     @Override
@@ -79,7 +80,7 @@ public class AccountSnapshotWriter implements AccountSnapshotSink, AutoCloseable
 
     private void writeTask(SnapshotWriteTask task) {
         try {
-            snapshotStore.write(journalRecordingId, task.fillPosition(), task.snapshotBytes());
+            snapshotStore.write(journalRecordingId, task.fillPositions(), task.snapshotBytes());
             durableSeq = task.appliedSeq(); // fsync까지 끝난 뒤에만 durable로 보고한다
         } catch (RuntimeException e) {
             // 이번 회차 쓰기가 실패해도 프로세스는 계속 돈다 — durableSeq를 안 올려 가지치기를
@@ -101,6 +102,6 @@ public class AccountSnapshotWriter implements AccountSnapshotSink, AutoCloseable
         }
     }
 
-    private record SnapshotWriteTask(byte[] snapshotBytes, long fillPosition, long appliedSeq) {
+    private record SnapshotWriteTask(byte[] snapshotBytes, Map<Integer, Long> fillPositions, long appliedSeq) {
     }
 }

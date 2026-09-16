@@ -1,6 +1,7 @@
 package com.flab.stocktradingengine.account.worker.config;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -94,9 +95,10 @@ public class AccountFillIntakeConfig {
     }
 
     /**
-     * 재기동 시 "매칭이 냈지만 이 프로세스가 못 받은 체결"을 채운다(ADR-032, U4b). 스냅샷이
-     * 가리키는 {@link StoredAccountSnapshot#fillConsumedPosition}부터 체결 스트림을 replay해
-     * {@link AccountEngineConfig#accountEngine}이 {@code engine.recover(...)}로 재적용한다.
+     * 재기동 시 "매칭이 냈지만 이 프로세스가 못 받은 체결"을 채운다(ADR-032, U4b·I1 U3). 스냅샷이
+     * 가리키는 {@link StoredAccountSnapshot#fillConsumedPosition}(발행자별 위치 맵)부터 체결
+     * 스트림을 recording별로 replay해 {@link AccountEngineConfig#accountEngine}이
+     * {@code engine.recover(...)}로 재적용한다.
      *
      * <p>스냅샷이 없으면(첫 기동, graceful stop을 한 번도 안 겪음) 되살릴 gap 자체가 없다 —
      * fromPosition을 정할 기준이 없으므로 replay를 생략하고 빈 리스트를 돌려준다. 이후 들어오는
@@ -118,7 +120,8 @@ public class AccountFillIntakeConfig {
         if (accountLoadedSnapshot.isEmpty()) {
             return List.of();
         }
+        Map<Integer, Long> fillConsumedPositions = accountLoadedSnapshot.get().fillConsumedPosition();
         AccountFillReplayer replayer = new AccountFillReplayer(aeronArchive);
-        return replayer.readFrom(fillChannel, AeronStreamIds.FILL, accountLoadedSnapshot.get().fillConsumedPosition());
+        return replayer.readFrom(fillChannel, AeronStreamIds.FILL, fillConsumedPositions);
     }
 }

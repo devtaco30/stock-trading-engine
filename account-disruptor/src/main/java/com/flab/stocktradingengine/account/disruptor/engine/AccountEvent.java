@@ -22,6 +22,7 @@ public class AccountEvent {
     private String requestId;
     private long tradeId;
     private long sourcePosition;
+    private int sourceSessionId;
     private long journaledPosition;
     private long publishedAtEpochNanos;
 
@@ -64,8 +65,11 @@ public class AccountEvent {
      * 매수 체결 반영 명령으로 슬롯을 채운다. tradeId 는 체결 신원(멱등키). sourcePosition 은 이 체결을
      * 실어 보낸 수신 스트림의 위치(1-2) — 소비자 스레드가 실제로 이 체결을 반영한 뒤에야 그 값을
      * "적용 완료 위치"로 인정한다. 수신 스레드가 도착시킨 위치({@code image.position()})와는 다르다.
+     * sourceSessionId 는 그 위치가 어느 발행자(Aeron 연결)의 것인지 구분하는 키(ADR-032 I1, D1) —
+     * 매칭 프로세스가 둘 이상이면 recording 이 여럿 생기고, position 값 하나만으로는 어느 recording의
+     * 위치인지 구분할 수 없다.
      */
-    public void setBuyFill(long tradeId, long orderId, long accountId, String stockCode, BigDecimal matchPrice, int quantity, long sourcePosition) {
+    public void setBuyFill(long tradeId, long orderId, long accountId, String stockCode, BigDecimal matchPrice, int quantity, long sourcePosition, int sourceSessionId) {
         this.type = AccountEventType.BUY_FILL;
         this.tradeId = tradeId;
         this.orderId = orderId;
@@ -74,10 +78,11 @@ public class AccountEvent {
         this.price = matchPrice;
         this.quantity = quantity;
         this.sourcePosition = sourcePosition;
+        this.sourceSessionId = sourceSessionId;
     }
 
-    /** 매도 체결 반영 명령으로 슬롯을 채운다. tradeId 는 체결 신원(멱등키). sourcePosition 은 {@link #setBuyFill}과 같다. */
-    public void setSellFill(long tradeId, long orderId, long accountId, String stockCode, int quantity, long sourcePosition) {
+    /** 매도 체결 반영 명령으로 슬롯을 채운다. tradeId 는 체결 신원(멱등키). sourcePosition·sourceSessionId 는 {@link #setBuyFill}과 같다. */
+    public void setSellFill(long tradeId, long orderId, long accountId, String stockCode, int quantity, long sourcePosition, int sourceSessionId) {
         this.type = AccountEventType.SELL_FILL;
         this.tradeId = tradeId;
         this.orderId = orderId;
@@ -85,6 +90,7 @@ public class AccountEvent {
         this.stockCode = stockCode;
         this.quantity = quantity;
         this.sourcePosition = sourcePosition;
+        this.sourceSessionId = sourceSessionId;
     }
 
     /**
@@ -115,6 +121,7 @@ public class AccountEvent {
         this.requestId = null;
         this.tradeId = 0L;
         this.sourcePosition = 0L;
+        this.sourceSessionId = 0;
         this.journaledPosition = 0L;
         this.publishedAtEpochNanos = 0L;
     }
@@ -153,6 +160,10 @@ public class AccountEvent {
 
     public long getSourcePosition() {
         return sourcePosition;
+    }
+
+    public int getSourceSessionId() {
+        return sourceSessionId;
     }
 
     public long getJournaledPosition() {

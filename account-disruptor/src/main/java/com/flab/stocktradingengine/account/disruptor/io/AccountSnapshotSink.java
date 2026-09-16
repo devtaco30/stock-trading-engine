@@ -1,5 +1,7 @@
 package com.flab.stocktradingengine.account.disruptor.io;
 
+import java.util.Map;
+
 /**
  * 소비자 스레드(single-writer)가 러닝 중 스냅샷을 디스크에 내보내는 통로(1-3,
  * {@code docs/_tradeid_snapshot_prune.html}). {@link MatchingOrderSender}·{@code AccountResultListener}와
@@ -19,10 +21,11 @@ public interface AccountSnapshotSink {
      * 스냅샷 주기에 다시 시도), 예외를 던지지 않는다 — 소비자 스레드를 막으면 안 된다.
      *
      * @param snapshotBytes {@code AccountSnapshotCodec}로 이미 인코딩된 스냅샷(저널 위치 포함)
-     * @param fillPosition  이 스냅샷 시점의 체결 수신 위치({@code AccountEventHandler#lastAppliedFillPosition()})
+     * @param fillPositions 이 스냅샷 시점의 체결 수신 위치를 발행자(Aeron sessionId, ADR-032 I1 D1)별로
+     *                      담은 맵({@code AccountEventHandler#lastAppliedFillPositions()})
      * @param appliedSeq    이 스냅샷을 만든 시점의 저널 적용 순번 — durable해지면 이 값이 {@link #durableSeq()}로 보고된다
      */
-    boolean offer(byte[] snapshotBytes, long fillPosition, long appliedSeq);
+    boolean offer(byte[] snapshotBytes, Map<Integer, Long> fillPositions, long appliedSeq);
 
     /**
      * 지금까지 디스크에 durable하게(fsync 완료) 쓰인 가장 최근 스냅샷의 appliedSeq. 아직 아무것도
