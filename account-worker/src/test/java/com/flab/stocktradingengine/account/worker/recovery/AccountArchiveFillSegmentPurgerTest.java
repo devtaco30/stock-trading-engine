@@ -73,7 +73,9 @@ class AccountArchiveFillSegmentPurgerTest {
         fillChannel = "aeron:udp?endpoint=localhost:" + fillPort;
 
         archivingMediaDriver = ArchivingMediaDriver.launch(
-            new MediaDriver.Context().aeronDirectoryName(accountAeronDirectoryName),
+            new MediaDriver.Context().aeronDirectoryName(accountAeronDirectoryName)
+                .dirDeleteOnStart(true)
+                .dirDeleteOnShutdown(true),
             new Archive.Context()
                 .controlChannel(controlRequestChannel)
                 .replicationChannel("aeron:udp?endpoint=localhost:0")
@@ -89,8 +91,8 @@ class AccountArchiveFillSegmentPurgerTest {
             .controlResponseChannel("aeron:udp?endpoint=localhost:0"));
         testArchive.startRecording(fillChannel, FILL_STREAM_ID, SourceLocation.REMOTE);
 
-        matchingDriverA = MediaDriver.launchEmbedded();
-        matchingDriverB = MediaDriver.launchEmbedded();
+        matchingDriverA = MediaDriver.launchEmbedded(cleanEmbeddedMediaDriverContext());
+        matchingDriverB = MediaDriver.launchEmbedded(cleanEmbeddedMediaDriverContext());
         matchingAeronA = Aeron.connect(new Aeron.Context().aeronDirectoryName(matchingDriverA.aeronDirectoryName()));
         matchingAeronB = Aeron.connect(new Aeron.Context().aeronDirectoryName(matchingDriverB.aeronDirectoryName()));
         publicationA = matchingAeronA.addPublication(
@@ -216,5 +218,10 @@ class AccountArchiveFillSegmentPurgerTest {
             }
         }
         return found[0];
+    }
+
+    /** Aeron 드라이버 통신용 임시 디렉터리(aeron-*)를 시작·종료 시 지운다(I10) — 기본값은 안 지운다. */
+    private static MediaDriver.Context cleanEmbeddedMediaDriverContext() {
+        return new MediaDriver.Context().dirDeleteOnStart(true).dirDeleteOnShutdown(true);
     }
 }

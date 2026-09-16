@@ -83,7 +83,7 @@ class AccountFillMultiSourceReplayRecoveryIntegrationTest {
             awaitSeq(engine, 1L); // r1 예약 accept — 이 엔진의 첫 발급이라 counter=1
             long buyOrderId = orderId(1);
 
-            MediaDriver matchingDriverA = MediaDriver.launchEmbedded();
+            MediaDriver matchingDriverA = MediaDriver.launchEmbedded(cleanEmbeddedMediaDriverContext());
             try {
                 Aeron matchingAeronA = Aeron.connect(new Aeron.Context().aeronDirectoryName(matchingDriverA.aeronDirectoryName()));
                 try {
@@ -113,7 +113,7 @@ class AccountFillMultiSourceReplayRecoveryIntegrationTest {
 
             // 매칭B — 별도 드라이버·클라이언트라 sessionId가 매칭A와 다르다, 아예 새 recording이 생긴다.
             // 스냅샷(run1 종료 시점)엔 이 sessionId가 없다 — "맵에 없으면 시작 위치부터" 분기를 이 recording이 탄다.
-            MediaDriver matchingDriverB = MediaDriver.launchEmbedded();
+            MediaDriver matchingDriverB = MediaDriver.launchEmbedded(cleanEmbeddedMediaDriverContext());
             try {
                 Aeron matchingAeronB = Aeron.connect(new Aeron.Context().aeronDirectoryName(matchingDriverB.aeronDirectoryName()));
                 try {
@@ -216,5 +216,10 @@ class AccountFillMultiSourceReplayRecoveryIntegrationTest {
             }
             Thread.yield();
         }
+    }
+
+    /** Aeron 드라이버 통신용 임시 디렉터리(aeron-*)를 시작·종료 시 지운다(I10) — 기본값은 안 지운다. */
+    private static MediaDriver.Context cleanEmbeddedMediaDriverContext() {
+        return new MediaDriver.Context().dirDeleteOnStart(true).dirDeleteOnShutdown(true);
     }
 }
