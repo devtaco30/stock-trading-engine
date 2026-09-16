@@ -40,7 +40,7 @@ public class MatchingFillPublishConfig {
         return new MatchingFillPublications(byEndpoint);
     }
 
-    @Bean
+    @Bean(initMethod = "start", destroyMethod = "close")
     public AccountFillPublisher accountFillPublisher(
             ShardRoutingTable shardRoutingTable,
             MatchingFillPublications matchingFillPublications,
