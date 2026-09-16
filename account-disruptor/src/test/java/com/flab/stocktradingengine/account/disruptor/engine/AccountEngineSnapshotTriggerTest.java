@@ -208,8 +208,8 @@ class AccountEngineSnapshotTriggerTest {
         private final AtomicLong durableSeq = new AtomicLong(0L);
 
         @Override
-        public boolean offer(byte[] snapshotBytes, Map<Integer, Long> fillPositions, long appliedSeq) {
-            offers.add(new Offer(snapshotBytes, fillPositions, appliedSeq));
+        public boolean offer(byte[] snapshotBytes, Map<Integer, Long> fillPositions, long journalPosition, long appliedSeq) {
+            offers.add(new Offer(snapshotBytes, fillPositions, journalPosition, appliedSeq));
             return true;
         }
 
@@ -218,7 +218,7 @@ class AccountEngineSnapshotTriggerTest {
             return durableSeq.get();
         }
 
-        private record Offer(byte[] snapshotBytes, Map<Integer, Long> fillPositions, long appliedSeq) {
+        private record Offer(byte[] snapshotBytes, Map<Integer, Long> fillPositions, long journalPosition, long appliedSeq) {
         }
     }
 }

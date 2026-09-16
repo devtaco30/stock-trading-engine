@@ -3,6 +3,7 @@ package com.flab.stocktradingengine.account.worker.config;
 import java.io.File;
 import java.util.Optional;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.SmartLifecycle;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -10,9 +11,12 @@ import org.springframework.context.annotation.Configuration;
 import com.flab.stocktradingengine.account.disruptor.engine.AccountEngine;
 import com.flab.stocktradingengine.account.worker.lifecycle.AccountSnapshotLifecycle;
 import com.flab.stocktradingengine.account.worker.lifecycle.AccountSnapshotWriterLifecycle;
+import com.flab.stocktradingengine.account.worker.recovery.AccountArchiveSegmentPurger;
 import com.flab.stocktradingengine.account.worker.recovery.AccountSnapshotStore;
 import com.flab.stocktradingengine.account.worker.recovery.AccountSnapshotWriter;
 import com.flab.stocktradingengine.account.worker.recovery.StoredAccountSnapshot;
+
+import io.aeron.Aeron;
 
 /**
  * 계좌 엔진 스냅샷(2d-2b) 배선. {@link AccountOrderIntakeConfig}가 만든 archive-dir(저널과 같은
@@ -26,6 +30,17 @@ import com.flab.stocktradingengine.account.worker.recovery.StoredAccountSnapshot
  */
 @Configuration
 public class AccountSnapshotConfig {
+
+    // AccountOrderIntakeConfig.aeronArchive가 쓰는 것과 같은 property·기본값 — 회수 전용 연결이
+    // 같은 Archive를 가리켜야 하므로(같은 제어 채널) 이 값을 그대로 따른다.
+    private static final String DEFAULT_CONTROL_REQUEST_CHANNEL = "aeron:udp?endpoint=localhost:8010";
+
+    @Bean
+    public AccountArchiveSegmentPurger accountJournalSegmentPurger(
+            Aeron aeron, Long accountJournalRecordingId,
+            @Value("${account.worker.archive.control-channel:" + DEFAULT_CONTROL_REQUEST_CHANNEL + "}") String controlRequestChannel) {
+        return new AccountArchiveSegmentPurger(aeron, controlRequestChannel, accountJournalRecordingId);
+    }
 
     @Bean
     public AccountSnapshotStore accountSnapshotStore(File accountArchiveDir) {
@@ -51,8 +66,9 @@ public class AccountSnapshotConfig {
      * start() 이후에나 일어나므로).
      */
     @Bean
-    public AccountSnapshotWriter accountSnapshotWriter(AccountSnapshotStore accountSnapshotStore, Long accountJournalRecordingId) {
-        return new AccountSnapshotWriter(accountSnapshotStore, accountJournalRecordingId);
+    public AccountSnapshotWriter accountSnapshotWriter(AccountSnapshotStore accountSnapshotStore,
+            Long accountJournalRecordingId, AccountArchiveSegmentPurger accountJournalSegmentPurger) {
+        return new AccountSnapshotWriter(accountSnapshotStore, accountJournalRecordingId, accountJournalSegmentPurger);
     }
 
     @Bean

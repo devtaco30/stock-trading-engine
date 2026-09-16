@@ -23,9 +23,14 @@ public interface AccountSnapshotSink {
      * @param snapshotBytes {@code AccountSnapshotCodec}로 이미 인코딩된 스냅샷(저널 위치 포함)
      * @param fillPositions 이 스냅샷 시점의 체결 수신 위치를 발행자(Aeron sessionId, ADR-032 I1 D1)별로
      *                      담은 맵({@code AccountEventHandler#lastAppliedFillPositions()})
+     * @param journalPosition 이 스냅샷을 찍은 시점의 저널 위치({@code AccountSnapshot#journalPosition()}과
+     *                      같은 값) — {@code snapshotBytes} 안에도 인코딩돼 있지만(재인코딩 없이 쓰기만
+     *                      하는 구현체가 읽으려면 디코딩이 필요해) 값 자체를 여기 별도 인자로 실어
+     *                      나른다({@code fillPositions}와 같은 이유, ADR-032 I5 D1 — 러닝 중 Archive
+     *                      세그먼트 회수의 경계로 쓰인다)
      * @param appliedSeq    이 스냅샷을 만든 시점의 저널 적용 순번 — durable해지면 이 값이 {@link #durableSeq()}로 보고된다
      */
-    boolean offer(byte[] snapshotBytes, Map<Integer, Long> fillPositions, long appliedSeq);
+    boolean offer(byte[] snapshotBytes, Map<Integer, Long> fillPositions, long journalPosition, long appliedSeq);
 
     /**
      * 지금까지 디스크에 durable하게(fsync 완료) 쓰인 가장 최근 스냅샷의 appliedSeq. 아직 아무것도

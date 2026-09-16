@@ -58,7 +58,7 @@ public class AccountEngine {
     // 둬, 실수로 가지치기가 진행돼 테스트가 세대 데이터를 잃는 일이 없게 한다(보수적 기본값).
     private static final AccountSnapshotSink NO_OP_SNAPSHOT_SINK = new AccountSnapshotSink() {
         @Override
-        public boolean offer(byte[] snapshotBytes, Map<Integer, Long> fillPositions, long appliedSeq) {
+        public boolean offer(byte[] snapshotBytes, Map<Integer, Long> fillPositions, long journalPosition, long appliedSeq) {
             return true;
         }
 
