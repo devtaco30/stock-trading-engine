@@ -1,7 +1,5 @@
 package com.flab.stocktradingengine.account.worker.config;
 
-import java.lang.System.Logger;
-import java.lang.System.Logger.Level;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -54,8 +52,6 @@ import io.aeron.archive.codecs.SourceLocation;
 @Configuration
 public class AccountFillIntakeConfig {
 
-    private static final Logger log = System.getLogger(AccountFillIntakeConfig.class.getName());
-
     // 패키지 가시성 — 테스트(같은 패키지)가 이 기본값을 그대로 참조해 matching-worker 체결
     // 채널과 맞춘다. 실제 채널은 transport.fill.channel 속성에서 해석된다(fork1 Unit 1). 스트림
     // ID는 core AeronStreamIds.FILL로 matching-worker와 공유한다.
@@ -99,9 +95,10 @@ public class AccountFillIntakeConfig {
     }
 
     /**
-     * 재기동 시 "매칭이 냈지만 이 프로세스가 못 받은 체결"을 채운다(ADR-032, U4b). 스냅샷이
-     * 가리키는 {@link StoredAccountSnapshot#fillConsumedPosition}부터 체결 스트림을 replay해
-     * {@link AccountEngineConfig#accountEngine}이 {@code engine.recover(...)}로 재적용한다.
+     * 재기동 시 "매칭이 냈지만 이 프로세스가 못 받은 체결"을 채운다(ADR-032, U4b·I1 U3). 스냅샷이
+     * 가리키는 {@link StoredAccountSnapshot#fillConsumedPosition}(발행자별 위치 맵)부터 체결
+     * 스트림을 recording별로 replay해 {@link AccountEngineConfig#accountEngine}이
+     * {@code engine.recover(...)}로 재적용한다.
      *
      * <p>스냅샷이 없으면(첫 기동, graceful stop을 한 번도 안 겪음) 되살릴 gap 자체가 없다 —
      * fromPosition을 정할 기준이 없으므로 replay를 생략하고 빈 리스트를 돌려준다. 이후 들어오는
@@ -123,19 +120,8 @@ public class AccountFillIntakeConfig {
         if (accountLoadedSnapshot.isEmpty()) {
             return List.of();
         }
-        // ADR-032 I1 임시 다리 — AccountFillReplayer는 아직(U3 전) recording 하나만 읽는다.
-        // 매칭 프로세스가 하나뿐인 지금은 맵에 항목이 최대 하나뿐이라 안전하다. U3가 readFrom을
-        // 위치 맵을 받는 형태로 바꾸면 이 추출 없이 맵을 그대로 넘긴다.
         Map<Integer, Long> fillConsumedPositions = accountLoadedSnapshot.get().fillConsumedPosition();
-        if (fillConsumedPositions.size() > 1) {
-            // 조용히 하나만 골라 나머지를 버리면 지금 고치는 버그(recording 여럿 중 하나만 읽어
-            // 체결이 빠짐)와 같은 모양이 된다 — 못 하는 걸 못 한다고 드러낸다(D2와 같은 원칙).
-            log.log(Level.WARNING, "[계좌] 체결 위치가 발행자 " + fillConsumedPositions.size()
-                + "개분 있는데 U3(ADR-032 I1) 전까지는 그중 하나만 읽습니다 — 나머지 발행자의 체결은 이번 복구에서 빠집니다: "
-                + fillConsumedPositions);
-        }
-        long fromPosition = fillConsumedPositions.values().stream().findFirst().orElse(0L);
         AccountFillReplayer replayer = new AccountFillReplayer(aeronArchive);
-        return replayer.readFrom(fillChannel, AeronStreamIds.FILL, fromPosition);
+        return replayer.readFrom(fillChannel, AeronStreamIds.FILL, fillConsumedPositions);
     }
 }

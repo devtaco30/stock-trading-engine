@@ -4,6 +4,7 @@ import java.lang.System.Logger;
 import java.lang.System.Logger.Level;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import com.flab.stocktradingengine.codec.FillCodec;
@@ -16,19 +17,18 @@ import io.aeron.logbuffer.FragmentHandler;
 
 /**
  * 체결 스트림(6001)을 Aeron Archive에서 읽어 {@link FilledTrade} 리스트로 돌려주는 리더(ADR-032,
- * U4b). {@link AccountJournalReplayer}(2b-2b)를 미러한다 — replay+FragmentHandler+tryDecode·
+ * U4b·I1 U3). {@link AccountJournalReplayer}(2b-2b)를 미러한다 — replay+FragmentHandler+tryDecode·
  * awaitConnected 구조가 같다. 매칭이 "재기동 전에 계좌가 못 받은 체결"을 이 스트림에 이미 durable
  * 하게 남겨뒀으므로, 여기서 읽어 {@code AccountEngine#recover}에 넘길 입력을 만든다.
  *
- * <h3>단순화 — 단일 recording 가정 (C6로 미룸)</h3>
- * <p>{@link AccountJournalReplayer}는 저널 스트림에 recording이 여러 개(자기 프로세스가 여러 번
- * 재시작)일 수 있어 시작 시각순으로 이어 붙인다. 이 클래스는 그 복잡도를 지금 들이지 않는다 —
- * fork3 U3부터 체결 스트림(6001)의 녹화 주체는 이 프로세스(계좌) 자신이라(REMOTE, {@code
- * AccountFillIntakeConfig}), recordingId도 계좌가 직접 안다. 단순화는 여전히 남는다: run(프로세스
- * 수명) 하나당 이 채널·스트림에 recording이 정확히 하나(또는 아직 없음, 0개)라고 가정한다 — 발행자인
- * 매칭이 한 run 안에서 여러 번 재시작하면 같은 계좌 run이 매칭 recording을 여러 개 relay로 이어
- * 받게 되는 경우까지는 다루지 않는다(그때는 recordingId를 시작 시각순으로 이어 붙이는
- * {@link AccountJournalReplayer} 방식으로 확장 — 복구 하드닝 C6에서 다룬다).</p>
+ * <h3>recording이 여럿이면 발행자(sessionId)별로 각자 읽는다 (ADR-032 I1)</h3>
+ * <p>매칭 프로세스가 둘 이상이면 이 채널·스트림에 recording이 여럿 생긴다(각 Aeron 연결=세션마다
+ * 하나) — {@link AccountJournalReplayer}처럼 시작 시각순으로 "이어 붙일" 수 없다, 스냅샷 시점에
+ * recording 여러 개가 동시에 "현재"이기 때문이다(같은 값을 "먼저 것" "나중 것"으로 나눌 기준이
+ * 없다). 대신 recording마다 자기 sessionId로 {@code fillPositions} 맵을 찾아 그 위치부터 읽는다 —
+ * 맵에 없으면(스냅샷 이후 새로 연결된 발행자) 그 recording의 시작 위치부터 읽는다. 어느 순서로
+ * 읽어도 결과가 같다(D3 — 체결 반영은 tradeId 멱등 + 잔량 차감이라 순서 무관, {@code
+ * decision_records/account-fill-order-independence.md}).</p>
  */
 public class AccountFillReplayer {
 
@@ -39,8 +39,9 @@ public class AccountFillReplayer {
     private static final int REPLAY_STREAM_ID = 6002;
     private static final int FRAGMENT_LIMIT = 10;
     private static final long CONNECT_TIMEOUT_NANOS = 5_000_000_000L;
-    // listRecordingsForUri 페이지 크기 — 이 채널·스트림은 단일 recording을 가정하므로 여유 있게 잡는다.
-    private static final int LIST_RECORDINGS_LIMIT = 10;
+    // listRecordingsForUri 페이지 크기 — AccountJournalReplayer와 같은 상한(이 프로젝트 규모에서
+    // 한 스트림에 recording이 100개를 넘길 일은 없다).
+    private static final int LIST_RECORDINGS_LIMIT = 100;
 
     private final AeronArchive aeronArchive;
     private final FillCodec codec = new FillCodec();
@@ -50,32 +51,30 @@ public class AccountFillReplayer {
     }
 
     /**
-     * {@code fromPosition}부터 체결 스트림의 recording을 읽어 디코딩한다. recording이 카탈로그에
-     * 없으면(매칭이 아직 한 번도 뜬 적이 없거나, 이 채널을 전혀 안 씀) 빈 리스트를 돌려준다 —
-     * 예외가 아니다(복구할 gap 자체가 없는 정상 상태).
+     * 체결 스트림의 recording을 전부 읽어 디코딩한다. recording마다 자기 sessionId로
+     * {@code fillPositions}(스냅샷 시점 발행자별 위치, ADR-032 I1 D1)를 찾아 그 위치부터 읽고,
+     * 맵에 없으면 그 recording의 시작 위치부터 읽는다. recording이 카탈로그에 하나도 없으면(매칭이
+     * 아직 한 번도 뜬 적이 없거나, 이 채널을 전혀 안 씀) 빈 리스트를 돌려준다 — 예외가 아니다
+     * (복구할 gap 자체가 없는 정상 상태).
      */
-    public List<FilledTrade> readFrom(String fillChannel, int fillStreamId, long fromPosition) {
-        Optional<RecordingSummary> recording = findRecording(fillChannel, fillStreamId);
-        if (recording.isEmpty()) {
-            return List.of();
-        }
+    public List<FilledTrade> readFrom(String fillChannel, int fillStreamId, Map<Integer, Long> fillPositions) {
+        List<RecordingSummary> recordings = listRecordings(fillChannel, fillStreamId);
         List<FilledTrade> entries = new ArrayList<>();
-        replayOne(recording.get(), fromPosition, entries);
+        for (RecordingSummary recording : recordings) {
+            long fromPosition = fillPositions.getOrDefault(recording.sessionId(), recording.startPosition());
+            replayOne(recording, fromPosition, entries);
+        }
         return entries;
     }
 
-    /** 단일 recording을 가정하고 카탈로그에서 하나만 찾는다(클래스 javadoc "단순화" 참고). */
-    private Optional<RecordingSummary> findRecording(String channel, int streamId) {
+    private List<RecordingSummary> listRecordings(String channel, int streamId) {
         List<RecordingSummary> found = new ArrayList<>();
         aeronArchive.listRecordingsForUri(0, LIST_RECORDINGS_LIMIT, channel, streamId,
             (controlSessionId, correlationId, recordingId, startTimestamp, stopTimestamp,
              startPosition, stopPosition, initialTermId, segmentFileLength, termBufferLength,
              mtuLength, sessionId, foundStreamId, strippedChannel, originalChannel, sourceIdentity) ->
-                found.add(new RecordingSummary(recordingId, stopPosition)));
-        if (found.isEmpty()) {
-            return Optional.empty();
-        }
-        return Optional.of(found.get(found.size() - 1));
+                found.add(new RecordingSummary(recordingId, sessionId, startPosition, stopPosition)));
+        return found;
     }
 
     private void replayOne(RecordingSummary recording, long fromPosition, List<FilledTrade> out) {
@@ -112,6 +111,6 @@ public class AccountFillReplayer {
     }
 
     /** listRecordingsForUri 콜백에서 뽑아낸, 재생에 필요한 최소 정보. */
-    private record RecordingSummary(long recordingId, long stopPosition) {
+    private record RecordingSummary(long recordingId, int sessionId, long startPosition, long stopPosition) {
     }
 }
