@@ -79,20 +79,47 @@ public class AccountOrderIntakeConfig {
         return archiveDir;
     }
 
+    /**
+     * @param segmentFileLength   {@code account.worker.archive.segment-file-length} — Archive 세그먼트
+     *                            파일 길이(바이트). 비워두면(기본, 운영) Aeron 기본값(128MB)을 그대로
+     *                            쓴다. **ADR-032 I5 U3 전용** — `AccountArchiveSegmentPurger`의 회수가
+     *                            실제로 세그먼트를 지우는지 통합테스트에서 관측하려면 기본 세그먼트
+     *                            크기로는 테스트 데이터로 세그먼트 경계를 못 넘어 "아무것도 안 지워진
+     *                            채 통과"하는 거짓 green이 난다(U1·U2에서 먼저 겪음). **운영에서 이
+     *                            값을 작게 주면 세그먼트 파일 개수가 폭증하니 절대 운영에 설정하지
+     *                            말 것.**
+     * @param ipcTermBufferLength {@code account.worker.archive.ipc-term-buffer-length} — 이 드라이버의
+     *                            모든 IPC 채널(저널 포함) term 버퍼 길이. 비워두면 Aeron 기본값을
+     *                            그대로 쓴다. Archive는 recording의 실제 segmentFileLength를
+     *                            {@code max(segmentFileLength, termBufferLength)}로 강제하므로
+     *                            (서버 소스로 확인), segmentFileLength만 줄여도 term 길이가 기본값
+     *                            (수십 MB)이면 세그먼트가 그 값으로 도로 커진다 — U3에서 이 값도
+     *                            같이 줄여야 세그먼트가 실제로 작아진다. **segmentFileLength와 같은
+     *                            이유로 운영에 설정하지 말 것.**
+     */
     @Bean(destroyMethod = "close")
     public ArchivingMediaDriver archivingMediaDriver(
             File accountArchiveDir,
-            @Value("${account.worker.archive.control-channel:" + DEFAULT_CONTROL_REQUEST_CHANNEL + "}") String controlRequestChannel) {
+            @Value("${account.worker.archive.control-channel:" + DEFAULT_CONTROL_REQUEST_CHANNEL + "}") String controlRequestChannel,
+            @Value("${account.worker.archive.segment-file-length:0}") int segmentFileLength,
+            @Value("${account.worker.archive.ipc-term-buffer-length:0}") int ipcTermBufferLength) {
         String aeronDirectoryName = CommonContext.generateRandomDirName();
 
-        return ArchivingMediaDriver.launch(
-            new MediaDriver.Context().aeronDirectoryName(aeronDirectoryName),
-            new Archive.Context()
-                .controlChannel(controlRequestChannel)
-                .replicationChannel(REPLICATION_CHANNEL)
-                .deleteArchiveOnStart(false) // 저널은 재시작 넘어 보존해야 한다(2b-1b)
-                .archiveDir(accountArchiveDir)
-        );
+        MediaDriver.Context mediaDriverContext = new MediaDriver.Context().aeronDirectoryName(aeronDirectoryName);
+        if (ipcTermBufferLength > 0) {
+            mediaDriverContext.ipcTermBufferLength(ipcTermBufferLength);
+        }
+
+        Archive.Context archiveContext = new Archive.Context()
+            .controlChannel(controlRequestChannel)
+            .replicationChannel(REPLICATION_CHANNEL)
+            .deleteArchiveOnStart(false) // 저널은 재시작 넘어 보존해야 한다(2b-1b)
+            .archiveDir(accountArchiveDir);
+        if (segmentFileLength > 0) {
+            archiveContext.segmentFileLength(segmentFileLength);
+        }
+
+        return ArchivingMediaDriver.launch(mediaDriverContext, archiveContext);
     }
 
     @Bean(destroyMethod = "close")
