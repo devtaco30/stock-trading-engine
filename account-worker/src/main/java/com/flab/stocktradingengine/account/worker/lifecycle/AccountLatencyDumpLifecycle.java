@@ -6,6 +6,7 @@ import java.lang.System.Logger.Level;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -27,6 +28,29 @@ import com.flab.stocktradingengine.time.LatencySnapshot;
  * 쓰고 트리거 파일을 지운다(부하 드라이버가 그 삭제를 "처리 완료" 신호로 폴링한다). 트리거를 못
  * 보내고 죽는 경우를 대비해, {@link #stop()}에서도 그 시점까지 안 꺼낸 나머지를 {@link #outputPath}에
  * 한 번 더 쓴다(안전망) — 트리거 경로가 비어 있으면(설정 안 함) 이 안전망 하나만 동작한다.</p>
+ *
+ * <h3>순서는 "쓰고 → 지운다" 그대로, 다만 삭제 실패가 재처리로 이어지지 않게 한다</h3>
+ * <p>부하 드라이버는 트리거 파일이 "사라짐"을 목적지 파일이 다 써졌다는 완료 신호로 폴링한다
+ * (dc 스펙) — 그래서 목적지를 다 쓴 뒤에야 트리거를 지워야 하고, 트리거를 먼저 다른 이름으로
+ * 옮겨버리면(claim) 목적지가 아직 안 써졌는데도 신호가 먼저 뜬다(실측 — 초기 구현에서 목적지
+ * 파일이 빈 상태로 읽히는 걸 테스트가 잡아냄). 그런데 순서를 그대로 두면 삭제가 실패했을 때
+ * (디스크 오류 등) 다음 폴이 같은 트리거를 또 보고, 이미 리셋된(거의 빈) 히스토그램으로 방금 쓴
+ * 정상 스냅샷을 빈 값으로 덮어써버린다(2b 리뷰 지적). 그래서 {@link #lastHandledDestinationPath}로
+ * "이 트리거는 이미 처리했다"를 기억해 뒀다가, 같은 목적지 경로가 다시 보이면 히스토그램 재기록
+ * 없이 삭제만 재시도한다 — 삭제가 계속 실패해도 목적지 파일 내용은 절대 다시 안 건드린다.</p>
+ *
+ * <h3>목적지 파일은 임시 이름에 쓰고 원자적으로 rename한다</h3>
+ * <p>드라이버가 트리거 삭제를 보고 바로 목적지를 읽으므로, {@code objectMapper.writeValue}가
+ * 파일을 만들고 내용을 채우는 그 짧은 틈을 드라이버가 비어 있는 채로 읽을 수 있다(같은 이유로
+ * 테스트가 잡아냄). {@code destinationPath + ".tmp"}에 다 쓴 뒤 {@link Files#move}(ATOMIC_MOVE)로
+ * 최종 경로에 옮겨, 목적지 경로는 항상 완성된 내용으로만 나타나게 한다.</p>
+ *
+ * <h3>드라이버 계약 — 패스마다 목적지 경로가 달라야 한다</h3>
+ * <p>{@link #lastHandledDestinationPath}는 "직전에 처리한 목적지 경로와 같은가"만으로 재처리
+ * 여부를 판단하고 성공 후에도 비우지 않는다(39 리뷰 비블로킹 노트) — 그래서 서로 다른 패스가
+ * 우연히 같은 목적지 경로를 쓰면 두 번째 패스가 조용히 스킵된다. 패스마다 목적지 경로를 다르게
+ * 주는 것이 부하 드라이버 쪽 계약이다(워밍업+3패스 테스트가 이미 이렇게 검증돼 있다) — 이 게
+ * 지켜지는 한 "직전과 같은 경로"는 항상 "삭제만 실패한 같은 트리거의 재도착"만을 뜻한다.</p>
  */
 public class AccountLatencyDumpLifecycle implements SmartLifecycle {
 
@@ -46,6 +70,9 @@ public class AccountLatencyDumpLifecycle implements SmartLifecycle {
     private final AtomicBoolean running = new AtomicBoolean(false);
 
     private Thread pollThread;
+    // 폴링 스레드(pollLoop) 하나만 읽고 쓴다 — 같은 트리거 내용을 다시 보면(삭제 재시도 상황)
+    // 히스토그램을 또 건드리지 않기 위한 기억.
+    private String lastHandledDestinationPath;
 
     public AccountLatencyDumpLifecycle(LatencyHistogram histogram, String outputPath, String snapshotTriggerPath) {
         this.histogram = histogram;
@@ -66,8 +93,14 @@ public class AccountLatencyDumpLifecycle implements SmartLifecycle {
     private void pollLoop() {
         Path triggerPath = Path.of(snapshotTriggerPath);
         while (running.get()) {
-            if (Files.exists(triggerPath)) {
-                handleTrigger(triggerPath);
+            try {
+                if (Files.exists(triggerPath)) {
+                    handleTrigger(triggerPath);
+                }
+            } catch (RuntimeException e) {
+                // 폴링 스레드 자체가 죽으면 이후 패스 경계를 영영 못 잡는다 — 이번 회차만 걸러내고
+                // 계속 돈다(2b 리뷰 지적).
+                log.log(Level.WARNING, "[계좌 지연 측정] 트리거 폴링 중 예상 못한 예외", e);
             }
             try {
                 Thread.sleep(POLL_INTERVAL_MILLIS);
@@ -78,7 +111,11 @@ public class AccountLatencyDumpLifecycle implements SmartLifecycle {
         }
     }
 
-    /** 트리거 파일 내용(한 줄=출력 경로)을 읽어 그 경로에 스냅샷을 쓰고, 트리거 파일을 지운다. */
+    /**
+     * 트리거 내용(한 줄=목적지 경로)을 읽어 그 경로에 스냅샷을 원자적으로 쓰고, 트리거 파일을
+     * 지운다. 직전에 처리한 목적지 경로와 같으면(=삭제가 실패해 같은 트리거가 다시 보인 것)
+     * 히스토그램을 다시 건드리지 않고 삭제만 재시도한다.
+     */
     private void handleTrigger(Path triggerPath) {
         try {
             List<String> lines = Files.readAllLines(triggerPath, StandardCharsets.UTF_8);
@@ -86,21 +123,28 @@ public class AccountLatencyDumpLifecycle implements SmartLifecycle {
                 return; // 부하 드라이버가 아직 다 쓰는 중일 수 있다 — 다음 폴에서 다시 본다.
             }
             String destinationPath = lines.get(0).trim();
-            writeSnapshot(destinationPath, histogram.snapshotAndReset());
+            if (!destinationPath.equals(lastHandledDestinationPath)) {
+                writeSnapshot(destinationPath, histogram.snapshotAndReset());
+                lastHandledDestinationPath = destinationPath;
+            }
             Files.deleteIfExists(triggerPath);
         } catch (IOException e) {
             // 계측 부가 기능 — 실패해도 앱 본체(주문 처리)를 죽이면 안 된다. 트리거 파일이 안
-            // 지워지므로 부하 드라이버 쪽에서도 타임아웃으로 알아챈다.
+            // 지워지므로 부하 드라이버 쪽에서도 타임아웃으로 알아챈다. writeSnapshot이 이미 성공한
+            // 뒤 삭제만 실패한 경우엔 lastHandledDestinationPath가 다음 폴에서 재기록을 막아준다.
             log.log(Level.WARNING, "[계좌 지연 측정] 트리거 처리 실패: trigger=" + triggerPath, e);
         }
     }
 
+    /** {@code destinationPath + ".tmp"}에 다 쓴 뒤 원자적으로 rename한다 — 읽는 쪽이 빈/일부만 쓰인 파일을 못 보게. */
     private void writeSnapshot(String destinationPath, LatencySnapshot snapshot) throws IOException {
         Path path = Path.of(destinationPath);
         if (path.getParent() != null) {
             Files.createDirectories(path.getParent());
         }
-        objectMapper.writeValue(path.toFile(), snapshot);
+        Path tmp = path.resolveSibling(path.getFileName() + ".tmp");
+        objectMapper.writeValue(tmp.toFile(), snapshot);
+        Files.move(tmp, path, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
     }
 
     @Override

@@ -1,5 +1,6 @@
 package com.flab.stocktradingengine.time;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -65,6 +66,19 @@ class LatencyHistogramTest {
         histogram.record(EpochNanos.now() - TimeUnit.MILLISECONDS.toNanos(10));
         LatencySnapshot third = histogram.snapshotAndReset();
         assertEquals(1, third.count(), "리셋 뒤 새로 기록한 1건만 담겨야 한다");
+    }
+
+    @Test
+    @DisplayName("극단적으로 큰 경과시간(오토리사이징 한계 근처)을 기록해도 예외 없이 처리된다 (2b 리뷰 — 계측이 핫패스를 죽이면 안 됨)")
+    void 극단값을_기록해도_예외가_안_난다() {
+        LatencyHistogram histogram = new LatencyHistogram(true);
+
+        // publishedAtEpochNanos=1이면 경과시간이 EpochNanos.now() 자체(약 55년 상당) — 오토리사이징
+        // 히스토그램이 감당해야 하는 거의 최대 범위. 예외 없이 끝나야 한다(1-2건 흘러도 처리는 계속).
+        assertDoesNotThrow(() -> histogram.record(1L));
+
+        LatencySnapshot snapshot = histogram.snapshotAndReset();
+        assertEquals(1, snapshot.count(), "예외 없이 처리됐으면 정상 기록도 1건 남아야 한다");
     }
 
     @Test
