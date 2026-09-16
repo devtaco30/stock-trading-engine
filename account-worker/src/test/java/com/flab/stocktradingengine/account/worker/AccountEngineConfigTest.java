@@ -59,7 +59,7 @@ class AccountEngineConfigTest {
             // 대체 빈을 준다 — 이 테스트는 매수 검증 경로만 본다.
             .withBean(AccountSnapshotSink.class, () -> new AccountSnapshotSink() {
                 @Override
-                public boolean offer(byte[] snapshotBytes, Map<Integer, Long> fillPositions, long appliedSeq) {
+                public boolean offer(byte[] snapshotBytes, Map<Integer, Long> fillPositions, long journalPosition, long appliedSeq) {
                     return true;
                 }
 

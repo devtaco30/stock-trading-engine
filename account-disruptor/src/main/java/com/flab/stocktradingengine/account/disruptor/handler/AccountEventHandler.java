@@ -186,7 +186,7 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
         accounts.forEach((accountId, state) -> accountsById.put(accountId, state.toSnapshot()));
         AccountSnapshot snapshot = new AccountSnapshot(accountsById, orderIdGenerator.counter(), lastJournaledPosition);
         byte[] snapshotBytes = snapshotCodec.encode(snapshot);
-        boolean offered = snapshotSink.offer(snapshotBytes, lastAppliedFillPositions(), appliedSeq);
+        boolean offered = snapshotSink.offer(snapshotBytes, lastAppliedFillPositions(), lastJournaledPosition, appliedSeq);
         if (!offered) {
             log.log(Level.WARNING, "[계좌] 스냅샷 쓰기 큐가 가득 차 이번 회차 스킵: appliedSeq=" + appliedSeq);
         }
