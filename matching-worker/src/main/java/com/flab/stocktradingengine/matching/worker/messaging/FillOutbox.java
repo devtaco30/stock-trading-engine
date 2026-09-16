@@ -49,7 +49,7 @@ import lombok.extern.slf4j.Slf4j;
 class FillOutbox {
 
     private static final int ENCODE_BUFFER_SIZE = 256;
-    private static final int QUEUE_CAPACITY = 65536;
+    static final int QUEUE_CAPACITY = 65536;
 
     private final String endpoint;
     private final ExclusivePublication publication;
@@ -136,15 +136,22 @@ class FillOutbox {
      */
     void close(long drainTimeoutMillis) {
         running.set(false);
-        if (publisherThread != null) {
-            try {
-                publisherThread.join(drainTimeoutMillis);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
+        if (publisherThread == null) {
+            return;
         }
-        int remaining = queue.size();
-        if (remaining > 0) {
+
+        try {
+            publisherThread.join(drainTimeoutMillis);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+
+        // 스레드가 아직 살아 있다는 건 큐가 빈 뒤에도(publishLoop 종료 조건) 안 끝났다는 뜻이라,
+        // 지금 발신 재시도 중인 체결 1건이 있다 — queue.size()만 세면 그 1건이 빠진다. +1이 정확히
+        // 1인 이유: publishLoop가 멈춰 있을 수 있는 자리는 publish() 안의 재시도 루프뿐이고, 그
+        // 루프는 poll()로 큐에서 꺼낸 trade 하나를 손에 든 채로 돈다 — 항상 정확히 한 건이다.
+        if (publisherThread.isAlive()) {
+            int remaining = queue.size() + 1;
             log.error("[매칭] 체결 발신 드레인이 타임아웃 안에 끝나지 않았습니다 — 유실 가능한 체결 {}건 남음: endpoint={}",
                 remaining, endpoint);
         }
