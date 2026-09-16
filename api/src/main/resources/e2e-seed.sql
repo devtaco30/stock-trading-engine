@@ -407,6002 +407,7502 @@ SELECT 2100, 2, 0, 1.00, 'ACTIVE'
 WHERE NOT EXISTS (SELECT 1 FROM accounts a WHERE a.account_id = 2100);
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2051, 'A000020', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2051 AND h.stock_code = 'A000020');
+SELECT a.id, 'A000020', 132, 0 FROM accounts a
+WHERE a.account_id = 2051
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000020');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2051, 'A000040', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2051 AND h.stock_code = 'A000040');
+SELECT a.id, 'A000040', 132, 0 FROM accounts a
+WHERE a.account_id = 2051
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000040');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2051, 'A000050', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2051 AND h.stock_code = 'A000050');
+SELECT a.id, 'A000050', 136, 0 FROM accounts a
+WHERE a.account_id = 2051
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000050');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2051, 'A000070', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2051 AND h.stock_code = 'A000070');
+SELECT a.id, 'A000070', 132, 0 FROM accounts a
+WHERE a.account_id = 2051
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000070');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2051, 'A000080', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2051 AND h.stock_code = 'A000080');
+SELECT a.id, 'A000080', 132, 0 FROM accounts a
+WHERE a.account_id = 2051
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000080');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2051, 'A000100', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2051 AND h.stock_code = 'A000100');
+SELECT a.id, 'A000100', 136, 0 FROM accounts a
+WHERE a.account_id = 2051
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000100');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2051, 'A000120', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2051 AND h.stock_code = 'A000120');
+SELECT a.id, 'A000120', 132, 0 FROM accounts a
+WHERE a.account_id = 2051
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000120');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2051, 'A000140', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2051 AND h.stock_code = 'A000140');
+SELECT a.id, 'A000140', 132, 0 FROM accounts a
+WHERE a.account_id = 2051
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000140');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2051, 'A000150', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2051 AND h.stock_code = 'A000150');
+SELECT a.id, 'A000150', 136, 0 FROM accounts a
+WHERE a.account_id = 2051
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000150');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2051, 'A000180', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2051 AND h.stock_code = 'A000180');
+SELECT a.id, 'A000180', 132, 0 FROM accounts a
+WHERE a.account_id = 2051
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000180');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2051, 'A000210', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2051 AND h.stock_code = 'A000210');
+SELECT a.id, 'A000210', 132, 0 FROM accounts a
+WHERE a.account_id = 2051
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000210');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2051, 'A000220', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2051 AND h.stock_code = 'A000220');
+SELECT a.id, 'A000220', 136, 0 FROM accounts a
+WHERE a.account_id = 2051
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000220');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2051, 'A000230', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2051 AND h.stock_code = 'A000230');
+SELECT a.id, 'A000230', 132, 0 FROM accounts a
+WHERE a.account_id = 2051
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000230');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2051, 'A000240', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2051 AND h.stock_code = 'A000240');
+SELECT a.id, 'A000240', 132, 0 FROM accounts a
+WHERE a.account_id = 2051
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000240');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2051, 'A000250', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2051 AND h.stock_code = 'A000250');
+SELECT a.id, 'A000250', 136, 0 FROM accounts a
+WHERE a.account_id = 2051
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000250');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2051, 'A000270', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2051 AND h.stock_code = 'A000270');
+SELECT a.id, 'A000270', 132, 0 FROM accounts a
+WHERE a.account_id = 2051
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2051, 'A000300', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2051 AND h.stock_code = 'A000300');
+SELECT a.id, 'A000300', 132, 0 FROM accounts a
+WHERE a.account_id = 2051
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2051, 'A000320', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2051 AND h.stock_code = 'A000320');
+SELECT a.id, 'A000320', 136, 0 FROM accounts a
+WHERE a.account_id = 2051
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000320');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2051, 'A000370', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2051 AND h.stock_code = 'A000370');
+SELECT a.id, 'A000370', 132, 0 FROM accounts a
+WHERE a.account_id = 2051
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000370');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2051, 'A000390', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2051 AND h.stock_code = 'A000390');
+SELECT a.id, 'A000390', 132, 0 FROM accounts a
+WHERE a.account_id = 2051
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000390');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2051, 'A000400', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2051 AND h.stock_code = 'A000400');
+SELECT a.id, 'A000400', 136, 0 FROM accounts a
+WHERE a.account_id = 2051
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000400');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2051, 'A000430', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2051 AND h.stock_code = 'A000430');
+SELECT a.id, 'A000430', 132, 0 FROM accounts a
+WHERE a.account_id = 2051
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000430');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2051, 'A000440', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2051 AND h.stock_code = 'A000440');
+SELECT a.id, 'A000440', 132, 0 FROM accounts a
+WHERE a.account_id = 2051
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000440');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2051, 'A000480', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2051 AND h.stock_code = 'A000480');
+SELECT a.id, 'A000480', 132, 0 FROM accounts a
+WHERE a.account_id = 2051
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000480');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2051, 'A900260', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2051 AND h.stock_code = 'A900260');
+SELECT a.id, 'A900260', 132, 0 FROM accounts a
+WHERE a.account_id = 2051
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900260');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2051, 'A900270', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2051 AND h.stock_code = 'A900270');
+SELECT a.id, 'A900270', 136, 0 FROM accounts a
+WHERE a.account_id = 2051
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2051, 'A900290', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2051 AND h.stock_code = 'A900290');
+SELECT a.id, 'A900290', 136, 0 FROM accounts a
+WHERE a.account_id = 2051
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900290');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2051, 'A900300', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2051 AND h.stock_code = 'A900300');
+SELECT a.id, 'A900300', 132, 0 FROM accounts a
+WHERE a.account_id = 2051
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2051, 'A900310', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2051 AND h.stock_code = 'A900310');
+SELECT a.id, 'A900310', 132, 0 FROM accounts a
+WHERE a.account_id = 2051
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900310');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2051, 'A900340', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2051 AND h.stock_code = 'A900340');
+SELECT a.id, 'A900340', 136, 0 FROM accounts a
+WHERE a.account_id = 2051
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900340');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2052, 'A000020', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2052 AND h.stock_code = 'A000020');
+SELECT a.id, 'A000020', 132, 0 FROM accounts a
+WHERE a.account_id = 2052
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000020');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2052, 'A000040', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2052 AND h.stock_code = 'A000040');
+SELECT a.id, 'A000040', 132, 0 FROM accounts a
+WHERE a.account_id = 2052
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000040');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2052, 'A000050', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2052 AND h.stock_code = 'A000050');
+SELECT a.id, 'A000050', 136, 0 FROM accounts a
+WHERE a.account_id = 2052
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000050');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2052, 'A000070', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2052 AND h.stock_code = 'A000070');
+SELECT a.id, 'A000070', 132, 0 FROM accounts a
+WHERE a.account_id = 2052
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000070');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2052, 'A000080', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2052 AND h.stock_code = 'A000080');
+SELECT a.id, 'A000080', 132, 0 FROM accounts a
+WHERE a.account_id = 2052
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000080');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2052, 'A000100', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2052 AND h.stock_code = 'A000100');
+SELECT a.id, 'A000100', 136, 0 FROM accounts a
+WHERE a.account_id = 2052
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000100');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2052, 'A000120', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2052 AND h.stock_code = 'A000120');
+SELECT a.id, 'A000120', 132, 0 FROM accounts a
+WHERE a.account_id = 2052
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000120');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2052, 'A000140', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2052 AND h.stock_code = 'A000140');
+SELECT a.id, 'A000140', 132, 0 FROM accounts a
+WHERE a.account_id = 2052
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000140');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2052, 'A000150', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2052 AND h.stock_code = 'A000150');
+SELECT a.id, 'A000150', 136, 0 FROM accounts a
+WHERE a.account_id = 2052
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000150');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2052, 'A000180', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2052 AND h.stock_code = 'A000180');
+SELECT a.id, 'A000180', 132, 0 FROM accounts a
+WHERE a.account_id = 2052
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000180');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2052, 'A000210', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2052 AND h.stock_code = 'A000210');
+SELECT a.id, 'A000210', 132, 0 FROM accounts a
+WHERE a.account_id = 2052
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000210');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2052, 'A000220', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2052 AND h.stock_code = 'A000220');
+SELECT a.id, 'A000220', 136, 0 FROM accounts a
+WHERE a.account_id = 2052
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000220');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2052, 'A000230', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2052 AND h.stock_code = 'A000230');
+SELECT a.id, 'A000230', 132, 0 FROM accounts a
+WHERE a.account_id = 2052
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000230');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2052, 'A000240', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2052 AND h.stock_code = 'A000240');
+SELECT a.id, 'A000240', 132, 0 FROM accounts a
+WHERE a.account_id = 2052
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000240');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2052, 'A000250', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2052 AND h.stock_code = 'A000250');
+SELECT a.id, 'A000250', 136, 0 FROM accounts a
+WHERE a.account_id = 2052
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000250');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2052, 'A000270', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2052 AND h.stock_code = 'A000270');
+SELECT a.id, 'A000270', 132, 0 FROM accounts a
+WHERE a.account_id = 2052
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2052, 'A000300', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2052 AND h.stock_code = 'A000300');
+SELECT a.id, 'A000300', 132, 0 FROM accounts a
+WHERE a.account_id = 2052
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2052, 'A000320', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2052 AND h.stock_code = 'A000320');
+SELECT a.id, 'A000320', 136, 0 FROM accounts a
+WHERE a.account_id = 2052
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000320');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2052, 'A000370', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2052 AND h.stock_code = 'A000370');
+SELECT a.id, 'A000370', 132, 0 FROM accounts a
+WHERE a.account_id = 2052
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000370');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2052, 'A000390', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2052 AND h.stock_code = 'A000390');
+SELECT a.id, 'A000390', 132, 0 FROM accounts a
+WHERE a.account_id = 2052
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000390');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2052, 'A000400', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2052 AND h.stock_code = 'A000400');
+SELECT a.id, 'A000400', 136, 0 FROM accounts a
+WHERE a.account_id = 2052
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000400');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2052, 'A000430', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2052 AND h.stock_code = 'A000430');
+SELECT a.id, 'A000430', 132, 0 FROM accounts a
+WHERE a.account_id = 2052
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000430');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2052, 'A000440', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2052 AND h.stock_code = 'A000440');
+SELECT a.id, 'A000440', 132, 0 FROM accounts a
+WHERE a.account_id = 2052
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000440');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2052, 'A000480', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2052 AND h.stock_code = 'A000480');
+SELECT a.id, 'A000480', 132, 0 FROM accounts a
+WHERE a.account_id = 2052
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000480');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2052, 'A900260', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2052 AND h.stock_code = 'A900260');
+SELECT a.id, 'A900260', 132, 0 FROM accounts a
+WHERE a.account_id = 2052
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900260');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2052, 'A900270', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2052 AND h.stock_code = 'A900270');
+SELECT a.id, 'A900270', 136, 0 FROM accounts a
+WHERE a.account_id = 2052
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2052, 'A900290', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2052 AND h.stock_code = 'A900290');
+SELECT a.id, 'A900290', 132, 0 FROM accounts a
+WHERE a.account_id = 2052
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900290');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2052, 'A900300', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2052 AND h.stock_code = 'A900300');
+SELECT a.id, 'A900300', 136, 0 FROM accounts a
+WHERE a.account_id = 2052
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2052, 'A900310', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2052 AND h.stock_code = 'A900310');
+SELECT a.id, 'A900310', 132, 0 FROM accounts a
+WHERE a.account_id = 2052
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900310');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2052, 'A900340', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2052 AND h.stock_code = 'A900340');
+SELECT a.id, 'A900340', 136, 0 FROM accounts a
+WHERE a.account_id = 2052
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900340');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2053, 'A000020', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2053 AND h.stock_code = 'A000020');
+SELECT a.id, 'A000020', 136, 0 FROM accounts a
+WHERE a.account_id = 2053
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000020');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2053, 'A000040', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2053 AND h.stock_code = 'A000040');
+SELECT a.id, 'A000040', 132, 0 FROM accounts a
+WHERE a.account_id = 2053
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000040');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2053, 'A000050', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2053 AND h.stock_code = 'A000050');
+SELECT a.id, 'A000050', 136, 0 FROM accounts a
+WHERE a.account_id = 2053
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000050');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2053, 'A000070', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2053 AND h.stock_code = 'A000070');
+SELECT a.id, 'A000070', 132, 0 FROM accounts a
+WHERE a.account_id = 2053
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000070');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2053, 'A000080', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2053 AND h.stock_code = 'A000080');
+SELECT a.id, 'A000080', 132, 0 FROM accounts a
+WHERE a.account_id = 2053
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000080');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2053, 'A000100', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2053 AND h.stock_code = 'A000100');
+SELECT a.id, 'A000100', 136, 0 FROM accounts a
+WHERE a.account_id = 2053
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000100');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2053, 'A000120', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2053 AND h.stock_code = 'A000120');
+SELECT a.id, 'A000120', 132, 0 FROM accounts a
+WHERE a.account_id = 2053
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000120');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2053, 'A000140', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2053 AND h.stock_code = 'A000140');
+SELECT a.id, 'A000140', 132, 0 FROM accounts a
+WHERE a.account_id = 2053
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000140');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2053, 'A000150', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2053 AND h.stock_code = 'A000150');
+SELECT a.id, 'A000150', 136, 0 FROM accounts a
+WHERE a.account_id = 2053
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000150');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2053, 'A000180', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2053 AND h.stock_code = 'A000180');
+SELECT a.id, 'A000180', 132, 0 FROM accounts a
+WHERE a.account_id = 2053
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000180');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2053, 'A000210', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2053 AND h.stock_code = 'A000210');
+SELECT a.id, 'A000210', 132, 0 FROM accounts a
+WHERE a.account_id = 2053
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000210');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2053, 'A000220', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2053 AND h.stock_code = 'A000220');
+SELECT a.id, 'A000220', 136, 0 FROM accounts a
+WHERE a.account_id = 2053
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000220');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2053, 'A000230', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2053 AND h.stock_code = 'A000230');
+SELECT a.id, 'A000230', 132, 0 FROM accounts a
+WHERE a.account_id = 2053
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000230');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2053, 'A000240', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2053 AND h.stock_code = 'A000240');
+SELECT a.id, 'A000240', 132, 0 FROM accounts a
+WHERE a.account_id = 2053
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000240');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2053, 'A000250', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2053 AND h.stock_code = 'A000250');
+SELECT a.id, 'A000250', 136, 0 FROM accounts a
+WHERE a.account_id = 2053
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000250');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2053, 'A000270', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2053 AND h.stock_code = 'A000270');
+SELECT a.id, 'A000270', 132, 0 FROM accounts a
+WHERE a.account_id = 2053
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2053, 'A000300', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2053 AND h.stock_code = 'A000300');
+SELECT a.id, 'A000300', 132, 0 FROM accounts a
+WHERE a.account_id = 2053
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2053, 'A000320', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2053 AND h.stock_code = 'A000320');
+SELECT a.id, 'A000320', 136, 0 FROM accounts a
+WHERE a.account_id = 2053
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000320');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2053, 'A000370', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2053 AND h.stock_code = 'A000370');
+SELECT a.id, 'A000370', 132, 0 FROM accounts a
+WHERE a.account_id = 2053
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000370');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2053, 'A000390', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2053 AND h.stock_code = 'A000390');
+SELECT a.id, 'A000390', 132, 0 FROM accounts a
+WHERE a.account_id = 2053
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000390');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2053, 'A000400', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2053 AND h.stock_code = 'A000400');
+SELECT a.id, 'A000400', 132, 0 FROM accounts a
+WHERE a.account_id = 2053
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000400');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2053, 'A000430', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2053 AND h.stock_code = 'A000430');
+SELECT a.id, 'A000430', 136, 0 FROM accounts a
+WHERE a.account_id = 2053
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000430');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2053, 'A000440', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2053 AND h.stock_code = 'A000440');
+SELECT a.id, 'A000440', 132, 0 FROM accounts a
+WHERE a.account_id = 2053
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000440');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2053, 'A000480', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2053 AND h.stock_code = 'A000480');
+SELECT a.id, 'A000480', 132, 0 FROM accounts a
+WHERE a.account_id = 2053
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000480');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2053, 'A900260', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2053 AND h.stock_code = 'A900260');
+SELECT a.id, 'A900260', 132, 0 FROM accounts a
+WHERE a.account_id = 2053
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900260');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2053, 'A900270', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2053 AND h.stock_code = 'A900270');
+SELECT a.id, 'A900270', 136, 0 FROM accounts a
+WHERE a.account_id = 2053
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2053, 'A900290', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2053 AND h.stock_code = 'A900290');
+SELECT a.id, 'A900290', 132, 0 FROM accounts a
+WHERE a.account_id = 2053
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900290');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2053, 'A900300', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2053 AND h.stock_code = 'A900300');
+SELECT a.id, 'A900300', 136, 0 FROM accounts a
+WHERE a.account_id = 2053
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2053, 'A900310', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2053 AND h.stock_code = 'A900310');
+SELECT a.id, 'A900310', 132, 0 FROM accounts a
+WHERE a.account_id = 2053
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900310');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2053, 'A900340', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2053 AND h.stock_code = 'A900340');
+SELECT a.id, 'A900340', 132, 0 FROM accounts a
+WHERE a.account_id = 2053
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900340');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2054, 'A000020', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2054 AND h.stock_code = 'A000020');
+SELECT a.id, 'A000020', 136, 0 FROM accounts a
+WHERE a.account_id = 2054
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000020');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2054, 'A000040', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2054 AND h.stock_code = 'A000040');
+SELECT a.id, 'A000040', 132, 0 FROM accounts a
+WHERE a.account_id = 2054
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000040');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2054, 'A000050', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2054 AND h.stock_code = 'A000050');
+SELECT a.id, 'A000050', 132, 0 FROM accounts a
+WHERE a.account_id = 2054
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000050');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2054, 'A000070', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2054 AND h.stock_code = 'A000070');
+SELECT a.id, 'A000070', 136, 0 FROM accounts a
+WHERE a.account_id = 2054
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000070');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2054, 'A000080', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2054 AND h.stock_code = 'A000080');
+SELECT a.id, 'A000080', 132, 0 FROM accounts a
+WHERE a.account_id = 2054
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000080');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2054, 'A000100', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2054 AND h.stock_code = 'A000100');
+SELECT a.id, 'A000100', 136, 0 FROM accounts a
+WHERE a.account_id = 2054
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000100');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2054, 'A000120', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2054 AND h.stock_code = 'A000120');
+SELECT a.id, 'A000120', 132, 0 FROM accounts a
+WHERE a.account_id = 2054
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000120');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2054, 'A000140', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2054 AND h.stock_code = 'A000140');
+SELECT a.id, 'A000140', 132, 0 FROM accounts a
+WHERE a.account_id = 2054
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000140');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2054, 'A000150', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2054 AND h.stock_code = 'A000150');
+SELECT a.id, 'A000150', 136, 0 FROM accounts a
+WHERE a.account_id = 2054
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000150');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2054, 'A000180', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2054 AND h.stock_code = 'A000180');
+SELECT a.id, 'A000180', 132, 0 FROM accounts a
+WHERE a.account_id = 2054
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000180');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2054, 'A000210', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2054 AND h.stock_code = 'A000210');
+SELECT a.id, 'A000210', 132, 0 FROM accounts a
+WHERE a.account_id = 2054
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000210');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2054, 'A000220', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2054 AND h.stock_code = 'A000220');
+SELECT a.id, 'A000220', 136, 0 FROM accounts a
+WHERE a.account_id = 2054
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000220');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2054, 'A000230', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2054 AND h.stock_code = 'A000230');
+SELECT a.id, 'A000230', 132, 0 FROM accounts a
+WHERE a.account_id = 2054
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000230');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2054, 'A000240', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2054 AND h.stock_code = 'A000240');
+SELECT a.id, 'A000240', 132, 0 FROM accounts a
+WHERE a.account_id = 2054
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000240');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2054, 'A000250', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2054 AND h.stock_code = 'A000250');
+SELECT a.id, 'A000250', 136, 0 FROM accounts a
+WHERE a.account_id = 2054
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000250');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2054, 'A000270', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2054 AND h.stock_code = 'A000270');
+SELECT a.id, 'A000270', 132, 0 FROM accounts a
+WHERE a.account_id = 2054
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2054, 'A000300', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2054 AND h.stock_code = 'A000300');
+SELECT a.id, 'A000300', 132, 0 FROM accounts a
+WHERE a.account_id = 2054
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2054, 'A000320', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2054 AND h.stock_code = 'A000320');
+SELECT a.id, 'A000320', 136, 0 FROM accounts a
+WHERE a.account_id = 2054
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000320');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2054, 'A000370', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2054 AND h.stock_code = 'A000370');
+SELECT a.id, 'A000370', 132, 0 FROM accounts a
+WHERE a.account_id = 2054
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000370');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2054, 'A000390', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2054 AND h.stock_code = 'A000390');
+SELECT a.id, 'A000390', 132, 0 FROM accounts a
+WHERE a.account_id = 2054
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000390');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2054, 'A000400', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2054 AND h.stock_code = 'A000400');
+SELECT a.id, 'A000400', 132, 0 FROM accounts a
+WHERE a.account_id = 2054
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000400');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2054, 'A000430', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2054 AND h.stock_code = 'A000430');
+SELECT a.id, 'A000430', 136, 0 FROM accounts a
+WHERE a.account_id = 2054
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000430');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2054, 'A000440', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2054 AND h.stock_code = 'A000440');
+SELECT a.id, 'A000440', 132, 0 FROM accounts a
+WHERE a.account_id = 2054
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000440');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2054, 'A000480', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2054 AND h.stock_code = 'A000480');
+SELECT a.id, 'A000480', 132, 0 FROM accounts a
+WHERE a.account_id = 2054
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000480');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2054, 'A900260', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2054 AND h.stock_code = 'A900260');
+SELECT a.id, 'A900260', 132, 0 FROM accounts a
+WHERE a.account_id = 2054
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900260');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2054, 'A900270', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2054 AND h.stock_code = 'A900270');
+SELECT a.id, 'A900270', 136, 0 FROM accounts a
+WHERE a.account_id = 2054
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2054, 'A900290', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2054 AND h.stock_code = 'A900290');
+SELECT a.id, 'A900290', 132, 0 FROM accounts a
+WHERE a.account_id = 2054
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900290');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2054, 'A900300', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2054 AND h.stock_code = 'A900300');
+SELECT a.id, 'A900300', 136, 0 FROM accounts a
+WHERE a.account_id = 2054
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2054, 'A900310', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2054 AND h.stock_code = 'A900310');
+SELECT a.id, 'A900310', 132, 0 FROM accounts a
+WHERE a.account_id = 2054
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900310');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2054, 'A900340', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2054 AND h.stock_code = 'A900340');
+SELECT a.id, 'A900340', 132, 0 FROM accounts a
+WHERE a.account_id = 2054
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900340');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2055, 'A000020', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2055 AND h.stock_code = 'A000020');
+SELECT a.id, 'A000020', 136, 0 FROM accounts a
+WHERE a.account_id = 2055
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000020');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2055, 'A000040', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2055 AND h.stock_code = 'A000040');
+SELECT a.id, 'A000040', 132, 0 FROM accounts a
+WHERE a.account_id = 2055
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000040');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2055, 'A000050', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2055 AND h.stock_code = 'A000050');
+SELECT a.id, 'A000050', 132, 0 FROM accounts a
+WHERE a.account_id = 2055
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000050');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2055, 'A000070', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2055 AND h.stock_code = 'A000070');
+SELECT a.id, 'A000070', 136, 0 FROM accounts a
+WHERE a.account_id = 2055
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000070');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2055, 'A000080', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2055 AND h.stock_code = 'A000080');
+SELECT a.id, 'A000080', 132, 0 FROM accounts a
+WHERE a.account_id = 2055
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000080');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2055, 'A000100', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2055 AND h.stock_code = 'A000100');
+SELECT a.id, 'A000100', 132, 0 FROM accounts a
+WHERE a.account_id = 2055
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000100');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2055, 'A000120', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2055 AND h.stock_code = 'A000120');
+SELECT a.id, 'A000120', 136, 0 FROM accounts a
+WHERE a.account_id = 2055
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000120');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2055, 'A000140', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2055 AND h.stock_code = 'A000140');
+SELECT a.id, 'A000140', 132, 0 FROM accounts a
+WHERE a.account_id = 2055
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000140');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2055, 'A000150', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2055 AND h.stock_code = 'A000150');
+SELECT a.id, 'A000150', 136, 0 FROM accounts a
+WHERE a.account_id = 2055
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000150');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2055, 'A000180', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2055 AND h.stock_code = 'A000180');
+SELECT a.id, 'A000180', 132, 0 FROM accounts a
+WHERE a.account_id = 2055
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000180');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2055, 'A000210', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2055 AND h.stock_code = 'A000210');
+SELECT a.id, 'A000210', 132, 0 FROM accounts a
+WHERE a.account_id = 2055
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000210');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2055, 'A000220', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2055 AND h.stock_code = 'A000220');
+SELECT a.id, 'A000220', 136, 0 FROM accounts a
+WHERE a.account_id = 2055
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000220');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2055, 'A000230', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2055 AND h.stock_code = 'A000230');
+SELECT a.id, 'A000230', 132, 0 FROM accounts a
+WHERE a.account_id = 2055
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000230');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2055, 'A000240', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2055 AND h.stock_code = 'A000240');
+SELECT a.id, 'A000240', 132, 0 FROM accounts a
+WHERE a.account_id = 2055
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000240');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2055, 'A000250', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2055 AND h.stock_code = 'A000250');
+SELECT a.id, 'A000250', 136, 0 FROM accounts a
+WHERE a.account_id = 2055
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000250');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2055, 'A000270', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2055 AND h.stock_code = 'A000270');
+SELECT a.id, 'A000270', 132, 0 FROM accounts a
+WHERE a.account_id = 2055
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2055, 'A000300', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2055 AND h.stock_code = 'A000300');
+SELECT a.id, 'A000300', 132, 0 FROM accounts a
+WHERE a.account_id = 2055
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2055, 'A000320', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2055 AND h.stock_code = 'A000320');
+SELECT a.id, 'A000320', 132, 0 FROM accounts a
+WHERE a.account_id = 2055
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000320');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2055, 'A000370', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2055 AND h.stock_code = 'A000370');
+SELECT a.id, 'A000370', 136, 0 FROM accounts a
+WHERE a.account_id = 2055
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000370');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2055, 'A000390', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2055 AND h.stock_code = 'A000390');
+SELECT a.id, 'A000390', 132, 0 FROM accounts a
+WHERE a.account_id = 2055
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000390');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2055, 'A000400', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2055 AND h.stock_code = 'A000400');
+SELECT a.id, 'A000400', 132, 0 FROM accounts a
+WHERE a.account_id = 2055
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000400');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2055, 'A000430', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2055 AND h.stock_code = 'A000430');
+SELECT a.id, 'A000430', 136, 0 FROM accounts a
+WHERE a.account_id = 2055
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000430');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2055, 'A000440', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2055 AND h.stock_code = 'A000440');
+SELECT a.id, 'A000440', 132, 0 FROM accounts a
+WHERE a.account_id = 2055
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000440');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2055, 'A000480', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2055 AND h.stock_code = 'A000480');
+SELECT a.id, 'A000480', 132, 0 FROM accounts a
+WHERE a.account_id = 2055
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000480');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2055, 'A900260', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2055 AND h.stock_code = 'A900260');
+SELECT a.id, 'A900260', 132, 0 FROM accounts a
+WHERE a.account_id = 2055
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900260');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2055, 'A900270', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2055 AND h.stock_code = 'A900270');
+SELECT a.id, 'A900270', 136, 0 FROM accounts a
+WHERE a.account_id = 2055
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2055, 'A900290', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2055 AND h.stock_code = 'A900290');
+SELECT a.id, 'A900290', 132, 0 FROM accounts a
+WHERE a.account_id = 2055
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900290');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2055, 'A900300', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2055 AND h.stock_code = 'A900300');
+SELECT a.id, 'A900300', 136, 0 FROM accounts a
+WHERE a.account_id = 2055
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2055, 'A900310', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2055 AND h.stock_code = 'A900310');
+SELECT a.id, 'A900310', 132, 0 FROM accounts a
+WHERE a.account_id = 2055
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900310');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2055, 'A900340', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2055 AND h.stock_code = 'A900340');
+SELECT a.id, 'A900340', 132, 0 FROM accounts a
+WHERE a.account_id = 2055
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900340');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2056, 'A000020', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2056 AND h.stock_code = 'A000020');
+SELECT a.id, 'A000020', 136, 0 FROM accounts a
+WHERE a.account_id = 2056
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000020');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2056, 'A000040', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2056 AND h.stock_code = 'A000040');
+SELECT a.id, 'A000040', 132, 0 FROM accounts a
+WHERE a.account_id = 2056
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000040');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2056, 'A000050', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2056 AND h.stock_code = 'A000050');
+SELECT a.id, 'A000050', 132, 0 FROM accounts a
+WHERE a.account_id = 2056
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000050');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2056, 'A000070', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2056 AND h.stock_code = 'A000070');
+SELECT a.id, 'A000070', 136, 0 FROM accounts a
+WHERE a.account_id = 2056
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000070');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2056, 'A000080', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2056 AND h.stock_code = 'A000080');
+SELECT a.id, 'A000080', 132, 0 FROM accounts a
+WHERE a.account_id = 2056
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000080');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2056, 'A000100', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2056 AND h.stock_code = 'A000100');
+SELECT a.id, 'A000100', 132, 0 FROM accounts a
+WHERE a.account_id = 2056
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000100');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2056, 'A000120', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2056 AND h.stock_code = 'A000120');
+SELECT a.id, 'A000120', 136, 0 FROM accounts a
+WHERE a.account_id = 2056
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000120');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2056, 'A000140', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2056 AND h.stock_code = 'A000140');
+SELECT a.id, 'A000140', 132, 0 FROM accounts a
+WHERE a.account_id = 2056
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000140');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2056, 'A000150', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2056 AND h.stock_code = 'A000150');
+SELECT a.id, 'A000150', 132, 0 FROM accounts a
+WHERE a.account_id = 2056
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000150');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2056, 'A000180', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2056 AND h.stock_code = 'A000180');
+SELECT a.id, 'A000180', 136, 0 FROM accounts a
+WHERE a.account_id = 2056
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000180');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2056, 'A000210', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2056 AND h.stock_code = 'A000210');
+SELECT a.id, 'A000210', 132, 0 FROM accounts a
+WHERE a.account_id = 2056
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000210');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2056, 'A000220', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2056 AND h.stock_code = 'A000220');
+SELECT a.id, 'A000220', 136, 0 FROM accounts a
+WHERE a.account_id = 2056
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000220');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2056, 'A000230', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2056 AND h.stock_code = 'A000230');
+SELECT a.id, 'A000230', 132, 0 FROM accounts a
+WHERE a.account_id = 2056
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000230');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2056, 'A000240', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2056 AND h.stock_code = 'A000240');
+SELECT a.id, 'A000240', 132, 0 FROM accounts a
+WHERE a.account_id = 2056
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000240');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2056, 'A000250', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2056 AND h.stock_code = 'A000250');
+SELECT a.id, 'A000250', 136, 0 FROM accounts a
+WHERE a.account_id = 2056
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000250');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2056, 'A000270', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2056 AND h.stock_code = 'A000270');
+SELECT a.id, 'A000270', 132, 0 FROM accounts a
+WHERE a.account_id = 2056
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2056, 'A000300', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2056 AND h.stock_code = 'A000300');
+SELECT a.id, 'A000300', 132, 0 FROM accounts a
+WHERE a.account_id = 2056
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2056, 'A000320', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2056 AND h.stock_code = 'A000320');
+SELECT a.id, 'A000320', 132, 0 FROM accounts a
+WHERE a.account_id = 2056
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000320');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2056, 'A000370', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2056 AND h.stock_code = 'A000370');
+SELECT a.id, 'A000370', 136, 0 FROM accounts a
+WHERE a.account_id = 2056
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000370');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2056, 'A000390', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2056 AND h.stock_code = 'A000390');
+SELECT a.id, 'A000390', 132, 0 FROM accounts a
+WHERE a.account_id = 2056
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000390');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2056, 'A000400', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2056 AND h.stock_code = 'A000400');
+SELECT a.id, 'A000400', 132, 0 FROM accounts a
+WHERE a.account_id = 2056
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000400');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2056, 'A000430', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2056 AND h.stock_code = 'A000430');
+SELECT a.id, 'A000430', 136, 0 FROM accounts a
+WHERE a.account_id = 2056
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000430');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2056, 'A000440', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2056 AND h.stock_code = 'A000440');
+SELECT a.id, 'A000440', 132, 0 FROM accounts a
+WHERE a.account_id = 2056
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000440');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2056, 'A000480', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2056 AND h.stock_code = 'A000480');
+SELECT a.id, 'A000480', 132, 0 FROM accounts a
+WHERE a.account_id = 2056
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000480');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2056, 'A900260', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2056 AND h.stock_code = 'A900260');
+SELECT a.id, 'A900260', 132, 0 FROM accounts a
+WHERE a.account_id = 2056
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900260');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2056, 'A900270', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2056 AND h.stock_code = 'A900270');
+SELECT a.id, 'A900270', 136, 0 FROM accounts a
+WHERE a.account_id = 2056
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2056, 'A900290', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2056 AND h.stock_code = 'A900290');
+SELECT a.id, 'A900290', 132, 0 FROM accounts a
+WHERE a.account_id = 2056
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900290');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2056, 'A900300', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2056 AND h.stock_code = 'A900300');
+SELECT a.id, 'A900300', 136, 0 FROM accounts a
+WHERE a.account_id = 2056
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2056, 'A900310', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2056 AND h.stock_code = 'A900310');
+SELECT a.id, 'A900310', 132, 0 FROM accounts a
+WHERE a.account_id = 2056
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900310');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2056, 'A900340', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2056 AND h.stock_code = 'A900340');
+SELECT a.id, 'A900340', 132, 0 FROM accounts a
+WHERE a.account_id = 2056
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900340');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2057, 'A000020', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2057 AND h.stock_code = 'A000020');
+SELECT a.id, 'A000020', 136, 0 FROM accounts a
+WHERE a.account_id = 2057
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000020');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2057, 'A000040', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2057 AND h.stock_code = 'A000040');
+SELECT a.id, 'A000040', 132, 0 FROM accounts a
+WHERE a.account_id = 2057
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000040');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2057, 'A000050', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2057 AND h.stock_code = 'A000050');
+SELECT a.id, 'A000050', 132, 0 FROM accounts a
+WHERE a.account_id = 2057
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000050');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2057, 'A000070', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2057 AND h.stock_code = 'A000070');
+SELECT a.id, 'A000070', 136, 0 FROM accounts a
+WHERE a.account_id = 2057
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000070');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2057, 'A000080', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2057 AND h.stock_code = 'A000080');
+SELECT a.id, 'A000080', 132, 0 FROM accounts a
+WHERE a.account_id = 2057
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000080');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2057, 'A000100', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2057 AND h.stock_code = 'A000100');
+SELECT a.id, 'A000100', 132, 0 FROM accounts a
+WHERE a.account_id = 2057
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000100');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2057, 'A000120', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2057 AND h.stock_code = 'A000120');
+SELECT a.id, 'A000120', 136, 0 FROM accounts a
+WHERE a.account_id = 2057
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000120');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2057, 'A000140', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2057 AND h.stock_code = 'A000140');
+SELECT a.id, 'A000140', 132, 0 FROM accounts a
+WHERE a.account_id = 2057
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000140');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2057, 'A000150', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2057 AND h.stock_code = 'A000150');
+SELECT a.id, 'A000150', 132, 0 FROM accounts a
+WHERE a.account_id = 2057
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000150');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2057, 'A000180', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2057 AND h.stock_code = 'A000180');
+SELECT a.id, 'A000180', 136, 0 FROM accounts a
+WHERE a.account_id = 2057
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000180');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2057, 'A000210', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2057 AND h.stock_code = 'A000210');
+SELECT a.id, 'A000210', 132, 0 FROM accounts a
+WHERE a.account_id = 2057
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000210');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2057, 'A000220', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2057 AND h.stock_code = 'A000220');
+SELECT a.id, 'A000220', 132, 0 FROM accounts a
+WHERE a.account_id = 2057
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000220');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2057, 'A000230', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2057 AND h.stock_code = 'A000230');
+SELECT a.id, 'A000230', 136, 0 FROM accounts a
+WHERE a.account_id = 2057
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000230');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2057, 'A000240', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2057 AND h.stock_code = 'A000240');
+SELECT a.id, 'A000240', 132, 0 FROM accounts a
+WHERE a.account_id = 2057
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000240');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2057, 'A000250', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2057 AND h.stock_code = 'A000250');
+SELECT a.id, 'A000250', 132, 0 FROM accounts a
+WHERE a.account_id = 2057
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000250');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2057, 'A000270', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2057 AND h.stock_code = 'A000270');
+SELECT a.id, 'A000270', 136, 0 FROM accounts a
+WHERE a.account_id = 2057
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2057, 'A000300', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2057 AND h.stock_code = 'A000300');
+SELECT a.id, 'A000300', 132, 0 FROM accounts a
+WHERE a.account_id = 2057
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2057, 'A000320', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2057 AND h.stock_code = 'A000320');
+SELECT a.id, 'A000320', 132, 0 FROM accounts a
+WHERE a.account_id = 2057
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000320');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2057, 'A000370', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2057 AND h.stock_code = 'A000370');
+SELECT a.id, 'A000370', 136, 0 FROM accounts a
+WHERE a.account_id = 2057
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000370');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2057, 'A000390', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2057 AND h.stock_code = 'A000390');
+SELECT a.id, 'A000390', 132, 0 FROM accounts a
+WHERE a.account_id = 2057
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000390');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2057, 'A000400', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2057 AND h.stock_code = 'A000400');
+SELECT a.id, 'A000400', 132, 0 FROM accounts a
+WHERE a.account_id = 2057
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000400');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2057, 'A000430', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2057 AND h.stock_code = 'A000430');
+SELECT a.id, 'A000430', 136, 0 FROM accounts a
+WHERE a.account_id = 2057
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000430');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2057, 'A000440', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2057 AND h.stock_code = 'A000440');
+SELECT a.id, 'A000440', 132, 0 FROM accounts a
+WHERE a.account_id = 2057
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000440');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2057, 'A000480', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2057 AND h.stock_code = 'A000480');
+SELECT a.id, 'A000480', 132, 0 FROM accounts a
+WHERE a.account_id = 2057
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000480');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2057, 'A900260', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2057 AND h.stock_code = 'A900260');
+SELECT a.id, 'A900260', 132, 0 FROM accounts a
+WHERE a.account_id = 2057
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900260');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2057, 'A900270', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2057 AND h.stock_code = 'A900270');
+SELECT a.id, 'A900270', 136, 0 FROM accounts a
+WHERE a.account_id = 2057
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2057, 'A900290', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2057 AND h.stock_code = 'A900290');
+SELECT a.id, 'A900290', 132, 0 FROM accounts a
+WHERE a.account_id = 2057
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900290');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2057, 'A900300', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2057 AND h.stock_code = 'A900300');
+SELECT a.id, 'A900300', 136, 0 FROM accounts a
+WHERE a.account_id = 2057
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2057, 'A900310', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2057 AND h.stock_code = 'A900310');
+SELECT a.id, 'A900310', 132, 0 FROM accounts a
+WHERE a.account_id = 2057
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900310');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2057, 'A900340', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2057 AND h.stock_code = 'A900340');
+SELECT a.id, 'A900340', 132, 0 FROM accounts a
+WHERE a.account_id = 2057
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900340');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2058, 'A000020', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2058 AND h.stock_code = 'A000020');
+SELECT a.id, 'A000020', 136, 0 FROM accounts a
+WHERE a.account_id = 2058
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000020');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2058, 'A000040', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2058 AND h.stock_code = 'A000040');
+SELECT a.id, 'A000040', 132, 0 FROM accounts a
+WHERE a.account_id = 2058
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000040');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2058, 'A000050', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2058 AND h.stock_code = 'A000050');
+SELECT a.id, 'A000050', 132, 0 FROM accounts a
+WHERE a.account_id = 2058
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000050');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2058, 'A000070', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2058 AND h.stock_code = 'A000070');
+SELECT a.id, 'A000070', 136, 0 FROM accounts a
+WHERE a.account_id = 2058
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000070');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2058, 'A000080', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2058 AND h.stock_code = 'A000080');
+SELECT a.id, 'A000080', 132, 0 FROM accounts a
+WHERE a.account_id = 2058
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000080');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2058, 'A000100', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2058 AND h.stock_code = 'A000100');
+SELECT a.id, 'A000100', 132, 0 FROM accounts a
+WHERE a.account_id = 2058
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000100');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2058, 'A000120', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2058 AND h.stock_code = 'A000120');
+SELECT a.id, 'A000120', 136, 0 FROM accounts a
+WHERE a.account_id = 2058
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000120');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2058, 'A000140', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2058 AND h.stock_code = 'A000140');
+SELECT a.id, 'A000140', 132, 0 FROM accounts a
+WHERE a.account_id = 2058
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000140');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2058, 'A000150', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2058 AND h.stock_code = 'A000150');
+SELECT a.id, 'A000150', 132, 0 FROM accounts a
+WHERE a.account_id = 2058
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000150');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2058, 'A000180', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2058 AND h.stock_code = 'A000180');
+SELECT a.id, 'A000180', 136, 0 FROM accounts a
+WHERE a.account_id = 2058
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000180');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2058, 'A000210', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2058 AND h.stock_code = 'A000210');
+SELECT a.id, 'A000210', 132, 0 FROM accounts a
+WHERE a.account_id = 2058
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000210');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2058, 'A000220', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2058 AND h.stock_code = 'A000220');
+SELECT a.id, 'A000220', 132, 0 FROM accounts a
+WHERE a.account_id = 2058
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000220');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2058, 'A000230', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2058 AND h.stock_code = 'A000230');
+SELECT a.id, 'A000230', 136, 0 FROM accounts a
+WHERE a.account_id = 2058
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000230');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2058, 'A000240', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2058 AND h.stock_code = 'A000240');
+SELECT a.id, 'A000240', 132, 0 FROM accounts a
+WHERE a.account_id = 2058
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000240');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2058, 'A000250', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2058 AND h.stock_code = 'A000250');
+SELECT a.id, 'A000250', 132, 0 FROM accounts a
+WHERE a.account_id = 2058
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000250');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2058, 'A000270', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2058 AND h.stock_code = 'A000270');
+SELECT a.id, 'A000270', 136, 0 FROM accounts a
+WHERE a.account_id = 2058
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2058, 'A000300', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2058 AND h.stock_code = 'A000300');
+SELECT a.id, 'A000300', 132, 0 FROM accounts a
+WHERE a.account_id = 2058
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2058, 'A000320', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2058 AND h.stock_code = 'A000320');
+SELECT a.id, 'A000320', 132, 0 FROM accounts a
+WHERE a.account_id = 2058
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000320');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2058, 'A000370', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2058 AND h.stock_code = 'A000370');
+SELECT a.id, 'A000370', 136, 0 FROM accounts a
+WHERE a.account_id = 2058
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000370');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2058, 'A000390', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2058 AND h.stock_code = 'A000390');
+SELECT a.id, 'A000390', 132, 0 FROM accounts a
+WHERE a.account_id = 2058
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000390');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2058, 'A000400', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2058 AND h.stock_code = 'A000400');
+SELECT a.id, 'A000400', 132, 0 FROM accounts a
+WHERE a.account_id = 2058
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000400');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2058, 'A000430', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2058 AND h.stock_code = 'A000430');
+SELECT a.id, 'A000430', 136, 0 FROM accounts a
+WHERE a.account_id = 2058
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000430');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2058, 'A000440', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2058 AND h.stock_code = 'A000440');
+SELECT a.id, 'A000440', 132, 0 FROM accounts a
+WHERE a.account_id = 2058
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000440');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2058, 'A000480', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2058 AND h.stock_code = 'A000480');
+SELECT a.id, 'A000480', 132, 0 FROM accounts a
+WHERE a.account_id = 2058
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000480');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2058, 'A900260', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2058 AND h.stock_code = 'A900260');
+SELECT a.id, 'A900260', 132, 0 FROM accounts a
+WHERE a.account_id = 2058
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900260');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2058, 'A900270', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2058 AND h.stock_code = 'A900270');
+SELECT a.id, 'A900270', 136, 0 FROM accounts a
+WHERE a.account_id = 2058
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2058, 'A900290', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2058 AND h.stock_code = 'A900290');
+SELECT a.id, 'A900290', 132, 0 FROM accounts a
+WHERE a.account_id = 2058
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900290');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2058, 'A900300', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2058 AND h.stock_code = 'A900300');
+SELECT a.id, 'A900300', 136, 0 FROM accounts a
+WHERE a.account_id = 2058
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2058, 'A900310', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2058 AND h.stock_code = 'A900310');
+SELECT a.id, 'A900310', 132, 0 FROM accounts a
+WHERE a.account_id = 2058
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900310');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2058, 'A900340', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2058 AND h.stock_code = 'A900340');
+SELECT a.id, 'A900340', 132, 0 FROM accounts a
+WHERE a.account_id = 2058
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900340');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2059, 'A000020', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2059 AND h.stock_code = 'A000020');
+SELECT a.id, 'A000020', 136, 0 FROM accounts a
+WHERE a.account_id = 2059
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000020');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2059, 'A000040', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2059 AND h.stock_code = 'A000040');
+SELECT a.id, 'A000040', 132, 0 FROM accounts a
+WHERE a.account_id = 2059
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000040');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2059, 'A000050', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2059 AND h.stock_code = 'A000050');
+SELECT a.id, 'A000050', 132, 0 FROM accounts a
+WHERE a.account_id = 2059
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000050');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2059, 'A000070', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2059 AND h.stock_code = 'A000070');
+SELECT a.id, 'A000070', 136, 0 FROM accounts a
+WHERE a.account_id = 2059
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000070');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2059, 'A000080', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2059 AND h.stock_code = 'A000080');
+SELECT a.id, 'A000080', 132, 0 FROM accounts a
+WHERE a.account_id = 2059
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000080');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2059, 'A000100', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2059 AND h.stock_code = 'A000100');
+SELECT a.id, 'A000100', 132, 0 FROM accounts a
+WHERE a.account_id = 2059
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000100');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2059, 'A000120', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2059 AND h.stock_code = 'A000120');
+SELECT a.id, 'A000120', 136, 0 FROM accounts a
+WHERE a.account_id = 2059
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000120');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2059, 'A000140', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2059 AND h.stock_code = 'A000140');
+SELECT a.id, 'A000140', 132, 0 FROM accounts a
+WHERE a.account_id = 2059
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000140');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2059, 'A000150', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2059 AND h.stock_code = 'A000150');
+SELECT a.id, 'A000150', 132, 0 FROM accounts a
+WHERE a.account_id = 2059
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000150');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2059, 'A000180', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2059 AND h.stock_code = 'A000180');
+SELECT a.id, 'A000180', 136, 0 FROM accounts a
+WHERE a.account_id = 2059
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000180');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2059, 'A000210', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2059 AND h.stock_code = 'A000210');
+SELECT a.id, 'A000210', 132, 0 FROM accounts a
+WHERE a.account_id = 2059
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000210');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2059, 'A000220', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2059 AND h.stock_code = 'A000220');
+SELECT a.id, 'A000220', 132, 0 FROM accounts a
+WHERE a.account_id = 2059
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000220');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2059, 'A000230', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2059 AND h.stock_code = 'A000230');
+SELECT a.id, 'A000230', 136, 0 FROM accounts a
+WHERE a.account_id = 2059
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000230');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2059, 'A000240', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2059 AND h.stock_code = 'A000240');
+SELECT a.id, 'A000240', 132, 0 FROM accounts a
+WHERE a.account_id = 2059
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000240');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2059, 'A000250', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2059 AND h.stock_code = 'A000250');
+SELECT a.id, 'A000250', 132, 0 FROM accounts a
+WHERE a.account_id = 2059
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000250');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2059, 'A000270', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2059 AND h.stock_code = 'A000270');
+SELECT a.id, 'A000270', 136, 0 FROM accounts a
+WHERE a.account_id = 2059
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2059, 'A000300', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2059 AND h.stock_code = 'A000300');
+SELECT a.id, 'A000300', 132, 0 FROM accounts a
+WHERE a.account_id = 2059
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2059, 'A000320', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2059 AND h.stock_code = 'A000320');
+SELECT a.id, 'A000320', 132, 0 FROM accounts a
+WHERE a.account_id = 2059
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000320');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2059, 'A000370', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2059 AND h.stock_code = 'A000370');
+SELECT a.id, 'A000370', 136, 0 FROM accounts a
+WHERE a.account_id = 2059
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000370');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2059, 'A000390', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2059 AND h.stock_code = 'A000390');
+SELECT a.id, 'A000390', 132, 0 FROM accounts a
+WHERE a.account_id = 2059
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000390');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2059, 'A000400', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2059 AND h.stock_code = 'A000400');
+SELECT a.id, 'A000400', 132, 0 FROM accounts a
+WHERE a.account_id = 2059
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000400');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2059, 'A000430', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2059 AND h.stock_code = 'A000430');
+SELECT a.id, 'A000430', 136, 0 FROM accounts a
+WHERE a.account_id = 2059
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000430');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2059, 'A000440', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2059 AND h.stock_code = 'A000440');
+SELECT a.id, 'A000440', 132, 0 FROM accounts a
+WHERE a.account_id = 2059
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000440');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2059, 'A000480', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2059 AND h.stock_code = 'A000480');
+SELECT a.id, 'A000480', 132, 0 FROM accounts a
+WHERE a.account_id = 2059
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000480');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2059, 'A900260', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2059 AND h.stock_code = 'A900260');
+SELECT a.id, 'A900260', 132, 0 FROM accounts a
+WHERE a.account_id = 2059
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900260');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2059, 'A900270', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2059 AND h.stock_code = 'A900270');
+SELECT a.id, 'A900270', 136, 0 FROM accounts a
+WHERE a.account_id = 2059
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2059, 'A900290', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2059 AND h.stock_code = 'A900290');
+SELECT a.id, 'A900290', 132, 0 FROM accounts a
+WHERE a.account_id = 2059
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900290');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2059, 'A900300', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2059 AND h.stock_code = 'A900300');
+SELECT a.id, 'A900300', 136, 0 FROM accounts a
+WHERE a.account_id = 2059
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2059, 'A900310', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2059 AND h.stock_code = 'A900310');
+SELECT a.id, 'A900310', 132, 0 FROM accounts a
+WHERE a.account_id = 2059
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900310');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2059, 'A900340', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2059 AND h.stock_code = 'A900340');
+SELECT a.id, 'A900340', 132, 0 FROM accounts a
+WHERE a.account_id = 2059
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900340');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2060, 'A000020', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2060 AND h.stock_code = 'A000020');
+SELECT a.id, 'A000020', 136, 0 FROM accounts a
+WHERE a.account_id = 2060
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000020');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2060, 'A000040', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2060 AND h.stock_code = 'A000040');
+SELECT a.id, 'A000040', 132, 0 FROM accounts a
+WHERE a.account_id = 2060
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000040');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2060, 'A000050', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2060 AND h.stock_code = 'A000050');
+SELECT a.id, 'A000050', 132, 0 FROM accounts a
+WHERE a.account_id = 2060
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000050');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2060, 'A000070', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2060 AND h.stock_code = 'A000070');
+SELECT a.id, 'A000070', 136, 0 FROM accounts a
+WHERE a.account_id = 2060
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000070');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2060, 'A000080', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2060 AND h.stock_code = 'A000080');
+SELECT a.id, 'A000080', 132, 0 FROM accounts a
+WHERE a.account_id = 2060
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000080');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2060, 'A000100', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2060 AND h.stock_code = 'A000100');
+SELECT a.id, 'A000100', 132, 0 FROM accounts a
+WHERE a.account_id = 2060
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000100');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2060, 'A000120', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2060 AND h.stock_code = 'A000120');
+SELECT a.id, 'A000120', 136, 0 FROM accounts a
+WHERE a.account_id = 2060
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000120');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2060, 'A000140', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2060 AND h.stock_code = 'A000140');
+SELECT a.id, 'A000140', 132, 0 FROM accounts a
+WHERE a.account_id = 2060
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000140');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2060, 'A000150', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2060 AND h.stock_code = 'A000150');
+SELECT a.id, 'A000150', 132, 0 FROM accounts a
+WHERE a.account_id = 2060
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000150');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2060, 'A000180', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2060 AND h.stock_code = 'A000180');
+SELECT a.id, 'A000180', 136, 0 FROM accounts a
+WHERE a.account_id = 2060
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000180');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2060, 'A000210', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2060 AND h.stock_code = 'A000210');
+SELECT a.id, 'A000210', 132, 0 FROM accounts a
+WHERE a.account_id = 2060
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000210');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2060, 'A000220', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2060 AND h.stock_code = 'A000220');
+SELECT a.id, 'A000220', 132, 0 FROM accounts a
+WHERE a.account_id = 2060
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000220');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2060, 'A000230', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2060 AND h.stock_code = 'A000230');
+SELECT a.id, 'A000230', 136, 0 FROM accounts a
+WHERE a.account_id = 2060
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000230');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2060, 'A000240', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2060 AND h.stock_code = 'A000240');
+SELECT a.id, 'A000240', 132, 0 FROM accounts a
+WHERE a.account_id = 2060
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000240');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2060, 'A000250', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2060 AND h.stock_code = 'A000250');
+SELECT a.id, 'A000250', 132, 0 FROM accounts a
+WHERE a.account_id = 2060
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000250');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2060, 'A000270', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2060 AND h.stock_code = 'A000270');
+SELECT a.id, 'A000270', 136, 0 FROM accounts a
+WHERE a.account_id = 2060
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2060, 'A000300', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2060 AND h.stock_code = 'A000300');
+SELECT a.id, 'A000300', 132, 0 FROM accounts a
+WHERE a.account_id = 2060
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2060, 'A000320', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2060 AND h.stock_code = 'A000320');
+SELECT a.id, 'A000320', 132, 0 FROM accounts a
+WHERE a.account_id = 2060
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000320');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2060, 'A000370', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2060 AND h.stock_code = 'A000370');
+SELECT a.id, 'A000370', 136, 0 FROM accounts a
+WHERE a.account_id = 2060
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000370');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2060, 'A000390', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2060 AND h.stock_code = 'A000390');
+SELECT a.id, 'A000390', 132, 0 FROM accounts a
+WHERE a.account_id = 2060
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000390');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2060, 'A000400', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2060 AND h.stock_code = 'A000400');
+SELECT a.id, 'A000400', 132, 0 FROM accounts a
+WHERE a.account_id = 2060
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000400');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2060, 'A000430', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2060 AND h.stock_code = 'A000430');
+SELECT a.id, 'A000430', 136, 0 FROM accounts a
+WHERE a.account_id = 2060
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000430');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2060, 'A000440', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2060 AND h.stock_code = 'A000440');
+SELECT a.id, 'A000440', 132, 0 FROM accounts a
+WHERE a.account_id = 2060
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000440');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2060, 'A000480', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2060 AND h.stock_code = 'A000480');
+SELECT a.id, 'A000480', 132, 0 FROM accounts a
+WHERE a.account_id = 2060
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000480');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2060, 'A900260', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2060 AND h.stock_code = 'A900260');
+SELECT a.id, 'A900260', 132, 0 FROM accounts a
+WHERE a.account_id = 2060
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900260');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2060, 'A900270', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2060 AND h.stock_code = 'A900270');
+SELECT a.id, 'A900270', 136, 0 FROM accounts a
+WHERE a.account_id = 2060
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2060, 'A900290', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2060 AND h.stock_code = 'A900290');
+SELECT a.id, 'A900290', 132, 0 FROM accounts a
+WHERE a.account_id = 2060
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900290');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2060, 'A900300', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2060 AND h.stock_code = 'A900300');
+SELECT a.id, 'A900300', 136, 0 FROM accounts a
+WHERE a.account_id = 2060
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2060, 'A900310', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2060 AND h.stock_code = 'A900310');
+SELECT a.id, 'A900310', 132, 0 FROM accounts a
+WHERE a.account_id = 2060
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900310');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2060, 'A900340', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2060 AND h.stock_code = 'A900340');
+SELECT a.id, 'A900340', 132, 0 FROM accounts a
+WHERE a.account_id = 2060
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900340');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2061, 'A000020', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2061 AND h.stock_code = 'A000020');
+SELECT a.id, 'A000020', 136, 0 FROM accounts a
+WHERE a.account_id = 2061
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000020');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2061, 'A000040', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2061 AND h.stock_code = 'A000040');
+SELECT a.id, 'A000040', 132, 0 FROM accounts a
+WHERE a.account_id = 2061
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000040');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2061, 'A000050', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2061 AND h.stock_code = 'A000050');
+SELECT a.id, 'A000050', 132, 0 FROM accounts a
+WHERE a.account_id = 2061
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000050');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2061, 'A000070', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2061 AND h.stock_code = 'A000070');
+SELECT a.id, 'A000070', 136, 0 FROM accounts a
+WHERE a.account_id = 2061
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000070');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2061, 'A000080', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2061 AND h.stock_code = 'A000080');
+SELECT a.id, 'A000080', 132, 0 FROM accounts a
+WHERE a.account_id = 2061
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000080');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2061, 'A000100', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2061 AND h.stock_code = 'A000100');
+SELECT a.id, 'A000100', 132, 0 FROM accounts a
+WHERE a.account_id = 2061
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000100');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2061, 'A000120', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2061 AND h.stock_code = 'A000120');
+SELECT a.id, 'A000120', 136, 0 FROM accounts a
+WHERE a.account_id = 2061
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000120');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2061, 'A000140', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2061 AND h.stock_code = 'A000140');
+SELECT a.id, 'A000140', 132, 0 FROM accounts a
+WHERE a.account_id = 2061
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000140');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2061, 'A000150', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2061 AND h.stock_code = 'A000150');
+SELECT a.id, 'A000150', 132, 0 FROM accounts a
+WHERE a.account_id = 2061
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000150');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2061, 'A000180', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2061 AND h.stock_code = 'A000180');
+SELECT a.id, 'A000180', 136, 0 FROM accounts a
+WHERE a.account_id = 2061
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000180');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2061, 'A000210', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2061 AND h.stock_code = 'A000210');
+SELECT a.id, 'A000210', 132, 0 FROM accounts a
+WHERE a.account_id = 2061
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000210');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2061, 'A000220', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2061 AND h.stock_code = 'A000220');
+SELECT a.id, 'A000220', 132, 0 FROM accounts a
+WHERE a.account_id = 2061
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000220');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2061, 'A000230', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2061 AND h.stock_code = 'A000230');
+SELECT a.id, 'A000230', 136, 0 FROM accounts a
+WHERE a.account_id = 2061
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000230');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2061, 'A000240', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2061 AND h.stock_code = 'A000240');
+SELECT a.id, 'A000240', 132, 0 FROM accounts a
+WHERE a.account_id = 2061
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000240');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2061, 'A000250', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2061 AND h.stock_code = 'A000250');
+SELECT a.id, 'A000250', 132, 0 FROM accounts a
+WHERE a.account_id = 2061
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000250');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2061, 'A000270', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2061 AND h.stock_code = 'A000270');
+SELECT a.id, 'A000270', 136, 0 FROM accounts a
+WHERE a.account_id = 2061
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2061, 'A000300', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2061 AND h.stock_code = 'A000300');
+SELECT a.id, 'A000300', 132, 0 FROM accounts a
+WHERE a.account_id = 2061
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2061, 'A000320', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2061 AND h.stock_code = 'A000320');
+SELECT a.id, 'A000320', 132, 0 FROM accounts a
+WHERE a.account_id = 2061
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000320');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2061, 'A000370', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2061 AND h.stock_code = 'A000370');
+SELECT a.id, 'A000370', 136, 0 FROM accounts a
+WHERE a.account_id = 2061
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000370');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2061, 'A000390', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2061 AND h.stock_code = 'A000390');
+SELECT a.id, 'A000390', 132, 0 FROM accounts a
+WHERE a.account_id = 2061
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000390');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2061, 'A000400', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2061 AND h.stock_code = 'A000400');
+SELECT a.id, 'A000400', 132, 0 FROM accounts a
+WHERE a.account_id = 2061
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000400');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2061, 'A000430', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2061 AND h.stock_code = 'A000430');
+SELECT a.id, 'A000430', 136, 0 FROM accounts a
+WHERE a.account_id = 2061
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000430');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2061, 'A000440', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2061 AND h.stock_code = 'A000440');
+SELECT a.id, 'A000440', 132, 0 FROM accounts a
+WHERE a.account_id = 2061
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000440');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2061, 'A000480', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2061 AND h.stock_code = 'A000480');
+SELECT a.id, 'A000480', 132, 0 FROM accounts a
+WHERE a.account_id = 2061
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000480');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2061, 'A900260', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2061 AND h.stock_code = 'A900260');
+SELECT a.id, 'A900260', 132, 0 FROM accounts a
+WHERE a.account_id = 2061
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900260');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2061, 'A900270', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2061 AND h.stock_code = 'A900270');
+SELECT a.id, 'A900270', 136, 0 FROM accounts a
+WHERE a.account_id = 2061
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2061, 'A900290', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2061 AND h.stock_code = 'A900290');
+SELECT a.id, 'A900290', 132, 0 FROM accounts a
+WHERE a.account_id = 2061
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900290');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2061, 'A900300', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2061 AND h.stock_code = 'A900300');
+SELECT a.id, 'A900300', 136, 0 FROM accounts a
+WHERE a.account_id = 2061
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2061, 'A900310', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2061 AND h.stock_code = 'A900310');
+SELECT a.id, 'A900310', 132, 0 FROM accounts a
+WHERE a.account_id = 2061
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900310');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2061, 'A900340', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2061 AND h.stock_code = 'A900340');
+SELECT a.id, 'A900340', 132, 0 FROM accounts a
+WHERE a.account_id = 2061
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900340');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2062, 'A000020', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2062 AND h.stock_code = 'A000020');
+SELECT a.id, 'A000020', 136, 0 FROM accounts a
+WHERE a.account_id = 2062
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000020');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2062, 'A000040', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2062 AND h.stock_code = 'A000040');
+SELECT a.id, 'A000040', 132, 0 FROM accounts a
+WHERE a.account_id = 2062
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000040');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2062, 'A000050', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2062 AND h.stock_code = 'A000050');
+SELECT a.id, 'A000050', 132, 0 FROM accounts a
+WHERE a.account_id = 2062
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000050');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2062, 'A000070', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2062 AND h.stock_code = 'A000070');
+SELECT a.id, 'A000070', 136, 0 FROM accounts a
+WHERE a.account_id = 2062
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000070');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2062, 'A000080', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2062 AND h.stock_code = 'A000080');
+SELECT a.id, 'A000080', 132, 0 FROM accounts a
+WHERE a.account_id = 2062
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000080');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2062, 'A000100', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2062 AND h.stock_code = 'A000100');
+SELECT a.id, 'A000100', 132, 0 FROM accounts a
+WHERE a.account_id = 2062
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000100');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2062, 'A000120', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2062 AND h.stock_code = 'A000120');
+SELECT a.id, 'A000120', 136, 0 FROM accounts a
+WHERE a.account_id = 2062
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000120');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2062, 'A000140', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2062 AND h.stock_code = 'A000140');
+SELECT a.id, 'A000140', 132, 0 FROM accounts a
+WHERE a.account_id = 2062
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000140');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2062, 'A000150', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2062 AND h.stock_code = 'A000150');
+SELECT a.id, 'A000150', 132, 0 FROM accounts a
+WHERE a.account_id = 2062
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000150');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2062, 'A000180', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2062 AND h.stock_code = 'A000180');
+SELECT a.id, 'A000180', 136, 0 FROM accounts a
+WHERE a.account_id = 2062
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000180');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2062, 'A000210', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2062 AND h.stock_code = 'A000210');
+SELECT a.id, 'A000210', 132, 0 FROM accounts a
+WHERE a.account_id = 2062
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000210');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2062, 'A000220', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2062 AND h.stock_code = 'A000220');
+SELECT a.id, 'A000220', 132, 0 FROM accounts a
+WHERE a.account_id = 2062
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000220');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2062, 'A000230', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2062 AND h.stock_code = 'A000230');
+SELECT a.id, 'A000230', 136, 0 FROM accounts a
+WHERE a.account_id = 2062
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000230');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2062, 'A000240', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2062 AND h.stock_code = 'A000240');
+SELECT a.id, 'A000240', 132, 0 FROM accounts a
+WHERE a.account_id = 2062
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000240');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2062, 'A000250', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2062 AND h.stock_code = 'A000250');
+SELECT a.id, 'A000250', 132, 0 FROM accounts a
+WHERE a.account_id = 2062
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000250');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2062, 'A000270', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2062 AND h.stock_code = 'A000270');
+SELECT a.id, 'A000270', 136, 0 FROM accounts a
+WHERE a.account_id = 2062
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2062, 'A000300', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2062 AND h.stock_code = 'A000300');
+SELECT a.id, 'A000300', 132, 0 FROM accounts a
+WHERE a.account_id = 2062
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2062, 'A000320', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2062 AND h.stock_code = 'A000320');
+SELECT a.id, 'A000320', 132, 0 FROM accounts a
+WHERE a.account_id = 2062
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000320');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2062, 'A000370', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2062 AND h.stock_code = 'A000370');
+SELECT a.id, 'A000370', 136, 0 FROM accounts a
+WHERE a.account_id = 2062
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000370');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2062, 'A000390', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2062 AND h.stock_code = 'A000390');
+SELECT a.id, 'A000390', 132, 0 FROM accounts a
+WHERE a.account_id = 2062
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000390');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2062, 'A000400', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2062 AND h.stock_code = 'A000400');
+SELECT a.id, 'A000400', 132, 0 FROM accounts a
+WHERE a.account_id = 2062
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000400');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2062, 'A000430', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2062 AND h.stock_code = 'A000430');
+SELECT a.id, 'A000430', 136, 0 FROM accounts a
+WHERE a.account_id = 2062
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000430');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2062, 'A000440', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2062 AND h.stock_code = 'A000440');
+SELECT a.id, 'A000440', 132, 0 FROM accounts a
+WHERE a.account_id = 2062
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000440');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2062, 'A000480', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2062 AND h.stock_code = 'A000480');
+SELECT a.id, 'A000480', 132, 0 FROM accounts a
+WHERE a.account_id = 2062
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000480');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2062, 'A900260', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2062 AND h.stock_code = 'A900260');
+SELECT a.id, 'A900260', 132, 0 FROM accounts a
+WHERE a.account_id = 2062
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900260');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2062, 'A900270', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2062 AND h.stock_code = 'A900270');
+SELECT a.id, 'A900270', 136, 0 FROM accounts a
+WHERE a.account_id = 2062
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2062, 'A900290', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2062 AND h.stock_code = 'A900290');
+SELECT a.id, 'A900290', 132, 0 FROM accounts a
+WHERE a.account_id = 2062
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900290');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2062, 'A900300', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2062 AND h.stock_code = 'A900300');
+SELECT a.id, 'A900300', 136, 0 FROM accounts a
+WHERE a.account_id = 2062
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2062, 'A900310', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2062 AND h.stock_code = 'A900310');
+SELECT a.id, 'A900310', 132, 0 FROM accounts a
+WHERE a.account_id = 2062
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900310');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2062, 'A900340', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2062 AND h.stock_code = 'A900340');
+SELECT a.id, 'A900340', 132, 0 FROM accounts a
+WHERE a.account_id = 2062
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900340');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2063, 'A000020', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2063 AND h.stock_code = 'A000020');
+SELECT a.id, 'A000020', 136, 0 FROM accounts a
+WHERE a.account_id = 2063
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000020');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2063, 'A000040', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2063 AND h.stock_code = 'A000040');
+SELECT a.id, 'A000040', 132, 0 FROM accounts a
+WHERE a.account_id = 2063
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000040');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2063, 'A000050', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2063 AND h.stock_code = 'A000050');
+SELECT a.id, 'A000050', 132, 0 FROM accounts a
+WHERE a.account_id = 2063
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000050');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2063, 'A000070', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2063 AND h.stock_code = 'A000070');
+SELECT a.id, 'A000070', 136, 0 FROM accounts a
+WHERE a.account_id = 2063
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000070');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2063, 'A000080', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2063 AND h.stock_code = 'A000080');
+SELECT a.id, 'A000080', 132, 0 FROM accounts a
+WHERE a.account_id = 2063
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000080');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2063, 'A000100', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2063 AND h.stock_code = 'A000100');
+SELECT a.id, 'A000100', 132, 0 FROM accounts a
+WHERE a.account_id = 2063
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000100');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2063, 'A000120', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2063 AND h.stock_code = 'A000120');
+SELECT a.id, 'A000120', 136, 0 FROM accounts a
+WHERE a.account_id = 2063
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000120');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2063, 'A000140', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2063 AND h.stock_code = 'A000140');
+SELECT a.id, 'A000140', 132, 0 FROM accounts a
+WHERE a.account_id = 2063
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000140');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2063, 'A000150', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2063 AND h.stock_code = 'A000150');
+SELECT a.id, 'A000150', 132, 0 FROM accounts a
+WHERE a.account_id = 2063
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000150');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2063, 'A000180', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2063 AND h.stock_code = 'A000180');
+SELECT a.id, 'A000180', 136, 0 FROM accounts a
+WHERE a.account_id = 2063
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000180');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2063, 'A000210', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2063 AND h.stock_code = 'A000210');
+SELECT a.id, 'A000210', 132, 0 FROM accounts a
+WHERE a.account_id = 2063
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000210');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2063, 'A000220', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2063 AND h.stock_code = 'A000220');
+SELECT a.id, 'A000220', 132, 0 FROM accounts a
+WHERE a.account_id = 2063
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000220');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2063, 'A000230', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2063 AND h.stock_code = 'A000230');
+SELECT a.id, 'A000230', 136, 0 FROM accounts a
+WHERE a.account_id = 2063
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000230');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2063, 'A000240', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2063 AND h.stock_code = 'A000240');
+SELECT a.id, 'A000240', 132, 0 FROM accounts a
+WHERE a.account_id = 2063
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000240');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2063, 'A000250', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2063 AND h.stock_code = 'A000250');
+SELECT a.id, 'A000250', 132, 0 FROM accounts a
+WHERE a.account_id = 2063
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000250');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2063, 'A000270', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2063 AND h.stock_code = 'A000270');
+SELECT a.id, 'A000270', 136, 0 FROM accounts a
+WHERE a.account_id = 2063
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2063, 'A000300', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2063 AND h.stock_code = 'A000300');
+SELECT a.id, 'A000300', 132, 0 FROM accounts a
+WHERE a.account_id = 2063
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2063, 'A000320', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2063 AND h.stock_code = 'A000320');
+SELECT a.id, 'A000320', 132, 0 FROM accounts a
+WHERE a.account_id = 2063
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000320');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2063, 'A000370', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2063 AND h.stock_code = 'A000370');
+SELECT a.id, 'A000370', 136, 0 FROM accounts a
+WHERE a.account_id = 2063
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000370');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2063, 'A000390', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2063 AND h.stock_code = 'A000390');
+SELECT a.id, 'A000390', 132, 0 FROM accounts a
+WHERE a.account_id = 2063
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000390');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2063, 'A000400', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2063 AND h.stock_code = 'A000400');
+SELECT a.id, 'A000400', 132, 0 FROM accounts a
+WHERE a.account_id = 2063
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000400');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2063, 'A000430', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2063 AND h.stock_code = 'A000430');
+SELECT a.id, 'A000430', 136, 0 FROM accounts a
+WHERE a.account_id = 2063
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000430');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2063, 'A000440', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2063 AND h.stock_code = 'A000440');
+SELECT a.id, 'A000440', 132, 0 FROM accounts a
+WHERE a.account_id = 2063
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000440');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2063, 'A000480', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2063 AND h.stock_code = 'A000480');
+SELECT a.id, 'A000480', 132, 0 FROM accounts a
+WHERE a.account_id = 2063
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000480');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2063, 'A900260', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2063 AND h.stock_code = 'A900260');
+SELECT a.id, 'A900260', 132, 0 FROM accounts a
+WHERE a.account_id = 2063
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900260');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2063, 'A900270', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2063 AND h.stock_code = 'A900270');
+SELECT a.id, 'A900270', 136, 0 FROM accounts a
+WHERE a.account_id = 2063
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2063, 'A900290', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2063 AND h.stock_code = 'A900290');
+SELECT a.id, 'A900290', 132, 0 FROM accounts a
+WHERE a.account_id = 2063
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900290');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2063, 'A900300', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2063 AND h.stock_code = 'A900300');
+SELECT a.id, 'A900300', 136, 0 FROM accounts a
+WHERE a.account_id = 2063
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2063, 'A900310', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2063 AND h.stock_code = 'A900310');
+SELECT a.id, 'A900310', 132, 0 FROM accounts a
+WHERE a.account_id = 2063
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900310');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2063, 'A900340', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2063 AND h.stock_code = 'A900340');
+SELECT a.id, 'A900340', 132, 0 FROM accounts a
+WHERE a.account_id = 2063
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900340');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2064, 'A000020', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2064 AND h.stock_code = 'A000020');
+SELECT a.id, 'A000020', 136, 0 FROM accounts a
+WHERE a.account_id = 2064
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000020');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2064, 'A000040', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2064 AND h.stock_code = 'A000040');
+SELECT a.id, 'A000040', 132, 0 FROM accounts a
+WHERE a.account_id = 2064
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000040');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2064, 'A000050', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2064 AND h.stock_code = 'A000050');
+SELECT a.id, 'A000050', 132, 0 FROM accounts a
+WHERE a.account_id = 2064
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000050');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2064, 'A000070', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2064 AND h.stock_code = 'A000070');
+SELECT a.id, 'A000070', 136, 0 FROM accounts a
+WHERE a.account_id = 2064
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000070');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2064, 'A000080', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2064 AND h.stock_code = 'A000080');
+SELECT a.id, 'A000080', 132, 0 FROM accounts a
+WHERE a.account_id = 2064
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000080');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2064, 'A000100', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2064 AND h.stock_code = 'A000100');
+SELECT a.id, 'A000100', 132, 0 FROM accounts a
+WHERE a.account_id = 2064
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000100');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2064, 'A000120', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2064 AND h.stock_code = 'A000120');
+SELECT a.id, 'A000120', 136, 0 FROM accounts a
+WHERE a.account_id = 2064
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000120');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2064, 'A000140', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2064 AND h.stock_code = 'A000140');
+SELECT a.id, 'A000140', 132, 0 FROM accounts a
+WHERE a.account_id = 2064
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000140');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2064, 'A000150', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2064 AND h.stock_code = 'A000150');
+SELECT a.id, 'A000150', 132, 0 FROM accounts a
+WHERE a.account_id = 2064
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000150');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2064, 'A000180', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2064 AND h.stock_code = 'A000180');
+SELECT a.id, 'A000180', 136, 0 FROM accounts a
+WHERE a.account_id = 2064
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000180');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2064, 'A000210', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2064 AND h.stock_code = 'A000210');
+SELECT a.id, 'A000210', 132, 0 FROM accounts a
+WHERE a.account_id = 2064
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000210');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2064, 'A000220', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2064 AND h.stock_code = 'A000220');
+SELECT a.id, 'A000220', 132, 0 FROM accounts a
+WHERE a.account_id = 2064
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000220');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2064, 'A000230', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2064 AND h.stock_code = 'A000230');
+SELECT a.id, 'A000230', 136, 0 FROM accounts a
+WHERE a.account_id = 2064
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000230');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2064, 'A000240', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2064 AND h.stock_code = 'A000240');
+SELECT a.id, 'A000240', 132, 0 FROM accounts a
+WHERE a.account_id = 2064
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000240');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2064, 'A000250', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2064 AND h.stock_code = 'A000250');
+SELECT a.id, 'A000250', 132, 0 FROM accounts a
+WHERE a.account_id = 2064
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000250');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2064, 'A000270', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2064 AND h.stock_code = 'A000270');
+SELECT a.id, 'A000270', 136, 0 FROM accounts a
+WHERE a.account_id = 2064
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2064, 'A000300', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2064 AND h.stock_code = 'A000300');
+SELECT a.id, 'A000300', 132, 0 FROM accounts a
+WHERE a.account_id = 2064
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2064, 'A000320', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2064 AND h.stock_code = 'A000320');
+SELECT a.id, 'A000320', 132, 0 FROM accounts a
+WHERE a.account_id = 2064
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000320');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2064, 'A000370', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2064 AND h.stock_code = 'A000370');
+SELECT a.id, 'A000370', 136, 0 FROM accounts a
+WHERE a.account_id = 2064
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000370');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2064, 'A000390', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2064 AND h.stock_code = 'A000390');
+SELECT a.id, 'A000390', 132, 0 FROM accounts a
+WHERE a.account_id = 2064
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000390');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2064, 'A000400', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2064 AND h.stock_code = 'A000400');
+SELECT a.id, 'A000400', 132, 0 FROM accounts a
+WHERE a.account_id = 2064
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000400');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2064, 'A000430', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2064 AND h.stock_code = 'A000430');
+SELECT a.id, 'A000430', 136, 0 FROM accounts a
+WHERE a.account_id = 2064
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000430');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2064, 'A000440', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2064 AND h.stock_code = 'A000440');
+SELECT a.id, 'A000440', 132, 0 FROM accounts a
+WHERE a.account_id = 2064
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000440');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2064, 'A000480', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2064 AND h.stock_code = 'A000480');
+SELECT a.id, 'A000480', 132, 0 FROM accounts a
+WHERE a.account_id = 2064
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000480');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2064, 'A900260', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2064 AND h.stock_code = 'A900260');
+SELECT a.id, 'A900260', 132, 0 FROM accounts a
+WHERE a.account_id = 2064
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900260');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2064, 'A900270', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2064 AND h.stock_code = 'A900270');
+SELECT a.id, 'A900270', 136, 0 FROM accounts a
+WHERE a.account_id = 2064
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2064, 'A900290', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2064 AND h.stock_code = 'A900290');
+SELECT a.id, 'A900290', 132, 0 FROM accounts a
+WHERE a.account_id = 2064
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900290');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2064, 'A900300', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2064 AND h.stock_code = 'A900300');
+SELECT a.id, 'A900300', 136, 0 FROM accounts a
+WHERE a.account_id = 2064
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2064, 'A900310', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2064 AND h.stock_code = 'A900310');
+SELECT a.id, 'A900310', 132, 0 FROM accounts a
+WHERE a.account_id = 2064
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900310');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2064, 'A900340', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2064 AND h.stock_code = 'A900340');
+SELECT a.id, 'A900340', 132, 0 FROM accounts a
+WHERE a.account_id = 2064
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900340');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2065, 'A000020', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2065 AND h.stock_code = 'A000020');
+SELECT a.id, 'A000020', 136, 0 FROM accounts a
+WHERE a.account_id = 2065
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000020');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2065, 'A000040', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2065 AND h.stock_code = 'A000040');
+SELECT a.id, 'A000040', 132, 0 FROM accounts a
+WHERE a.account_id = 2065
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000040');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2065, 'A000050', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2065 AND h.stock_code = 'A000050');
+SELECT a.id, 'A000050', 132, 0 FROM accounts a
+WHERE a.account_id = 2065
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000050');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2065, 'A000070', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2065 AND h.stock_code = 'A000070');
+SELECT a.id, 'A000070', 136, 0 FROM accounts a
+WHERE a.account_id = 2065
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000070');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2065, 'A000080', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2065 AND h.stock_code = 'A000080');
+SELECT a.id, 'A000080', 132, 0 FROM accounts a
+WHERE a.account_id = 2065
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000080');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2065, 'A000100', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2065 AND h.stock_code = 'A000100');
+SELECT a.id, 'A000100', 132, 0 FROM accounts a
+WHERE a.account_id = 2065
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000100');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2065, 'A000120', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2065 AND h.stock_code = 'A000120');
+SELECT a.id, 'A000120', 136, 0 FROM accounts a
+WHERE a.account_id = 2065
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000120');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2065, 'A000140', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2065 AND h.stock_code = 'A000140');
+SELECT a.id, 'A000140', 132, 0 FROM accounts a
+WHERE a.account_id = 2065
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000140');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2065, 'A000150', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2065 AND h.stock_code = 'A000150');
+SELECT a.id, 'A000150', 132, 0 FROM accounts a
+WHERE a.account_id = 2065
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000150');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2065, 'A000180', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2065 AND h.stock_code = 'A000180');
+SELECT a.id, 'A000180', 136, 0 FROM accounts a
+WHERE a.account_id = 2065
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000180');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2065, 'A000210', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2065 AND h.stock_code = 'A000210');
+SELECT a.id, 'A000210', 132, 0 FROM accounts a
+WHERE a.account_id = 2065
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000210');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2065, 'A000220', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2065 AND h.stock_code = 'A000220');
+SELECT a.id, 'A000220', 132, 0 FROM accounts a
+WHERE a.account_id = 2065
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000220');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2065, 'A000230', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2065 AND h.stock_code = 'A000230');
+SELECT a.id, 'A000230', 136, 0 FROM accounts a
+WHERE a.account_id = 2065
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000230');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2065, 'A000240', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2065 AND h.stock_code = 'A000240');
+SELECT a.id, 'A000240', 132, 0 FROM accounts a
+WHERE a.account_id = 2065
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000240');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2065, 'A000250', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2065 AND h.stock_code = 'A000250');
+SELECT a.id, 'A000250', 132, 0 FROM accounts a
+WHERE a.account_id = 2065
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000250');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2065, 'A000270', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2065 AND h.stock_code = 'A000270');
+SELECT a.id, 'A000270', 136, 0 FROM accounts a
+WHERE a.account_id = 2065
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2065, 'A000300', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2065 AND h.stock_code = 'A000300');
+SELECT a.id, 'A000300', 132, 0 FROM accounts a
+WHERE a.account_id = 2065
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2065, 'A000320', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2065 AND h.stock_code = 'A000320');
+SELECT a.id, 'A000320', 132, 0 FROM accounts a
+WHERE a.account_id = 2065
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000320');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2065, 'A000370', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2065 AND h.stock_code = 'A000370');
+SELECT a.id, 'A000370', 136, 0 FROM accounts a
+WHERE a.account_id = 2065
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000370');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2065, 'A000390', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2065 AND h.stock_code = 'A000390');
+SELECT a.id, 'A000390', 132, 0 FROM accounts a
+WHERE a.account_id = 2065
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000390');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2065, 'A000400', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2065 AND h.stock_code = 'A000400');
+SELECT a.id, 'A000400', 132, 0 FROM accounts a
+WHERE a.account_id = 2065
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000400');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2065, 'A000430', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2065 AND h.stock_code = 'A000430');
+SELECT a.id, 'A000430', 136, 0 FROM accounts a
+WHERE a.account_id = 2065
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000430');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2065, 'A000440', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2065 AND h.stock_code = 'A000440');
+SELECT a.id, 'A000440', 132, 0 FROM accounts a
+WHERE a.account_id = 2065
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000440');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2065, 'A000480', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2065 AND h.stock_code = 'A000480');
+SELECT a.id, 'A000480', 132, 0 FROM accounts a
+WHERE a.account_id = 2065
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000480');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2065, 'A900260', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2065 AND h.stock_code = 'A900260');
+SELECT a.id, 'A900260', 132, 0 FROM accounts a
+WHERE a.account_id = 2065
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900260');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2065, 'A900270', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2065 AND h.stock_code = 'A900270');
+SELECT a.id, 'A900270', 136, 0 FROM accounts a
+WHERE a.account_id = 2065
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2065, 'A900290', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2065 AND h.stock_code = 'A900290');
+SELECT a.id, 'A900290', 132, 0 FROM accounts a
+WHERE a.account_id = 2065
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900290');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2065, 'A900300', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2065 AND h.stock_code = 'A900300');
+SELECT a.id, 'A900300', 136, 0 FROM accounts a
+WHERE a.account_id = 2065
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2065, 'A900310', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2065 AND h.stock_code = 'A900310');
+SELECT a.id, 'A900310', 132, 0 FROM accounts a
+WHERE a.account_id = 2065
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900310');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2065, 'A900340', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2065 AND h.stock_code = 'A900340');
+SELECT a.id, 'A900340', 132, 0 FROM accounts a
+WHERE a.account_id = 2065
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900340');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2066, 'A000020', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2066 AND h.stock_code = 'A000020');
+SELECT a.id, 'A000020', 136, 0 FROM accounts a
+WHERE a.account_id = 2066
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000020');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2066, 'A000040', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2066 AND h.stock_code = 'A000040');
+SELECT a.id, 'A000040', 132, 0 FROM accounts a
+WHERE a.account_id = 2066
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000040');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2066, 'A000050', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2066 AND h.stock_code = 'A000050');
+SELECT a.id, 'A000050', 132, 0 FROM accounts a
+WHERE a.account_id = 2066
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000050');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2066, 'A000070', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2066 AND h.stock_code = 'A000070');
+SELECT a.id, 'A000070', 136, 0 FROM accounts a
+WHERE a.account_id = 2066
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000070');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2066, 'A000080', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2066 AND h.stock_code = 'A000080');
+SELECT a.id, 'A000080', 132, 0 FROM accounts a
+WHERE a.account_id = 2066
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000080');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2066, 'A000100', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2066 AND h.stock_code = 'A000100');
+SELECT a.id, 'A000100', 132, 0 FROM accounts a
+WHERE a.account_id = 2066
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000100');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2066, 'A000120', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2066 AND h.stock_code = 'A000120');
+SELECT a.id, 'A000120', 136, 0 FROM accounts a
+WHERE a.account_id = 2066
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000120');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2066, 'A000140', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2066 AND h.stock_code = 'A000140');
+SELECT a.id, 'A000140', 132, 0 FROM accounts a
+WHERE a.account_id = 2066
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000140');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2066, 'A000150', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2066 AND h.stock_code = 'A000150');
+SELECT a.id, 'A000150', 132, 0 FROM accounts a
+WHERE a.account_id = 2066
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000150');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2066, 'A000180', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2066 AND h.stock_code = 'A000180');
+SELECT a.id, 'A000180', 136, 0 FROM accounts a
+WHERE a.account_id = 2066
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000180');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2066, 'A000210', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2066 AND h.stock_code = 'A000210');
+SELECT a.id, 'A000210', 132, 0 FROM accounts a
+WHERE a.account_id = 2066
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000210');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2066, 'A000220', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2066 AND h.stock_code = 'A000220');
+SELECT a.id, 'A000220', 132, 0 FROM accounts a
+WHERE a.account_id = 2066
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000220');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2066, 'A000230', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2066 AND h.stock_code = 'A000230');
+SELECT a.id, 'A000230', 136, 0 FROM accounts a
+WHERE a.account_id = 2066
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000230');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2066, 'A000240', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2066 AND h.stock_code = 'A000240');
+SELECT a.id, 'A000240', 132, 0 FROM accounts a
+WHERE a.account_id = 2066
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000240');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2066, 'A000250', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2066 AND h.stock_code = 'A000250');
+SELECT a.id, 'A000250', 132, 0 FROM accounts a
+WHERE a.account_id = 2066
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000250');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2066, 'A000270', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2066 AND h.stock_code = 'A000270');
+SELECT a.id, 'A000270', 136, 0 FROM accounts a
+WHERE a.account_id = 2066
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2066, 'A000300', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2066 AND h.stock_code = 'A000300');
+SELECT a.id, 'A000300', 132, 0 FROM accounts a
+WHERE a.account_id = 2066
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2066, 'A000320', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2066 AND h.stock_code = 'A000320');
+SELECT a.id, 'A000320', 132, 0 FROM accounts a
+WHERE a.account_id = 2066
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000320');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2066, 'A000370', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2066 AND h.stock_code = 'A000370');
+SELECT a.id, 'A000370', 136, 0 FROM accounts a
+WHERE a.account_id = 2066
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000370');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2066, 'A000390', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2066 AND h.stock_code = 'A000390');
+SELECT a.id, 'A000390', 132, 0 FROM accounts a
+WHERE a.account_id = 2066
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000390');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2066, 'A000400', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2066 AND h.stock_code = 'A000400');
+SELECT a.id, 'A000400', 132, 0 FROM accounts a
+WHERE a.account_id = 2066
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000400');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2066, 'A000430', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2066 AND h.stock_code = 'A000430');
+SELECT a.id, 'A000430', 136, 0 FROM accounts a
+WHERE a.account_id = 2066
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000430');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2066, 'A000440', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2066 AND h.stock_code = 'A000440');
+SELECT a.id, 'A000440', 132, 0 FROM accounts a
+WHERE a.account_id = 2066
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000440');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2066, 'A000480', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2066 AND h.stock_code = 'A000480');
+SELECT a.id, 'A000480', 132, 0 FROM accounts a
+WHERE a.account_id = 2066
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000480');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2066, 'A900260', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2066 AND h.stock_code = 'A900260');
+SELECT a.id, 'A900260', 132, 0 FROM accounts a
+WHERE a.account_id = 2066
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900260');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2066, 'A900270', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2066 AND h.stock_code = 'A900270');
+SELECT a.id, 'A900270', 136, 0 FROM accounts a
+WHERE a.account_id = 2066
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2066, 'A900290', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2066 AND h.stock_code = 'A900290');
+SELECT a.id, 'A900290', 132, 0 FROM accounts a
+WHERE a.account_id = 2066
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900290');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2066, 'A900300', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2066 AND h.stock_code = 'A900300');
+SELECT a.id, 'A900300', 136, 0 FROM accounts a
+WHERE a.account_id = 2066
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2066, 'A900310', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2066 AND h.stock_code = 'A900310');
+SELECT a.id, 'A900310', 132, 0 FROM accounts a
+WHERE a.account_id = 2066
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900310');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2066, 'A900340', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2066 AND h.stock_code = 'A900340');
+SELECT a.id, 'A900340', 132, 0 FROM accounts a
+WHERE a.account_id = 2066
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900340');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2067, 'A000020', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2067 AND h.stock_code = 'A000020');
+SELECT a.id, 'A000020', 136, 0 FROM accounts a
+WHERE a.account_id = 2067
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000020');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2067, 'A000040', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2067 AND h.stock_code = 'A000040');
+SELECT a.id, 'A000040', 132, 0 FROM accounts a
+WHERE a.account_id = 2067
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000040');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2067, 'A000050', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2067 AND h.stock_code = 'A000050');
+SELECT a.id, 'A000050', 132, 0 FROM accounts a
+WHERE a.account_id = 2067
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000050');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2067, 'A000070', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2067 AND h.stock_code = 'A000070');
+SELECT a.id, 'A000070', 136, 0 FROM accounts a
+WHERE a.account_id = 2067
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000070');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2067, 'A000080', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2067 AND h.stock_code = 'A000080');
+SELECT a.id, 'A000080', 132, 0 FROM accounts a
+WHERE a.account_id = 2067
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000080');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2067, 'A000100', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2067 AND h.stock_code = 'A000100');
+SELECT a.id, 'A000100', 132, 0 FROM accounts a
+WHERE a.account_id = 2067
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000100');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2067, 'A000120', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2067 AND h.stock_code = 'A000120');
+SELECT a.id, 'A000120', 136, 0 FROM accounts a
+WHERE a.account_id = 2067
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000120');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2067, 'A000140', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2067 AND h.stock_code = 'A000140');
+SELECT a.id, 'A000140', 132, 0 FROM accounts a
+WHERE a.account_id = 2067
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000140');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2067, 'A000150', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2067 AND h.stock_code = 'A000150');
+SELECT a.id, 'A000150', 132, 0 FROM accounts a
+WHERE a.account_id = 2067
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000150');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2067, 'A000180', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2067 AND h.stock_code = 'A000180');
+SELECT a.id, 'A000180', 136, 0 FROM accounts a
+WHERE a.account_id = 2067
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000180');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2067, 'A000210', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2067 AND h.stock_code = 'A000210');
+SELECT a.id, 'A000210', 132, 0 FROM accounts a
+WHERE a.account_id = 2067
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000210');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2067, 'A000220', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2067 AND h.stock_code = 'A000220');
+SELECT a.id, 'A000220', 132, 0 FROM accounts a
+WHERE a.account_id = 2067
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000220');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2067, 'A000230', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2067 AND h.stock_code = 'A000230');
+SELECT a.id, 'A000230', 136, 0 FROM accounts a
+WHERE a.account_id = 2067
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000230');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2067, 'A000240', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2067 AND h.stock_code = 'A000240');
+SELECT a.id, 'A000240', 132, 0 FROM accounts a
+WHERE a.account_id = 2067
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000240');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2067, 'A000250', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2067 AND h.stock_code = 'A000250');
+SELECT a.id, 'A000250', 132, 0 FROM accounts a
+WHERE a.account_id = 2067
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000250');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2067, 'A000270', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2067 AND h.stock_code = 'A000270');
+SELECT a.id, 'A000270', 136, 0 FROM accounts a
+WHERE a.account_id = 2067
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2067, 'A000300', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2067 AND h.stock_code = 'A000300');
+SELECT a.id, 'A000300', 132, 0 FROM accounts a
+WHERE a.account_id = 2067
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2067, 'A000320', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2067 AND h.stock_code = 'A000320');
+SELECT a.id, 'A000320', 132, 0 FROM accounts a
+WHERE a.account_id = 2067
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000320');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2067, 'A000370', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2067 AND h.stock_code = 'A000370');
+SELECT a.id, 'A000370', 136, 0 FROM accounts a
+WHERE a.account_id = 2067
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000370');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2067, 'A000390', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2067 AND h.stock_code = 'A000390');
+SELECT a.id, 'A000390', 132, 0 FROM accounts a
+WHERE a.account_id = 2067
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000390');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2067, 'A000400', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2067 AND h.stock_code = 'A000400');
+SELECT a.id, 'A000400', 132, 0 FROM accounts a
+WHERE a.account_id = 2067
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000400');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2067, 'A000430', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2067 AND h.stock_code = 'A000430');
+SELECT a.id, 'A000430', 136, 0 FROM accounts a
+WHERE a.account_id = 2067
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000430');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2067, 'A000440', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2067 AND h.stock_code = 'A000440');
+SELECT a.id, 'A000440', 132, 0 FROM accounts a
+WHERE a.account_id = 2067
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000440');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2067, 'A000480', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2067 AND h.stock_code = 'A000480');
+SELECT a.id, 'A000480', 132, 0 FROM accounts a
+WHERE a.account_id = 2067
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000480');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2067, 'A900260', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2067 AND h.stock_code = 'A900260');
+SELECT a.id, 'A900260', 132, 0 FROM accounts a
+WHERE a.account_id = 2067
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900260');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2067, 'A900270', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2067 AND h.stock_code = 'A900270');
+SELECT a.id, 'A900270', 136, 0 FROM accounts a
+WHERE a.account_id = 2067
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2067, 'A900290', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2067 AND h.stock_code = 'A900290');
+SELECT a.id, 'A900290', 132, 0 FROM accounts a
+WHERE a.account_id = 2067
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900290');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2067, 'A900300', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2067 AND h.stock_code = 'A900300');
+SELECT a.id, 'A900300', 136, 0 FROM accounts a
+WHERE a.account_id = 2067
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2067, 'A900310', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2067 AND h.stock_code = 'A900310');
+SELECT a.id, 'A900310', 132, 0 FROM accounts a
+WHERE a.account_id = 2067
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900310');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2067, 'A900340', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2067 AND h.stock_code = 'A900340');
+SELECT a.id, 'A900340', 132, 0 FROM accounts a
+WHERE a.account_id = 2067
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900340');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2068, 'A000020', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2068 AND h.stock_code = 'A000020');
+SELECT a.id, 'A000020', 136, 0 FROM accounts a
+WHERE a.account_id = 2068
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000020');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2068, 'A000040', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2068 AND h.stock_code = 'A000040');
+SELECT a.id, 'A000040', 132, 0 FROM accounts a
+WHERE a.account_id = 2068
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000040');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2068, 'A000050', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2068 AND h.stock_code = 'A000050');
+SELECT a.id, 'A000050', 132, 0 FROM accounts a
+WHERE a.account_id = 2068
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000050');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2068, 'A000070', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2068 AND h.stock_code = 'A000070');
+SELECT a.id, 'A000070', 136, 0 FROM accounts a
+WHERE a.account_id = 2068
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000070');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2068, 'A000080', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2068 AND h.stock_code = 'A000080');
+SELECT a.id, 'A000080', 132, 0 FROM accounts a
+WHERE a.account_id = 2068
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000080');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2068, 'A000100', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2068 AND h.stock_code = 'A000100');
+SELECT a.id, 'A000100', 132, 0 FROM accounts a
+WHERE a.account_id = 2068
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000100');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2068, 'A000120', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2068 AND h.stock_code = 'A000120');
+SELECT a.id, 'A000120', 136, 0 FROM accounts a
+WHERE a.account_id = 2068
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000120');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2068, 'A000140', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2068 AND h.stock_code = 'A000140');
+SELECT a.id, 'A000140', 132, 0 FROM accounts a
+WHERE a.account_id = 2068
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000140');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2068, 'A000150', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2068 AND h.stock_code = 'A000150');
+SELECT a.id, 'A000150', 132, 0 FROM accounts a
+WHERE a.account_id = 2068
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000150');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2068, 'A000180', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2068 AND h.stock_code = 'A000180');
+SELECT a.id, 'A000180', 136, 0 FROM accounts a
+WHERE a.account_id = 2068
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000180');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2068, 'A000210', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2068 AND h.stock_code = 'A000210');
+SELECT a.id, 'A000210', 132, 0 FROM accounts a
+WHERE a.account_id = 2068
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000210');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2068, 'A000220', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2068 AND h.stock_code = 'A000220');
+SELECT a.id, 'A000220', 132, 0 FROM accounts a
+WHERE a.account_id = 2068
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000220');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2068, 'A000230', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2068 AND h.stock_code = 'A000230');
+SELECT a.id, 'A000230', 136, 0 FROM accounts a
+WHERE a.account_id = 2068
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000230');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2068, 'A000240', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2068 AND h.stock_code = 'A000240');
+SELECT a.id, 'A000240', 132, 0 FROM accounts a
+WHERE a.account_id = 2068
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000240');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2068, 'A000250', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2068 AND h.stock_code = 'A000250');
+SELECT a.id, 'A000250', 132, 0 FROM accounts a
+WHERE a.account_id = 2068
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000250');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2068, 'A000270', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2068 AND h.stock_code = 'A000270');
+SELECT a.id, 'A000270', 136, 0 FROM accounts a
+WHERE a.account_id = 2068
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2068, 'A000300', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2068 AND h.stock_code = 'A000300');
+SELECT a.id, 'A000300', 132, 0 FROM accounts a
+WHERE a.account_id = 2068
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2068, 'A000320', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2068 AND h.stock_code = 'A000320');
+SELECT a.id, 'A000320', 132, 0 FROM accounts a
+WHERE a.account_id = 2068
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000320');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2068, 'A000370', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2068 AND h.stock_code = 'A000370');
+SELECT a.id, 'A000370', 136, 0 FROM accounts a
+WHERE a.account_id = 2068
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000370');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2068, 'A000390', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2068 AND h.stock_code = 'A000390');
+SELECT a.id, 'A000390', 132, 0 FROM accounts a
+WHERE a.account_id = 2068
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000390');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2068, 'A000400', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2068 AND h.stock_code = 'A000400');
+SELECT a.id, 'A000400', 132, 0 FROM accounts a
+WHERE a.account_id = 2068
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000400');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2068, 'A000430', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2068 AND h.stock_code = 'A000430');
+SELECT a.id, 'A000430', 136, 0 FROM accounts a
+WHERE a.account_id = 2068
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000430');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2068, 'A000440', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2068 AND h.stock_code = 'A000440');
+SELECT a.id, 'A000440', 132, 0 FROM accounts a
+WHERE a.account_id = 2068
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000440');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2068, 'A000480', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2068 AND h.stock_code = 'A000480');
+SELECT a.id, 'A000480', 132, 0 FROM accounts a
+WHERE a.account_id = 2068
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000480');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2068, 'A900260', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2068 AND h.stock_code = 'A900260');
+SELECT a.id, 'A900260', 136, 0 FROM accounts a
+WHERE a.account_id = 2068
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900260');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2068, 'A900270', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2068 AND h.stock_code = 'A900270');
+SELECT a.id, 'A900270', 132, 0 FROM accounts a
+WHERE a.account_id = 2068
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2068, 'A900290', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2068 AND h.stock_code = 'A900290');
+SELECT a.id, 'A900290', 132, 0 FROM accounts a
+WHERE a.account_id = 2068
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900290');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2068, 'A900300', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2068 AND h.stock_code = 'A900300');
+SELECT a.id, 'A900300', 136, 0 FROM accounts a
+WHERE a.account_id = 2068
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2068, 'A900310', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2068 AND h.stock_code = 'A900310');
+SELECT a.id, 'A900310', 132, 0 FROM accounts a
+WHERE a.account_id = 2068
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900310');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2068, 'A900340', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2068 AND h.stock_code = 'A900340');
+SELECT a.id, 'A900340', 132, 0 FROM accounts a
+WHERE a.account_id = 2068
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900340');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2069, 'A000020', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2069 AND h.stock_code = 'A000020');
+SELECT a.id, 'A000020', 136, 0 FROM accounts a
+WHERE a.account_id = 2069
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000020');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2069, 'A000040', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2069 AND h.stock_code = 'A000040');
+SELECT a.id, 'A000040', 132, 0 FROM accounts a
+WHERE a.account_id = 2069
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000040');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2069, 'A000050', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2069 AND h.stock_code = 'A000050');
+SELECT a.id, 'A000050', 132, 0 FROM accounts a
+WHERE a.account_id = 2069
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000050');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2069, 'A000070', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2069 AND h.stock_code = 'A000070');
+SELECT a.id, 'A000070', 136, 0 FROM accounts a
+WHERE a.account_id = 2069
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000070');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2069, 'A000080', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2069 AND h.stock_code = 'A000080');
+SELECT a.id, 'A000080', 132, 0 FROM accounts a
+WHERE a.account_id = 2069
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000080');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2069, 'A000100', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2069 AND h.stock_code = 'A000100');
+SELECT a.id, 'A000100', 132, 0 FROM accounts a
+WHERE a.account_id = 2069
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000100');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2069, 'A000120', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2069 AND h.stock_code = 'A000120');
+SELECT a.id, 'A000120', 136, 0 FROM accounts a
+WHERE a.account_id = 2069
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000120');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2069, 'A000140', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2069 AND h.stock_code = 'A000140');
+SELECT a.id, 'A000140', 132, 0 FROM accounts a
+WHERE a.account_id = 2069
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000140');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2069, 'A000150', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2069 AND h.stock_code = 'A000150');
+SELECT a.id, 'A000150', 132, 0 FROM accounts a
+WHERE a.account_id = 2069
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000150');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2069, 'A000180', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2069 AND h.stock_code = 'A000180');
+SELECT a.id, 'A000180', 136, 0 FROM accounts a
+WHERE a.account_id = 2069
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000180');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2069, 'A000210', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2069 AND h.stock_code = 'A000210');
+SELECT a.id, 'A000210', 132, 0 FROM accounts a
+WHERE a.account_id = 2069
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000210');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2069, 'A000220', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2069 AND h.stock_code = 'A000220');
+SELECT a.id, 'A000220', 132, 0 FROM accounts a
+WHERE a.account_id = 2069
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000220');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2069, 'A000230', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2069 AND h.stock_code = 'A000230');
+SELECT a.id, 'A000230', 136, 0 FROM accounts a
+WHERE a.account_id = 2069
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000230');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2069, 'A000240', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2069 AND h.stock_code = 'A000240');
+SELECT a.id, 'A000240', 132, 0 FROM accounts a
+WHERE a.account_id = 2069
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000240');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2069, 'A000250', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2069 AND h.stock_code = 'A000250');
+SELECT a.id, 'A000250', 132, 0 FROM accounts a
+WHERE a.account_id = 2069
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000250');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2069, 'A000270', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2069 AND h.stock_code = 'A000270');
+SELECT a.id, 'A000270', 136, 0 FROM accounts a
+WHERE a.account_id = 2069
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2069, 'A000300', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2069 AND h.stock_code = 'A000300');
+SELECT a.id, 'A000300', 132, 0 FROM accounts a
+WHERE a.account_id = 2069
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2069, 'A000320', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2069 AND h.stock_code = 'A000320');
+SELECT a.id, 'A000320', 132, 0 FROM accounts a
+WHERE a.account_id = 2069
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000320');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2069, 'A000370', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2069 AND h.stock_code = 'A000370');
+SELECT a.id, 'A000370', 136, 0 FROM accounts a
+WHERE a.account_id = 2069
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000370');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2069, 'A000390', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2069 AND h.stock_code = 'A000390');
+SELECT a.id, 'A000390', 132, 0 FROM accounts a
+WHERE a.account_id = 2069
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000390');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2069, 'A000400', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2069 AND h.stock_code = 'A000400');
+SELECT a.id, 'A000400', 132, 0 FROM accounts a
+WHERE a.account_id = 2069
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000400');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2069, 'A000430', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2069 AND h.stock_code = 'A000430');
+SELECT a.id, 'A000430', 132, 0 FROM accounts a
+WHERE a.account_id = 2069
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000430');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2069, 'A000440', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2069 AND h.stock_code = 'A000440');
+SELECT a.id, 'A000440', 136, 0 FROM accounts a
+WHERE a.account_id = 2069
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000440');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2069, 'A000480', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2069 AND h.stock_code = 'A000480');
+SELECT a.id, 'A000480', 132, 0 FROM accounts a
+WHERE a.account_id = 2069
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000480');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2069, 'A900260', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2069 AND h.stock_code = 'A900260');
+SELECT a.id, 'A900260', 136, 0 FROM accounts a
+WHERE a.account_id = 2069
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900260');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2069, 'A900270', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2069 AND h.stock_code = 'A900270');
+SELECT a.id, 'A900270', 132, 0 FROM accounts a
+WHERE a.account_id = 2069
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2069, 'A900290', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2069 AND h.stock_code = 'A900290');
+SELECT a.id, 'A900290', 132, 0 FROM accounts a
+WHERE a.account_id = 2069
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900290');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2069, 'A900300', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2069 AND h.stock_code = 'A900300');
+SELECT a.id, 'A900300', 132, 0 FROM accounts a
+WHERE a.account_id = 2069
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2069, 'A900310', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2069 AND h.stock_code = 'A900310');
+SELECT a.id, 'A900310', 136, 0 FROM accounts a
+WHERE a.account_id = 2069
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900310');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2069, 'A900340', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2069 AND h.stock_code = 'A900340');
+SELECT a.id, 'A900340', 132, 0 FROM accounts a
+WHERE a.account_id = 2069
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900340');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2070, 'A000020', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2070 AND h.stock_code = 'A000020');
+SELECT a.id, 'A000020', 132, 0 FROM accounts a
+WHERE a.account_id = 2070
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000020');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2070, 'A000040', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2070 AND h.stock_code = 'A000040');
+SELECT a.id, 'A000040', 136, 0 FROM accounts a
+WHERE a.account_id = 2070
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000040');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2070, 'A000050', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2070 AND h.stock_code = 'A000050');
+SELECT a.id, 'A000050', 132, 0 FROM accounts a
+WHERE a.account_id = 2070
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000050');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2070, 'A000070', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2070 AND h.stock_code = 'A000070');
+SELECT a.id, 'A000070', 136, 0 FROM accounts a
+WHERE a.account_id = 2070
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000070');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2070, 'A000080', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2070 AND h.stock_code = 'A000080');
+SELECT a.id, 'A000080', 132, 0 FROM accounts a
+WHERE a.account_id = 2070
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000080');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2070, 'A000100', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2070 AND h.stock_code = 'A000100');
+SELECT a.id, 'A000100', 132, 0 FROM accounts a
+WHERE a.account_id = 2070
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000100');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2070, 'A000120', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2070 AND h.stock_code = 'A000120');
+SELECT a.id, 'A000120', 136, 0 FROM accounts a
+WHERE a.account_id = 2070
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000120');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2070, 'A000140', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2070 AND h.stock_code = 'A000140');
+SELECT a.id, 'A000140', 132, 0 FROM accounts a
+WHERE a.account_id = 2070
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000140');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2070, 'A000150', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2070 AND h.stock_code = 'A000150');
+SELECT a.id, 'A000150', 132, 0 FROM accounts a
+WHERE a.account_id = 2070
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000150');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2070, 'A000180', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2070 AND h.stock_code = 'A000180');
+SELECT a.id, 'A000180', 136, 0 FROM accounts a
+WHERE a.account_id = 2070
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000180');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2070, 'A000210', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2070 AND h.stock_code = 'A000210');
+SELECT a.id, 'A000210', 132, 0 FROM accounts a
+WHERE a.account_id = 2070
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000210');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2070, 'A000220', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2070 AND h.stock_code = 'A000220');
+SELECT a.id, 'A000220', 132, 0 FROM accounts a
+WHERE a.account_id = 2070
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000220');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2070, 'A000230', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2070 AND h.stock_code = 'A000230');
+SELECT a.id, 'A000230', 136, 0 FROM accounts a
+WHERE a.account_id = 2070
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000230');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2070, 'A000240', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2070 AND h.stock_code = 'A000240');
+SELECT a.id, 'A000240', 132, 0 FROM accounts a
+WHERE a.account_id = 2070
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000240');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2070, 'A000250', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2070 AND h.stock_code = 'A000250');
+SELECT a.id, 'A000250', 132, 0 FROM accounts a
+WHERE a.account_id = 2070
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000250');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2070, 'A000270', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2070 AND h.stock_code = 'A000270');
+SELECT a.id, 'A000270', 136, 0 FROM accounts a
+WHERE a.account_id = 2070
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2070, 'A000300', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2070 AND h.stock_code = 'A000300');
+SELECT a.id, 'A000300', 132, 0 FROM accounts a
+WHERE a.account_id = 2070
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2070, 'A000320', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2070 AND h.stock_code = 'A000320');
+SELECT a.id, 'A000320', 132, 0 FROM accounts a
+WHERE a.account_id = 2070
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000320');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2070, 'A000370', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2070 AND h.stock_code = 'A000370');
+SELECT a.id, 'A000370', 136, 0 FROM accounts a
+WHERE a.account_id = 2070
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000370');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2070, 'A000390', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2070 AND h.stock_code = 'A000390');
+SELECT a.id, 'A000390', 132, 0 FROM accounts a
+WHERE a.account_id = 2070
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000390');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2070, 'A000400', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2070 AND h.stock_code = 'A000400');
+SELECT a.id, 'A000400', 132, 0 FROM accounts a
+WHERE a.account_id = 2070
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000400');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2070, 'A000430', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2070 AND h.stock_code = 'A000430');
+SELECT a.id, 'A000430', 132, 0 FROM accounts a
+WHERE a.account_id = 2070
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000430');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2070, 'A000440', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2070 AND h.stock_code = 'A000440');
+SELECT a.id, 'A000440', 136, 0 FROM accounts a
+WHERE a.account_id = 2070
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000440');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2070, 'A000480', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2070 AND h.stock_code = 'A000480');
+SELECT a.id, 'A000480', 132, 0 FROM accounts a
+WHERE a.account_id = 2070
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000480');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2070, 'A900260', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2070 AND h.stock_code = 'A900260');
+SELECT a.id, 'A900260', 136, 0 FROM accounts a
+WHERE a.account_id = 2070
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900260');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2070, 'A900270', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2070 AND h.stock_code = 'A900270');
+SELECT a.id, 'A900270', 132, 0 FROM accounts a
+WHERE a.account_id = 2070
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2070, 'A900290', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2070 AND h.stock_code = 'A900290');
+SELECT a.id, 'A900290', 132, 0 FROM accounts a
+WHERE a.account_id = 2070
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900290');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2070, 'A900300', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2070 AND h.stock_code = 'A900300');
+SELECT a.id, 'A900300', 132, 0 FROM accounts a
+WHERE a.account_id = 2070
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2070, 'A900310', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2070 AND h.stock_code = 'A900310');
+SELECT a.id, 'A900310', 136, 0 FROM accounts a
+WHERE a.account_id = 2070
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900310');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2070, 'A900340', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2070 AND h.stock_code = 'A900340');
+SELECT a.id, 'A900340', 132, 0 FROM accounts a
+WHERE a.account_id = 2070
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900340');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2071, 'A000020', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2071 AND h.stock_code = 'A000020');
+SELECT a.id, 'A000020', 132, 0 FROM accounts a
+WHERE a.account_id = 2071
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000020');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2071, 'A000040', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2071 AND h.stock_code = 'A000040');
+SELECT a.id, 'A000040', 136, 0 FROM accounts a
+WHERE a.account_id = 2071
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000040');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2071, 'A000050', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2071 AND h.stock_code = 'A000050');
+SELECT a.id, 'A000050', 132, 0 FROM accounts a
+WHERE a.account_id = 2071
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000050');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2071, 'A000070', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2071 AND h.stock_code = 'A000070');
+SELECT a.id, 'A000070', 132, 0 FROM accounts a
+WHERE a.account_id = 2071
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000070');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2071, 'A000080', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2071 AND h.stock_code = 'A000080');
+SELECT a.id, 'A000080', 136, 0 FROM accounts a
+WHERE a.account_id = 2071
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000080');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2071, 'A000100', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2071 AND h.stock_code = 'A000100');
+SELECT a.id, 'A000100', 132, 0 FROM accounts a
+WHERE a.account_id = 2071
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000100');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2071, 'A000120', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2071 AND h.stock_code = 'A000120');
+SELECT a.id, 'A000120', 136, 0 FROM accounts a
+WHERE a.account_id = 2071
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000120');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2071, 'A000140', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2071 AND h.stock_code = 'A000140');
+SELECT a.id, 'A000140', 132, 0 FROM accounts a
+WHERE a.account_id = 2071
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000140');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2071, 'A000150', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2071 AND h.stock_code = 'A000150');
+SELECT a.id, 'A000150', 132, 0 FROM accounts a
+WHERE a.account_id = 2071
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000150');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2071, 'A000180', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2071 AND h.stock_code = 'A000180');
+SELECT a.id, 'A000180', 136, 0 FROM accounts a
+WHERE a.account_id = 2071
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000180');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2071, 'A000210', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2071 AND h.stock_code = 'A000210');
+SELECT a.id, 'A000210', 132, 0 FROM accounts a
+WHERE a.account_id = 2071
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000210');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2071, 'A000220', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2071 AND h.stock_code = 'A000220');
+SELECT a.id, 'A000220', 132, 0 FROM accounts a
+WHERE a.account_id = 2071
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000220');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2071, 'A000230', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2071 AND h.stock_code = 'A000230');
+SELECT a.id, 'A000230', 136, 0 FROM accounts a
+WHERE a.account_id = 2071
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000230');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2071, 'A000240', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2071 AND h.stock_code = 'A000240');
+SELECT a.id, 'A000240', 132, 0 FROM accounts a
+WHERE a.account_id = 2071
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000240');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2071, 'A000250', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2071 AND h.stock_code = 'A000250');
+SELECT a.id, 'A000250', 132, 0 FROM accounts a
+WHERE a.account_id = 2071
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000250');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2071, 'A000270', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2071 AND h.stock_code = 'A000270');
+SELECT a.id, 'A000270', 136, 0 FROM accounts a
+WHERE a.account_id = 2071
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2071, 'A000300', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2071 AND h.stock_code = 'A000300');
+SELECT a.id, 'A000300', 132, 0 FROM accounts a
+WHERE a.account_id = 2071
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2071, 'A000320', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2071 AND h.stock_code = 'A000320');
+SELECT a.id, 'A000320', 132, 0 FROM accounts a
+WHERE a.account_id = 2071
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000320');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2071, 'A000370', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2071 AND h.stock_code = 'A000370');
+SELECT a.id, 'A000370', 132, 0 FROM accounts a
+WHERE a.account_id = 2071
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000370');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2071, 'A000390', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2071 AND h.stock_code = 'A000390');
+SELECT a.id, 'A000390', 136, 0 FROM accounts a
+WHERE a.account_id = 2071
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000390');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2071, 'A000400', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2071 AND h.stock_code = 'A000400');
+SELECT a.id, 'A000400', 132, 0 FROM accounts a
+WHERE a.account_id = 2071
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000400');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2071, 'A000430', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2071 AND h.stock_code = 'A000430');
+SELECT a.id, 'A000430', 132, 0 FROM accounts a
+WHERE a.account_id = 2071
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000430');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2071, 'A000440', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2071 AND h.stock_code = 'A000440');
+SELECT a.id, 'A000440', 136, 0 FROM accounts a
+WHERE a.account_id = 2071
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000440');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2071, 'A000480', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2071 AND h.stock_code = 'A000480');
+SELECT a.id, 'A000480', 132, 0 FROM accounts a
+WHERE a.account_id = 2071
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000480');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2071, 'A900260', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2071 AND h.stock_code = 'A900260');
+SELECT a.id, 'A900260', 136, 0 FROM accounts a
+WHERE a.account_id = 2071
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900260');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2071, 'A900270', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2071 AND h.stock_code = 'A900270');
+SELECT a.id, 'A900270', 132, 0 FROM accounts a
+WHERE a.account_id = 2071
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2071, 'A900290', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2071 AND h.stock_code = 'A900290');
+SELECT a.id, 'A900290', 132, 0 FROM accounts a
+WHERE a.account_id = 2071
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900290');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2071, 'A900300', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2071 AND h.stock_code = 'A900300');
+SELECT a.id, 'A900300', 132, 0 FROM accounts a
+WHERE a.account_id = 2071
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2071, 'A900310', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2071 AND h.stock_code = 'A900310');
+SELECT a.id, 'A900310', 136, 0 FROM accounts a
+WHERE a.account_id = 2071
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900310');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2071, 'A900340', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2071 AND h.stock_code = 'A900340');
+SELECT a.id, 'A900340', 132, 0 FROM accounts a
+WHERE a.account_id = 2071
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900340');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2072, 'A000020', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2072 AND h.stock_code = 'A000020');
+SELECT a.id, 'A000020', 132, 0 FROM accounts a
+WHERE a.account_id = 2072
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000020');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2072, 'A000040', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2072 AND h.stock_code = 'A000040');
+SELECT a.id, 'A000040', 136, 0 FROM accounts a
+WHERE a.account_id = 2072
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000040');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2072, 'A000050', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2072 AND h.stock_code = 'A000050');
+SELECT a.id, 'A000050', 132, 0 FROM accounts a
+WHERE a.account_id = 2072
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000050');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2072, 'A000070', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2072 AND h.stock_code = 'A000070');
+SELECT a.id, 'A000070', 132, 0 FROM accounts a
+WHERE a.account_id = 2072
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000070');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2072, 'A000080', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2072 AND h.stock_code = 'A000080');
+SELECT a.id, 'A000080', 136, 0 FROM accounts a
+WHERE a.account_id = 2072
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000080');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2072, 'A000100', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2072 AND h.stock_code = 'A000100');
+SELECT a.id, 'A000100', 132, 0 FROM accounts a
+WHERE a.account_id = 2072
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000100');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2072, 'A000120', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2072 AND h.stock_code = 'A000120');
+SELECT a.id, 'A000120', 132, 0 FROM accounts a
+WHERE a.account_id = 2072
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000120');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2072, 'A000140', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2072 AND h.stock_code = 'A000140');
+SELECT a.id, 'A000140', 136, 0 FROM accounts a
+WHERE a.account_id = 2072
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000140');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2072, 'A000150', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2072 AND h.stock_code = 'A000150');
+SELECT a.id, 'A000150', 132, 0 FROM accounts a
+WHERE a.account_id = 2072
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000150');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2072, 'A000180', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2072 AND h.stock_code = 'A000180');
+SELECT a.id, 'A000180', 136, 0 FROM accounts a
+WHERE a.account_id = 2072
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000180');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2072, 'A000210', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2072 AND h.stock_code = 'A000210');
+SELECT a.id, 'A000210', 132, 0 FROM accounts a
+WHERE a.account_id = 2072
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000210');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2072, 'A000220', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2072 AND h.stock_code = 'A000220');
+SELECT a.id, 'A000220', 132, 0 FROM accounts a
+WHERE a.account_id = 2072
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000220');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2072, 'A000230', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2072 AND h.stock_code = 'A000230');
+SELECT a.id, 'A000230', 136, 0 FROM accounts a
+WHERE a.account_id = 2072
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000230');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2072, 'A000240', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2072 AND h.stock_code = 'A000240');
+SELECT a.id, 'A000240', 132, 0 FROM accounts a
+WHERE a.account_id = 2072
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000240');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2072, 'A000250', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2072 AND h.stock_code = 'A000250');
+SELECT a.id, 'A000250', 132, 0 FROM accounts a
+WHERE a.account_id = 2072
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000250');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2072, 'A000270', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2072 AND h.stock_code = 'A000270');
+SELECT a.id, 'A000270', 136, 0 FROM accounts a
+WHERE a.account_id = 2072
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2072, 'A000300', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2072 AND h.stock_code = 'A000300');
+SELECT a.id, 'A000300', 132, 0 FROM accounts a
+WHERE a.account_id = 2072
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2072, 'A000320', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2072 AND h.stock_code = 'A000320');
+SELECT a.id, 'A000320', 132, 0 FROM accounts a
+WHERE a.account_id = 2072
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000320');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2072, 'A000370', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2072 AND h.stock_code = 'A000370');
+SELECT a.id, 'A000370', 132, 0 FROM accounts a
+WHERE a.account_id = 2072
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000370');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2072, 'A000390', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2072 AND h.stock_code = 'A000390');
+SELECT a.id, 'A000390', 136, 0 FROM accounts a
+WHERE a.account_id = 2072
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000390');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2072, 'A000400', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2072 AND h.stock_code = 'A000400');
+SELECT a.id, 'A000400', 132, 0 FROM accounts a
+WHERE a.account_id = 2072
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000400');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2072, 'A000430', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2072 AND h.stock_code = 'A000430');
+SELECT a.id, 'A000430', 132, 0 FROM accounts a
+WHERE a.account_id = 2072
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000430');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2072, 'A000440', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2072 AND h.stock_code = 'A000440');
+SELECT a.id, 'A000440', 136, 0 FROM accounts a
+WHERE a.account_id = 2072
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000440');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2072, 'A000480', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2072 AND h.stock_code = 'A000480');
+SELECT a.id, 'A000480', 132, 0 FROM accounts a
+WHERE a.account_id = 2072
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000480');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2072, 'A900260', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2072 AND h.stock_code = 'A900260');
+SELECT a.id, 'A900260', 136, 0 FROM accounts a
+WHERE a.account_id = 2072
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900260');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2072, 'A900270', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2072 AND h.stock_code = 'A900270');
+SELECT a.id, 'A900270', 132, 0 FROM accounts a
+WHERE a.account_id = 2072
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2072, 'A900290', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2072 AND h.stock_code = 'A900290');
+SELECT a.id, 'A900290', 132, 0 FROM accounts a
+WHERE a.account_id = 2072
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900290');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2072, 'A900300', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2072 AND h.stock_code = 'A900300');
+SELECT a.id, 'A900300', 132, 0 FROM accounts a
+WHERE a.account_id = 2072
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2072, 'A900310', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2072 AND h.stock_code = 'A900310');
+SELECT a.id, 'A900310', 136, 0 FROM accounts a
+WHERE a.account_id = 2072
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900310');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2072, 'A900340', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2072 AND h.stock_code = 'A900340');
+SELECT a.id, 'A900340', 132, 0 FROM accounts a
+WHERE a.account_id = 2072
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900340');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2073, 'A000020', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2073 AND h.stock_code = 'A000020');
+SELECT a.id, 'A000020', 132, 0 FROM accounts a
+WHERE a.account_id = 2073
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000020');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2073, 'A000040', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2073 AND h.stock_code = 'A000040');
+SELECT a.id, 'A000040', 136, 0 FROM accounts a
+WHERE a.account_id = 2073
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000040');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2073, 'A000050', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2073 AND h.stock_code = 'A000050');
+SELECT a.id, 'A000050', 132, 0 FROM accounts a
+WHERE a.account_id = 2073
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000050');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2073, 'A000070', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2073 AND h.stock_code = 'A000070');
+SELECT a.id, 'A000070', 132, 0 FROM accounts a
+WHERE a.account_id = 2073
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000070');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2073, 'A000080', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2073 AND h.stock_code = 'A000080');
+SELECT a.id, 'A000080', 136, 0 FROM accounts a
+WHERE a.account_id = 2073
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000080');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2073, 'A000100', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2073 AND h.stock_code = 'A000100');
+SELECT a.id, 'A000100', 132, 0 FROM accounts a
+WHERE a.account_id = 2073
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000100');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2073, 'A000120', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2073 AND h.stock_code = 'A000120');
+SELECT a.id, 'A000120', 132, 0 FROM accounts a
+WHERE a.account_id = 2073
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000120');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2073, 'A000140', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2073 AND h.stock_code = 'A000140');
+SELECT a.id, 'A000140', 136, 0 FROM accounts a
+WHERE a.account_id = 2073
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000140');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2073, 'A000150', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2073 AND h.stock_code = 'A000150');
+SELECT a.id, 'A000150', 132, 0 FROM accounts a
+WHERE a.account_id = 2073
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000150');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2073, 'A000180', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2073 AND h.stock_code = 'A000180');
+SELECT a.id, 'A000180', 132, 0 FROM accounts a
+WHERE a.account_id = 2073
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000180');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2073, 'A000210', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2073 AND h.stock_code = 'A000210');
+SELECT a.id, 'A000210', 136, 0 FROM accounts a
+WHERE a.account_id = 2073
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000210');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2073, 'A000220', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2073 AND h.stock_code = 'A000220');
+SELECT a.id, 'A000220', 132, 0 FROM accounts a
+WHERE a.account_id = 2073
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000220');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2073, 'A000230', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2073 AND h.stock_code = 'A000230');
+SELECT a.id, 'A000230', 136, 0 FROM accounts a
+WHERE a.account_id = 2073
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000230');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2073, 'A000240', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2073 AND h.stock_code = 'A000240');
+SELECT a.id, 'A000240', 132, 0 FROM accounts a
+WHERE a.account_id = 2073
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000240');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2073, 'A000250', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2073 AND h.stock_code = 'A000250');
+SELECT a.id, 'A000250', 132, 0 FROM accounts a
+WHERE a.account_id = 2073
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000250');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2073, 'A000270', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2073 AND h.stock_code = 'A000270');
+SELECT a.id, 'A000270', 132, 0 FROM accounts a
+WHERE a.account_id = 2073
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2073, 'A000300', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2073 AND h.stock_code = 'A000300');
+SELECT a.id, 'A000300', 136, 0 FROM accounts a
+WHERE a.account_id = 2073
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2073, 'A000320', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2073 AND h.stock_code = 'A000320');
+SELECT a.id, 'A000320', 132, 0 FROM accounts a
+WHERE a.account_id = 2073
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000320');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2073, 'A000370', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2073 AND h.stock_code = 'A000370');
+SELECT a.id, 'A000370', 132, 0 FROM accounts a
+WHERE a.account_id = 2073
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000370');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2073, 'A000390', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2073 AND h.stock_code = 'A000390');
+SELECT a.id, 'A000390', 136, 0 FROM accounts a
+WHERE a.account_id = 2073
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000390');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2073, 'A000400', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2073 AND h.stock_code = 'A000400');
+SELECT a.id, 'A000400', 132, 0 FROM accounts a
+WHERE a.account_id = 2073
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000400');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2073, 'A000430', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2073 AND h.stock_code = 'A000430');
+SELECT a.id, 'A000430', 132, 0 FROM accounts a
+WHERE a.account_id = 2073
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000430');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2073, 'A000440', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2073 AND h.stock_code = 'A000440');
+SELECT a.id, 'A000440', 136, 0 FROM accounts a
+WHERE a.account_id = 2073
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000440');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2073, 'A000480', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2073 AND h.stock_code = 'A000480');
+SELECT a.id, 'A000480', 132, 0 FROM accounts a
+WHERE a.account_id = 2073
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000480');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2073, 'A900260', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2073 AND h.stock_code = 'A900260');
+SELECT a.id, 'A900260', 136, 0 FROM accounts a
+WHERE a.account_id = 2073
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900260');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2073, 'A900270', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2073 AND h.stock_code = 'A900270');
+SELECT a.id, 'A900270', 132, 0 FROM accounts a
+WHERE a.account_id = 2073
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2073, 'A900290', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2073 AND h.stock_code = 'A900290');
+SELECT a.id, 'A900290', 132, 0 FROM accounts a
+WHERE a.account_id = 2073
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900290');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2073, 'A900300', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2073 AND h.stock_code = 'A900300');
+SELECT a.id, 'A900300', 132, 0 FROM accounts a
+WHERE a.account_id = 2073
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2073, 'A900310', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2073 AND h.stock_code = 'A900310');
+SELECT a.id, 'A900310', 136, 0 FROM accounts a
+WHERE a.account_id = 2073
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900310');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2073, 'A900340', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2073 AND h.stock_code = 'A900340');
+SELECT a.id, 'A900340', 132, 0 FROM accounts a
+WHERE a.account_id = 2073
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900340');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2074, 'A000020', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2074 AND h.stock_code = 'A000020');
+SELECT a.id, 'A000020', 132, 0 FROM accounts a
+WHERE a.account_id = 2074
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000020');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2074, 'A000040', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2074 AND h.stock_code = 'A000040');
+SELECT a.id, 'A000040', 136, 0 FROM accounts a
+WHERE a.account_id = 2074
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000040');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2074, 'A000050', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2074 AND h.stock_code = 'A000050');
+SELECT a.id, 'A000050', 132, 0 FROM accounts a
+WHERE a.account_id = 2074
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000050');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2074, 'A000070', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2074 AND h.stock_code = 'A000070');
+SELECT a.id, 'A000070', 132, 0 FROM accounts a
+WHERE a.account_id = 2074
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000070');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2074, 'A000080', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2074 AND h.stock_code = 'A000080');
+SELECT a.id, 'A000080', 136, 0 FROM accounts a
+WHERE a.account_id = 2074
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000080');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2074, 'A000100', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2074 AND h.stock_code = 'A000100');
+SELECT a.id, 'A000100', 132, 0 FROM accounts a
+WHERE a.account_id = 2074
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000100');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2074, 'A000120', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2074 AND h.stock_code = 'A000120');
+SELECT a.id, 'A000120', 132, 0 FROM accounts a
+WHERE a.account_id = 2074
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000120');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2074, 'A000140', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2074 AND h.stock_code = 'A000140');
+SELECT a.id, 'A000140', 136, 0 FROM accounts a
+WHERE a.account_id = 2074
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000140');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2074, 'A000150', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2074 AND h.stock_code = 'A000150');
+SELECT a.id, 'A000150', 132, 0 FROM accounts a
+WHERE a.account_id = 2074
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000150');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2074, 'A000180', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2074 AND h.stock_code = 'A000180');
+SELECT a.id, 'A000180', 132, 0 FROM accounts a
+WHERE a.account_id = 2074
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000180');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2074, 'A000210', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2074 AND h.stock_code = 'A000210');
+SELECT a.id, 'A000210', 136, 0 FROM accounts a
+WHERE a.account_id = 2074
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000210');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2074, 'A000220', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2074 AND h.stock_code = 'A000220');
+SELECT a.id, 'A000220', 132, 0 FROM accounts a
+WHERE a.account_id = 2074
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000220');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2074, 'A000230', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2074 AND h.stock_code = 'A000230');
+SELECT a.id, 'A000230', 132, 0 FROM accounts a
+WHERE a.account_id = 2074
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000230');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2074, 'A000240', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2074 AND h.stock_code = 'A000240');
+SELECT a.id, 'A000240', 136, 0 FROM accounts a
+WHERE a.account_id = 2074
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000240');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2074, 'A000250', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2074 AND h.stock_code = 'A000250');
+SELECT a.id, 'A000250', 132, 0 FROM accounts a
+WHERE a.account_id = 2074
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000250');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2074, 'A000270', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2074 AND h.stock_code = 'A000270');
+SELECT a.id, 'A000270', 132, 0 FROM accounts a
+WHERE a.account_id = 2074
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2074, 'A000300', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2074 AND h.stock_code = 'A000300');
+SELECT a.id, 'A000300', 136, 0 FROM accounts a
+WHERE a.account_id = 2074
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2074, 'A000320', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2074 AND h.stock_code = 'A000320');
+SELECT a.id, 'A000320', 132, 0 FROM accounts a
+WHERE a.account_id = 2074
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000320');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2074, 'A000370', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2074 AND h.stock_code = 'A000370');
+SELECT a.id, 'A000370', 132, 0 FROM accounts a
+WHERE a.account_id = 2074
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000370');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2074, 'A000390', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2074 AND h.stock_code = 'A000390');
+SELECT a.id, 'A000390', 136, 0 FROM accounts a
+WHERE a.account_id = 2074
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000390');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2074, 'A000400', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2074 AND h.stock_code = 'A000400');
+SELECT a.id, 'A000400', 132, 0 FROM accounts a
+WHERE a.account_id = 2074
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000400');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2074, 'A000430', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2074 AND h.stock_code = 'A000430');
+SELECT a.id, 'A000430', 132, 0 FROM accounts a
+WHERE a.account_id = 2074
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000430');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2074, 'A000440', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2074 AND h.stock_code = 'A000440');
+SELECT a.id, 'A000440', 136, 0 FROM accounts a
+WHERE a.account_id = 2074
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000440');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2074, 'A000480', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2074 AND h.stock_code = 'A000480');
+SELECT a.id, 'A000480', 132, 0 FROM accounts a
+WHERE a.account_id = 2074
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000480');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2074, 'A900260', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2074 AND h.stock_code = 'A900260');
+SELECT a.id, 'A900260', 136, 0 FROM accounts a
+WHERE a.account_id = 2074
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900260');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2074, 'A900270', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2074 AND h.stock_code = 'A900270');
+SELECT a.id, 'A900270', 132, 0 FROM accounts a
+WHERE a.account_id = 2074
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2074, 'A900290', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2074 AND h.stock_code = 'A900290');
+SELECT a.id, 'A900290', 132, 0 FROM accounts a
+WHERE a.account_id = 2074
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900290');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2074, 'A900300', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2074 AND h.stock_code = 'A900300');
+SELECT a.id, 'A900300', 132, 0 FROM accounts a
+WHERE a.account_id = 2074
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2074, 'A900310', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2074 AND h.stock_code = 'A900310');
+SELECT a.id, 'A900310', 136, 0 FROM accounts a
+WHERE a.account_id = 2074
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900310');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2074, 'A900340', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2074 AND h.stock_code = 'A900340');
+SELECT a.id, 'A900340', 132, 0 FROM accounts a
+WHERE a.account_id = 2074
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900340');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2075, 'A000020', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2075 AND h.stock_code = 'A000020');
+SELECT a.id, 'A000020', 132, 0 FROM accounts a
+WHERE a.account_id = 2075
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000020');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2075, 'A000040', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2075 AND h.stock_code = 'A000040');
+SELECT a.id, 'A000040', 136, 0 FROM accounts a
+WHERE a.account_id = 2075
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000040');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2075, 'A000050', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2075 AND h.stock_code = 'A000050');
+SELECT a.id, 'A000050', 132, 0 FROM accounts a
+WHERE a.account_id = 2075
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000050');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2075, 'A000070', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2075 AND h.stock_code = 'A000070');
+SELECT a.id, 'A000070', 132, 0 FROM accounts a
+WHERE a.account_id = 2075
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000070');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2075, 'A000080', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2075 AND h.stock_code = 'A000080');
+SELECT a.id, 'A000080', 136, 0 FROM accounts a
+WHERE a.account_id = 2075
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000080');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2075, 'A000100', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2075 AND h.stock_code = 'A000100');
+SELECT a.id, 'A000100', 132, 0 FROM accounts a
+WHERE a.account_id = 2075
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000100');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2075, 'A000120', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2075 AND h.stock_code = 'A000120');
+SELECT a.id, 'A000120', 132, 0 FROM accounts a
+WHERE a.account_id = 2075
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000120');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2075, 'A000140', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2075 AND h.stock_code = 'A000140');
+SELECT a.id, 'A000140', 136, 0 FROM accounts a
+WHERE a.account_id = 2075
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000140');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2075, 'A000150', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2075 AND h.stock_code = 'A000150');
+SELECT a.id, 'A000150', 132, 0 FROM accounts a
+WHERE a.account_id = 2075
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000150');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2075, 'A000180', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2075 AND h.stock_code = 'A000180');
+SELECT a.id, 'A000180', 132, 0 FROM accounts a
+WHERE a.account_id = 2075
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000180');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2075, 'A000210', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2075 AND h.stock_code = 'A000210');
+SELECT a.id, 'A000210', 136, 0 FROM accounts a
+WHERE a.account_id = 2075
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000210');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2075, 'A000220', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2075 AND h.stock_code = 'A000220');
+SELECT a.id, 'A000220', 132, 0 FROM accounts a
+WHERE a.account_id = 2075
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000220');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2075, 'A000230', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2075 AND h.stock_code = 'A000230');
+SELECT a.id, 'A000230', 132, 0 FROM accounts a
+WHERE a.account_id = 2075
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000230');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2075, 'A000240', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2075 AND h.stock_code = 'A000240');
+SELECT a.id, 'A000240', 136, 0 FROM accounts a
+WHERE a.account_id = 2075
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000240');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2075, 'A000250', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2075 AND h.stock_code = 'A000250');
+SELECT a.id, 'A000250', 132, 0 FROM accounts a
+WHERE a.account_id = 2075
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000250');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2075, 'A000270', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2075 AND h.stock_code = 'A000270');
+SELECT a.id, 'A000270', 132, 0 FROM accounts a
+WHERE a.account_id = 2075
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2075, 'A000300', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2075 AND h.stock_code = 'A000300');
+SELECT a.id, 'A000300', 136, 0 FROM accounts a
+WHERE a.account_id = 2075
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2075, 'A000320', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2075 AND h.stock_code = 'A000320');
+SELECT a.id, 'A000320', 132, 0 FROM accounts a
+WHERE a.account_id = 2075
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000320');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2075, 'A000370', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2075 AND h.stock_code = 'A000370');
+SELECT a.id, 'A000370', 132, 0 FROM accounts a
+WHERE a.account_id = 2075
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000370');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2075, 'A000390', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2075 AND h.stock_code = 'A000390');
+SELECT a.id, 'A000390', 136, 0 FROM accounts a
+WHERE a.account_id = 2075
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000390');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2075, 'A000400', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2075 AND h.stock_code = 'A000400');
+SELECT a.id, 'A000400', 132, 0 FROM accounts a
+WHERE a.account_id = 2075
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000400');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2075, 'A000430', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2075 AND h.stock_code = 'A000430');
+SELECT a.id, 'A000430', 132, 0 FROM accounts a
+WHERE a.account_id = 2075
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000430');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2075, 'A000440', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2075 AND h.stock_code = 'A000440');
+SELECT a.id, 'A000440', 136, 0 FROM accounts a
+WHERE a.account_id = 2075
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000440');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2075, 'A000480', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2075 AND h.stock_code = 'A000480');
+SELECT a.id, 'A000480', 132, 0 FROM accounts a
+WHERE a.account_id = 2075
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000480');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2075, 'A900260', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2075 AND h.stock_code = 'A900260');
+SELECT a.id, 'A900260', 136, 0 FROM accounts a
+WHERE a.account_id = 2075
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900260');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2075, 'A900270', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2075 AND h.stock_code = 'A900270');
+SELECT a.id, 'A900270', 132, 0 FROM accounts a
+WHERE a.account_id = 2075
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2075, 'A900290', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2075 AND h.stock_code = 'A900290');
+SELECT a.id, 'A900290', 132, 0 FROM accounts a
+WHERE a.account_id = 2075
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900290');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2075, 'A900300', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2075 AND h.stock_code = 'A900300');
+SELECT a.id, 'A900300', 132, 0 FROM accounts a
+WHERE a.account_id = 2075
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2075, 'A900310', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2075 AND h.stock_code = 'A900310');
+SELECT a.id, 'A900310', 136, 0 FROM accounts a
+WHERE a.account_id = 2075
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900310');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2075, 'A900340', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2075 AND h.stock_code = 'A900340');
+SELECT a.id, 'A900340', 132, 0 FROM accounts a
+WHERE a.account_id = 2075
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900340');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2076, 'A000020', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2076 AND h.stock_code = 'A000020');
+SELECT a.id, 'A000020', 132, 0 FROM accounts a
+WHERE a.account_id = 2076
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000020');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2076, 'A000040', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2076 AND h.stock_code = 'A000040');
+SELECT a.id, 'A000040', 136, 0 FROM accounts a
+WHERE a.account_id = 2076
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000040');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2076, 'A000050', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2076 AND h.stock_code = 'A000050');
+SELECT a.id, 'A000050', 132, 0 FROM accounts a
+WHERE a.account_id = 2076
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000050');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2076, 'A000070', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2076 AND h.stock_code = 'A000070');
+SELECT a.id, 'A000070', 132, 0 FROM accounts a
+WHERE a.account_id = 2076
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000070');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2076, 'A000080', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2076 AND h.stock_code = 'A000080');
+SELECT a.id, 'A000080', 136, 0 FROM accounts a
+WHERE a.account_id = 2076
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000080');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2076, 'A000100', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2076 AND h.stock_code = 'A000100');
+SELECT a.id, 'A000100', 132, 0 FROM accounts a
+WHERE a.account_id = 2076
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000100');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2076, 'A000120', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2076 AND h.stock_code = 'A000120');
+SELECT a.id, 'A000120', 132, 0 FROM accounts a
+WHERE a.account_id = 2076
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000120');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2076, 'A000140', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2076 AND h.stock_code = 'A000140');
+SELECT a.id, 'A000140', 136, 0 FROM accounts a
+WHERE a.account_id = 2076
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000140');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2076, 'A000150', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2076 AND h.stock_code = 'A000150');
+SELECT a.id, 'A000150', 132, 0 FROM accounts a
+WHERE a.account_id = 2076
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000150');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2076, 'A000180', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2076 AND h.stock_code = 'A000180');
+SELECT a.id, 'A000180', 132, 0 FROM accounts a
+WHERE a.account_id = 2076
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000180');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2076, 'A000210', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2076 AND h.stock_code = 'A000210');
+SELECT a.id, 'A000210', 136, 0 FROM accounts a
+WHERE a.account_id = 2076
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000210');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2076, 'A000220', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2076 AND h.stock_code = 'A000220');
+SELECT a.id, 'A000220', 132, 0 FROM accounts a
+WHERE a.account_id = 2076
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000220');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2076, 'A000230', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2076 AND h.stock_code = 'A000230');
+SELECT a.id, 'A000230', 132, 0 FROM accounts a
+WHERE a.account_id = 2076
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000230');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2076, 'A000240', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2076 AND h.stock_code = 'A000240');
+SELECT a.id, 'A000240', 136, 0 FROM accounts a
+WHERE a.account_id = 2076
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000240');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2076, 'A000250', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2076 AND h.stock_code = 'A000250');
+SELECT a.id, 'A000250', 132, 0 FROM accounts a
+WHERE a.account_id = 2076
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000250');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2076, 'A000270', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2076 AND h.stock_code = 'A000270');
+SELECT a.id, 'A000270', 132, 0 FROM accounts a
+WHERE a.account_id = 2076
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2076, 'A000300', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2076 AND h.stock_code = 'A000300');
+SELECT a.id, 'A000300', 136, 0 FROM accounts a
+WHERE a.account_id = 2076
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2076, 'A000320', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2076 AND h.stock_code = 'A000320');
+SELECT a.id, 'A000320', 132, 0 FROM accounts a
+WHERE a.account_id = 2076
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000320');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2076, 'A000370', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2076 AND h.stock_code = 'A000370');
+SELECT a.id, 'A000370', 132, 0 FROM accounts a
+WHERE a.account_id = 2076
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000370');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2076, 'A000390', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2076 AND h.stock_code = 'A000390');
+SELECT a.id, 'A000390', 136, 0 FROM accounts a
+WHERE a.account_id = 2076
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000390');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2076, 'A000400', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2076 AND h.stock_code = 'A000400');
+SELECT a.id, 'A000400', 132, 0 FROM accounts a
+WHERE a.account_id = 2076
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000400');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2076, 'A000430', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2076 AND h.stock_code = 'A000430');
+SELECT a.id, 'A000430', 132, 0 FROM accounts a
+WHERE a.account_id = 2076
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000430');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2076, 'A000440', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2076 AND h.stock_code = 'A000440');
+SELECT a.id, 'A000440', 136, 0 FROM accounts a
+WHERE a.account_id = 2076
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000440');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2076, 'A000480', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2076 AND h.stock_code = 'A000480');
+SELECT a.id, 'A000480', 132, 0 FROM accounts a
+WHERE a.account_id = 2076
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000480');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2076, 'A900260', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2076 AND h.stock_code = 'A900260');
+SELECT a.id, 'A900260', 136, 0 FROM accounts a
+WHERE a.account_id = 2076
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900260');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2076, 'A900270', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2076 AND h.stock_code = 'A900270');
+SELECT a.id, 'A900270', 132, 0 FROM accounts a
+WHERE a.account_id = 2076
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2076, 'A900290', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2076 AND h.stock_code = 'A900290');
+SELECT a.id, 'A900290', 132, 0 FROM accounts a
+WHERE a.account_id = 2076
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900290');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2076, 'A900300', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2076 AND h.stock_code = 'A900300');
+SELECT a.id, 'A900300', 132, 0 FROM accounts a
+WHERE a.account_id = 2076
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2076, 'A900310', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2076 AND h.stock_code = 'A900310');
+SELECT a.id, 'A900310', 136, 0 FROM accounts a
+WHERE a.account_id = 2076
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900310');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2076, 'A900340', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2076 AND h.stock_code = 'A900340');
+SELECT a.id, 'A900340', 132, 0 FROM accounts a
+WHERE a.account_id = 2076
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900340');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2077, 'A000020', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2077 AND h.stock_code = 'A000020');
+SELECT a.id, 'A000020', 132, 0 FROM accounts a
+WHERE a.account_id = 2077
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000020');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2077, 'A000040', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2077 AND h.stock_code = 'A000040');
+SELECT a.id, 'A000040', 136, 0 FROM accounts a
+WHERE a.account_id = 2077
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000040');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2077, 'A000050', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2077 AND h.stock_code = 'A000050');
+SELECT a.id, 'A000050', 132, 0 FROM accounts a
+WHERE a.account_id = 2077
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000050');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2077, 'A000070', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2077 AND h.stock_code = 'A000070');
+SELECT a.id, 'A000070', 132, 0 FROM accounts a
+WHERE a.account_id = 2077
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000070');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2077, 'A000080', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2077 AND h.stock_code = 'A000080');
+SELECT a.id, 'A000080', 136, 0 FROM accounts a
+WHERE a.account_id = 2077
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000080');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2077, 'A000100', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2077 AND h.stock_code = 'A000100');
+SELECT a.id, 'A000100', 132, 0 FROM accounts a
+WHERE a.account_id = 2077
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000100');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2077, 'A000120', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2077 AND h.stock_code = 'A000120');
+SELECT a.id, 'A000120', 132, 0 FROM accounts a
+WHERE a.account_id = 2077
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000120');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2077, 'A000140', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2077 AND h.stock_code = 'A000140');
+SELECT a.id, 'A000140', 136, 0 FROM accounts a
+WHERE a.account_id = 2077
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000140');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2077, 'A000150', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2077 AND h.stock_code = 'A000150');
+SELECT a.id, 'A000150', 132, 0 FROM accounts a
+WHERE a.account_id = 2077
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000150');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2077, 'A000180', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2077 AND h.stock_code = 'A000180');
+SELECT a.id, 'A000180', 132, 0 FROM accounts a
+WHERE a.account_id = 2077
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000180');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2077, 'A000210', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2077 AND h.stock_code = 'A000210');
+SELECT a.id, 'A000210', 136, 0 FROM accounts a
+WHERE a.account_id = 2077
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000210');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2077, 'A000220', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2077 AND h.stock_code = 'A000220');
+SELECT a.id, 'A000220', 132, 0 FROM accounts a
+WHERE a.account_id = 2077
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000220');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2077, 'A000230', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2077 AND h.stock_code = 'A000230');
+SELECT a.id, 'A000230', 132, 0 FROM accounts a
+WHERE a.account_id = 2077
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000230');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2077, 'A000240', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2077 AND h.stock_code = 'A000240');
+SELECT a.id, 'A000240', 136, 0 FROM accounts a
+WHERE a.account_id = 2077
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000240');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2077, 'A000250', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2077 AND h.stock_code = 'A000250');
+SELECT a.id, 'A000250', 132, 0 FROM accounts a
+WHERE a.account_id = 2077
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000250');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2077, 'A000270', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2077 AND h.stock_code = 'A000270');
+SELECT a.id, 'A000270', 132, 0 FROM accounts a
+WHERE a.account_id = 2077
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2077, 'A000300', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2077 AND h.stock_code = 'A000300');
+SELECT a.id, 'A000300', 136, 0 FROM accounts a
+WHERE a.account_id = 2077
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2077, 'A000320', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2077 AND h.stock_code = 'A000320');
+SELECT a.id, 'A000320', 132, 0 FROM accounts a
+WHERE a.account_id = 2077
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000320');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2077, 'A000370', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2077 AND h.stock_code = 'A000370');
+SELECT a.id, 'A000370', 132, 0 FROM accounts a
+WHERE a.account_id = 2077
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000370');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2077, 'A000390', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2077 AND h.stock_code = 'A000390');
+SELECT a.id, 'A000390', 136, 0 FROM accounts a
+WHERE a.account_id = 2077
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000390');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2077, 'A000400', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2077 AND h.stock_code = 'A000400');
+SELECT a.id, 'A000400', 132, 0 FROM accounts a
+WHERE a.account_id = 2077
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000400');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2077, 'A000430', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2077 AND h.stock_code = 'A000430');
+SELECT a.id, 'A000430', 132, 0 FROM accounts a
+WHERE a.account_id = 2077
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000430');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2077, 'A000440', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2077 AND h.stock_code = 'A000440');
+SELECT a.id, 'A000440', 136, 0 FROM accounts a
+WHERE a.account_id = 2077
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000440');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2077, 'A000480', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2077 AND h.stock_code = 'A000480');
+SELECT a.id, 'A000480', 132, 0 FROM accounts a
+WHERE a.account_id = 2077
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000480');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2077, 'A900260', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2077 AND h.stock_code = 'A900260');
+SELECT a.id, 'A900260', 136, 0 FROM accounts a
+WHERE a.account_id = 2077
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900260');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2077, 'A900270', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2077 AND h.stock_code = 'A900270');
+SELECT a.id, 'A900270', 132, 0 FROM accounts a
+WHERE a.account_id = 2077
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2077, 'A900290', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2077 AND h.stock_code = 'A900290');
+SELECT a.id, 'A900290', 132, 0 FROM accounts a
+WHERE a.account_id = 2077
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900290');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2077, 'A900300', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2077 AND h.stock_code = 'A900300');
+SELECT a.id, 'A900300', 132, 0 FROM accounts a
+WHERE a.account_id = 2077
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2077, 'A900310', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2077 AND h.stock_code = 'A900310');
+SELECT a.id, 'A900310', 136, 0 FROM accounts a
+WHERE a.account_id = 2077
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900310');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2077, 'A900340', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2077 AND h.stock_code = 'A900340');
+SELECT a.id, 'A900340', 132, 0 FROM accounts a
+WHERE a.account_id = 2077
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900340');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2078, 'A000020', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2078 AND h.stock_code = 'A000020');
+SELECT a.id, 'A000020', 132, 0 FROM accounts a
+WHERE a.account_id = 2078
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000020');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2078, 'A000040', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2078 AND h.stock_code = 'A000040');
+SELECT a.id, 'A000040', 136, 0 FROM accounts a
+WHERE a.account_id = 2078
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000040');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2078, 'A000050', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2078 AND h.stock_code = 'A000050');
+SELECT a.id, 'A000050', 132, 0 FROM accounts a
+WHERE a.account_id = 2078
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000050');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2078, 'A000070', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2078 AND h.stock_code = 'A000070');
+SELECT a.id, 'A000070', 132, 0 FROM accounts a
+WHERE a.account_id = 2078
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000070');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2078, 'A000080', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2078 AND h.stock_code = 'A000080');
+SELECT a.id, 'A000080', 136, 0 FROM accounts a
+WHERE a.account_id = 2078
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000080');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2078, 'A000100', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2078 AND h.stock_code = 'A000100');
+SELECT a.id, 'A000100', 132, 0 FROM accounts a
+WHERE a.account_id = 2078
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000100');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2078, 'A000120', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2078 AND h.stock_code = 'A000120');
+SELECT a.id, 'A000120', 132, 0 FROM accounts a
+WHERE a.account_id = 2078
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000120');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2078, 'A000140', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2078 AND h.stock_code = 'A000140');
+SELECT a.id, 'A000140', 136, 0 FROM accounts a
+WHERE a.account_id = 2078
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000140');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2078, 'A000150', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2078 AND h.stock_code = 'A000150');
+SELECT a.id, 'A000150', 132, 0 FROM accounts a
+WHERE a.account_id = 2078
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000150');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2078, 'A000180', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2078 AND h.stock_code = 'A000180');
+SELECT a.id, 'A000180', 132, 0 FROM accounts a
+WHERE a.account_id = 2078
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000180');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2078, 'A000210', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2078 AND h.stock_code = 'A000210');
+SELECT a.id, 'A000210', 136, 0 FROM accounts a
+WHERE a.account_id = 2078
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000210');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2078, 'A000220', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2078 AND h.stock_code = 'A000220');
+SELECT a.id, 'A000220', 132, 0 FROM accounts a
+WHERE a.account_id = 2078
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000220');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2078, 'A000230', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2078 AND h.stock_code = 'A000230');
+SELECT a.id, 'A000230', 132, 0 FROM accounts a
+WHERE a.account_id = 2078
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000230');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2078, 'A000240', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2078 AND h.stock_code = 'A000240');
+SELECT a.id, 'A000240', 136, 0 FROM accounts a
+WHERE a.account_id = 2078
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000240');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2078, 'A000250', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2078 AND h.stock_code = 'A000250');
+SELECT a.id, 'A000250', 132, 0 FROM accounts a
+WHERE a.account_id = 2078
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000250');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2078, 'A000270', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2078 AND h.stock_code = 'A000270');
+SELECT a.id, 'A000270', 132, 0 FROM accounts a
+WHERE a.account_id = 2078
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2078, 'A000300', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2078 AND h.stock_code = 'A000300');
+SELECT a.id, 'A000300', 136, 0 FROM accounts a
+WHERE a.account_id = 2078
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2078, 'A000320', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2078 AND h.stock_code = 'A000320');
+SELECT a.id, 'A000320', 132, 0 FROM accounts a
+WHERE a.account_id = 2078
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000320');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2078, 'A000370', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2078 AND h.stock_code = 'A000370');
+SELECT a.id, 'A000370', 132, 0 FROM accounts a
+WHERE a.account_id = 2078
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000370');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2078, 'A000390', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2078 AND h.stock_code = 'A000390');
+SELECT a.id, 'A000390', 136, 0 FROM accounts a
+WHERE a.account_id = 2078
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000390');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2078, 'A000400', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2078 AND h.stock_code = 'A000400');
+SELECT a.id, 'A000400', 132, 0 FROM accounts a
+WHERE a.account_id = 2078
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000400');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2078, 'A000430', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2078 AND h.stock_code = 'A000430');
+SELECT a.id, 'A000430', 132, 0 FROM accounts a
+WHERE a.account_id = 2078
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000430');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2078, 'A000440', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2078 AND h.stock_code = 'A000440');
+SELECT a.id, 'A000440', 136, 0 FROM accounts a
+WHERE a.account_id = 2078
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000440');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2078, 'A000480', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2078 AND h.stock_code = 'A000480');
+SELECT a.id, 'A000480', 132, 0 FROM accounts a
+WHERE a.account_id = 2078
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000480');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2078, 'A900260', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2078 AND h.stock_code = 'A900260');
+SELECT a.id, 'A900260', 136, 0 FROM accounts a
+WHERE a.account_id = 2078
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900260');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2078, 'A900270', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2078 AND h.stock_code = 'A900270');
+SELECT a.id, 'A900270', 132, 0 FROM accounts a
+WHERE a.account_id = 2078
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2078, 'A900290', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2078 AND h.stock_code = 'A900290');
+SELECT a.id, 'A900290', 132, 0 FROM accounts a
+WHERE a.account_id = 2078
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900290');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2078, 'A900300', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2078 AND h.stock_code = 'A900300');
+SELECT a.id, 'A900300', 132, 0 FROM accounts a
+WHERE a.account_id = 2078
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2078, 'A900310', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2078 AND h.stock_code = 'A900310');
+SELECT a.id, 'A900310', 136, 0 FROM accounts a
+WHERE a.account_id = 2078
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900310');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2078, 'A900340', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2078 AND h.stock_code = 'A900340');
+SELECT a.id, 'A900340', 132, 0 FROM accounts a
+WHERE a.account_id = 2078
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900340');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2079, 'A000020', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2079 AND h.stock_code = 'A000020');
+SELECT a.id, 'A000020', 132, 0 FROM accounts a
+WHERE a.account_id = 2079
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000020');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2079, 'A000040', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2079 AND h.stock_code = 'A000040');
+SELECT a.id, 'A000040', 136, 0 FROM accounts a
+WHERE a.account_id = 2079
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000040');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2079, 'A000050', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2079 AND h.stock_code = 'A000050');
+SELECT a.id, 'A000050', 132, 0 FROM accounts a
+WHERE a.account_id = 2079
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000050');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2079, 'A000070', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2079 AND h.stock_code = 'A000070');
+SELECT a.id, 'A000070', 132, 0 FROM accounts a
+WHERE a.account_id = 2079
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000070');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2079, 'A000080', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2079 AND h.stock_code = 'A000080');
+SELECT a.id, 'A000080', 136, 0 FROM accounts a
+WHERE a.account_id = 2079
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000080');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2079, 'A000100', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2079 AND h.stock_code = 'A000100');
+SELECT a.id, 'A000100', 132, 0 FROM accounts a
+WHERE a.account_id = 2079
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000100');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2079, 'A000120', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2079 AND h.stock_code = 'A000120');
+SELECT a.id, 'A000120', 132, 0 FROM accounts a
+WHERE a.account_id = 2079
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000120');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2079, 'A000140', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2079 AND h.stock_code = 'A000140');
+SELECT a.id, 'A000140', 136, 0 FROM accounts a
+WHERE a.account_id = 2079
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000140');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2079, 'A000150', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2079 AND h.stock_code = 'A000150');
+SELECT a.id, 'A000150', 132, 0 FROM accounts a
+WHERE a.account_id = 2079
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000150');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2079, 'A000180', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2079 AND h.stock_code = 'A000180');
+SELECT a.id, 'A000180', 132, 0 FROM accounts a
+WHERE a.account_id = 2079
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000180');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2079, 'A000210', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2079 AND h.stock_code = 'A000210');
+SELECT a.id, 'A000210', 136, 0 FROM accounts a
+WHERE a.account_id = 2079
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000210');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2079, 'A000220', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2079 AND h.stock_code = 'A000220');
+SELECT a.id, 'A000220', 132, 0 FROM accounts a
+WHERE a.account_id = 2079
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000220');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2079, 'A000230', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2079 AND h.stock_code = 'A000230');
+SELECT a.id, 'A000230', 132, 0 FROM accounts a
+WHERE a.account_id = 2079
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000230');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2079, 'A000240', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2079 AND h.stock_code = 'A000240');
+SELECT a.id, 'A000240', 136, 0 FROM accounts a
+WHERE a.account_id = 2079
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000240');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2079, 'A000250', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2079 AND h.stock_code = 'A000250');
+SELECT a.id, 'A000250', 132, 0 FROM accounts a
+WHERE a.account_id = 2079
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000250');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2079, 'A000270', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2079 AND h.stock_code = 'A000270');
+SELECT a.id, 'A000270', 132, 0 FROM accounts a
+WHERE a.account_id = 2079
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2079, 'A000300', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2079 AND h.stock_code = 'A000300');
+SELECT a.id, 'A000300', 136, 0 FROM accounts a
+WHERE a.account_id = 2079
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2079, 'A000320', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2079 AND h.stock_code = 'A000320');
+SELECT a.id, 'A000320', 132, 0 FROM accounts a
+WHERE a.account_id = 2079
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000320');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2079, 'A000370', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2079 AND h.stock_code = 'A000370');
+SELECT a.id, 'A000370', 132, 0 FROM accounts a
+WHERE a.account_id = 2079
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000370');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2079, 'A000390', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2079 AND h.stock_code = 'A000390');
+SELECT a.id, 'A000390', 136, 0 FROM accounts a
+WHERE a.account_id = 2079
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000390');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2079, 'A000400', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2079 AND h.stock_code = 'A000400');
+SELECT a.id, 'A000400', 132, 0 FROM accounts a
+WHERE a.account_id = 2079
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000400');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2079, 'A000430', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2079 AND h.stock_code = 'A000430');
+SELECT a.id, 'A000430', 132, 0 FROM accounts a
+WHERE a.account_id = 2079
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000430');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2079, 'A000440', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2079 AND h.stock_code = 'A000440');
+SELECT a.id, 'A000440', 136, 0 FROM accounts a
+WHERE a.account_id = 2079
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000440');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2079, 'A000480', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2079 AND h.stock_code = 'A000480');
+SELECT a.id, 'A000480', 132, 0 FROM accounts a
+WHERE a.account_id = 2079
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000480');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2079, 'A900260', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2079 AND h.stock_code = 'A900260');
+SELECT a.id, 'A900260', 136, 0 FROM accounts a
+WHERE a.account_id = 2079
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900260');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2079, 'A900270', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2079 AND h.stock_code = 'A900270');
+SELECT a.id, 'A900270', 132, 0 FROM accounts a
+WHERE a.account_id = 2079
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2079, 'A900290', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2079 AND h.stock_code = 'A900290');
+SELECT a.id, 'A900290', 132, 0 FROM accounts a
+WHERE a.account_id = 2079
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900290');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2079, 'A900300', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2079 AND h.stock_code = 'A900300');
+SELECT a.id, 'A900300', 132, 0 FROM accounts a
+WHERE a.account_id = 2079
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2079, 'A900310', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2079 AND h.stock_code = 'A900310');
+SELECT a.id, 'A900310', 136, 0 FROM accounts a
+WHERE a.account_id = 2079
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900310');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2079, 'A900340', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2079 AND h.stock_code = 'A900340');
+SELECT a.id, 'A900340', 132, 0 FROM accounts a
+WHERE a.account_id = 2079
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900340');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2080, 'A000020', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2080 AND h.stock_code = 'A000020');
+SELECT a.id, 'A000020', 132, 0 FROM accounts a
+WHERE a.account_id = 2080
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000020');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2080, 'A000040', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2080 AND h.stock_code = 'A000040');
+SELECT a.id, 'A000040', 136, 0 FROM accounts a
+WHERE a.account_id = 2080
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000040');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2080, 'A000050', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2080 AND h.stock_code = 'A000050');
+SELECT a.id, 'A000050', 132, 0 FROM accounts a
+WHERE a.account_id = 2080
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000050');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2080, 'A000070', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2080 AND h.stock_code = 'A000070');
+SELECT a.id, 'A000070', 132, 0 FROM accounts a
+WHERE a.account_id = 2080
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000070');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2080, 'A000080', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2080 AND h.stock_code = 'A000080');
+SELECT a.id, 'A000080', 136, 0 FROM accounts a
+WHERE a.account_id = 2080
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000080');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2080, 'A000100', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2080 AND h.stock_code = 'A000100');
+SELECT a.id, 'A000100', 132, 0 FROM accounts a
+WHERE a.account_id = 2080
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000100');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2080, 'A000120', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2080 AND h.stock_code = 'A000120');
+SELECT a.id, 'A000120', 132, 0 FROM accounts a
+WHERE a.account_id = 2080
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000120');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2080, 'A000140', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2080 AND h.stock_code = 'A000140');
+SELECT a.id, 'A000140', 136, 0 FROM accounts a
+WHERE a.account_id = 2080
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000140');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2080, 'A000150', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2080 AND h.stock_code = 'A000150');
+SELECT a.id, 'A000150', 132, 0 FROM accounts a
+WHERE a.account_id = 2080
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000150');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2080, 'A000180', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2080 AND h.stock_code = 'A000180');
+SELECT a.id, 'A000180', 132, 0 FROM accounts a
+WHERE a.account_id = 2080
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000180');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2080, 'A000210', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2080 AND h.stock_code = 'A000210');
+SELECT a.id, 'A000210', 136, 0 FROM accounts a
+WHERE a.account_id = 2080
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000210');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2080, 'A000220', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2080 AND h.stock_code = 'A000220');
+SELECT a.id, 'A000220', 132, 0 FROM accounts a
+WHERE a.account_id = 2080
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000220');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2080, 'A000230', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2080 AND h.stock_code = 'A000230');
+SELECT a.id, 'A000230', 132, 0 FROM accounts a
+WHERE a.account_id = 2080
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000230');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2080, 'A000240', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2080 AND h.stock_code = 'A000240');
+SELECT a.id, 'A000240', 136, 0 FROM accounts a
+WHERE a.account_id = 2080
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000240');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2080, 'A000250', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2080 AND h.stock_code = 'A000250');
+SELECT a.id, 'A000250', 132, 0 FROM accounts a
+WHERE a.account_id = 2080
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000250');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2080, 'A000270', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2080 AND h.stock_code = 'A000270');
+SELECT a.id, 'A000270', 132, 0 FROM accounts a
+WHERE a.account_id = 2080
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2080, 'A000300', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2080 AND h.stock_code = 'A000300');
+SELECT a.id, 'A000300', 136, 0 FROM accounts a
+WHERE a.account_id = 2080
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2080, 'A000320', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2080 AND h.stock_code = 'A000320');
+SELECT a.id, 'A000320', 132, 0 FROM accounts a
+WHERE a.account_id = 2080
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000320');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2080, 'A000370', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2080 AND h.stock_code = 'A000370');
+SELECT a.id, 'A000370', 132, 0 FROM accounts a
+WHERE a.account_id = 2080
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000370');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2080, 'A000390', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2080 AND h.stock_code = 'A000390');
+SELECT a.id, 'A000390', 136, 0 FROM accounts a
+WHERE a.account_id = 2080
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000390');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2080, 'A000400', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2080 AND h.stock_code = 'A000400');
+SELECT a.id, 'A000400', 132, 0 FROM accounts a
+WHERE a.account_id = 2080
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000400');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2080, 'A000430', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2080 AND h.stock_code = 'A000430');
+SELECT a.id, 'A000430', 132, 0 FROM accounts a
+WHERE a.account_id = 2080
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000430');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2080, 'A000440', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2080 AND h.stock_code = 'A000440');
+SELECT a.id, 'A000440', 136, 0 FROM accounts a
+WHERE a.account_id = 2080
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000440');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2080, 'A000480', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2080 AND h.stock_code = 'A000480');
+SELECT a.id, 'A000480', 132, 0 FROM accounts a
+WHERE a.account_id = 2080
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000480');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2080, 'A900260', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2080 AND h.stock_code = 'A900260');
+SELECT a.id, 'A900260', 136, 0 FROM accounts a
+WHERE a.account_id = 2080
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900260');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2080, 'A900270', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2080 AND h.stock_code = 'A900270');
+SELECT a.id, 'A900270', 132, 0 FROM accounts a
+WHERE a.account_id = 2080
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2080, 'A900290', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2080 AND h.stock_code = 'A900290');
+SELECT a.id, 'A900290', 132, 0 FROM accounts a
+WHERE a.account_id = 2080
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900290');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2080, 'A900300', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2080 AND h.stock_code = 'A900300');
+SELECT a.id, 'A900300', 132, 0 FROM accounts a
+WHERE a.account_id = 2080
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2080, 'A900310', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2080 AND h.stock_code = 'A900310');
+SELECT a.id, 'A900310', 136, 0 FROM accounts a
+WHERE a.account_id = 2080
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900310');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2080, 'A900340', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2080 AND h.stock_code = 'A900340');
+SELECT a.id, 'A900340', 132, 0 FROM accounts a
+WHERE a.account_id = 2080
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900340');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2081, 'A000020', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2081 AND h.stock_code = 'A000020');
+SELECT a.id, 'A000020', 132, 0 FROM accounts a
+WHERE a.account_id = 2081
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000020');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2081, 'A000040', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2081 AND h.stock_code = 'A000040');
+SELECT a.id, 'A000040', 136, 0 FROM accounts a
+WHERE a.account_id = 2081
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000040');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2081, 'A000050', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2081 AND h.stock_code = 'A000050');
+SELECT a.id, 'A000050', 132, 0 FROM accounts a
+WHERE a.account_id = 2081
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000050');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2081, 'A000070', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2081 AND h.stock_code = 'A000070');
+SELECT a.id, 'A000070', 132, 0 FROM accounts a
+WHERE a.account_id = 2081
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000070');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2081, 'A000080', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2081 AND h.stock_code = 'A000080');
+SELECT a.id, 'A000080', 136, 0 FROM accounts a
+WHERE a.account_id = 2081
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000080');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2081, 'A000100', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2081 AND h.stock_code = 'A000100');
+SELECT a.id, 'A000100', 132, 0 FROM accounts a
+WHERE a.account_id = 2081
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000100');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2081, 'A000120', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2081 AND h.stock_code = 'A000120');
+SELECT a.id, 'A000120', 132, 0 FROM accounts a
+WHERE a.account_id = 2081
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000120');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2081, 'A000140', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2081 AND h.stock_code = 'A000140');
+SELECT a.id, 'A000140', 136, 0 FROM accounts a
+WHERE a.account_id = 2081
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000140');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2081, 'A000150', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2081 AND h.stock_code = 'A000150');
+SELECT a.id, 'A000150', 132, 0 FROM accounts a
+WHERE a.account_id = 2081
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000150');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2081, 'A000180', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2081 AND h.stock_code = 'A000180');
+SELECT a.id, 'A000180', 132, 0 FROM accounts a
+WHERE a.account_id = 2081
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000180');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2081, 'A000210', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2081 AND h.stock_code = 'A000210');
+SELECT a.id, 'A000210', 136, 0 FROM accounts a
+WHERE a.account_id = 2081
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000210');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2081, 'A000220', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2081 AND h.stock_code = 'A000220');
+SELECT a.id, 'A000220', 132, 0 FROM accounts a
+WHERE a.account_id = 2081
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000220');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2081, 'A000230', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2081 AND h.stock_code = 'A000230');
+SELECT a.id, 'A000230', 132, 0 FROM accounts a
+WHERE a.account_id = 2081
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000230');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2081, 'A000240', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2081 AND h.stock_code = 'A000240');
+SELECT a.id, 'A000240', 136, 0 FROM accounts a
+WHERE a.account_id = 2081
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000240');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2081, 'A000250', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2081 AND h.stock_code = 'A000250');
+SELECT a.id, 'A000250', 132, 0 FROM accounts a
+WHERE a.account_id = 2081
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000250');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2081, 'A000270', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2081 AND h.stock_code = 'A000270');
+SELECT a.id, 'A000270', 132, 0 FROM accounts a
+WHERE a.account_id = 2081
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2081, 'A000300', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2081 AND h.stock_code = 'A000300');
+SELECT a.id, 'A000300', 136, 0 FROM accounts a
+WHERE a.account_id = 2081
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2081, 'A000320', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2081 AND h.stock_code = 'A000320');
+SELECT a.id, 'A000320', 132, 0 FROM accounts a
+WHERE a.account_id = 2081
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000320');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2081, 'A000370', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2081 AND h.stock_code = 'A000370');
+SELECT a.id, 'A000370', 132, 0 FROM accounts a
+WHERE a.account_id = 2081
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000370');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2081, 'A000390', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2081 AND h.stock_code = 'A000390');
+SELECT a.id, 'A000390', 136, 0 FROM accounts a
+WHERE a.account_id = 2081
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000390');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2081, 'A000400', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2081 AND h.stock_code = 'A000400');
+SELECT a.id, 'A000400', 132, 0 FROM accounts a
+WHERE a.account_id = 2081
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000400');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2081, 'A000430', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2081 AND h.stock_code = 'A000430');
+SELECT a.id, 'A000430', 132, 0 FROM accounts a
+WHERE a.account_id = 2081
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000430');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2081, 'A000440', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2081 AND h.stock_code = 'A000440');
+SELECT a.id, 'A000440', 136, 0 FROM accounts a
+WHERE a.account_id = 2081
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000440');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2081, 'A000480', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2081 AND h.stock_code = 'A000480');
+SELECT a.id, 'A000480', 132, 0 FROM accounts a
+WHERE a.account_id = 2081
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000480');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2081, 'A900260', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2081 AND h.stock_code = 'A900260');
+SELECT a.id, 'A900260', 136, 0 FROM accounts a
+WHERE a.account_id = 2081
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900260');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2081, 'A900270', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2081 AND h.stock_code = 'A900270');
+SELECT a.id, 'A900270', 132, 0 FROM accounts a
+WHERE a.account_id = 2081
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2081, 'A900290', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2081 AND h.stock_code = 'A900290');
+SELECT a.id, 'A900290', 132, 0 FROM accounts a
+WHERE a.account_id = 2081
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900290');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2081, 'A900300', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2081 AND h.stock_code = 'A900300');
+SELECT a.id, 'A900300', 132, 0 FROM accounts a
+WHERE a.account_id = 2081
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2081, 'A900310', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2081 AND h.stock_code = 'A900310');
+SELECT a.id, 'A900310', 136, 0 FROM accounts a
+WHERE a.account_id = 2081
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900310');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2081, 'A900340', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2081 AND h.stock_code = 'A900340');
+SELECT a.id, 'A900340', 132, 0 FROM accounts a
+WHERE a.account_id = 2081
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900340');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2082, 'A000020', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2082 AND h.stock_code = 'A000020');
+SELECT a.id, 'A000020', 132, 0 FROM accounts a
+WHERE a.account_id = 2082
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000020');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2082, 'A000040', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2082 AND h.stock_code = 'A000040');
+SELECT a.id, 'A000040', 136, 0 FROM accounts a
+WHERE a.account_id = 2082
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000040');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2082, 'A000050', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2082 AND h.stock_code = 'A000050');
+SELECT a.id, 'A000050', 132, 0 FROM accounts a
+WHERE a.account_id = 2082
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000050');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2082, 'A000070', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2082 AND h.stock_code = 'A000070');
+SELECT a.id, 'A000070', 132, 0 FROM accounts a
+WHERE a.account_id = 2082
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000070');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2082, 'A000080', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2082 AND h.stock_code = 'A000080');
+SELECT a.id, 'A000080', 136, 0 FROM accounts a
+WHERE a.account_id = 2082
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000080');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2082, 'A000100', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2082 AND h.stock_code = 'A000100');
+SELECT a.id, 'A000100', 132, 0 FROM accounts a
+WHERE a.account_id = 2082
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000100');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2082, 'A000120', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2082 AND h.stock_code = 'A000120');
+SELECT a.id, 'A000120', 132, 0 FROM accounts a
+WHERE a.account_id = 2082
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000120');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2082, 'A000140', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2082 AND h.stock_code = 'A000140');
+SELECT a.id, 'A000140', 136, 0 FROM accounts a
+WHERE a.account_id = 2082
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000140');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2082, 'A000150', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2082 AND h.stock_code = 'A000150');
+SELECT a.id, 'A000150', 132, 0 FROM accounts a
+WHERE a.account_id = 2082
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000150');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2082, 'A000180', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2082 AND h.stock_code = 'A000180');
+SELECT a.id, 'A000180', 132, 0 FROM accounts a
+WHERE a.account_id = 2082
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000180');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2082, 'A000210', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2082 AND h.stock_code = 'A000210');
+SELECT a.id, 'A000210', 136, 0 FROM accounts a
+WHERE a.account_id = 2082
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000210');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2082, 'A000220', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2082 AND h.stock_code = 'A000220');
+SELECT a.id, 'A000220', 132, 0 FROM accounts a
+WHERE a.account_id = 2082
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000220');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2082, 'A000230', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2082 AND h.stock_code = 'A000230');
+SELECT a.id, 'A000230', 132, 0 FROM accounts a
+WHERE a.account_id = 2082
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000230');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2082, 'A000240', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2082 AND h.stock_code = 'A000240');
+SELECT a.id, 'A000240', 136, 0 FROM accounts a
+WHERE a.account_id = 2082
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000240');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2082, 'A000250', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2082 AND h.stock_code = 'A000250');
+SELECT a.id, 'A000250', 132, 0 FROM accounts a
+WHERE a.account_id = 2082
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000250');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2082, 'A000270', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2082 AND h.stock_code = 'A000270');
+SELECT a.id, 'A000270', 132, 0 FROM accounts a
+WHERE a.account_id = 2082
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2082, 'A000300', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2082 AND h.stock_code = 'A000300');
+SELECT a.id, 'A000300', 136, 0 FROM accounts a
+WHERE a.account_id = 2082
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2082, 'A000320', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2082 AND h.stock_code = 'A000320');
+SELECT a.id, 'A000320', 132, 0 FROM accounts a
+WHERE a.account_id = 2082
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000320');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2082, 'A000370', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2082 AND h.stock_code = 'A000370');
+SELECT a.id, 'A000370', 132, 0 FROM accounts a
+WHERE a.account_id = 2082
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000370');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2082, 'A000390', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2082 AND h.stock_code = 'A000390');
+SELECT a.id, 'A000390', 136, 0 FROM accounts a
+WHERE a.account_id = 2082
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000390');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2082, 'A000400', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2082 AND h.stock_code = 'A000400');
+SELECT a.id, 'A000400', 132, 0 FROM accounts a
+WHERE a.account_id = 2082
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000400');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2082, 'A000430', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2082 AND h.stock_code = 'A000430');
+SELECT a.id, 'A000430', 132, 0 FROM accounts a
+WHERE a.account_id = 2082
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000430');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2082, 'A000440', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2082 AND h.stock_code = 'A000440');
+SELECT a.id, 'A000440', 136, 0 FROM accounts a
+WHERE a.account_id = 2082
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000440');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2082, 'A000480', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2082 AND h.stock_code = 'A000480');
+SELECT a.id, 'A000480', 132, 0 FROM accounts a
+WHERE a.account_id = 2082
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000480');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2082, 'A900260', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2082 AND h.stock_code = 'A900260');
+SELECT a.id, 'A900260', 136, 0 FROM accounts a
+WHERE a.account_id = 2082
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900260');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2082, 'A900270', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2082 AND h.stock_code = 'A900270');
+SELECT a.id, 'A900270', 132, 0 FROM accounts a
+WHERE a.account_id = 2082
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2082, 'A900290', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2082 AND h.stock_code = 'A900290');
+SELECT a.id, 'A900290', 132, 0 FROM accounts a
+WHERE a.account_id = 2082
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900290');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2082, 'A900300', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2082 AND h.stock_code = 'A900300');
+SELECT a.id, 'A900300', 132, 0 FROM accounts a
+WHERE a.account_id = 2082
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2082, 'A900310', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2082 AND h.stock_code = 'A900310');
+SELECT a.id, 'A900310', 136, 0 FROM accounts a
+WHERE a.account_id = 2082
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900310');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2082, 'A900340', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2082 AND h.stock_code = 'A900340');
+SELECT a.id, 'A900340', 132, 0 FROM accounts a
+WHERE a.account_id = 2082
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900340');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2083, 'A000020', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2083 AND h.stock_code = 'A000020');
+SELECT a.id, 'A000020', 132, 0 FROM accounts a
+WHERE a.account_id = 2083
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000020');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2083, 'A000040', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2083 AND h.stock_code = 'A000040');
+SELECT a.id, 'A000040', 136, 0 FROM accounts a
+WHERE a.account_id = 2083
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000040');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2083, 'A000050', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2083 AND h.stock_code = 'A000050');
+SELECT a.id, 'A000050', 132, 0 FROM accounts a
+WHERE a.account_id = 2083
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000050');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2083, 'A000070', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2083 AND h.stock_code = 'A000070');
+SELECT a.id, 'A000070', 132, 0 FROM accounts a
+WHERE a.account_id = 2083
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000070');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2083, 'A000080', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2083 AND h.stock_code = 'A000080');
+SELECT a.id, 'A000080', 136, 0 FROM accounts a
+WHERE a.account_id = 2083
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000080');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2083, 'A000100', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2083 AND h.stock_code = 'A000100');
+SELECT a.id, 'A000100', 132, 0 FROM accounts a
+WHERE a.account_id = 2083
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000100');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2083, 'A000120', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2083 AND h.stock_code = 'A000120');
+SELECT a.id, 'A000120', 132, 0 FROM accounts a
+WHERE a.account_id = 2083
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000120');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2083, 'A000140', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2083 AND h.stock_code = 'A000140');
+SELECT a.id, 'A000140', 136, 0 FROM accounts a
+WHERE a.account_id = 2083
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000140');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2083, 'A000150', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2083 AND h.stock_code = 'A000150');
+SELECT a.id, 'A000150', 132, 0 FROM accounts a
+WHERE a.account_id = 2083
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000150');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2083, 'A000180', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2083 AND h.stock_code = 'A000180');
+SELECT a.id, 'A000180', 132, 0 FROM accounts a
+WHERE a.account_id = 2083
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000180');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2083, 'A000210', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2083 AND h.stock_code = 'A000210');
+SELECT a.id, 'A000210', 136, 0 FROM accounts a
+WHERE a.account_id = 2083
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000210');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2083, 'A000220', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2083 AND h.stock_code = 'A000220');
+SELECT a.id, 'A000220', 132, 0 FROM accounts a
+WHERE a.account_id = 2083
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000220');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2083, 'A000230', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2083 AND h.stock_code = 'A000230');
+SELECT a.id, 'A000230', 132, 0 FROM accounts a
+WHERE a.account_id = 2083
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000230');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2083, 'A000240', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2083 AND h.stock_code = 'A000240');
+SELECT a.id, 'A000240', 136, 0 FROM accounts a
+WHERE a.account_id = 2083
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000240');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2083, 'A000250', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2083 AND h.stock_code = 'A000250');
+SELECT a.id, 'A000250', 132, 0 FROM accounts a
+WHERE a.account_id = 2083
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000250');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2083, 'A000270', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2083 AND h.stock_code = 'A000270');
+SELECT a.id, 'A000270', 132, 0 FROM accounts a
+WHERE a.account_id = 2083
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2083, 'A000300', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2083 AND h.stock_code = 'A000300');
+SELECT a.id, 'A000300', 136, 0 FROM accounts a
+WHERE a.account_id = 2083
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2083, 'A000320', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2083 AND h.stock_code = 'A000320');
+SELECT a.id, 'A000320', 132, 0 FROM accounts a
+WHERE a.account_id = 2083
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000320');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2083, 'A000370', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2083 AND h.stock_code = 'A000370');
+SELECT a.id, 'A000370', 132, 0 FROM accounts a
+WHERE a.account_id = 2083
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000370');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2083, 'A000390', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2083 AND h.stock_code = 'A000390');
+SELECT a.id, 'A000390', 136, 0 FROM accounts a
+WHERE a.account_id = 2083
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000390');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2083, 'A000400', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2083 AND h.stock_code = 'A000400');
+SELECT a.id, 'A000400', 132, 0 FROM accounts a
+WHERE a.account_id = 2083
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000400');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2083, 'A000430', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2083 AND h.stock_code = 'A000430');
+SELECT a.id, 'A000430', 132, 0 FROM accounts a
+WHERE a.account_id = 2083
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000430');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2083, 'A000440', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2083 AND h.stock_code = 'A000440');
+SELECT a.id, 'A000440', 136, 0 FROM accounts a
+WHERE a.account_id = 2083
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000440');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2083, 'A000480', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2083 AND h.stock_code = 'A000480');
+SELECT a.id, 'A000480', 132, 0 FROM accounts a
+WHERE a.account_id = 2083
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000480');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2083, 'A900260', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2083 AND h.stock_code = 'A900260');
+SELECT a.id, 'A900260', 136, 0 FROM accounts a
+WHERE a.account_id = 2083
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900260');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2083, 'A900270', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2083 AND h.stock_code = 'A900270');
+SELECT a.id, 'A900270', 132, 0 FROM accounts a
+WHERE a.account_id = 2083
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2083, 'A900290', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2083 AND h.stock_code = 'A900290');
+SELECT a.id, 'A900290', 132, 0 FROM accounts a
+WHERE a.account_id = 2083
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900290');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2083, 'A900300', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2083 AND h.stock_code = 'A900300');
+SELECT a.id, 'A900300', 132, 0 FROM accounts a
+WHERE a.account_id = 2083
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2083, 'A900310', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2083 AND h.stock_code = 'A900310');
+SELECT a.id, 'A900310', 136, 0 FROM accounts a
+WHERE a.account_id = 2083
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900310');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2083, 'A900340', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2083 AND h.stock_code = 'A900340');
+SELECT a.id, 'A900340', 132, 0 FROM accounts a
+WHERE a.account_id = 2083
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900340');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2084, 'A000020', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2084 AND h.stock_code = 'A000020');
+SELECT a.id, 'A000020', 132, 0 FROM accounts a
+WHERE a.account_id = 2084
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000020');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2084, 'A000040', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2084 AND h.stock_code = 'A000040');
+SELECT a.id, 'A000040', 136, 0 FROM accounts a
+WHERE a.account_id = 2084
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000040');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2084, 'A000050', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2084 AND h.stock_code = 'A000050');
+SELECT a.id, 'A000050', 132, 0 FROM accounts a
+WHERE a.account_id = 2084
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000050');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2084, 'A000070', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2084 AND h.stock_code = 'A000070');
+SELECT a.id, 'A000070', 132, 0 FROM accounts a
+WHERE a.account_id = 2084
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000070');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2084, 'A000080', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2084 AND h.stock_code = 'A000080');
+SELECT a.id, 'A000080', 136, 0 FROM accounts a
+WHERE a.account_id = 2084
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000080');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2084, 'A000100', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2084 AND h.stock_code = 'A000100');
+SELECT a.id, 'A000100', 132, 0 FROM accounts a
+WHERE a.account_id = 2084
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000100');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2084, 'A000120', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2084 AND h.stock_code = 'A000120');
+SELECT a.id, 'A000120', 132, 0 FROM accounts a
+WHERE a.account_id = 2084
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000120');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2084, 'A000140', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2084 AND h.stock_code = 'A000140');
+SELECT a.id, 'A000140', 136, 0 FROM accounts a
+WHERE a.account_id = 2084
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000140');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2084, 'A000150', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2084 AND h.stock_code = 'A000150');
+SELECT a.id, 'A000150', 132, 0 FROM accounts a
+WHERE a.account_id = 2084
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000150');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2084, 'A000180', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2084 AND h.stock_code = 'A000180');
+SELECT a.id, 'A000180', 132, 0 FROM accounts a
+WHERE a.account_id = 2084
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000180');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2084, 'A000210', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2084 AND h.stock_code = 'A000210');
+SELECT a.id, 'A000210', 136, 0 FROM accounts a
+WHERE a.account_id = 2084
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000210');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2084, 'A000220', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2084 AND h.stock_code = 'A000220');
+SELECT a.id, 'A000220', 132, 0 FROM accounts a
+WHERE a.account_id = 2084
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000220');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2084, 'A000230', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2084 AND h.stock_code = 'A000230');
+SELECT a.id, 'A000230', 132, 0 FROM accounts a
+WHERE a.account_id = 2084
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000230');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2084, 'A000240', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2084 AND h.stock_code = 'A000240');
+SELECT a.id, 'A000240', 136, 0 FROM accounts a
+WHERE a.account_id = 2084
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000240');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2084, 'A000250', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2084 AND h.stock_code = 'A000250');
+SELECT a.id, 'A000250', 132, 0 FROM accounts a
+WHERE a.account_id = 2084
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000250');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2084, 'A000270', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2084 AND h.stock_code = 'A000270');
+SELECT a.id, 'A000270', 132, 0 FROM accounts a
+WHERE a.account_id = 2084
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2084, 'A000300', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2084 AND h.stock_code = 'A000300');
+SELECT a.id, 'A000300', 136, 0 FROM accounts a
+WHERE a.account_id = 2084
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2084, 'A000320', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2084 AND h.stock_code = 'A000320');
+SELECT a.id, 'A000320', 132, 0 FROM accounts a
+WHERE a.account_id = 2084
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000320');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2084, 'A000370', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2084 AND h.stock_code = 'A000370');
+SELECT a.id, 'A000370', 132, 0 FROM accounts a
+WHERE a.account_id = 2084
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000370');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2084, 'A000390', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2084 AND h.stock_code = 'A000390');
+SELECT a.id, 'A000390', 136, 0 FROM accounts a
+WHERE a.account_id = 2084
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000390');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2084, 'A000400', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2084 AND h.stock_code = 'A000400');
+SELECT a.id, 'A000400', 132, 0 FROM accounts a
+WHERE a.account_id = 2084
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000400');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2084, 'A000430', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2084 AND h.stock_code = 'A000430');
+SELECT a.id, 'A000430', 132, 0 FROM accounts a
+WHERE a.account_id = 2084
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000430');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2084, 'A000440', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2084 AND h.stock_code = 'A000440');
+SELECT a.id, 'A000440', 136, 0 FROM accounts a
+WHERE a.account_id = 2084
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000440');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2084, 'A000480', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2084 AND h.stock_code = 'A000480');
+SELECT a.id, 'A000480', 132, 0 FROM accounts a
+WHERE a.account_id = 2084
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000480');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2084, 'A900260', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2084 AND h.stock_code = 'A900260');
+SELECT a.id, 'A900260', 136, 0 FROM accounts a
+WHERE a.account_id = 2084
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900260');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2084, 'A900270', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2084 AND h.stock_code = 'A900270');
+SELECT a.id, 'A900270', 132, 0 FROM accounts a
+WHERE a.account_id = 2084
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2084, 'A900290', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2084 AND h.stock_code = 'A900290');
+SELECT a.id, 'A900290', 132, 0 FROM accounts a
+WHERE a.account_id = 2084
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900290');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2084, 'A900300', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2084 AND h.stock_code = 'A900300');
+SELECT a.id, 'A900300', 132, 0 FROM accounts a
+WHERE a.account_id = 2084
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2084, 'A900310', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2084 AND h.stock_code = 'A900310');
+SELECT a.id, 'A900310', 136, 0 FROM accounts a
+WHERE a.account_id = 2084
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900310');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2084, 'A900340', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2084 AND h.stock_code = 'A900340');
+SELECT a.id, 'A900340', 132, 0 FROM accounts a
+WHERE a.account_id = 2084
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900340');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2085, 'A000020', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2085 AND h.stock_code = 'A000020');
+SELECT a.id, 'A000020', 132, 0 FROM accounts a
+WHERE a.account_id = 2085
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000020');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2085, 'A000040', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2085 AND h.stock_code = 'A000040');
+SELECT a.id, 'A000040', 136, 0 FROM accounts a
+WHERE a.account_id = 2085
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000040');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2085, 'A000050', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2085 AND h.stock_code = 'A000050');
+SELECT a.id, 'A000050', 132, 0 FROM accounts a
+WHERE a.account_id = 2085
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000050');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2085, 'A000070', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2085 AND h.stock_code = 'A000070');
+SELECT a.id, 'A000070', 132, 0 FROM accounts a
+WHERE a.account_id = 2085
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000070');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2085, 'A000080', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2085 AND h.stock_code = 'A000080');
+SELECT a.id, 'A000080', 136, 0 FROM accounts a
+WHERE a.account_id = 2085
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000080');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2085, 'A000100', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2085 AND h.stock_code = 'A000100');
+SELECT a.id, 'A000100', 132, 0 FROM accounts a
+WHERE a.account_id = 2085
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000100');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2085, 'A000120', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2085 AND h.stock_code = 'A000120');
+SELECT a.id, 'A000120', 132, 0 FROM accounts a
+WHERE a.account_id = 2085
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000120');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2085, 'A000140', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2085 AND h.stock_code = 'A000140');
+SELECT a.id, 'A000140', 136, 0 FROM accounts a
+WHERE a.account_id = 2085
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000140');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2085, 'A000150', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2085 AND h.stock_code = 'A000150');
+SELECT a.id, 'A000150', 132, 0 FROM accounts a
+WHERE a.account_id = 2085
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000150');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2085, 'A000180', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2085 AND h.stock_code = 'A000180');
+SELECT a.id, 'A000180', 132, 0 FROM accounts a
+WHERE a.account_id = 2085
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000180');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2085, 'A000210', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2085 AND h.stock_code = 'A000210');
+SELECT a.id, 'A000210', 136, 0 FROM accounts a
+WHERE a.account_id = 2085
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000210');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2085, 'A000220', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2085 AND h.stock_code = 'A000220');
+SELECT a.id, 'A000220', 132, 0 FROM accounts a
+WHERE a.account_id = 2085
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000220');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2085, 'A000230', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2085 AND h.stock_code = 'A000230');
+SELECT a.id, 'A000230', 132, 0 FROM accounts a
+WHERE a.account_id = 2085
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000230');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2085, 'A000240', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2085 AND h.stock_code = 'A000240');
+SELECT a.id, 'A000240', 136, 0 FROM accounts a
+WHERE a.account_id = 2085
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000240');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2085, 'A000250', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2085 AND h.stock_code = 'A000250');
+SELECT a.id, 'A000250', 132, 0 FROM accounts a
+WHERE a.account_id = 2085
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000250');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2085, 'A000270', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2085 AND h.stock_code = 'A000270');
+SELECT a.id, 'A000270', 132, 0 FROM accounts a
+WHERE a.account_id = 2085
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2085, 'A000300', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2085 AND h.stock_code = 'A000300');
+SELECT a.id, 'A000300', 136, 0 FROM accounts a
+WHERE a.account_id = 2085
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2085, 'A000320', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2085 AND h.stock_code = 'A000320');
+SELECT a.id, 'A000320', 132, 0 FROM accounts a
+WHERE a.account_id = 2085
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000320');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2085, 'A000370', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2085 AND h.stock_code = 'A000370');
+SELECT a.id, 'A000370', 132, 0 FROM accounts a
+WHERE a.account_id = 2085
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000370');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2085, 'A000390', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2085 AND h.stock_code = 'A000390');
+SELECT a.id, 'A000390', 136, 0 FROM accounts a
+WHERE a.account_id = 2085
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000390');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2085, 'A000400', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2085 AND h.stock_code = 'A000400');
+SELECT a.id, 'A000400', 132, 0 FROM accounts a
+WHERE a.account_id = 2085
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000400');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2085, 'A000430', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2085 AND h.stock_code = 'A000430');
+SELECT a.id, 'A000430', 132, 0 FROM accounts a
+WHERE a.account_id = 2085
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000430');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2085, 'A000440', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2085 AND h.stock_code = 'A000440');
+SELECT a.id, 'A000440', 132, 0 FROM accounts a
+WHERE a.account_id = 2085
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000440');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2085, 'A000480', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2085 AND h.stock_code = 'A000480');
+SELECT a.id, 'A000480', 136, 0 FROM accounts a
+WHERE a.account_id = 2085
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000480');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2085, 'A900260', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2085 AND h.stock_code = 'A900260');
+SELECT a.id, 'A900260', 132, 0 FROM accounts a
+WHERE a.account_id = 2085
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900260');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2085, 'A900270', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2085 AND h.stock_code = 'A900270');
+SELECT a.id, 'A900270', 132, 0 FROM accounts a
+WHERE a.account_id = 2085
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2085, 'A900290', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2085 AND h.stock_code = 'A900290');
+SELECT a.id, 'A900290', 136, 0 FROM accounts a
+WHERE a.account_id = 2085
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900290');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2085, 'A900300', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2085 AND h.stock_code = 'A900300');
+SELECT a.id, 'A900300', 132, 0 FROM accounts a
+WHERE a.account_id = 2085
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2085, 'A900310', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2085 AND h.stock_code = 'A900310');
+SELECT a.id, 'A900310', 136, 0 FROM accounts a
+WHERE a.account_id = 2085
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900310');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2085, 'A900340', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2085 AND h.stock_code = 'A900340');
+SELECT a.id, 'A900340', 132, 0 FROM accounts a
+WHERE a.account_id = 2085
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900340');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2086, 'A000020', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2086 AND h.stock_code = 'A000020');
+SELECT a.id, 'A000020', 132, 0 FROM accounts a
+WHERE a.account_id = 2086
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000020');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2086, 'A000040', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2086 AND h.stock_code = 'A000040');
+SELECT a.id, 'A000040', 136, 0 FROM accounts a
+WHERE a.account_id = 2086
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000040');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2086, 'A000050', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2086 AND h.stock_code = 'A000050');
+SELECT a.id, 'A000050', 132, 0 FROM accounts a
+WHERE a.account_id = 2086
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000050');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2086, 'A000070', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2086 AND h.stock_code = 'A000070');
+SELECT a.id, 'A000070', 132, 0 FROM accounts a
+WHERE a.account_id = 2086
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000070');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2086, 'A000080', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2086 AND h.stock_code = 'A000080');
+SELECT a.id, 'A000080', 136, 0 FROM accounts a
+WHERE a.account_id = 2086
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000080');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2086, 'A000100', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2086 AND h.stock_code = 'A000100');
+SELECT a.id, 'A000100', 132, 0 FROM accounts a
+WHERE a.account_id = 2086
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000100');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2086, 'A000120', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2086 AND h.stock_code = 'A000120');
+SELECT a.id, 'A000120', 132, 0 FROM accounts a
+WHERE a.account_id = 2086
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000120');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2086, 'A000140', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2086 AND h.stock_code = 'A000140');
+SELECT a.id, 'A000140', 136, 0 FROM accounts a
+WHERE a.account_id = 2086
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000140');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2086, 'A000150', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2086 AND h.stock_code = 'A000150');
+SELECT a.id, 'A000150', 132, 0 FROM accounts a
+WHERE a.account_id = 2086
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000150');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2086, 'A000180', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2086 AND h.stock_code = 'A000180');
+SELECT a.id, 'A000180', 132, 0 FROM accounts a
+WHERE a.account_id = 2086
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000180');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2086, 'A000210', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2086 AND h.stock_code = 'A000210');
+SELECT a.id, 'A000210', 136, 0 FROM accounts a
+WHERE a.account_id = 2086
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000210');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2086, 'A000220', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2086 AND h.stock_code = 'A000220');
+SELECT a.id, 'A000220', 132, 0 FROM accounts a
+WHERE a.account_id = 2086
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000220');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2086, 'A000230', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2086 AND h.stock_code = 'A000230');
+SELECT a.id, 'A000230', 132, 0 FROM accounts a
+WHERE a.account_id = 2086
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000230');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2086, 'A000240', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2086 AND h.stock_code = 'A000240');
+SELECT a.id, 'A000240', 136, 0 FROM accounts a
+WHERE a.account_id = 2086
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000240');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2086, 'A000250', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2086 AND h.stock_code = 'A000250');
+SELECT a.id, 'A000250', 132, 0 FROM accounts a
+WHERE a.account_id = 2086
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000250');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2086, 'A000270', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2086 AND h.stock_code = 'A000270');
+SELECT a.id, 'A000270', 132, 0 FROM accounts a
+WHERE a.account_id = 2086
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2086, 'A000300', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2086 AND h.stock_code = 'A000300');
+SELECT a.id, 'A000300', 136, 0 FROM accounts a
+WHERE a.account_id = 2086
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2086, 'A000320', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2086 AND h.stock_code = 'A000320');
+SELECT a.id, 'A000320', 132, 0 FROM accounts a
+WHERE a.account_id = 2086
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000320');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2086, 'A000370', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2086 AND h.stock_code = 'A000370');
+SELECT a.id, 'A000370', 132, 0 FROM accounts a
+WHERE a.account_id = 2086
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000370');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2086, 'A000390', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2086 AND h.stock_code = 'A000390');
+SELECT a.id, 'A000390', 136, 0 FROM accounts a
+WHERE a.account_id = 2086
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000390');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2086, 'A000400', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2086 AND h.stock_code = 'A000400');
+SELECT a.id, 'A000400', 132, 0 FROM accounts a
+WHERE a.account_id = 2086
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000400');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2086, 'A000430', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2086 AND h.stock_code = 'A000430');
+SELECT a.id, 'A000430', 132, 0 FROM accounts a
+WHERE a.account_id = 2086
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000430');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2086, 'A000440', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2086 AND h.stock_code = 'A000440');
+SELECT a.id, 'A000440', 132, 0 FROM accounts a
+WHERE a.account_id = 2086
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000440');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2086, 'A000480', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2086 AND h.stock_code = 'A000480');
+SELECT a.id, 'A000480', 136, 0 FROM accounts a
+WHERE a.account_id = 2086
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000480');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2086, 'A900260', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2086 AND h.stock_code = 'A900260');
+SELECT a.id, 'A900260', 132, 0 FROM accounts a
+WHERE a.account_id = 2086
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900260');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2086, 'A900270', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2086 AND h.stock_code = 'A900270');
+SELECT a.id, 'A900270', 132, 0 FROM accounts a
+WHERE a.account_id = 2086
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2086, 'A900290', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2086 AND h.stock_code = 'A900290');
+SELECT a.id, 'A900290', 136, 0 FROM accounts a
+WHERE a.account_id = 2086
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900290');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2086, 'A900300', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2086 AND h.stock_code = 'A900300');
+SELECT a.id, 'A900300', 132, 0 FROM accounts a
+WHERE a.account_id = 2086
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2086, 'A900310', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2086 AND h.stock_code = 'A900310');
+SELECT a.id, 'A900310', 132, 0 FROM accounts a
+WHERE a.account_id = 2086
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900310');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2086, 'A900340', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2086 AND h.stock_code = 'A900340');
+SELECT a.id, 'A900340', 136, 0 FROM accounts a
+WHERE a.account_id = 2086
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900340');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2087, 'A000020', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2087 AND h.stock_code = 'A000020');
+SELECT a.id, 'A000020', 132, 0 FROM accounts a
+WHERE a.account_id = 2087
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000020');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2087, 'A000040', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2087 AND h.stock_code = 'A000040');
+SELECT a.id, 'A000040', 132, 0 FROM accounts a
+WHERE a.account_id = 2087
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000040');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2087, 'A000050', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2087 AND h.stock_code = 'A000050');
+SELECT a.id, 'A000050', 136, 0 FROM accounts a
+WHERE a.account_id = 2087
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000050');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2087, 'A000070', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2087 AND h.stock_code = 'A000070');
+SELECT a.id, 'A000070', 132, 0 FROM accounts a
+WHERE a.account_id = 2087
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000070');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2087, 'A000080', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2087 AND h.stock_code = 'A000080');
+SELECT a.id, 'A000080', 136, 0 FROM accounts a
+WHERE a.account_id = 2087
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000080');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2087, 'A000100', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2087 AND h.stock_code = 'A000100');
+SELECT a.id, 'A000100', 132, 0 FROM accounts a
+WHERE a.account_id = 2087
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000100');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2087, 'A000120', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2087 AND h.stock_code = 'A000120');
+SELECT a.id, 'A000120', 132, 0 FROM accounts a
+WHERE a.account_id = 2087
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000120');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2087, 'A000140', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2087 AND h.stock_code = 'A000140');
+SELECT a.id, 'A000140', 136, 0 FROM accounts a
+WHERE a.account_id = 2087
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000140');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2087, 'A000150', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2087 AND h.stock_code = 'A000150');
+SELECT a.id, 'A000150', 132, 0 FROM accounts a
+WHERE a.account_id = 2087
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000150');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2087, 'A000180', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2087 AND h.stock_code = 'A000180');
+SELECT a.id, 'A000180', 132, 0 FROM accounts a
+WHERE a.account_id = 2087
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000180');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2087, 'A000210', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2087 AND h.stock_code = 'A000210');
+SELECT a.id, 'A000210', 136, 0 FROM accounts a
+WHERE a.account_id = 2087
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000210');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2087, 'A000220', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2087 AND h.stock_code = 'A000220');
+SELECT a.id, 'A000220', 132, 0 FROM accounts a
+WHERE a.account_id = 2087
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000220');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2087, 'A000230', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2087 AND h.stock_code = 'A000230');
+SELECT a.id, 'A000230', 132, 0 FROM accounts a
+WHERE a.account_id = 2087
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000230');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2087, 'A000240', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2087 AND h.stock_code = 'A000240');
+SELECT a.id, 'A000240', 136, 0 FROM accounts a
+WHERE a.account_id = 2087
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000240');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2087, 'A000250', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2087 AND h.stock_code = 'A000250');
+SELECT a.id, 'A000250', 132, 0 FROM accounts a
+WHERE a.account_id = 2087
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000250');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2087, 'A000270', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2087 AND h.stock_code = 'A000270');
+SELECT a.id, 'A000270', 132, 0 FROM accounts a
+WHERE a.account_id = 2087
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2087, 'A000300', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2087 AND h.stock_code = 'A000300');
+SELECT a.id, 'A000300', 136, 0 FROM accounts a
+WHERE a.account_id = 2087
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2087, 'A000320', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2087 AND h.stock_code = 'A000320');
+SELECT a.id, 'A000320', 132, 0 FROM accounts a
+WHERE a.account_id = 2087
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000320');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2087, 'A000370', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2087 AND h.stock_code = 'A000370');
+SELECT a.id, 'A000370', 132, 0 FROM accounts a
+WHERE a.account_id = 2087
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000370');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2087, 'A000390', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2087 AND h.stock_code = 'A000390');
+SELECT a.id, 'A000390', 132, 0 FROM accounts a
+WHERE a.account_id = 2087
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000390');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2087, 'A000400', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2087 AND h.stock_code = 'A000400');
+SELECT a.id, 'A000400', 136, 0 FROM accounts a
+WHERE a.account_id = 2087
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000400');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2087, 'A000430', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2087 AND h.stock_code = 'A000430');
+SELECT a.id, 'A000430', 132, 0 FROM accounts a
+WHERE a.account_id = 2087
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000430');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2087, 'A000440', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2087 AND h.stock_code = 'A000440');
+SELECT a.id, 'A000440', 132, 0 FROM accounts a
+WHERE a.account_id = 2087
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000440');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2087, 'A000480', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2087 AND h.stock_code = 'A000480');
+SELECT a.id, 'A000480', 136, 0 FROM accounts a
+WHERE a.account_id = 2087
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000480');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2087, 'A900260', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2087 AND h.stock_code = 'A900260');
+SELECT a.id, 'A900260', 132, 0 FROM accounts a
+WHERE a.account_id = 2087
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900260');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2087, 'A900270', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2087 AND h.stock_code = 'A900270');
+SELECT a.id, 'A900270', 132, 0 FROM accounts a
+WHERE a.account_id = 2087
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2087, 'A900290', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2087 AND h.stock_code = 'A900290');
+SELECT a.id, 'A900290', 136, 0 FROM accounts a
+WHERE a.account_id = 2087
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900290');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2087, 'A900300', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2087 AND h.stock_code = 'A900300');
+SELECT a.id, 'A900300', 132, 0 FROM accounts a
+WHERE a.account_id = 2087
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2087, 'A900310', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2087 AND h.stock_code = 'A900310');
+SELECT a.id, 'A900310', 132, 0 FROM accounts a
+WHERE a.account_id = 2087
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900310');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2087, 'A900340', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2087 AND h.stock_code = 'A900340');
+SELECT a.id, 'A900340', 136, 0 FROM accounts a
+WHERE a.account_id = 2087
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900340');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2088, 'A000020', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2088 AND h.stock_code = 'A000020');
+SELECT a.id, 'A000020', 132, 0 FROM accounts a
+WHERE a.account_id = 2088
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000020');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2088, 'A000040', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2088 AND h.stock_code = 'A000040');
+SELECT a.id, 'A000040', 132, 0 FROM accounts a
+WHERE a.account_id = 2088
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000040');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2088, 'A000050', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2088 AND h.stock_code = 'A000050');
+SELECT a.id, 'A000050', 136, 0 FROM accounts a
+WHERE a.account_id = 2088
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000050');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2088, 'A000070', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2088 AND h.stock_code = 'A000070');
+SELECT a.id, 'A000070', 132, 0 FROM accounts a
+WHERE a.account_id = 2088
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000070');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2088, 'A000080', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2088 AND h.stock_code = 'A000080');
+SELECT a.id, 'A000080', 132, 0 FROM accounts a
+WHERE a.account_id = 2088
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000080');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2088, 'A000100', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2088 AND h.stock_code = 'A000100');
+SELECT a.id, 'A000100', 136, 0 FROM accounts a
+WHERE a.account_id = 2088
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000100');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2088, 'A000120', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2088 AND h.stock_code = 'A000120');
+SELECT a.id, 'A000120', 132, 0 FROM accounts a
+WHERE a.account_id = 2088
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000120');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2088, 'A000140', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2088 AND h.stock_code = 'A000140');
+SELECT a.id, 'A000140', 136, 0 FROM accounts a
+WHERE a.account_id = 2088
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000140');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2088, 'A000150', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2088 AND h.stock_code = 'A000150');
+SELECT a.id, 'A000150', 132, 0 FROM accounts a
+WHERE a.account_id = 2088
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000150');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2088, 'A000180', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2088 AND h.stock_code = 'A000180');
+SELECT a.id, 'A000180', 132, 0 FROM accounts a
+WHERE a.account_id = 2088
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000180');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2088, 'A000210', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2088 AND h.stock_code = 'A000210');
+SELECT a.id, 'A000210', 136, 0 FROM accounts a
+WHERE a.account_id = 2088
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000210');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2088, 'A000220', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2088 AND h.stock_code = 'A000220');
+SELECT a.id, 'A000220', 132, 0 FROM accounts a
+WHERE a.account_id = 2088
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000220');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2088, 'A000230', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2088 AND h.stock_code = 'A000230');
+SELECT a.id, 'A000230', 132, 0 FROM accounts a
+WHERE a.account_id = 2088
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000230');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2088, 'A000240', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2088 AND h.stock_code = 'A000240');
+SELECT a.id, 'A000240', 136, 0 FROM accounts a
+WHERE a.account_id = 2088
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000240');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2088, 'A000250', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2088 AND h.stock_code = 'A000250');
+SELECT a.id, 'A000250', 132, 0 FROM accounts a
+WHERE a.account_id = 2088
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000250');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2088, 'A000270', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2088 AND h.stock_code = 'A000270');
+SELECT a.id, 'A000270', 132, 0 FROM accounts a
+WHERE a.account_id = 2088
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2088, 'A000300', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2088 AND h.stock_code = 'A000300');
+SELECT a.id, 'A000300', 136, 0 FROM accounts a
+WHERE a.account_id = 2088
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2088, 'A000320', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2088 AND h.stock_code = 'A000320');
+SELECT a.id, 'A000320', 132, 0 FROM accounts a
+WHERE a.account_id = 2088
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000320');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2088, 'A000370', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2088 AND h.stock_code = 'A000370');
+SELECT a.id, 'A000370', 132, 0 FROM accounts a
+WHERE a.account_id = 2088
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000370');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2088, 'A000390', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2088 AND h.stock_code = 'A000390');
+SELECT a.id, 'A000390', 132, 0 FROM accounts a
+WHERE a.account_id = 2088
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000390');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2088, 'A000400', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2088 AND h.stock_code = 'A000400');
+SELECT a.id, 'A000400', 136, 0 FROM accounts a
+WHERE a.account_id = 2088
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000400');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2088, 'A000430', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2088 AND h.stock_code = 'A000430');
+SELECT a.id, 'A000430', 132, 0 FROM accounts a
+WHERE a.account_id = 2088
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000430');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2088, 'A000440', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2088 AND h.stock_code = 'A000440');
+SELECT a.id, 'A000440', 132, 0 FROM accounts a
+WHERE a.account_id = 2088
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000440');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2088, 'A000480', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2088 AND h.stock_code = 'A000480');
+SELECT a.id, 'A000480', 136, 0 FROM accounts a
+WHERE a.account_id = 2088
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000480');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2088, 'A900260', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2088 AND h.stock_code = 'A900260');
+SELECT a.id, 'A900260', 132, 0 FROM accounts a
+WHERE a.account_id = 2088
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900260');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2088, 'A900270', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2088 AND h.stock_code = 'A900270');
+SELECT a.id, 'A900270', 132, 0 FROM accounts a
+WHERE a.account_id = 2088
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2088, 'A900290', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2088 AND h.stock_code = 'A900290');
+SELECT a.id, 'A900290', 136, 0 FROM accounts a
+WHERE a.account_id = 2088
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900290');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2088, 'A900300', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2088 AND h.stock_code = 'A900300');
+SELECT a.id, 'A900300', 132, 0 FROM accounts a
+WHERE a.account_id = 2088
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2088, 'A900310', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2088 AND h.stock_code = 'A900310');
+SELECT a.id, 'A900310', 132, 0 FROM accounts a
+WHERE a.account_id = 2088
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900310');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2088, 'A900340', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2088 AND h.stock_code = 'A900340');
+SELECT a.id, 'A900340', 136, 0 FROM accounts a
+WHERE a.account_id = 2088
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900340');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2089, 'A000020', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2089 AND h.stock_code = 'A000020');
+SELECT a.id, 'A000020', 132, 0 FROM accounts a
+WHERE a.account_id = 2089
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000020');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2089, 'A000040', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2089 AND h.stock_code = 'A000040');
+SELECT a.id, 'A000040', 132, 0 FROM accounts a
+WHERE a.account_id = 2089
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000040');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2089, 'A000050', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2089 AND h.stock_code = 'A000050');
+SELECT a.id, 'A000050', 136, 0 FROM accounts a
+WHERE a.account_id = 2089
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000050');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2089, 'A000070', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2089 AND h.stock_code = 'A000070');
+SELECT a.id, 'A000070', 132, 0 FROM accounts a
+WHERE a.account_id = 2089
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000070');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2089, 'A000080', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2089 AND h.stock_code = 'A000080');
+SELECT a.id, 'A000080', 132, 0 FROM accounts a
+WHERE a.account_id = 2089
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000080');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2089, 'A000100', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2089 AND h.stock_code = 'A000100');
+SELECT a.id, 'A000100', 136, 0 FROM accounts a
+WHERE a.account_id = 2089
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000100');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2089, 'A000120', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2089 AND h.stock_code = 'A000120');
+SELECT a.id, 'A000120', 132, 0 FROM accounts a
+WHERE a.account_id = 2089
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000120');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2089, 'A000140', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2089 AND h.stock_code = 'A000140');
+SELECT a.id, 'A000140', 132, 0 FROM accounts a
+WHERE a.account_id = 2089
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000140');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2089, 'A000150', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2089 AND h.stock_code = 'A000150');
+SELECT a.id, 'A000150', 136, 0 FROM accounts a
+WHERE a.account_id = 2089
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000150');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2089, 'A000180', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2089 AND h.stock_code = 'A000180');
+SELECT a.id, 'A000180', 132, 0 FROM accounts a
+WHERE a.account_id = 2089
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000180');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2089, 'A000210', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2089 AND h.stock_code = 'A000210');
+SELECT a.id, 'A000210', 136, 0 FROM accounts a
+WHERE a.account_id = 2089
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000210');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2089, 'A000220', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2089 AND h.stock_code = 'A000220');
+SELECT a.id, 'A000220', 132, 0 FROM accounts a
+WHERE a.account_id = 2089
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000220');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2089, 'A000230', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2089 AND h.stock_code = 'A000230');
+SELECT a.id, 'A000230', 132, 0 FROM accounts a
+WHERE a.account_id = 2089
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000230');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2089, 'A000240', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2089 AND h.stock_code = 'A000240');
+SELECT a.id, 'A000240', 136, 0 FROM accounts a
+WHERE a.account_id = 2089
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000240');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2089, 'A000250', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2089 AND h.stock_code = 'A000250');
+SELECT a.id, 'A000250', 132, 0 FROM accounts a
+WHERE a.account_id = 2089
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000250');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2089, 'A000270', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2089 AND h.stock_code = 'A000270');
+SELECT a.id, 'A000270', 132, 0 FROM accounts a
+WHERE a.account_id = 2089
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2089, 'A000300', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2089 AND h.stock_code = 'A000300');
+SELECT a.id, 'A000300', 132, 0 FROM accounts a
+WHERE a.account_id = 2089
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2089, 'A000320', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2089 AND h.stock_code = 'A000320');
+SELECT a.id, 'A000320', 136, 0 FROM accounts a
+WHERE a.account_id = 2089
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000320');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2089, 'A000370', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2089 AND h.stock_code = 'A000370');
+SELECT a.id, 'A000370', 132, 0 FROM accounts a
+WHERE a.account_id = 2089
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000370');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2089, 'A000390', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2089 AND h.stock_code = 'A000390');
+SELECT a.id, 'A000390', 132, 0 FROM accounts a
+WHERE a.account_id = 2089
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000390');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2089, 'A000400', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2089 AND h.stock_code = 'A000400');
+SELECT a.id, 'A000400', 136, 0 FROM accounts a
+WHERE a.account_id = 2089
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000400');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2089, 'A000430', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2089 AND h.stock_code = 'A000430');
+SELECT a.id, 'A000430', 132, 0 FROM accounts a
+WHERE a.account_id = 2089
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000430');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2089, 'A000440', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2089 AND h.stock_code = 'A000440');
+SELECT a.id, 'A000440', 132, 0 FROM accounts a
+WHERE a.account_id = 2089
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000440');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2089, 'A000480', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2089 AND h.stock_code = 'A000480');
+SELECT a.id, 'A000480', 136, 0 FROM accounts a
+WHERE a.account_id = 2089
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000480');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2089, 'A900260', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2089 AND h.stock_code = 'A900260');
+SELECT a.id, 'A900260', 132, 0 FROM accounts a
+WHERE a.account_id = 2089
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900260');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2089, 'A900270', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2089 AND h.stock_code = 'A900270');
+SELECT a.id, 'A900270', 132, 0 FROM accounts a
+WHERE a.account_id = 2089
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2089, 'A900290', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2089 AND h.stock_code = 'A900290');
+SELECT a.id, 'A900290', 136, 0 FROM accounts a
+WHERE a.account_id = 2089
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900290');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2089, 'A900300', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2089 AND h.stock_code = 'A900300');
+SELECT a.id, 'A900300', 132, 0 FROM accounts a
+WHERE a.account_id = 2089
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2089, 'A900310', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2089 AND h.stock_code = 'A900310');
+SELECT a.id, 'A900310', 132, 0 FROM accounts a
+WHERE a.account_id = 2089
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900310');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2089, 'A900340', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2089 AND h.stock_code = 'A900340');
+SELECT a.id, 'A900340', 136, 0 FROM accounts a
+WHERE a.account_id = 2089
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900340');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2090, 'A000020', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2090 AND h.stock_code = 'A000020');
+SELECT a.id, 'A000020', 132, 0 FROM accounts a
+WHERE a.account_id = 2090
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000020');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2090, 'A000040', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2090 AND h.stock_code = 'A000040');
+SELECT a.id, 'A000040', 132, 0 FROM accounts a
+WHERE a.account_id = 2090
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000040');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2090, 'A000050', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2090 AND h.stock_code = 'A000050');
+SELECT a.id, 'A000050', 136, 0 FROM accounts a
+WHERE a.account_id = 2090
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000050');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2090, 'A000070', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2090 AND h.stock_code = 'A000070');
+SELECT a.id, 'A000070', 132, 0 FROM accounts a
+WHERE a.account_id = 2090
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000070');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2090, 'A000080', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2090 AND h.stock_code = 'A000080');
+SELECT a.id, 'A000080', 132, 0 FROM accounts a
+WHERE a.account_id = 2090
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000080');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2090, 'A000100', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2090 AND h.stock_code = 'A000100');
+SELECT a.id, 'A000100', 136, 0 FROM accounts a
+WHERE a.account_id = 2090
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000100');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2090, 'A000120', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2090 AND h.stock_code = 'A000120');
+SELECT a.id, 'A000120', 132, 0 FROM accounts a
+WHERE a.account_id = 2090
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000120');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2090, 'A000140', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2090 AND h.stock_code = 'A000140');
+SELECT a.id, 'A000140', 132, 0 FROM accounts a
+WHERE a.account_id = 2090
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000140');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2090, 'A000150', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2090 AND h.stock_code = 'A000150');
+SELECT a.id, 'A000150', 136, 0 FROM accounts a
+WHERE a.account_id = 2090
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000150');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2090, 'A000180', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2090 AND h.stock_code = 'A000180');
+SELECT a.id, 'A000180', 132, 0 FROM accounts a
+WHERE a.account_id = 2090
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000180');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2090, 'A000210', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2090 AND h.stock_code = 'A000210');
+SELECT a.id, 'A000210', 132, 0 FROM accounts a
+WHERE a.account_id = 2090
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000210');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2090, 'A000220', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2090 AND h.stock_code = 'A000220');
+SELECT a.id, 'A000220', 136, 0 FROM accounts a
+WHERE a.account_id = 2090
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000220');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2090, 'A000230', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2090 AND h.stock_code = 'A000230');
+SELECT a.id, 'A000230', 132, 0 FROM accounts a
+WHERE a.account_id = 2090
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000230');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2090, 'A000240', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2090 AND h.stock_code = 'A000240');
+SELECT a.id, 'A000240', 136, 0 FROM accounts a
+WHERE a.account_id = 2090
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000240');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2090, 'A000250', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2090 AND h.stock_code = 'A000250');
+SELECT a.id, 'A000250', 132, 0 FROM accounts a
+WHERE a.account_id = 2090
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000250');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2090, 'A000270', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2090 AND h.stock_code = 'A000270');
+SELECT a.id, 'A000270', 132, 0 FROM accounts a
+WHERE a.account_id = 2090
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2090, 'A000300', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2090 AND h.stock_code = 'A000300');
+SELECT a.id, 'A000300', 132, 0 FROM accounts a
+WHERE a.account_id = 2090
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2090, 'A000320', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2090 AND h.stock_code = 'A000320');
+SELECT a.id, 'A000320', 136, 0 FROM accounts a
+WHERE a.account_id = 2090
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000320');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2090, 'A000370', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2090 AND h.stock_code = 'A000370');
+SELECT a.id, 'A000370', 132, 0 FROM accounts a
+WHERE a.account_id = 2090
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000370');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2090, 'A000390', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2090 AND h.stock_code = 'A000390');
+SELECT a.id, 'A000390', 132, 0 FROM accounts a
+WHERE a.account_id = 2090
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000390');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2090, 'A000400', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2090 AND h.stock_code = 'A000400');
+SELECT a.id, 'A000400', 136, 0 FROM accounts a
+WHERE a.account_id = 2090
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000400');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2090, 'A000430', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2090 AND h.stock_code = 'A000430');
+SELECT a.id, 'A000430', 132, 0 FROM accounts a
+WHERE a.account_id = 2090
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000430');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2090, 'A000440', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2090 AND h.stock_code = 'A000440');
+SELECT a.id, 'A000440', 132, 0 FROM accounts a
+WHERE a.account_id = 2090
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000440');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2090, 'A000480', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2090 AND h.stock_code = 'A000480');
+SELECT a.id, 'A000480', 136, 0 FROM accounts a
+WHERE a.account_id = 2090
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000480');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2090, 'A900260', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2090 AND h.stock_code = 'A900260');
+SELECT a.id, 'A900260', 132, 0 FROM accounts a
+WHERE a.account_id = 2090
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900260');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2090, 'A900270', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2090 AND h.stock_code = 'A900270');
+SELECT a.id, 'A900270', 132, 0 FROM accounts a
+WHERE a.account_id = 2090
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2090, 'A900290', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2090 AND h.stock_code = 'A900290');
+SELECT a.id, 'A900290', 136, 0 FROM accounts a
+WHERE a.account_id = 2090
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900290');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2090, 'A900300', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2090 AND h.stock_code = 'A900300');
+SELECT a.id, 'A900300', 132, 0 FROM accounts a
+WHERE a.account_id = 2090
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2090, 'A900310', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2090 AND h.stock_code = 'A900310');
+SELECT a.id, 'A900310', 132, 0 FROM accounts a
+WHERE a.account_id = 2090
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900310');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2090, 'A900340', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2090 AND h.stock_code = 'A900340');
+SELECT a.id, 'A900340', 136, 0 FROM accounts a
+WHERE a.account_id = 2090
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900340');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2091, 'A000020', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2091 AND h.stock_code = 'A000020');
+SELECT a.id, 'A000020', 132, 0 FROM accounts a
+WHERE a.account_id = 2091
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000020');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2091, 'A000040', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2091 AND h.stock_code = 'A000040');
+SELECT a.id, 'A000040', 132, 0 FROM accounts a
+WHERE a.account_id = 2091
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000040');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2091, 'A000050', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2091 AND h.stock_code = 'A000050');
+SELECT a.id, 'A000050', 136, 0 FROM accounts a
+WHERE a.account_id = 2091
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000050');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2091, 'A000070', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2091 AND h.stock_code = 'A000070');
+SELECT a.id, 'A000070', 132, 0 FROM accounts a
+WHERE a.account_id = 2091
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000070');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2091, 'A000080', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2091 AND h.stock_code = 'A000080');
+SELECT a.id, 'A000080', 132, 0 FROM accounts a
+WHERE a.account_id = 2091
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000080');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2091, 'A000100', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2091 AND h.stock_code = 'A000100');
+SELECT a.id, 'A000100', 136, 0 FROM accounts a
+WHERE a.account_id = 2091
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000100');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2091, 'A000120', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2091 AND h.stock_code = 'A000120');
+SELECT a.id, 'A000120', 132, 0 FROM accounts a
+WHERE a.account_id = 2091
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000120');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2091, 'A000140', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2091 AND h.stock_code = 'A000140');
+SELECT a.id, 'A000140', 132, 0 FROM accounts a
+WHERE a.account_id = 2091
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000140');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2091, 'A000150', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2091 AND h.stock_code = 'A000150');
+SELECT a.id, 'A000150', 136, 0 FROM accounts a
+WHERE a.account_id = 2091
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000150');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2091, 'A000180', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2091 AND h.stock_code = 'A000180');
+SELECT a.id, 'A000180', 132, 0 FROM accounts a
+WHERE a.account_id = 2091
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000180');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2091, 'A000210', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2091 AND h.stock_code = 'A000210');
+SELECT a.id, 'A000210', 132, 0 FROM accounts a
+WHERE a.account_id = 2091
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000210');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2091, 'A000220', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2091 AND h.stock_code = 'A000220');
+SELECT a.id, 'A000220', 136, 0 FROM accounts a
+WHERE a.account_id = 2091
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000220');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2091, 'A000230', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2091 AND h.stock_code = 'A000230');
+SELECT a.id, 'A000230', 132, 0 FROM accounts a
+WHERE a.account_id = 2091
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000230');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2091, 'A000240', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2091 AND h.stock_code = 'A000240');
+SELECT a.id, 'A000240', 132, 0 FROM accounts a
+WHERE a.account_id = 2091
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000240');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2091, 'A000250', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2091 AND h.stock_code = 'A000250');
+SELECT a.id, 'A000250', 136, 0 FROM accounts a
+WHERE a.account_id = 2091
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000250');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2091, 'A000270', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2091 AND h.stock_code = 'A000270');
+SELECT a.id, 'A000270', 132, 0 FROM accounts a
+WHERE a.account_id = 2091
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2091, 'A000300', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2091 AND h.stock_code = 'A000300');
+SELECT a.id, 'A000300', 132, 0 FROM accounts a
+WHERE a.account_id = 2091
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2091, 'A000320', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2091 AND h.stock_code = 'A000320');
+SELECT a.id, 'A000320', 136, 0 FROM accounts a
+WHERE a.account_id = 2091
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000320');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2091, 'A000370', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2091 AND h.stock_code = 'A000370');
+SELECT a.id, 'A000370', 132, 0 FROM accounts a
+WHERE a.account_id = 2091
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000370');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2091, 'A000390', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2091 AND h.stock_code = 'A000390');
+SELECT a.id, 'A000390', 132, 0 FROM accounts a
+WHERE a.account_id = 2091
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000390');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2091, 'A000400', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2091 AND h.stock_code = 'A000400');
+SELECT a.id, 'A000400', 136, 0 FROM accounts a
+WHERE a.account_id = 2091
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000400');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2091, 'A000430', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2091 AND h.stock_code = 'A000430');
+SELECT a.id, 'A000430', 132, 0 FROM accounts a
+WHERE a.account_id = 2091
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000430');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2091, 'A000440', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2091 AND h.stock_code = 'A000440');
+SELECT a.id, 'A000440', 132, 0 FROM accounts a
+WHERE a.account_id = 2091
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000440');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2091, 'A000480', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2091 AND h.stock_code = 'A000480');
+SELECT a.id, 'A000480', 136, 0 FROM accounts a
+WHERE a.account_id = 2091
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000480');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2091, 'A900260', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2091 AND h.stock_code = 'A900260');
+SELECT a.id, 'A900260', 132, 0 FROM accounts a
+WHERE a.account_id = 2091
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900260');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2091, 'A900270', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2091 AND h.stock_code = 'A900270');
+SELECT a.id, 'A900270', 132, 0 FROM accounts a
+WHERE a.account_id = 2091
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2091, 'A900290', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2091 AND h.stock_code = 'A900290');
+SELECT a.id, 'A900290', 136, 0 FROM accounts a
+WHERE a.account_id = 2091
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900290');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2091, 'A900300', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2091 AND h.stock_code = 'A900300');
+SELECT a.id, 'A900300', 132, 0 FROM accounts a
+WHERE a.account_id = 2091
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2091, 'A900310', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2091 AND h.stock_code = 'A900310');
+SELECT a.id, 'A900310', 132, 0 FROM accounts a
+WHERE a.account_id = 2091
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900310');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2091, 'A900340', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2091 AND h.stock_code = 'A900340');
+SELECT a.id, 'A900340', 136, 0 FROM accounts a
+WHERE a.account_id = 2091
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900340');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2092, 'A000020', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2092 AND h.stock_code = 'A000020');
+SELECT a.id, 'A000020', 132, 0 FROM accounts a
+WHERE a.account_id = 2092
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000020');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2092, 'A000040', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2092 AND h.stock_code = 'A000040');
+SELECT a.id, 'A000040', 132, 0 FROM accounts a
+WHERE a.account_id = 2092
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000040');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2092, 'A000050', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2092 AND h.stock_code = 'A000050');
+SELECT a.id, 'A000050', 136, 0 FROM accounts a
+WHERE a.account_id = 2092
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000050');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2092, 'A000070', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2092 AND h.stock_code = 'A000070');
+SELECT a.id, 'A000070', 132, 0 FROM accounts a
+WHERE a.account_id = 2092
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000070');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2092, 'A000080', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2092 AND h.stock_code = 'A000080');
+SELECT a.id, 'A000080', 132, 0 FROM accounts a
+WHERE a.account_id = 2092
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000080');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2092, 'A000100', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2092 AND h.stock_code = 'A000100');
+SELECT a.id, 'A000100', 136, 0 FROM accounts a
+WHERE a.account_id = 2092
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000100');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2092, 'A000120', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2092 AND h.stock_code = 'A000120');
+SELECT a.id, 'A000120', 132, 0 FROM accounts a
+WHERE a.account_id = 2092
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000120');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2092, 'A000140', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2092 AND h.stock_code = 'A000140');
+SELECT a.id, 'A000140', 132, 0 FROM accounts a
+WHERE a.account_id = 2092
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000140');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2092, 'A000150', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2092 AND h.stock_code = 'A000150');
+SELECT a.id, 'A000150', 136, 0 FROM accounts a
+WHERE a.account_id = 2092
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000150');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2092, 'A000180', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2092 AND h.stock_code = 'A000180');
+SELECT a.id, 'A000180', 132, 0 FROM accounts a
+WHERE a.account_id = 2092
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000180');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2092, 'A000210', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2092 AND h.stock_code = 'A000210');
+SELECT a.id, 'A000210', 132, 0 FROM accounts a
+WHERE a.account_id = 2092
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000210');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2092, 'A000220', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2092 AND h.stock_code = 'A000220');
+SELECT a.id, 'A000220', 136, 0 FROM accounts a
+WHERE a.account_id = 2092
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000220');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2092, 'A000230', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2092 AND h.stock_code = 'A000230');
+SELECT a.id, 'A000230', 132, 0 FROM accounts a
+WHERE a.account_id = 2092
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000230');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2092, 'A000240', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2092 AND h.stock_code = 'A000240');
+SELECT a.id, 'A000240', 132, 0 FROM accounts a
+WHERE a.account_id = 2092
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000240');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2092, 'A000250', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2092 AND h.stock_code = 'A000250');
+SELECT a.id, 'A000250', 136, 0 FROM accounts a
+WHERE a.account_id = 2092
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000250');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2092, 'A000270', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2092 AND h.stock_code = 'A000270');
+SELECT a.id, 'A000270', 132, 0 FROM accounts a
+WHERE a.account_id = 2092
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2092, 'A000300', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2092 AND h.stock_code = 'A000300');
+SELECT a.id, 'A000300', 132, 0 FROM accounts a
+WHERE a.account_id = 2092
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2092, 'A000320', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2092 AND h.stock_code = 'A000320');
+SELECT a.id, 'A000320', 136, 0 FROM accounts a
+WHERE a.account_id = 2092
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000320');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2092, 'A000370', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2092 AND h.stock_code = 'A000370');
+SELECT a.id, 'A000370', 132, 0 FROM accounts a
+WHERE a.account_id = 2092
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000370');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2092, 'A000390', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2092 AND h.stock_code = 'A000390');
+SELECT a.id, 'A000390', 132, 0 FROM accounts a
+WHERE a.account_id = 2092
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000390');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2092, 'A000400', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2092 AND h.stock_code = 'A000400');
+SELECT a.id, 'A000400', 136, 0 FROM accounts a
+WHERE a.account_id = 2092
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000400');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2092, 'A000430', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2092 AND h.stock_code = 'A000430');
+SELECT a.id, 'A000430', 132, 0 FROM accounts a
+WHERE a.account_id = 2092
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000430');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2092, 'A000440', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2092 AND h.stock_code = 'A000440');
+SELECT a.id, 'A000440', 132, 0 FROM accounts a
+WHERE a.account_id = 2092
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000440');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2092, 'A000480', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2092 AND h.stock_code = 'A000480');
+SELECT a.id, 'A000480', 136, 0 FROM accounts a
+WHERE a.account_id = 2092
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000480');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2092, 'A900260', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2092 AND h.stock_code = 'A900260');
+SELECT a.id, 'A900260', 132, 0 FROM accounts a
+WHERE a.account_id = 2092
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900260');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2092, 'A900270', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2092 AND h.stock_code = 'A900270');
+SELECT a.id, 'A900270', 132, 0 FROM accounts a
+WHERE a.account_id = 2092
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2092, 'A900290', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2092 AND h.stock_code = 'A900290');
+SELECT a.id, 'A900290', 136, 0 FROM accounts a
+WHERE a.account_id = 2092
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900290');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2092, 'A900300', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2092 AND h.stock_code = 'A900300');
+SELECT a.id, 'A900300', 132, 0 FROM accounts a
+WHERE a.account_id = 2092
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2092, 'A900310', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2092 AND h.stock_code = 'A900310');
+SELECT a.id, 'A900310', 132, 0 FROM accounts a
+WHERE a.account_id = 2092
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900310');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2092, 'A900340', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2092 AND h.stock_code = 'A900340');
+SELECT a.id, 'A900340', 136, 0 FROM accounts a
+WHERE a.account_id = 2092
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900340');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2093, 'A000020', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2093 AND h.stock_code = 'A000020');
+SELECT a.id, 'A000020', 132, 0 FROM accounts a
+WHERE a.account_id = 2093
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000020');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2093, 'A000040', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2093 AND h.stock_code = 'A000040');
+SELECT a.id, 'A000040', 132, 0 FROM accounts a
+WHERE a.account_id = 2093
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000040');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2093, 'A000050', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2093 AND h.stock_code = 'A000050');
+SELECT a.id, 'A000050', 136, 0 FROM accounts a
+WHERE a.account_id = 2093
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000050');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2093, 'A000070', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2093 AND h.stock_code = 'A000070');
+SELECT a.id, 'A000070', 132, 0 FROM accounts a
+WHERE a.account_id = 2093
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000070');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2093, 'A000080', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2093 AND h.stock_code = 'A000080');
+SELECT a.id, 'A000080', 132, 0 FROM accounts a
+WHERE a.account_id = 2093
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000080');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2093, 'A000100', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2093 AND h.stock_code = 'A000100');
+SELECT a.id, 'A000100', 136, 0 FROM accounts a
+WHERE a.account_id = 2093
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000100');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2093, 'A000120', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2093 AND h.stock_code = 'A000120');
+SELECT a.id, 'A000120', 132, 0 FROM accounts a
+WHERE a.account_id = 2093
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000120');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2093, 'A000140', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2093 AND h.stock_code = 'A000140');
+SELECT a.id, 'A000140', 132, 0 FROM accounts a
+WHERE a.account_id = 2093
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000140');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2093, 'A000150', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2093 AND h.stock_code = 'A000150');
+SELECT a.id, 'A000150', 136, 0 FROM accounts a
+WHERE a.account_id = 2093
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000150');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2093, 'A000180', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2093 AND h.stock_code = 'A000180');
+SELECT a.id, 'A000180', 132, 0 FROM accounts a
+WHERE a.account_id = 2093
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000180');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2093, 'A000210', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2093 AND h.stock_code = 'A000210');
+SELECT a.id, 'A000210', 132, 0 FROM accounts a
+WHERE a.account_id = 2093
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000210');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2093, 'A000220', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2093 AND h.stock_code = 'A000220');
+SELECT a.id, 'A000220', 136, 0 FROM accounts a
+WHERE a.account_id = 2093
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000220');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2093, 'A000230', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2093 AND h.stock_code = 'A000230');
+SELECT a.id, 'A000230', 132, 0 FROM accounts a
+WHERE a.account_id = 2093
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000230');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2093, 'A000240', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2093 AND h.stock_code = 'A000240');
+SELECT a.id, 'A000240', 132, 0 FROM accounts a
+WHERE a.account_id = 2093
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000240');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2093, 'A000250', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2093 AND h.stock_code = 'A000250');
+SELECT a.id, 'A000250', 136, 0 FROM accounts a
+WHERE a.account_id = 2093
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000250');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2093, 'A000270', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2093 AND h.stock_code = 'A000270');
+SELECT a.id, 'A000270', 132, 0 FROM accounts a
+WHERE a.account_id = 2093
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2093, 'A000300', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2093 AND h.stock_code = 'A000300');
+SELECT a.id, 'A000300', 132, 0 FROM accounts a
+WHERE a.account_id = 2093
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2093, 'A000320', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2093 AND h.stock_code = 'A000320');
+SELECT a.id, 'A000320', 136, 0 FROM accounts a
+WHERE a.account_id = 2093
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000320');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2093, 'A000370', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2093 AND h.stock_code = 'A000370');
+SELECT a.id, 'A000370', 132, 0 FROM accounts a
+WHERE a.account_id = 2093
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000370');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2093, 'A000390', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2093 AND h.stock_code = 'A000390');
+SELECT a.id, 'A000390', 132, 0 FROM accounts a
+WHERE a.account_id = 2093
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000390');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2093, 'A000400', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2093 AND h.stock_code = 'A000400');
+SELECT a.id, 'A000400', 136, 0 FROM accounts a
+WHERE a.account_id = 2093
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000400');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2093, 'A000430', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2093 AND h.stock_code = 'A000430');
+SELECT a.id, 'A000430', 132, 0 FROM accounts a
+WHERE a.account_id = 2093
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000430');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2093, 'A000440', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2093 AND h.stock_code = 'A000440');
+SELECT a.id, 'A000440', 132, 0 FROM accounts a
+WHERE a.account_id = 2093
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000440');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2093, 'A000480', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2093 AND h.stock_code = 'A000480');
+SELECT a.id, 'A000480', 136, 0 FROM accounts a
+WHERE a.account_id = 2093
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000480');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2093, 'A900260', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2093 AND h.stock_code = 'A900260');
+SELECT a.id, 'A900260', 132, 0 FROM accounts a
+WHERE a.account_id = 2093
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900260');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2093, 'A900270', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2093 AND h.stock_code = 'A900270');
+SELECT a.id, 'A900270', 132, 0 FROM accounts a
+WHERE a.account_id = 2093
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2093, 'A900290', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2093 AND h.stock_code = 'A900290');
+SELECT a.id, 'A900290', 136, 0 FROM accounts a
+WHERE a.account_id = 2093
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900290');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2093, 'A900300', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2093 AND h.stock_code = 'A900300');
+SELECT a.id, 'A900300', 132, 0 FROM accounts a
+WHERE a.account_id = 2093
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2093, 'A900310', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2093 AND h.stock_code = 'A900310');
+SELECT a.id, 'A900310', 132, 0 FROM accounts a
+WHERE a.account_id = 2093
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900310');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2093, 'A900340', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2093 AND h.stock_code = 'A900340');
+SELECT a.id, 'A900340', 136, 0 FROM accounts a
+WHERE a.account_id = 2093
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900340');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2094, 'A000020', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2094 AND h.stock_code = 'A000020');
+SELECT a.id, 'A000020', 132, 0 FROM accounts a
+WHERE a.account_id = 2094
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000020');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2094, 'A000040', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2094 AND h.stock_code = 'A000040');
+SELECT a.id, 'A000040', 132, 0 FROM accounts a
+WHERE a.account_id = 2094
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000040');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2094, 'A000050', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2094 AND h.stock_code = 'A000050');
+SELECT a.id, 'A000050', 136, 0 FROM accounts a
+WHERE a.account_id = 2094
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000050');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2094, 'A000070', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2094 AND h.stock_code = 'A000070');
+SELECT a.id, 'A000070', 132, 0 FROM accounts a
+WHERE a.account_id = 2094
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000070');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2094, 'A000080', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2094 AND h.stock_code = 'A000080');
+SELECT a.id, 'A000080', 132, 0 FROM accounts a
+WHERE a.account_id = 2094
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000080');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2094, 'A000100', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2094 AND h.stock_code = 'A000100');
+SELECT a.id, 'A000100', 136, 0 FROM accounts a
+WHERE a.account_id = 2094
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000100');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2094, 'A000120', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2094 AND h.stock_code = 'A000120');
+SELECT a.id, 'A000120', 132, 0 FROM accounts a
+WHERE a.account_id = 2094
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000120');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2094, 'A000140', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2094 AND h.stock_code = 'A000140');
+SELECT a.id, 'A000140', 132, 0 FROM accounts a
+WHERE a.account_id = 2094
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000140');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2094, 'A000150', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2094 AND h.stock_code = 'A000150');
+SELECT a.id, 'A000150', 136, 0 FROM accounts a
+WHERE a.account_id = 2094
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000150');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2094, 'A000180', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2094 AND h.stock_code = 'A000180');
+SELECT a.id, 'A000180', 132, 0 FROM accounts a
+WHERE a.account_id = 2094
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000180');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2094, 'A000210', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2094 AND h.stock_code = 'A000210');
+SELECT a.id, 'A000210', 132, 0 FROM accounts a
+WHERE a.account_id = 2094
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000210');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2094, 'A000220', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2094 AND h.stock_code = 'A000220');
+SELECT a.id, 'A000220', 136, 0 FROM accounts a
+WHERE a.account_id = 2094
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000220');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2094, 'A000230', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2094 AND h.stock_code = 'A000230');
+SELECT a.id, 'A000230', 132, 0 FROM accounts a
+WHERE a.account_id = 2094
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000230');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2094, 'A000240', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2094 AND h.stock_code = 'A000240');
+SELECT a.id, 'A000240', 132, 0 FROM accounts a
+WHERE a.account_id = 2094
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000240');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2094, 'A000250', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2094 AND h.stock_code = 'A000250');
+SELECT a.id, 'A000250', 136, 0 FROM accounts a
+WHERE a.account_id = 2094
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000250');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2094, 'A000270', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2094 AND h.stock_code = 'A000270');
+SELECT a.id, 'A000270', 132, 0 FROM accounts a
+WHERE a.account_id = 2094
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2094, 'A000300', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2094 AND h.stock_code = 'A000300');
+SELECT a.id, 'A000300', 132, 0 FROM accounts a
+WHERE a.account_id = 2094
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2094, 'A000320', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2094 AND h.stock_code = 'A000320');
+SELECT a.id, 'A000320', 136, 0 FROM accounts a
+WHERE a.account_id = 2094
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000320');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2094, 'A000370', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2094 AND h.stock_code = 'A000370');
+SELECT a.id, 'A000370', 132, 0 FROM accounts a
+WHERE a.account_id = 2094
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000370');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2094, 'A000390', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2094 AND h.stock_code = 'A000390');
+SELECT a.id, 'A000390', 132, 0 FROM accounts a
+WHERE a.account_id = 2094
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000390');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2094, 'A000400', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2094 AND h.stock_code = 'A000400');
+SELECT a.id, 'A000400', 136, 0 FROM accounts a
+WHERE a.account_id = 2094
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000400');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2094, 'A000430', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2094 AND h.stock_code = 'A000430');
+SELECT a.id, 'A000430', 132, 0 FROM accounts a
+WHERE a.account_id = 2094
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000430');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2094, 'A000440', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2094 AND h.stock_code = 'A000440');
+SELECT a.id, 'A000440', 132, 0 FROM accounts a
+WHERE a.account_id = 2094
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000440');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2094, 'A000480', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2094 AND h.stock_code = 'A000480');
+SELECT a.id, 'A000480', 136, 0 FROM accounts a
+WHERE a.account_id = 2094
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000480');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2094, 'A900260', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2094 AND h.stock_code = 'A900260');
+SELECT a.id, 'A900260', 132, 0 FROM accounts a
+WHERE a.account_id = 2094
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900260');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2094, 'A900270', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2094 AND h.stock_code = 'A900270');
+SELECT a.id, 'A900270', 132, 0 FROM accounts a
+WHERE a.account_id = 2094
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2094, 'A900290', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2094 AND h.stock_code = 'A900290');
+SELECT a.id, 'A900290', 136, 0 FROM accounts a
+WHERE a.account_id = 2094
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900290');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2094, 'A900300', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2094 AND h.stock_code = 'A900300');
+SELECT a.id, 'A900300', 132, 0 FROM accounts a
+WHERE a.account_id = 2094
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2094, 'A900310', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2094 AND h.stock_code = 'A900310');
+SELECT a.id, 'A900310', 132, 0 FROM accounts a
+WHERE a.account_id = 2094
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900310');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2094, 'A900340', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2094 AND h.stock_code = 'A900340');
+SELECT a.id, 'A900340', 136, 0 FROM accounts a
+WHERE a.account_id = 2094
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900340');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2095, 'A000020', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2095 AND h.stock_code = 'A000020');
+SELECT a.id, 'A000020', 132, 0 FROM accounts a
+WHERE a.account_id = 2095
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000020');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2095, 'A000040', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2095 AND h.stock_code = 'A000040');
+SELECT a.id, 'A000040', 132, 0 FROM accounts a
+WHERE a.account_id = 2095
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000040');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2095, 'A000050', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2095 AND h.stock_code = 'A000050');
+SELECT a.id, 'A000050', 136, 0 FROM accounts a
+WHERE a.account_id = 2095
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000050');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2095, 'A000070', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2095 AND h.stock_code = 'A000070');
+SELECT a.id, 'A000070', 132, 0 FROM accounts a
+WHERE a.account_id = 2095
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000070');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2095, 'A000080', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2095 AND h.stock_code = 'A000080');
+SELECT a.id, 'A000080', 132, 0 FROM accounts a
+WHERE a.account_id = 2095
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000080');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2095, 'A000100', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2095 AND h.stock_code = 'A000100');
+SELECT a.id, 'A000100', 136, 0 FROM accounts a
+WHERE a.account_id = 2095
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000100');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2095, 'A000120', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2095 AND h.stock_code = 'A000120');
+SELECT a.id, 'A000120', 132, 0 FROM accounts a
+WHERE a.account_id = 2095
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000120');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2095, 'A000140', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2095 AND h.stock_code = 'A000140');
+SELECT a.id, 'A000140', 132, 0 FROM accounts a
+WHERE a.account_id = 2095
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000140');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2095, 'A000150', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2095 AND h.stock_code = 'A000150');
+SELECT a.id, 'A000150', 136, 0 FROM accounts a
+WHERE a.account_id = 2095
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000150');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2095, 'A000180', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2095 AND h.stock_code = 'A000180');
+SELECT a.id, 'A000180', 132, 0 FROM accounts a
+WHERE a.account_id = 2095
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000180');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2095, 'A000210', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2095 AND h.stock_code = 'A000210');
+SELECT a.id, 'A000210', 132, 0 FROM accounts a
+WHERE a.account_id = 2095
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000210');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2095, 'A000220', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2095 AND h.stock_code = 'A000220');
+SELECT a.id, 'A000220', 136, 0 FROM accounts a
+WHERE a.account_id = 2095
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000220');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2095, 'A000230', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2095 AND h.stock_code = 'A000230');
+SELECT a.id, 'A000230', 132, 0 FROM accounts a
+WHERE a.account_id = 2095
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000230');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2095, 'A000240', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2095 AND h.stock_code = 'A000240');
+SELECT a.id, 'A000240', 132, 0 FROM accounts a
+WHERE a.account_id = 2095
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000240');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2095, 'A000250', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2095 AND h.stock_code = 'A000250');
+SELECT a.id, 'A000250', 136, 0 FROM accounts a
+WHERE a.account_id = 2095
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000250');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2095, 'A000270', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2095 AND h.stock_code = 'A000270');
+SELECT a.id, 'A000270', 132, 0 FROM accounts a
+WHERE a.account_id = 2095
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2095, 'A000300', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2095 AND h.stock_code = 'A000300');
+SELECT a.id, 'A000300', 132, 0 FROM accounts a
+WHERE a.account_id = 2095
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2095, 'A000320', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2095 AND h.stock_code = 'A000320');
+SELECT a.id, 'A000320', 136, 0 FROM accounts a
+WHERE a.account_id = 2095
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000320');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2095, 'A000370', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2095 AND h.stock_code = 'A000370');
+SELECT a.id, 'A000370', 132, 0 FROM accounts a
+WHERE a.account_id = 2095
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000370');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2095, 'A000390', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2095 AND h.stock_code = 'A000390');
+SELECT a.id, 'A000390', 132, 0 FROM accounts a
+WHERE a.account_id = 2095
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000390');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2095, 'A000400', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2095 AND h.stock_code = 'A000400');
+SELECT a.id, 'A000400', 136, 0 FROM accounts a
+WHERE a.account_id = 2095
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000400');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2095, 'A000430', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2095 AND h.stock_code = 'A000430');
+SELECT a.id, 'A000430', 132, 0 FROM accounts a
+WHERE a.account_id = 2095
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000430');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2095, 'A000440', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2095 AND h.stock_code = 'A000440');
+SELECT a.id, 'A000440', 132, 0 FROM accounts a
+WHERE a.account_id = 2095
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000440');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2095, 'A000480', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2095 AND h.stock_code = 'A000480');
+SELECT a.id, 'A000480', 136, 0 FROM accounts a
+WHERE a.account_id = 2095
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000480');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2095, 'A900260', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2095 AND h.stock_code = 'A900260');
+SELECT a.id, 'A900260', 132, 0 FROM accounts a
+WHERE a.account_id = 2095
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900260');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2095, 'A900270', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2095 AND h.stock_code = 'A900270');
+SELECT a.id, 'A900270', 132, 0 FROM accounts a
+WHERE a.account_id = 2095
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2095, 'A900290', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2095 AND h.stock_code = 'A900290');
+SELECT a.id, 'A900290', 136, 0 FROM accounts a
+WHERE a.account_id = 2095
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900290');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2095, 'A900300', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2095 AND h.stock_code = 'A900300');
+SELECT a.id, 'A900300', 132, 0 FROM accounts a
+WHERE a.account_id = 2095
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2095, 'A900310', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2095 AND h.stock_code = 'A900310');
+SELECT a.id, 'A900310', 132, 0 FROM accounts a
+WHERE a.account_id = 2095
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900310');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2095, 'A900340', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2095 AND h.stock_code = 'A900340');
+SELECT a.id, 'A900340', 136, 0 FROM accounts a
+WHERE a.account_id = 2095
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900340');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2096, 'A000020', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2096 AND h.stock_code = 'A000020');
+SELECT a.id, 'A000020', 132, 0 FROM accounts a
+WHERE a.account_id = 2096
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000020');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2096, 'A000040', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2096 AND h.stock_code = 'A000040');
+SELECT a.id, 'A000040', 132, 0 FROM accounts a
+WHERE a.account_id = 2096
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000040');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2096, 'A000050', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2096 AND h.stock_code = 'A000050');
+SELECT a.id, 'A000050', 136, 0 FROM accounts a
+WHERE a.account_id = 2096
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000050');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2096, 'A000070', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2096 AND h.stock_code = 'A000070');
+SELECT a.id, 'A000070', 132, 0 FROM accounts a
+WHERE a.account_id = 2096
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000070');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2096, 'A000080', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2096 AND h.stock_code = 'A000080');
+SELECT a.id, 'A000080', 132, 0 FROM accounts a
+WHERE a.account_id = 2096
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000080');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2096, 'A000100', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2096 AND h.stock_code = 'A000100');
+SELECT a.id, 'A000100', 136, 0 FROM accounts a
+WHERE a.account_id = 2096
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000100');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2096, 'A000120', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2096 AND h.stock_code = 'A000120');
+SELECT a.id, 'A000120', 132, 0 FROM accounts a
+WHERE a.account_id = 2096
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000120');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2096, 'A000140', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2096 AND h.stock_code = 'A000140');
+SELECT a.id, 'A000140', 132, 0 FROM accounts a
+WHERE a.account_id = 2096
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000140');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2096, 'A000150', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2096 AND h.stock_code = 'A000150');
+SELECT a.id, 'A000150', 136, 0 FROM accounts a
+WHERE a.account_id = 2096
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000150');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2096, 'A000180', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2096 AND h.stock_code = 'A000180');
+SELECT a.id, 'A000180', 132, 0 FROM accounts a
+WHERE a.account_id = 2096
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000180');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2096, 'A000210', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2096 AND h.stock_code = 'A000210');
+SELECT a.id, 'A000210', 132, 0 FROM accounts a
+WHERE a.account_id = 2096
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000210');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2096, 'A000220', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2096 AND h.stock_code = 'A000220');
+SELECT a.id, 'A000220', 136, 0 FROM accounts a
+WHERE a.account_id = 2096
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000220');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2096, 'A000230', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2096 AND h.stock_code = 'A000230');
+SELECT a.id, 'A000230', 132, 0 FROM accounts a
+WHERE a.account_id = 2096
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000230');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2096, 'A000240', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2096 AND h.stock_code = 'A000240');
+SELECT a.id, 'A000240', 132, 0 FROM accounts a
+WHERE a.account_id = 2096
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000240');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2096, 'A000250', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2096 AND h.stock_code = 'A000250');
+SELECT a.id, 'A000250', 136, 0 FROM accounts a
+WHERE a.account_id = 2096
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000250');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2096, 'A000270', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2096 AND h.stock_code = 'A000270');
+SELECT a.id, 'A000270', 132, 0 FROM accounts a
+WHERE a.account_id = 2096
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2096, 'A000300', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2096 AND h.stock_code = 'A000300');
+SELECT a.id, 'A000300', 132, 0 FROM accounts a
+WHERE a.account_id = 2096
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2096, 'A000320', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2096 AND h.stock_code = 'A000320');
+SELECT a.id, 'A000320', 136, 0 FROM accounts a
+WHERE a.account_id = 2096
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000320');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2096, 'A000370', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2096 AND h.stock_code = 'A000370');
+SELECT a.id, 'A000370', 132, 0 FROM accounts a
+WHERE a.account_id = 2096
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000370');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2096, 'A000390', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2096 AND h.stock_code = 'A000390');
+SELECT a.id, 'A000390', 132, 0 FROM accounts a
+WHERE a.account_id = 2096
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000390');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2096, 'A000400', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2096 AND h.stock_code = 'A000400');
+SELECT a.id, 'A000400', 136, 0 FROM accounts a
+WHERE a.account_id = 2096
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000400');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2096, 'A000430', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2096 AND h.stock_code = 'A000430');
+SELECT a.id, 'A000430', 132, 0 FROM accounts a
+WHERE a.account_id = 2096
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000430');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2096, 'A000440', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2096 AND h.stock_code = 'A000440');
+SELECT a.id, 'A000440', 132, 0 FROM accounts a
+WHERE a.account_id = 2096
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000440');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2096, 'A000480', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2096 AND h.stock_code = 'A000480');
+SELECT a.id, 'A000480', 136, 0 FROM accounts a
+WHERE a.account_id = 2096
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000480');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2096, 'A900260', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2096 AND h.stock_code = 'A900260');
+SELECT a.id, 'A900260', 132, 0 FROM accounts a
+WHERE a.account_id = 2096
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900260');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2096, 'A900270', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2096 AND h.stock_code = 'A900270');
+SELECT a.id, 'A900270', 132, 0 FROM accounts a
+WHERE a.account_id = 2096
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2096, 'A900290', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2096 AND h.stock_code = 'A900290');
+SELECT a.id, 'A900290', 136, 0 FROM accounts a
+WHERE a.account_id = 2096
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900290');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2096, 'A900300', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2096 AND h.stock_code = 'A900300');
+SELECT a.id, 'A900300', 132, 0 FROM accounts a
+WHERE a.account_id = 2096
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2096, 'A900310', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2096 AND h.stock_code = 'A900310');
+SELECT a.id, 'A900310', 132, 0 FROM accounts a
+WHERE a.account_id = 2096
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900310');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2096, 'A900340', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2096 AND h.stock_code = 'A900340');
+SELECT a.id, 'A900340', 136, 0 FROM accounts a
+WHERE a.account_id = 2096
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900340');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2097, 'A000020', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2097 AND h.stock_code = 'A000020');
+SELECT a.id, 'A000020', 132, 0 FROM accounts a
+WHERE a.account_id = 2097
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000020');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2097, 'A000040', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2097 AND h.stock_code = 'A000040');
+SELECT a.id, 'A000040', 132, 0 FROM accounts a
+WHERE a.account_id = 2097
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000040');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2097, 'A000050', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2097 AND h.stock_code = 'A000050');
+SELECT a.id, 'A000050', 136, 0 FROM accounts a
+WHERE a.account_id = 2097
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000050');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2097, 'A000070', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2097 AND h.stock_code = 'A000070');
+SELECT a.id, 'A000070', 132, 0 FROM accounts a
+WHERE a.account_id = 2097
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000070');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2097, 'A000080', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2097 AND h.stock_code = 'A000080');
+SELECT a.id, 'A000080', 132, 0 FROM accounts a
+WHERE a.account_id = 2097
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000080');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2097, 'A000100', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2097 AND h.stock_code = 'A000100');
+SELECT a.id, 'A000100', 136, 0 FROM accounts a
+WHERE a.account_id = 2097
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000100');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2097, 'A000120', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2097 AND h.stock_code = 'A000120');
+SELECT a.id, 'A000120', 132, 0 FROM accounts a
+WHERE a.account_id = 2097
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000120');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2097, 'A000140', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2097 AND h.stock_code = 'A000140');
+SELECT a.id, 'A000140', 132, 0 FROM accounts a
+WHERE a.account_id = 2097
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000140');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2097, 'A000150', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2097 AND h.stock_code = 'A000150');
+SELECT a.id, 'A000150', 136, 0 FROM accounts a
+WHERE a.account_id = 2097
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000150');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2097, 'A000180', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2097 AND h.stock_code = 'A000180');
+SELECT a.id, 'A000180', 132, 0 FROM accounts a
+WHERE a.account_id = 2097
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000180');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2097, 'A000210', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2097 AND h.stock_code = 'A000210');
+SELECT a.id, 'A000210', 132, 0 FROM accounts a
+WHERE a.account_id = 2097
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000210');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2097, 'A000220', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2097 AND h.stock_code = 'A000220');
+SELECT a.id, 'A000220', 136, 0 FROM accounts a
+WHERE a.account_id = 2097
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000220');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2097, 'A000230', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2097 AND h.stock_code = 'A000230');
+SELECT a.id, 'A000230', 132, 0 FROM accounts a
+WHERE a.account_id = 2097
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000230');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2097, 'A000240', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2097 AND h.stock_code = 'A000240');
+SELECT a.id, 'A000240', 132, 0 FROM accounts a
+WHERE a.account_id = 2097
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000240');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2097, 'A000250', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2097 AND h.stock_code = 'A000250');
+SELECT a.id, 'A000250', 136, 0 FROM accounts a
+WHERE a.account_id = 2097
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000250');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2097, 'A000270', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2097 AND h.stock_code = 'A000270');
+SELECT a.id, 'A000270', 132, 0 FROM accounts a
+WHERE a.account_id = 2097
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2097, 'A000300', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2097 AND h.stock_code = 'A000300');
+SELECT a.id, 'A000300', 132, 0 FROM accounts a
+WHERE a.account_id = 2097
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2097, 'A000320', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2097 AND h.stock_code = 'A000320');
+SELECT a.id, 'A000320', 136, 0 FROM accounts a
+WHERE a.account_id = 2097
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000320');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2097, 'A000370', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2097 AND h.stock_code = 'A000370');
+SELECT a.id, 'A000370', 132, 0 FROM accounts a
+WHERE a.account_id = 2097
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000370');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2097, 'A000390', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2097 AND h.stock_code = 'A000390');
+SELECT a.id, 'A000390', 132, 0 FROM accounts a
+WHERE a.account_id = 2097
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000390');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2097, 'A000400', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2097 AND h.stock_code = 'A000400');
+SELECT a.id, 'A000400', 136, 0 FROM accounts a
+WHERE a.account_id = 2097
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000400');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2097, 'A000430', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2097 AND h.stock_code = 'A000430');
+SELECT a.id, 'A000430', 132, 0 FROM accounts a
+WHERE a.account_id = 2097
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000430');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2097, 'A000440', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2097 AND h.stock_code = 'A000440');
+SELECT a.id, 'A000440', 132, 0 FROM accounts a
+WHERE a.account_id = 2097
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000440');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2097, 'A000480', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2097 AND h.stock_code = 'A000480');
+SELECT a.id, 'A000480', 136, 0 FROM accounts a
+WHERE a.account_id = 2097
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000480');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2097, 'A900260', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2097 AND h.stock_code = 'A900260');
+SELECT a.id, 'A900260', 132, 0 FROM accounts a
+WHERE a.account_id = 2097
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900260');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2097, 'A900270', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2097 AND h.stock_code = 'A900270');
+SELECT a.id, 'A900270', 132, 0 FROM accounts a
+WHERE a.account_id = 2097
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2097, 'A900290', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2097 AND h.stock_code = 'A900290');
+SELECT a.id, 'A900290', 136, 0 FROM accounts a
+WHERE a.account_id = 2097
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900290');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2097, 'A900300', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2097 AND h.stock_code = 'A900300');
+SELECT a.id, 'A900300', 132, 0 FROM accounts a
+WHERE a.account_id = 2097
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2097, 'A900310', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2097 AND h.stock_code = 'A900310');
+SELECT a.id, 'A900310', 132, 0 FROM accounts a
+WHERE a.account_id = 2097
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900310');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2097, 'A900340', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2097 AND h.stock_code = 'A900340');
+SELECT a.id, 'A900340', 136, 0 FROM accounts a
+WHERE a.account_id = 2097
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900340');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2098, 'A000020', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2098 AND h.stock_code = 'A000020');
+SELECT a.id, 'A000020', 132, 0 FROM accounts a
+WHERE a.account_id = 2098
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000020');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2098, 'A000040', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2098 AND h.stock_code = 'A000040');
+SELECT a.id, 'A000040', 132, 0 FROM accounts a
+WHERE a.account_id = 2098
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000040');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2098, 'A000050', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2098 AND h.stock_code = 'A000050');
+SELECT a.id, 'A000050', 136, 0 FROM accounts a
+WHERE a.account_id = 2098
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000050');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2098, 'A000070', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2098 AND h.stock_code = 'A000070');
+SELECT a.id, 'A000070', 132, 0 FROM accounts a
+WHERE a.account_id = 2098
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000070');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2098, 'A000080', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2098 AND h.stock_code = 'A000080');
+SELECT a.id, 'A000080', 132, 0 FROM accounts a
+WHERE a.account_id = 2098
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000080');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2098, 'A000100', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2098 AND h.stock_code = 'A000100');
+SELECT a.id, 'A000100', 136, 0 FROM accounts a
+WHERE a.account_id = 2098
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000100');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2098, 'A000120', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2098 AND h.stock_code = 'A000120');
+SELECT a.id, 'A000120', 132, 0 FROM accounts a
+WHERE a.account_id = 2098
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000120');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2098, 'A000140', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2098 AND h.stock_code = 'A000140');
+SELECT a.id, 'A000140', 132, 0 FROM accounts a
+WHERE a.account_id = 2098
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000140');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2098, 'A000150', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2098 AND h.stock_code = 'A000150');
+SELECT a.id, 'A000150', 136, 0 FROM accounts a
+WHERE a.account_id = 2098
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000150');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2098, 'A000180', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2098 AND h.stock_code = 'A000180');
+SELECT a.id, 'A000180', 132, 0 FROM accounts a
+WHERE a.account_id = 2098
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000180');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2098, 'A000210', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2098 AND h.stock_code = 'A000210');
+SELECT a.id, 'A000210', 132, 0 FROM accounts a
+WHERE a.account_id = 2098
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000210');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2098, 'A000220', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2098 AND h.stock_code = 'A000220');
+SELECT a.id, 'A000220', 136, 0 FROM accounts a
+WHERE a.account_id = 2098
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000220');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2098, 'A000230', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2098 AND h.stock_code = 'A000230');
+SELECT a.id, 'A000230', 132, 0 FROM accounts a
+WHERE a.account_id = 2098
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000230');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2098, 'A000240', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2098 AND h.stock_code = 'A000240');
+SELECT a.id, 'A000240', 132, 0 FROM accounts a
+WHERE a.account_id = 2098
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000240');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2098, 'A000250', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2098 AND h.stock_code = 'A000250');
+SELECT a.id, 'A000250', 136, 0 FROM accounts a
+WHERE a.account_id = 2098
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000250');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2098, 'A000270', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2098 AND h.stock_code = 'A000270');
+SELECT a.id, 'A000270', 132, 0 FROM accounts a
+WHERE a.account_id = 2098
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2098, 'A000300', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2098 AND h.stock_code = 'A000300');
+SELECT a.id, 'A000300', 132, 0 FROM accounts a
+WHERE a.account_id = 2098
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2098, 'A000320', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2098 AND h.stock_code = 'A000320');
+SELECT a.id, 'A000320', 136, 0 FROM accounts a
+WHERE a.account_id = 2098
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000320');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2098, 'A000370', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2098 AND h.stock_code = 'A000370');
+SELECT a.id, 'A000370', 132, 0 FROM accounts a
+WHERE a.account_id = 2098
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000370');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2098, 'A000390', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2098 AND h.stock_code = 'A000390');
+SELECT a.id, 'A000390', 132, 0 FROM accounts a
+WHERE a.account_id = 2098
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000390');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2098, 'A000400', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2098 AND h.stock_code = 'A000400');
+SELECT a.id, 'A000400', 136, 0 FROM accounts a
+WHERE a.account_id = 2098
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000400');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2098, 'A000430', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2098 AND h.stock_code = 'A000430');
+SELECT a.id, 'A000430', 132, 0 FROM accounts a
+WHERE a.account_id = 2098
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000430');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2098, 'A000440', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2098 AND h.stock_code = 'A000440');
+SELECT a.id, 'A000440', 132, 0 FROM accounts a
+WHERE a.account_id = 2098
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000440');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2098, 'A000480', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2098 AND h.stock_code = 'A000480');
+SELECT a.id, 'A000480', 136, 0 FROM accounts a
+WHERE a.account_id = 2098
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000480');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2098, 'A900260', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2098 AND h.stock_code = 'A900260');
+SELECT a.id, 'A900260', 132, 0 FROM accounts a
+WHERE a.account_id = 2098
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900260');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2098, 'A900270', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2098 AND h.stock_code = 'A900270');
+SELECT a.id, 'A900270', 132, 0 FROM accounts a
+WHERE a.account_id = 2098
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2098, 'A900290', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2098 AND h.stock_code = 'A900290');
+SELECT a.id, 'A900290', 136, 0 FROM accounts a
+WHERE a.account_id = 2098
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900290');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2098, 'A900300', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2098 AND h.stock_code = 'A900300');
+SELECT a.id, 'A900300', 132, 0 FROM accounts a
+WHERE a.account_id = 2098
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2098, 'A900310', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2098 AND h.stock_code = 'A900310');
+SELECT a.id, 'A900310', 132, 0 FROM accounts a
+WHERE a.account_id = 2098
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900310');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2098, 'A900340', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2098 AND h.stock_code = 'A900340');
+SELECT a.id, 'A900340', 136, 0 FROM accounts a
+WHERE a.account_id = 2098
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900340');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2099, 'A000020', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2099 AND h.stock_code = 'A000020');
+SELECT a.id, 'A000020', 132, 0 FROM accounts a
+WHERE a.account_id = 2099
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000020');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2099, 'A000040', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2099 AND h.stock_code = 'A000040');
+SELECT a.id, 'A000040', 132, 0 FROM accounts a
+WHERE a.account_id = 2099
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000040');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2099, 'A000050', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2099 AND h.stock_code = 'A000050');
+SELECT a.id, 'A000050', 136, 0 FROM accounts a
+WHERE a.account_id = 2099
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000050');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2099, 'A000070', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2099 AND h.stock_code = 'A000070');
+SELECT a.id, 'A000070', 132, 0 FROM accounts a
+WHERE a.account_id = 2099
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000070');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2099, 'A000080', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2099 AND h.stock_code = 'A000080');
+SELECT a.id, 'A000080', 132, 0 FROM accounts a
+WHERE a.account_id = 2099
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000080');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2099, 'A000100', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2099 AND h.stock_code = 'A000100');
+SELECT a.id, 'A000100', 136, 0 FROM accounts a
+WHERE a.account_id = 2099
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000100');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2099, 'A000120', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2099 AND h.stock_code = 'A000120');
+SELECT a.id, 'A000120', 132, 0 FROM accounts a
+WHERE a.account_id = 2099
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000120');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2099, 'A000140', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2099 AND h.stock_code = 'A000140');
+SELECT a.id, 'A000140', 132, 0 FROM accounts a
+WHERE a.account_id = 2099
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000140');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2099, 'A000150', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2099 AND h.stock_code = 'A000150');
+SELECT a.id, 'A000150', 136, 0 FROM accounts a
+WHERE a.account_id = 2099
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000150');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2099, 'A000180', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2099 AND h.stock_code = 'A000180');
+SELECT a.id, 'A000180', 132, 0 FROM accounts a
+WHERE a.account_id = 2099
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000180');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2099, 'A000210', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2099 AND h.stock_code = 'A000210');
+SELECT a.id, 'A000210', 132, 0 FROM accounts a
+WHERE a.account_id = 2099
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000210');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2099, 'A000220', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2099 AND h.stock_code = 'A000220');
+SELECT a.id, 'A000220', 136, 0 FROM accounts a
+WHERE a.account_id = 2099
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000220');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2099, 'A000230', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2099 AND h.stock_code = 'A000230');
+SELECT a.id, 'A000230', 132, 0 FROM accounts a
+WHERE a.account_id = 2099
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000230');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2099, 'A000240', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2099 AND h.stock_code = 'A000240');
+SELECT a.id, 'A000240', 132, 0 FROM accounts a
+WHERE a.account_id = 2099
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000240');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2099, 'A000250', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2099 AND h.stock_code = 'A000250');
+SELECT a.id, 'A000250', 136, 0 FROM accounts a
+WHERE a.account_id = 2099
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000250');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2099, 'A000270', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2099 AND h.stock_code = 'A000270');
+SELECT a.id, 'A000270', 132, 0 FROM accounts a
+WHERE a.account_id = 2099
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2099, 'A000300', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2099 AND h.stock_code = 'A000300');
+SELECT a.id, 'A000300', 132, 0 FROM accounts a
+WHERE a.account_id = 2099
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2099, 'A000320', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2099 AND h.stock_code = 'A000320');
+SELECT a.id, 'A000320', 136, 0 FROM accounts a
+WHERE a.account_id = 2099
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000320');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2099, 'A000370', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2099 AND h.stock_code = 'A000370');
+SELECT a.id, 'A000370', 132, 0 FROM accounts a
+WHERE a.account_id = 2099
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000370');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2099, 'A000390', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2099 AND h.stock_code = 'A000390');
+SELECT a.id, 'A000390', 132, 0 FROM accounts a
+WHERE a.account_id = 2099
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000390');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2099, 'A000400', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2099 AND h.stock_code = 'A000400');
+SELECT a.id, 'A000400', 136, 0 FROM accounts a
+WHERE a.account_id = 2099
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000400');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2099, 'A000430', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2099 AND h.stock_code = 'A000430');
+SELECT a.id, 'A000430', 132, 0 FROM accounts a
+WHERE a.account_id = 2099
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000430');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2099, 'A000440', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2099 AND h.stock_code = 'A000440');
+SELECT a.id, 'A000440', 132, 0 FROM accounts a
+WHERE a.account_id = 2099
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000440');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2099, 'A000480', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2099 AND h.stock_code = 'A000480');
+SELECT a.id, 'A000480', 136, 0 FROM accounts a
+WHERE a.account_id = 2099
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000480');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2099, 'A900260', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2099 AND h.stock_code = 'A900260');
+SELECT a.id, 'A900260', 132, 0 FROM accounts a
+WHERE a.account_id = 2099
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900260');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2099, 'A900270', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2099 AND h.stock_code = 'A900270');
+SELECT a.id, 'A900270', 132, 0 FROM accounts a
+WHERE a.account_id = 2099
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2099, 'A900290', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2099 AND h.stock_code = 'A900290');
+SELECT a.id, 'A900290', 136, 0 FROM accounts a
+WHERE a.account_id = 2099
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900290');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2099, 'A900300', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2099 AND h.stock_code = 'A900300');
+SELECT a.id, 'A900300', 132, 0 FROM accounts a
+WHERE a.account_id = 2099
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2099, 'A900310', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2099 AND h.stock_code = 'A900310');
+SELECT a.id, 'A900310', 132, 0 FROM accounts a
+WHERE a.account_id = 2099
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900310');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2099, 'A900340', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2099 AND h.stock_code = 'A900340');
+SELECT a.id, 'A900340', 136, 0 FROM accounts a
+WHERE a.account_id = 2099
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900340');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2100, 'A000020', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2100 AND h.stock_code = 'A000020');
+SELECT a.id, 'A000020', 132, 0 FROM accounts a
+WHERE a.account_id = 2100
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000020');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2100, 'A000040', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2100 AND h.stock_code = 'A000040');
+SELECT a.id, 'A000040', 132, 0 FROM accounts a
+WHERE a.account_id = 2100
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000040');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2100, 'A000050', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2100 AND h.stock_code = 'A000050');
+SELECT a.id, 'A000050', 136, 0 FROM accounts a
+WHERE a.account_id = 2100
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000050');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2100, 'A000070', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2100 AND h.stock_code = 'A000070');
+SELECT a.id, 'A000070', 132, 0 FROM accounts a
+WHERE a.account_id = 2100
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000070');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2100, 'A000080', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2100 AND h.stock_code = 'A000080');
+SELECT a.id, 'A000080', 132, 0 FROM accounts a
+WHERE a.account_id = 2100
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000080');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2100, 'A000100', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2100 AND h.stock_code = 'A000100');
+SELECT a.id, 'A000100', 136, 0 FROM accounts a
+WHERE a.account_id = 2100
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000100');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2100, 'A000120', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2100 AND h.stock_code = 'A000120');
+SELECT a.id, 'A000120', 132, 0 FROM accounts a
+WHERE a.account_id = 2100
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000120');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2100, 'A000140', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2100 AND h.stock_code = 'A000140');
+SELECT a.id, 'A000140', 132, 0 FROM accounts a
+WHERE a.account_id = 2100
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000140');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2100, 'A000150', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2100 AND h.stock_code = 'A000150');
+SELECT a.id, 'A000150', 136, 0 FROM accounts a
+WHERE a.account_id = 2100
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000150');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2100, 'A000180', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2100 AND h.stock_code = 'A000180');
+SELECT a.id, 'A000180', 132, 0 FROM accounts a
+WHERE a.account_id = 2100
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000180');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2100, 'A000210', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2100 AND h.stock_code = 'A000210');
+SELECT a.id, 'A000210', 132, 0 FROM accounts a
+WHERE a.account_id = 2100
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000210');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2100, 'A000220', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2100 AND h.stock_code = 'A000220');
+SELECT a.id, 'A000220', 136, 0 FROM accounts a
+WHERE a.account_id = 2100
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000220');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2100, 'A000230', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2100 AND h.stock_code = 'A000230');
+SELECT a.id, 'A000230', 132, 0 FROM accounts a
+WHERE a.account_id = 2100
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000230');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2100, 'A000240', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2100 AND h.stock_code = 'A000240');
+SELECT a.id, 'A000240', 132, 0 FROM accounts a
+WHERE a.account_id = 2100
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000240');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2100, 'A000250', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2100 AND h.stock_code = 'A000250');
+SELECT a.id, 'A000250', 136, 0 FROM accounts a
+WHERE a.account_id = 2100
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000250');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2100, 'A000270', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2100 AND h.stock_code = 'A000270');
+SELECT a.id, 'A000270', 132, 0 FROM accounts a
+WHERE a.account_id = 2100
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2100, 'A000300', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2100 AND h.stock_code = 'A000300');
+SELECT a.id, 'A000300', 132, 0 FROM accounts a
+WHERE a.account_id = 2100
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2100, 'A000320', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2100 AND h.stock_code = 'A000320');
+SELECT a.id, 'A000320', 136, 0 FROM accounts a
+WHERE a.account_id = 2100
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000320');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2100, 'A000370', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2100 AND h.stock_code = 'A000370');
+SELECT a.id, 'A000370', 132, 0 FROM accounts a
+WHERE a.account_id = 2100
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000370');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2100, 'A000390', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2100 AND h.stock_code = 'A000390');
+SELECT a.id, 'A000390', 132, 0 FROM accounts a
+WHERE a.account_id = 2100
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000390');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2100, 'A000400', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2100 AND h.stock_code = 'A000400');
+SELECT a.id, 'A000400', 136, 0 FROM accounts a
+WHERE a.account_id = 2100
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000400');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2100, 'A000430', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2100 AND h.stock_code = 'A000430');
+SELECT a.id, 'A000430', 132, 0 FROM accounts a
+WHERE a.account_id = 2100
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000430');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2100, 'A000440', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2100 AND h.stock_code = 'A000440');
+SELECT a.id, 'A000440', 132, 0 FROM accounts a
+WHERE a.account_id = 2100
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000440');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2100, 'A000480', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2100 AND h.stock_code = 'A000480');
+SELECT a.id, 'A000480', 136, 0 FROM accounts a
+WHERE a.account_id = 2100
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A000480');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2100, 'A900260', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2100 AND h.stock_code = 'A900260');
+SELECT a.id, 'A900260', 132, 0 FROM accounts a
+WHERE a.account_id = 2100
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900260');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2100, 'A900270', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2100 AND h.stock_code = 'A900270');
+SELECT a.id, 'A900270', 132, 0 FROM accounts a
+WHERE a.account_id = 2100
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900270');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2100, 'A900290', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2100 AND h.stock_code = 'A900290');
+SELECT a.id, 'A900290', 136, 0 FROM accounts a
+WHERE a.account_id = 2100
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900290');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2100, 'A900300', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2100 AND h.stock_code = 'A900300');
+SELECT a.id, 'A900300', 132, 0 FROM accounts a
+WHERE a.account_id = 2100
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900300');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2100, 'A900310', 132, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2100 AND h.stock_code = 'A900310');
+SELECT a.id, 'A900310', 132, 0 FROM accounts a
+WHERE a.account_id = 2100
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900310');
 
 INSERT INTO holdings (account_id, stock_code, quantity, average_price)
-SELECT 2100, 'A900340', 136, 0
-WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = 2100 AND h.stock_code = 'A900340');
+SELECT a.id, 'A900340', 136, 0 FROM accounts a
+WHERE a.account_id = 2100
+AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id AND h.stock_code = 'A900340');
 

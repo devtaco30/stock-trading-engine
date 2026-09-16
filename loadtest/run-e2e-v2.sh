@@ -13,12 +13,14 @@ mkdir -p "$LOG_DIR" "$PID_DIR"
 echo "인프라 기동 중 (postgres:9702, redis:6379, kafka:9092)..."
 docker compose -p stock-trading-engine -f docker-compose.yml -f docker-compose.loadtest.yml up -d
 
-TOKEN="loadtest-token-1"
+# e2e 계좌는 user_id=2로 시드된다(run-e2e-v1.sh와 같은 이유) — v2도 같은 계좌 풀(2001~2100)을
+# 쓰므로 토큰을 userId 2로 매핑한다.
+TOKEN="e2e-token-1"
 TOKEN_HASH=$(printf '%s' "$TOKEN" | shasum -a 256 | awk '{print $1}')
-echo "Redis 토큰 시드: auth:token:${TOKEN_HASH} -> userId 1"
+echo "Redis 토큰 시드: auth:token:${TOKEN_HASH} -> userId 2"
 seeded=false
 for _ in $(seq 1 30); do
-    if docker exec stock-trading-redis redis-cli SET "auth:token:${TOKEN_HASH}" 1 EX 86400 > /dev/null 2>&1; then
+    if docker exec stock-trading-redis redis-cli SET "auth:token:${TOKEN_HASH}" 2 EX 86400 > /dev/null 2>&1; then
         seeded=true
         break
     fi
@@ -30,16 +32,20 @@ if [ "$seeded" != true ]; then
 fi
 
 start_app() {
-    local module="$1"
-    nohup ./gradlew ":${module}:bootRun" --args='--spring.profiles.active=udp,e2e' \
+    local module="$1" extra_args="$2"
+    nohup ./gradlew ":${module}:bootRun" --args="--spring.profiles.active=udp,e2e${extra_args}" \
         > "${LOG_DIR}/${module}.log" 2>&1 &
     echo $! > "${PID_DIR}/${module}.pid"
     echo "${module} 기동 시작(런처 PID $(cat "${PID_DIR}/${module}.pid"), 로그 ${LOG_DIR}/${module}.log)"
 }
 
-start_app account-worker
-start_app matching-worker
-start_app api
+# 끝점①(주문 접수·예약) 지연 측정 훅은 account-worker(v2의 실제 검증·예약 지점)에만 켠다.
+# ⚠️ 절대경로 이유는 run-e2e-v1.sh 참고 — gradlew bootRun의 JVM 작업 디렉터리가 모듈
+# 디렉터리라 상대경로는 폴링 스레드가 엉뚱한 곳을 본다.
+E2E_RESULTS_ABS="$(pwd)/loadtest/results"
+start_app account-worker " --measure.latency.enabled=true --measure.latency.snapshot-trigger-path=${E2E_RESULTS_ABS}/latency-trigger-v2 --measure.latency.output-path=${E2E_RESULTS_ABS}/latency-v2-account-worker.json"
+start_app matching-worker ""
+start_app api ""
 
 await_udp_port() {
     local port="$1"

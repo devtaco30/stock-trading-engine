@@ -6,7 +6,9 @@ import exec from 'k6/execution';
 // 39 설계(decision_records/v1-v2-e2e-measurement.md) 축2 — 결정론 페어 입력 파일을 그대로
 // 순서대로 재생한다. HOT/랜덤 분산 없음 — 파일에 이미 계좌·종목·가격이 결정돼 있다.
 const VERSION = __ENV.VERSION || 'v1'; // 'v1' | 'v2'
-const TOKEN = __ENV.TOKEN || 'loadtest-token-1';
+// e2e 계좌(2001~2100)는 user_id=2로 시드된다 — run-e2e-v1.sh/v2.sh가 심어두는 e2e-token-1이
+// 그 userId로 매핑돼 있다(기존 loadtest-token-1은 user_id=1용이라 여기선 403이 난다).
+const TOKEN = __ENV.TOKEN || 'e2e-token-1';
 const BASE = __ENV.BASE || 'http://localhost:8080';
 const VUS = parseInt(__ENV.VUS || '50');
 const INPUT_FILE = __ENV.INPUT_FILE || './results/e2e-input.jsonl';

@@ -138,10 +138,15 @@ def write_v1_seed(buyer_cost, seller_holdings):
         )
     for (account_id, stock_code), qty in sorted(seller_holdings.items()):
         holding_qty = qty * PASSES
+        # holdings.account_id는 accounts의 업무키(account_id)가 아니라 대리키(id)를 참조한다
+        # (FK fk1lvcybrc320h9lxbgaqs613bg REFERENCES accounts(id) — orders.account_id와 달리
+        # accounts(account_id)가 아니다. docker Postgres에 직접 기동해 FK 위반으로 확인함,
+        # 2026-09-16). accounts.account_id={account_id}인 행의 대리키를 서브쿼리로 찾아 넣는다.
         lines.append(
             f"INSERT INTO holdings (account_id, stock_code, quantity, average_price)\n"
-            f"SELECT {account_id}, '{stock_code}', {holding_qty}, 0\n"
-            f"WHERE NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = {account_id} "
+            f"SELECT a.id, '{stock_code}', {holding_qty}, 0 FROM accounts a\n"
+            f"WHERE a.account_id = {account_id}\n"
+            f"AND NOT EXISTS (SELECT 1 FROM holdings h WHERE h.account_id = a.id "
             f"AND h.stock_code = '{stock_code}');\n"
         )
     out_path = REPO_ROOT / "api" / "src" / "main" / "resources" / "e2e-seed.sql"

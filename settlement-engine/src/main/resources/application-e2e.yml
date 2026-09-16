@@ -18,8 +18,9 @@ spring:
   kafka:
     bootstrap-servers: localhost:9092
     consumer:
-      group-id: settlement-engine
-      auto-offset-reset: earliest
+      # order-engine과 같은 이유로 전용 그룹+latest.
+      group-id: settlement-engine-e2e
+      auto-offset-reset: latest
       enable-auto-commit: false
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer

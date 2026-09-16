@@ -25,8 +25,10 @@ spring:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
     consumer:
-      group-id: matching-engine
-      auto-offset-reset: earliest
+      # order-engine과 같은 이유로 전용 그룹+latest — 지금은 lag 0이지만 다른 프로파일과
+      # group-id를 공유하면 언제든 같은 오염(백로그 재생)이 재현될 수 있다.
+      group-id: matching-engine-e2e
+      auto-offset-reset: latest
       enable-auto-commit: false
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
