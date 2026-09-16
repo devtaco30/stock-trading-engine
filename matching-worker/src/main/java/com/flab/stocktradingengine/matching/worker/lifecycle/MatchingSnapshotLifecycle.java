@@ -1,5 +1,7 @@
 package com.flab.stocktradingengine.matching.worker.lifecycle;
 
+import java.util.concurrent.atomic.AtomicBoolean;
+
 import org.springframework.context.SmartLifecycle;
 
 import com.flab.stocktradingengine.matching.disruptor.engine.MatchingEngine;
@@ -30,7 +32,7 @@ public class MatchingSnapshotLifecycle implements SmartLifecycle {
     private final MatchingEngine engine;
     private final MatchingSnapshotStore snapshotStore;
     private final AeronArchive aeronArchive;
-    private boolean running = false;
+    private final AtomicBoolean running = new AtomicBoolean(false);
 
     public MatchingSnapshotLifecycle(MatchingEngine engine, MatchingSnapshotStore snapshotStore, AeronArchive aeronArchive) {
         this.engine = engine;
@@ -40,14 +42,14 @@ public class MatchingSnapshotLifecycle implements SmartLifecycle {
 
     @Override
     public void start() {
-        running = true;
+        running.set(true);
     }
 
     @Override
     public void stop() {
         long recordingId = resolveCurrentJournalRecordingId();
         snapshotStore.write(recordingId, engine.snapshot());
-        running = false;
+        running.set(false);
     }
 
     /** 저널 스트림의 현재(=이 프로세스가 기동 때 시작한) 녹화 ID — 카탈로그에서 가장 최근에 시작한 것. */
@@ -72,7 +74,7 @@ public class MatchingSnapshotLifecycle implements SmartLifecycle {
 
     @Override
     public boolean isRunning() {
-        return running;
+        return running.get();
     }
 
     @Override

@@ -1,5 +1,7 @@
 package com.flab.stocktradingengine.account.disruptor.io;
 
+import java.lang.System.Logger;
+import java.lang.System.Logger.Level;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -44,6 +46,7 @@ import com.flab.stocktradingengine.codec.FilledTrade;
  */
 public final class AccountFillReceiver implements AutoCloseable {
 
+    private static final Logger log = System.getLogger(AccountFillReceiver.class.getName());
     private static final int FRAGMENT_LIMIT = 10;
     private static final long CLOSE_JOIN_TIMEOUT_MILLIS = 1000L;
 
@@ -113,7 +116,11 @@ public final class AccountFillReceiver implements AutoCloseable {
             trade.stockCode(), trade.filledQuantity(), sourcePosition);
     }
 
-    /** 폴링 스레드를 멈추고 종료를 기다린다. */
+    /**
+     * 폴링 스레드를 멈추고 종료를 기다린다. {@code CLOSE_JOIN_TIMEOUT_MILLIS} 안에 멈추지
+     * 않으면 경고만 남긴다 — 곧 Subscription이 닫히는 동안에도 그 스레드가 poll 중일 수 있다는
+     * 뜻이지만, 여기서 구조적으로 막지는 않는다(관측성 추가일 뿐).
+     */
     @Override
     public void close() {
         running.set(false);
@@ -122,6 +129,10 @@ public final class AccountFillReceiver implements AutoCloseable {
                 pollThread.join(CLOSE_JOIN_TIMEOUT_MILLIS);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
+            }
+            if (pollThread.isAlive()) {
+                log.log(Level.WARNING,
+                    "[계좌] 체결 수신 폴링 스레드가 " + CLOSE_JOIN_TIMEOUT_MILLIS + "ms 안에 멈추지 않았습니다");
             }
         }
     }
