@@ -22,6 +22,18 @@ import com.flab.stocktradingengine.trading.entity.OrderSide;
  */
 public interface MatchingOrderSender {
 
-    /** 매수·매도 접수 하나를 매칭으로 전달한다. side로 매수·매도를 구분한다. */
+    /**
+     * 매수·매도 접수 하나를 매칭으로 전달한다. side로 매수·매도를 구분한다.
+     *
+     * <h3>구현 계약(I2 발신측 D1~D3 이후) — 버리지 않는다, 그래서 블로킹·예외를 던질 수 있다</h3>
+     * <p>이 메서드는 계좌 엔진의 단일 상시 컨슈머 스레드 안에서 동기 호출된다. 매칭으로 보내지
+     * 못한 주문은 계좌 예약은 그대로인데 매칭 장부엔 없어서 체결·취소가 영영 안 온다 — 그래서
+     * {@code AeronMatchingOrderSender}는 더 이상 best-effort가 아니다: 발신 큐가 가득 차면
+     * 자리가 날 때까지 이 스레드에서 대기하고(그동안 이 샤드의 다른 계좌 접수도 같이 멈춘다),
+     * 발신 스트림이 복구 불가 상태(CLOSED 등)면 이 호출에서 예외를 던져
+     * {@code AccountExceptionHandler}가 계좌 엔진 전체를 fail-fast로 멈추게 한다. 매칭 전달
+     * 자체를 검증하지 않는 테스트(계좌 단독 복구·저널 등)는 진짜 구현 대신 아무것도 안 하는
+     * 테스트 더블({@code NoOpMatchingOrderSender})을 쓴다.</p>
+     */
     void forwardPlace(long orderId, long accountId, String stockCode, OrderSide side, BigDecimal price, int quantity);
 }

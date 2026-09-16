@@ -14,6 +14,7 @@ import org.springframework.context.ConfigurableApplicationContext;
 
 import com.flab.stocktradingengine.account.disruptor.domain.AccountState;
 import com.flab.stocktradingengine.account.disruptor.engine.AccountEngine;
+import com.flab.stocktradingengine.account.worker.support.NoOpMatchingOrderSenderTestConfig;
 
 /**
  * 2d-2b 핵심 — 계좌 워커가 graceful shutdown 때 스냅샷을 찍고, 재기동 때 그 스냅샷(+ 스냅샷 이후
@@ -120,9 +121,14 @@ class AccountSnapshotRecoveryIntegrationTest {
         }
     }
 
+    // 이 테스트는 계좌 스냅샷·저널 복구만 본다 — 매칭 프로세스를 안 띄우므로 매칭 인테이크 채널에
+    // 아무도 안 붙어 있다. 진짜 AeronMatchingOrderSender를 그대로 쓰면 forwardPlace마다 전용
+    // 스레드가 "연결 안 됨"을 계속 재시도하다 컨텍스트 종료 시 드레인 타임아웃(5초)을 매번 다
+    // 채운다(I2 발신측 D2가 의도한 동작이지만 이 테스트엔 무관한 비용) — NoOpMatchingOrderSenderTestConfig로 대체한다.
     private ConfigurableApplicationContext launch() {
         return new SpringApplicationBuilder(AccountWorkerApplication.class)
             .web(WebApplicationType.NONE)
+            .sources(NoOpMatchingOrderSenderTestConfig.class)
             .properties(
                 "account-worker.seed-accounts[0].account-id=1",
                 "account-worker.seed-accounts[0].balance=1000000",

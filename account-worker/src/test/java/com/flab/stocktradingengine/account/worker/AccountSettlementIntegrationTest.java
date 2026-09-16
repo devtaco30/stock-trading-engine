@@ -24,6 +24,7 @@ import org.springframework.test.annotation.DirtiesContext;
 import com.flab.stocktradingengine.account.disruptor.domain.AccountResultListener;
 import com.flab.stocktradingengine.account.disruptor.domain.RejectReason;
 import com.flab.stocktradingengine.account.disruptor.engine.AccountEngine;
+import com.flab.stocktradingengine.account.worker.support.NoOpMatchingOrderSenderTestConfig;
 import com.flab.stocktradingengine.kafka.KafkaTopics;
 import com.flab.stocktradingengine.kafka.event.SettlementResultEvent;
 
@@ -46,7 +47,7 @@ import com.flab.stocktradingengine.kafka.event.SettlementResultEvent;
     }
 )
 @DirtiesContext
-@Import(AccountSettlementIntegrationTest.RecorderConfig.class)
+@Import({AccountSettlementIntegrationTest.RecorderConfig.class, NoOpMatchingOrderSenderTestConfig.class})
 class AccountSettlementIntegrationTest {
 
     private static final String STOCK = "005930";

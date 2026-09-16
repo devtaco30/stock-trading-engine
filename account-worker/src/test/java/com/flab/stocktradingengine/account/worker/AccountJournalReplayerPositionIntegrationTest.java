@@ -15,6 +15,7 @@ import org.springframework.context.ConfigurableApplicationContext;
 import com.flab.stocktradingengine.account.disruptor.engine.AccountEngine;
 import com.flab.stocktradingengine.account.worker.config.AccountJournalArchiveConfig;
 import com.flab.stocktradingengine.account.worker.recovery.AccountJournalReplayer;
+import com.flab.stocktradingengine.account.worker.support.NoOpMatchingOrderSenderTestConfig;
 import com.flab.stocktradingengine.codec.AccountJournalEntry;
 
 import io.aeron.archive.client.AeronArchive;
@@ -87,6 +88,7 @@ class AccountJournalReplayerPositionIntegrationTest {
     private ConfigurableApplicationContext launch() {
         return new SpringApplicationBuilder(AccountWorkerApplication.class)
             .web(WebApplicationType.NONE)
+            .sources(NoOpMatchingOrderSenderTestConfig.class)
             .properties(
                 "account-worker.seed-accounts[0].account-id=1",
                 "account-worker.seed-accounts[0].balance=1000000",

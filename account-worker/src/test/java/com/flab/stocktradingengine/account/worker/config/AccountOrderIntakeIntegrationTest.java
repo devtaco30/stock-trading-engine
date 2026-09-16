@@ -20,6 +20,7 @@ import org.springframework.test.annotation.DirtiesContext;
 import com.flab.stocktradingengine.account.disruptor.domain.AccountResultListener;
 import com.flab.stocktradingengine.account.disruptor.domain.RejectReason;
 import com.flab.stocktradingengine.account.worker.AccountWorkerApplication;
+import com.flab.stocktradingengine.account.worker.support.NoOpMatchingOrderSenderTestConfig;
 import com.flab.stocktradingengine.aeron.AeronStreamIds;
 import com.flab.stocktradingengine.trading.entity.OrderSide;
 import com.flab.stocktradingengine.codec.AccountOrderCodec;
@@ -44,7 +45,7 @@ import io.aeron.Publication;
     }
 )
 @DirtiesContext
-@Import(AccountOrderIntakeIntegrationTest.RecorderConfig.class)
+@Import({AccountOrderIntakeIntegrationTest.RecorderConfig.class, NoOpMatchingOrderSenderTestConfig.class})
 class AccountOrderIntakeIntegrationTest {
 
     private static final String STOCK = "005930";
