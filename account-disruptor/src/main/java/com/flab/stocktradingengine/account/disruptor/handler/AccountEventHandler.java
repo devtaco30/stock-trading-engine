@@ -20,6 +20,7 @@ import com.flab.stocktradingengine.account.disruptor.io.MatchingOrderSender;
 import com.flab.stocktradingengine.account.disruptor.snapshot.AccountSnapshot;
 import com.flab.stocktradingengine.account.disruptor.snapshot.AccountSnapshotCodec;
 import com.flab.stocktradingengine.account.disruptor.snapshot.AccountStateSnapshot;
+import com.flab.stocktradingengine.time.LatencyHistogram;
 import com.flab.stocktradingengine.trading.entity.OrderSide;
 
 /**
@@ -49,6 +50,10 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
     /** orderId가 발급되지 못했을 때(requestId 빈값·null, 모르는 계좌) 리스너에 싣는 값 — 발급기는 0을 내지 않는다. */
     private static final long NO_ORDER_ID = 0L;
 
+    // 접수 지연 측정(끝점①)을 안 쓰는 생성자(대부분의 테스트)를 위한 기본값 — 꺼진 채로 두면
+    // record가 분기 하나만 타고 즉시 반환한다.
+    private static final LatencyHistogram NO_OP_LATENCY_HISTOGRAM = new LatencyHistogram(false);
+
     // 저널 N건마다 러닝 중 스냅샷을 찍는다(1-3). 근거 없는 임시값이다 — account-disruptor에
     // 자체 처리량 벤치마크가 아직 없다(매칭 코어 JMH 실측만 있음, decision_records/
     // account-idempotency-cache-bound.md). C7 부하측정 이후 실측 처리량 × 감당할 복구시간으로
@@ -64,6 +69,7 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
     private final AccountSnapshotSink snapshotSink;
     private final AccountSnapshotCodec snapshotCodec = new AccountSnapshotCodec();
     private final boolean snapshotTriggerEnabled;
+    private final LatencyHistogram latencyHistogram;
 
     // 소비자 스레드(이 핸들러)만 쓰고, 호스트 스레드(그레이스풀 스톱)·1-3의 스냅샷 쓰기 스레드가
     // 읽는다 — 다른 스레드가 읽으므로 volatile.
@@ -77,7 +83,7 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
     public AccountEventHandler(Map<Long, AccountState> accounts, AccountOrderIdGenerator orderIdGenerator,
                                MatchingOrderSender matchingOrderSender, AccountResultListener listener,
                                AccountSnapshotSink snapshotSink) {
-        this(accounts, orderIdGenerator, matchingOrderSender, listener, snapshotSink, true);
+        this(accounts, orderIdGenerator, matchingOrderSender, listener, snapshotSink, true, NO_OP_LATENCY_HISTOGRAM);
     }
 
     /**
@@ -91,12 +97,24 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
     public AccountEventHandler(Map<Long, AccountState> accounts, AccountOrderIdGenerator orderIdGenerator,
                                MatchingOrderSender matchingOrderSender, AccountResultListener listener,
                                AccountSnapshotSink snapshotSink, boolean snapshotTriggerEnabled) {
+        this(accounts, orderIdGenerator, matchingOrderSender, listener, snapshotSink, snapshotTriggerEnabled, NO_OP_LATENCY_HISTOGRAM);
+    }
+
+    /**
+     * @param latencyHistogram 끝점①(접수·예약) 지연 측정기(decision_records/v1-v2-e2e-measurement.md).
+     *     매수·매도가 accept됐을 때만 기록한다(거부·중복은 모집단에서 뺀다 — v1의 대응 지점이
+     *     같은 이유로 거부 시 그 지점에 도달하지 않는 것과 모집단을 맞춘다).
+     */
+    public AccountEventHandler(Map<Long, AccountState> accounts, AccountOrderIdGenerator orderIdGenerator,
+                               MatchingOrderSender matchingOrderSender, AccountResultListener listener,
+                               AccountSnapshotSink snapshotSink, boolean snapshotTriggerEnabled, LatencyHistogram latencyHistogram) {
         this.accounts = accounts;
         this.orderIdGenerator = orderIdGenerator;
         this.matchingOrderSender = matchingOrderSender;
         this.listener = listener;
         this.snapshotSink = snapshotSink;
         this.snapshotTriggerEnabled = snapshotTriggerEnabled;
+        this.latencyHistogram = latencyHistogram;
     }
 
     /** 소비자가 실제로 처리한 시점의 체결 수신 위치(1-2) — {@code AccountFillReceiver.consumedPosition()}과 달리 아직 처리 안 된 체결은 반영하지 않는다. */
@@ -213,6 +231,7 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
 
         ReserveResult result = state.tryReserve(orderId, price, event.getQuantity());
         if (result.accepted()) {
+            latencyHistogram.record(event.getPublishedAtEpochNanos());
             listener.onAccepted(accountId, orderId, requestId, result.reservedMargin());
             matchingOrderSender.forwardPlace(orderId, accountId, event.getStockCode(), OrderSide.BUY, price, event.getQuantity());
         } else {
@@ -249,6 +268,7 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
 
         SellReserveResult result = state.trySellReserve(orderId, event.getStockCode(), event.getQuantity());
         if (result.accepted()) {
+            latencyHistogram.record(event.getPublishedAtEpochNanos());
             listener.onSellAccepted(accountId, orderId, requestId, result.reservedQuantity());
             matchingOrderSender.forwardPlace(orderId, accountId, event.getStockCode(), OrderSide.SELL, price, event.getQuantity());
         } else {

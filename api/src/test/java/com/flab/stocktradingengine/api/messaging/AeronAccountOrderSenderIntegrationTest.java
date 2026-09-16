@@ -19,6 +19,7 @@ import org.junit.jupiter.api.Test;
 
 import com.flab.stocktradingengine.codec.AccountOrderCodec;
 import com.flab.stocktradingengine.codec.DecodedAccountOrder;
+import com.flab.stocktradingengine.time.EpochNanos;
 import com.flab.stocktradingengine.trading.entity.OrderSide;
 
 import io.aeron.Aeron;
@@ -70,21 +71,27 @@ class AeronAccountOrderSenderIntegrationTest {
     @Test
     void 매수_주문을_발신하면_계좌_인테이크_구독에서_그대로_디코딩된다() {
         AeronAccountOrderSender sender = new AeronAccountOrderSender(publication);
+        long before = EpochNanos.now();
 
         sender.send(OrderSide.BUY, 1L, STOCK_CODE, new BigDecimal("10000"), 10, "req-buy-1");
 
         DecodedAccountOrder decoded = awaitOne();
-        assertThat(decoded).isEqualTo(new DecodedAccountOrder(OrderSide.BUY, 1L, STOCK_CODE, new BigDecimal("10000"), 10, "req-buy-1"));
+        assertThat(decoded).usingRecursiveComparison().ignoringFields("publishedAtEpochNanos")
+            .isEqualTo(new DecodedAccountOrder(OrderSide.BUY, 1L, STOCK_CODE, new BigDecimal("10000"), 10, "req-buy-1", 0L));
+        assertPublishedRecently(decoded, before);
     }
 
     @Test
     void 매도_주문을_발신하면_계좌_인테이크_구독에서_그대로_디코딩된다() {
         AeronAccountOrderSender sender = new AeronAccountOrderSender(publication);
+        long before = EpochNanos.now();
 
         sender.send(OrderSide.SELL, 2L, STOCK_CODE, new BigDecimal("11000"), 5, "req-sell-1");
 
         DecodedAccountOrder decoded = awaitOne();
-        assertThat(decoded).isEqualTo(new DecodedAccountOrder(OrderSide.SELL, 2L, STOCK_CODE, new BigDecimal("11000"), 5, "req-sell-1"));
+        assertThat(decoded).usingRecursiveComparison().ignoringFields("publishedAtEpochNanos")
+            .isEqualTo(new DecodedAccountOrder(OrderSide.SELL, 2L, STOCK_CODE, new BigDecimal("11000"), 5, "req-sell-1", 0L));
+        assertPublishedRecently(decoded, before);
     }
 
     /**
@@ -106,7 +113,7 @@ class AeronAccountOrderSenderIntegrationTest {
             long accountId = i + 1L;
             int quantity = i + 1;
             String requestId = "req-concurrent-" + i;
-            expected.add(new DecodedAccountOrder(OrderSide.BUY, accountId, STOCK_CODE, new BigDecimal("10000"), quantity, requestId));
+            expected.add(new DecodedAccountOrder(OrderSide.BUY, accountId, STOCK_CODE, new BigDecimal("10000"), quantity, requestId, 0L));
             pool.submit(() -> {
                 ready.countDown();
                 awaitStart(start);
@@ -119,7 +126,14 @@ class AeronAccountOrderSenderIntegrationTest {
         assertTrue(pool.awaitTermination(5, TimeUnit.SECONDS), "발신 스레드들이 5초 안에 끝나지 않음");
 
         List<DecodedAccountOrder> received = awaitN(threadCount);
-        assertThat(received).containsExactlyInAnyOrderElementsOf(expected);
+        assertThat(received).usingRecursiveFieldByFieldElementComparatorIgnoringFields("publishedAtEpochNanos")
+            .containsExactlyInAnyOrderElementsOf(expected);
+    }
+
+    /** publishedAtEpochNanos는 send() 호출 시점에 라이브로 찍히므로, 값 자체가 아니라 "그 사이에 찍혔는지"만 검증한다. */
+    private void assertPublishedRecently(DecodedAccountOrder decoded, long before) {
+        long after = EpochNanos.now();
+        assertTrue(decoded.publishedAtEpochNanos() >= before && decoded.publishedAtEpochNanos() <= after);
     }
 
     private DecodedAccountOrder awaitOne() {

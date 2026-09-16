@@ -2,6 +2,7 @@ package com.flab.stocktradingengine.kafka.consumer;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -28,6 +29,7 @@ import com.flab.stocktradingengine.kafka.event.OrderCancelRequestEvent;
 import com.flab.stocktradingengine.kafka.event.OrderCancelledEvent;
 import com.flab.stocktradingengine.kafka.event.OrderPlacedEvent;
 import com.flab.stocktradingengine.kafka.event.OrderRequestEvent;
+import com.flab.stocktradingengine.time.LatencyHistogram;
 import com.flab.stocktradingengine.trading.entity.OrderSide;
 import com.flab.stocktradingengine.trading.service.OrderCommandService;
 import com.flab.stocktradingengine.trading.view.PlaceOrderResultView;
@@ -49,6 +51,8 @@ class OrderRequestConsumerTest {
     KafkaTemplate kafkaTemplate;
     @Mock
     Acknowledgment ack;
+    @Mock
+    LatencyHistogram latencyHistogram;
 
     @InjectMocks
     OrderRequestConsumer consumer;
@@ -75,6 +79,7 @@ class OrderRequestConsumerTest {
         verify(orderCommandService).placeBuyOrder(any(), any());
         verify(kafkaTemplate).send(eq("orders"), eq(STOCK), any(OrderPlacedEvent.class));
         verify(ack, times(1)).acknowledge();
+        verify(latencyHistogram, times(1)).record(anyLong());
     }
 
     @Test
@@ -87,6 +92,7 @@ class OrderRequestConsumerTest {
 
         verify(ack, times(1)).acknowledge();
         verify(kafkaTemplate, never()).send(any(), any(), any());
+        verify(latencyHistogram, never()).record(anyLong());
     }
 
     @Test

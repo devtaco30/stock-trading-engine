@@ -143,7 +143,7 @@ class AccountEngineSnapshotTriggerTest {
 
         AccountEvent scratch = new AccountEvent();
         for (long i = 0; i < SNAPSHOT_INTERVAL * 2; i++) {
-            scratch.setBuy(1L, STOCK, new BigDecimal("10000"), 1, "r" + i);
+            scratch.setBuy(1L, STOCK, new BigDecimal("10000"), 1, "r" + i, 0L);
             handler.onEvent(scratch, i, false);
         }
 

@@ -6,6 +6,7 @@ plugins {
 dependencies {
 	implementation(libs.snowflake)
 	implementation(libs.agrona) // wire 패키지의 Aeron 바이너리 코덱(DirectBuffer/MutableDirectBuffer)이 씀
+	implementation(libs.hdrhistogram) // time.LatencyHistogram의 백분위 계산 — public API에 안 드러나 implementation
 
 	// Jackson annotations only (compile-time)
 	compileOnly("com.fasterxml.jackson.core:jackson-annotations:2.17.0")

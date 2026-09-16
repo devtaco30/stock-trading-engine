@@ -14,9 +14,14 @@ import com.flab.stocktradingengine.trading.entity.OrderSide;
  * 등 체결·정산까지 포함)이 아니라 {@link OrderSide}(BUY/SELL)를 쓴다 — 인테이크 와이어는 매수·매도
  * 접수만 실어보내고, 체결·정산은 별도 경로(Kafka)로 온다. account.disruptor.EventType은 계좌 엔진의
  * 내부 명령 종류라 공유 계약인 core로 옮기지 않는다.</p>
+ *
+ * <p>{@code publishedAtEpochNanos}는 v1/v2 전 과정 측정(decision_records/
+ * v1-v2-e2e-measurement.md)의 끝점①(접수·예약) 지연 계산용이다. 발신자(API 게이트웨이)가
+ * 발행 직전 {@link com.flab.stocktradingengine.time.EpochNanos#now()}로 찍는다 — 측정
+ * 플래그와 무관하게 항상 채운다(측정 훅 자체는 소비자 쪽에서 게이트한다).</p>
  */
 public record DecodedAccountOrder(
     OrderSide type, long accountId, String stockCode,
-    BigDecimal price, int quantity, String requestId
+    BigDecimal price, int quantity, String requestId, long publishedAtEpochNanos
 ) {
 }
