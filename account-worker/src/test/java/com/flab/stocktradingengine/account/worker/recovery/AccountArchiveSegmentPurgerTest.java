@@ -28,8 +28,13 @@ import io.aeron.driver.MediaDriver;
  * `_i5_lld.md` 5절). 기본 세그먼트 길이(128MB)로는 테스트 데이터로 세그먼트 경계를 못 넘어
  * "지울 게 없어 통과"하는 거짓 green이 나므로(handoff 6-2), 세그먼트·term 길이를 Aeron 최소값
  * (64KB, {@code LogBufferDescriptor.TERM_MIN_LENGTH})으로 줄여 세그먼트 여러 개를 실제로 만든다.
+ * 체결 회수(U2)는 {@link AccountArchiveFillSegmentPurgerTest} 참고 — 이 파일은 저널 경로만 본다.
  */
 class AccountArchiveSegmentPurgerTest {
+
+    // 이 테스트는 저널(purgeJournalUpTo)만 쓴다 — 체결 채널·스트림은 실제로 안 쓰이는 더미 값.
+    private static final String UNUSED_FILL_CHANNEL = "aeron:ipc";
+    private static final int UNUSED_FILL_STREAM_ID = -1;
 
     private static final int TERM_BUFFER_LENGTH = 64 * 1024; // Aeron 허용 최소 term 길이
     private static final int SEGMENT_FILE_LENGTH = TERM_BUFFER_LENGTH; // 세그먼트 1개 = term 1개
@@ -89,19 +94,20 @@ class AccountArchiveSegmentPurgerTest {
     void 첫_회차는_아무것도_지우지_않고_두번째_회차부터_직전_경계까지_지운다() {
         long positionAfterBatch1 = publishUntilAdvanced(4); // 세그먼트 4개 분량
 
-        AccountArchiveSegmentPurger purger = new AccountArchiveSegmentPurger(aeron, controlRequestChannel, recordingId);
+        AccountArchiveSegmentPurger purger = new AccountArchiveSegmentPurger(
+            aeron, controlRequestChannel, recordingId, UNUSED_FILL_CHANNEL, UNUSED_FILL_STREAM_ID);
         purger.start();
         try {
             int filesBeforeAnyPurge = countSegmentFiles();
             assertThat(filesBeforeAnyPurge).as("세그먼트 4개 분량을 발행했으니 최소 3개 이상은 파일로 남아야 한다").isGreaterThanOrEqualTo(3);
 
-            purger.purgeUpTo(positionAfterBatch1);
+            purger.purgeJournalUpTo(positionAfterBatch1);
             assertThat(countSegmentFiles()).as("첫 회차는 직전 경계가 없어 아무것도 지우지 않는다").isEqualTo(filesBeforeAnyPurge);
 
             publishUntilAdvanced(4);
             int filesBeforeSecondPurge = countSegmentFiles();
             long positionAfterBatch2 = testArchive.getRecordingPosition(recordingId);
-            purger.purgeUpTo(positionAfterBatch2);
+            purger.purgeJournalUpTo(positionAfterBatch2);
 
             int filesAfterSecondPurge = countSegmentFiles();
             assertThat(filesAfterSecondPurge)

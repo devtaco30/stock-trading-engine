@@ -26,10 +26,11 @@ import com.flab.stocktradingengine.account.disruptor.io.AccountSnapshotSink;
  * 큐에 들어간 시점이 아니라 {@link AccountSnapshotStore#write}가 반환한(=디스크에 실제로 박힌)
  * 시점에만 갱신한다. 소비자 스레드가 이 값을 보고 옛 tradeId 세대를 가지치기할지 정한다.</p>
  *
- * <h3>Archive 세그먼트 회수 (ADR-032 I5 U1)</h3>
- * <p>스냅샷이 디스크에 확정된 직후(D2) {@link AccountArchiveSegmentPurger#purgeUpTo}를 부른다 —
- * "무엇을 지울지"는 이 클래스가 몰라도 되므로 회수 로직 자체는 그 클래스가 갖는다(SRP), 여기는
- * durable해진 시점에 호출만 한다.</p>
+ * <h3>Archive 세그먼트 회수 (ADR-032 I5 U1·U2)</h3>
+ * <p>스냅샷이 디스크에 확정된 직후(D2) 저널·체결 순서로 {@link AccountArchiveSegmentPurger#purgeJournalUpTo}·
+ * {@link AccountArchiveSegmentPurger#purgeFillsUpTo}를 부른다 — "무엇을 지울지"는 이 클래스가
+ * 몰라도 되므로 회수 로직 자체는 그 클래스가 갖는다(SRP), 여기는 durable해진 시점에 순서대로
+ * 호출만 한다(같은 스레드에서 순차 실행해 Archive 삭제 작업이 서로 겹치지 않게 한다).</p>
  */
 public class AccountSnapshotWriter implements AccountSnapshotSink, AutoCloseable {
 
@@ -42,7 +43,7 @@ public class AccountSnapshotWriter implements AccountSnapshotSink, AutoCloseable
 
     private final AccountSnapshotStore snapshotStore;
     private final long journalRecordingId;
-    private final AccountArchiveSegmentPurger journalPurger;
+    private final AccountArchiveSegmentPurger archivePurger;
     private final OneToOneConcurrentArrayQueue<SnapshotWriteTask> queue = new OneToOneConcurrentArrayQueue<>(QUEUE_CAPACITY);
     private final IdleStrategy idleStrategy = new BackoffIdleStrategy();
     private final AtomicBoolean running = new AtomicBoolean(false);
@@ -50,10 +51,10 @@ public class AccountSnapshotWriter implements AccountSnapshotSink, AutoCloseable
     private volatile long durableSeq = 0L;
     private Thread writerThread;
 
-    public AccountSnapshotWriter(AccountSnapshotStore snapshotStore, long journalRecordingId, AccountArchiveSegmentPurger journalPurger) {
+    public AccountSnapshotWriter(AccountSnapshotStore snapshotStore, long journalRecordingId, AccountArchiveSegmentPurger archivePurger) {
         this.snapshotStore = snapshotStore;
         this.journalRecordingId = journalRecordingId;
-        this.journalPurger = journalPurger;
+        this.archivePurger = archivePurger;
     }
 
     /** 계좌 엔진 소비자 스레드가 호출한다 — 큐에 넣기만 하고 즉시 돌아간다(논블로킹). */
@@ -69,7 +70,7 @@ public class AccountSnapshotWriter implements AccountSnapshotSink, AutoCloseable
 
     /** 쓰기 스레드와 전용 Archive 회수 연결을 기동한다. */
     public void start() {
-        journalPurger.start();
+        archivePurger.start();
         running.set(true);
         writerThread = new Thread(this::writeLoop, "account-snapshot-writer");
         writerThread.setDaemon(true);
@@ -90,7 +91,8 @@ public class AccountSnapshotWriter implements AccountSnapshotSink, AutoCloseable
         try {
             snapshotStore.write(journalRecordingId, task.fillPositions(), task.snapshotBytes());
             durableSeq = task.appliedSeq(); // fsync까지 끝난 뒤에만 durable로 보고한다
-            journalPurger.purgeUpTo(task.journalPosition());
+            archivePurger.purgeJournalUpTo(task.journalPosition());
+            archivePurger.purgeFillsUpTo(task.fillPositions());
         } catch (RuntimeException e) {
             // 이번 회차 쓰기가 실패해도 프로세스는 계속 돈다 — durableSeq를 안 올려 가지치기를
             // 계속 막는다(안전한 쪽으로 기운다). 다음 스냅샷 주기가 다시 시도한다.
@@ -109,7 +111,7 @@ public class AccountSnapshotWriter implements AccountSnapshotSink, AutoCloseable
                 Thread.currentThread().interrupt();
             }
         }
-        journalPurger.close();
+        archivePurger.close();
     }
 
     private record SnapshotWriteTask(byte[] snapshotBytes, Map<Integer, Long> fillPositions, long journalPosition, long appliedSeq) {

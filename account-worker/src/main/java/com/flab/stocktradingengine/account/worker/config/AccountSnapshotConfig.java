@@ -15,6 +15,7 @@ import com.flab.stocktradingengine.account.worker.recovery.AccountArchiveSegment
 import com.flab.stocktradingengine.account.worker.recovery.AccountSnapshotStore;
 import com.flab.stocktradingengine.account.worker.recovery.AccountSnapshotWriter;
 import com.flab.stocktradingengine.account.worker.recovery.StoredAccountSnapshot;
+import com.flab.stocktradingengine.aeron.AeronStreamIds;
 
 import io.aeron.Aeron;
 
@@ -36,10 +37,12 @@ public class AccountSnapshotConfig {
     private static final String DEFAULT_CONTROL_REQUEST_CHANNEL = "aeron:udp?endpoint=localhost:8010";
 
     @Bean
-    public AccountArchiveSegmentPurger accountJournalSegmentPurger(
+    public AccountArchiveSegmentPurger accountArchiveSegmentPurger(
             Aeron aeron, Long accountJournalRecordingId,
-            @Value("${account.worker.archive.control-channel:" + DEFAULT_CONTROL_REQUEST_CHANNEL + "}") String controlRequestChannel) {
-        return new AccountArchiveSegmentPurger(aeron, controlRequestChannel, accountJournalRecordingId);
+            @Value("${account.worker.archive.control-channel:" + DEFAULT_CONTROL_REQUEST_CHANNEL + "}") String controlRequestChannel,
+            @Value("${transport.fill.channel:" + AccountFillIntakeConfig.DEFAULT_FILL_CHANNEL + "}") String fillChannel) {
+        return new AccountArchiveSegmentPurger(aeron, controlRequestChannel, accountJournalRecordingId,
+            fillChannel, AeronStreamIds.FILL);
     }
 
     @Bean
@@ -67,8 +70,8 @@ public class AccountSnapshotConfig {
      */
     @Bean
     public AccountSnapshotWriter accountSnapshotWriter(AccountSnapshotStore accountSnapshotStore,
-            Long accountJournalRecordingId, AccountArchiveSegmentPurger accountJournalSegmentPurger) {
-        return new AccountSnapshotWriter(accountSnapshotStore, accountJournalRecordingId, accountJournalSegmentPurger);
+            Long accountJournalRecordingId, AccountArchiveSegmentPurger accountArchiveSegmentPurger) {
+        return new AccountSnapshotWriter(accountSnapshotStore, accountJournalRecordingId, accountArchiveSegmentPurger);
     }
 
     @Bean
