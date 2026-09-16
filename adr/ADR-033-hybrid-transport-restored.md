@@ -1,7 +1,7 @@
 # ADR-033 하이브리드 전송 복원 — 정산은 Kafka 유지 (ADR-032 되돌림, ADR-020 재확인)
 
 - 날짜: 2026-09-14
-- 상태: 채택. Kafka 완전 제거 결정(ADR-032 네타, `decision_records/single-stack-aeron-archive.md`)을 대체한다.
+- 상태: 채택. Kafka 완전 제거 결정(ADR-032)을 대체한다.
 - 관련: ADR-020(전송 반전) · 계좌 발신을 로직 스레드 밖으로(`decision_records/account-forwarding-off-thread.md`)
 
 ## 문제
