@@ -1,5 +1,8 @@
 package com.flab.stocktradingengine.time;
 
+import java.lang.System.Logger;
+import java.lang.System.Logger.Level;
+
 import org.HdrHistogram.Histogram;
 import org.HdrHistogram.Recorder;
 
@@ -28,6 +31,8 @@ import org.HdrHistogram.Recorder;
  */
 public final class LatencyHistogram {
 
+    private static final Logger log = System.getLogger(LatencyHistogram.class.getName());
+
     private static final int SIGNIFICANT_VALUE_DIGITS = 3;
 
     private final boolean enabled;
@@ -40,34 +45,58 @@ public final class LatencyHistogram {
         this.recorder = enabled ? new Recorder(SIGNIFICANT_VALUE_DIGITS) : null;
     }
 
-    /** {@code publishedAtEpochNanos}부터 지금까지 걸린 시간을 기록한다. 여러 스레드가 동시에 불러도 안전하다. */
+    /**
+     * {@code publishedAtEpochNanos}부터 지금까지 걸린 시간을 기록한다. 여러 스레드가 동시에 불러도
+     * 안전하다.
+     *
+     * <p>v2는 이 메서드를 계좌 엔진 single-writer 소비자 스레드의 핫패스에서 직접 부른다(2b 리뷰
+     * 지적) — HdrHistogram 내부에서 예상 못한 예외가 나더라도(라이브러리 버그 등) 여기서 삼키고
+     * 계측을 포기할 뿐, 절대 호출자에게 전파하지 않는다. 전파되면 계좌 엔진의 fail-fast 예외
+     * 핸들러가 소비자 스레드를 죽이거나(주문 처리 전체 정지), 이 호출이 accept 처리 중간(리스너
+     * 통지·매칭 발신 전)에 있어 이미 예약된 주문이 통지도 매칭 발신도 못 받고 붕 뜨는(돈) 결과로
+     * 이어질 수 있다 — 계측 부가 기능이 본 기능을 해치면 안 된다.</p>
+     */
     public void record(long publishedAtEpochNanos) {
         if (!enabled) {
             return;
         }
-        long elapsedNanos = EpochNanos.now() - publishedAtEpochNanos;
-        recorder.recordValue(Math.max(elapsedNanos, 0L));
+        try {
+            long elapsedNanos = EpochNanos.now() - publishedAtEpochNanos;
+            recorder.recordValue(Math.max(elapsedNanos, 0L));
+        } catch (RuntimeException e) {
+            log.log(Level.WARNING, "[접수 지연 측정] record 실패(계측만 스킵, 처리는 계속됨)", e);
+        }
     }
 
     /**
      * 마지막으로 이 메서드를 부른 뒤(처음이면 측정 시작 뒤)부터 지금까지 기록된 값들의 백분위
      * 스냅샷을 만들고, 내부 상태를 다음 구간을 위해 비운다 — 부하 측정 패스 경계(워밍업 끝·패스N
      * 끝)와 앱 종료 시(그때까지 안 꺼낸 나머지) 양쪽에서 이 메서드 하나로 쓴다.
+     *
+     * <p>{@link #record}와 같은 이유로 내부 예외를 삼킨다 — 이 메서드는 폴링 스레드(부하 측정
+     * 트리거 처리)에서 불려 주문 처리 핫패스와는 무관하지만, 예외가 그대로 새면 그 폴링 스레드
+     * 자체가 죽어 이후 패스 경계를 영영 못 잡는다. 실패하면 빈 스냅샷을 돌려준다 — 호출자(트리거
+     * 처리기)가 "이번 구간은 0건"으로 보고, 다음 트리거는 정상적으로 다시 시도된다.</p>
      */
     public LatencySnapshot snapshotAndReset() {
         if (!enabled) {
             return LatencySnapshot.empty();
         }
-        Histogram interval = recorder.getIntervalHistogram();
-        if (interval.getTotalCount() == 0) {
+        try {
+            Histogram interval = recorder.getIntervalHistogram();
+            if (interval.getTotalCount() == 0) {
+                return LatencySnapshot.empty();
+            }
+            return new LatencySnapshot(
+                interval.getTotalCount(),
+                interval.getValueAtPercentile(50.0),
+                interval.getValueAtPercentile(95.0),
+                interval.getValueAtPercentile(99.0),
+                interval.getMaxValue()
+            );
+        } catch (RuntimeException e) {
+            log.log(Level.WARNING, "[접수 지연 측정] snapshotAndReset 실패(빈 스냅샷으로 대체)", e);
             return LatencySnapshot.empty();
         }
-        return new LatencySnapshot(
-            interval.getTotalCount(),
-            interval.getValueAtPercentile(50.0),
-            interval.getValueAtPercentile(95.0),
-            interval.getValueAtPercentile(99.0),
-            interval.getMaxValue()
-        );
     }
 }
