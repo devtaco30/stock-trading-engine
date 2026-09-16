@@ -62,7 +62,10 @@ docker compose up -d   # kafka · redis · postgres
 ### 측정
 
 - 매칭 코어 JMH: `./gradlew :matching-disruptor:jmh`, 지연 벤치 `:matching-disruptor:latencyBench` — 처리량 초당 약 97만~100만 주문, 저부하 지연 p50 13~30µs (Apple M1 Pro 10코어, OpenJDK 21.0.3, WaitStrategy 3종)
-- 부하: `loadtest/` (k6) — v1 vs v2 비교 [2026-09-16 측정 후 수치 삽입]
+- 부하: `loadtest/` (k6) — v1과 v2에 같은 입력 파일을 먹이고 같은 끝점(주문을 받아 잔고를 예약한 시점)에서 비교했습니다.
+  같은 도착률 초당 192건에서 접수 지연은 **v1 p50 12~13ms · p99 50~56ms**, **v2 p50 1.9~2.0ms · p99 3.5~4.2ms**입니다.
+  포화 용량은 v1이 초당 227건(컨슈머 3)에서 385건(컨슈머 9), v2가 초당 4000건 이상입니다 — v2 쪽은 하한입니다. k6 송신이 먼저 막혀 v2의 천장은 재지 못했습니다.
+  측정 설계와 한계(부하 생성기가 측정 대상과 같은 노트북에 있어 높은 도착률에서 꼬리 지연이 오염된 것 포함)는 `decision_records/v1-v2-e2e-measurement.md`에, 확정 결과 원본은 `loadtest/evidence/`에 있습니다.
 
 ### 결정 기록
 
