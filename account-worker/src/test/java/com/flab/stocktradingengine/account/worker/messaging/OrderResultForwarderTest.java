@@ -34,6 +34,7 @@ import org.springframework.kafka.test.context.EmbeddedKafka;
 import org.springframework.kafka.test.utils.KafkaTestUtils;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
 
+import com.flab.stocktradingengine.account.worker.recovery.OrderResultForwardPositionStore;
 import com.flab.stocktradingengine.codec.OrderResultCodec;
 import com.flab.stocktradingengine.codec.OrderResultEntry;
 import com.flab.stocktradingengine.codec.OrderVerdict;
@@ -50,6 +51,7 @@ import com.flab.stocktradingengine.kafka.KafkaTopics;
 class OrderResultForwarderTest {
 
     private static final OrderResultCodec CODEC = new OrderResultCodec();
+    private static final long DUMMY_RECORDING_ID = 1L;
 
     @Autowired
     private EmbeddedKafkaBroker embeddedKafkaBroker;
@@ -66,7 +68,8 @@ class OrderResultForwarderTest {
     @Test
     void 디코딩된_엔트리가_실제_토픽에_도착한다() {
         realKafkaTemplate = newRealKafkaTemplate();
-        OrderResultForwarder forwarder = new OrderResultForwarder(null, realKafkaTemplate);
+        OrderResultForwarder forwarder =
+            new OrderResultForwarder(null, realKafkaTemplate, mock(OrderResultForwardPositionStore.class), DUMMY_RECORDING_ID);
         OrderResultEntry entry = new OrderResultEntry(1L, 100L, "r1", OrderVerdict.ACCEPTED, null, 1_234L);
 
         forwarder.onFragment(encode(entry), 0, encodedLength(entry), null);
@@ -88,7 +91,8 @@ class OrderResultForwarderTest {
     void 손상된_프레임은_예외없이_skip하고_아무것도_발행하지_않는다() {
         @SuppressWarnings("unchecked")
         KafkaTemplate<String, Object> mockKafkaTemplate = mock(KafkaTemplate.class);
-        OrderResultForwarder forwarder = new OrderResultForwarder(null, mockKafkaTemplate);
+        OrderResultForwarder forwarder =
+            new OrderResultForwarder(null, mockKafkaTemplate, mock(OrderResultForwardPositionStore.class), DUMMY_RECORDING_ID);
 
         UnsafeBuffer poison = new UnsafeBuffer(new byte[2]); // OrderResultCodec 최소 고정 길이(18)에 한참 못 미침
 
@@ -100,7 +104,8 @@ class OrderResultForwarderTest {
     void 정상_프레임은_토픽_키_이벤트를_정확히_실어_send를_부른다() {
         @SuppressWarnings("unchecked")
         KafkaTemplate<String, Object> mockKafkaTemplate = mock(KafkaTemplate.class);
-        OrderResultForwarder forwarder = new OrderResultForwarder(null, mockKafkaTemplate);
+        OrderResultForwarder forwarder =
+            new OrderResultForwarder(null, mockKafkaTemplate, mock(OrderResultForwardPositionStore.class), DUMMY_RECORDING_ID);
         OrderResultEntry entry = new OrderResultEntry(7L, 0L, "r7", OrderVerdict.REJECTED, "INSUFFICIENT", 7_000L);
 
         forwarder.onFragment(encode(entry), 0, encodedLength(entry), null);
