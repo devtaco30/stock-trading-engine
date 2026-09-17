@@ -41,7 +41,9 @@ class AccountJournalReplayerPoisonIntegrationTest {
         ConfigurableApplicationContext run1 = launch();
         try {
             AccountEngine engine = run1.getBean(AccountEngine.class);
-            ExclusivePublication publication = run1.getBean(ExclusivePublication.class);
+            // 주문 결과 기록 트랙(U2)이 ExclusivePublication 빈을 하나 더 추가해 타입만으로는
+            // 모호해졌다 — 저널 발행 스트림을 이름으로 지정해 가져온다.
+            ExclusivePublication publication = run1.getBean("accountJournalPublication", ExclusivePublication.class);
 
             engine.publishBuy(1L, STOCK, new BigDecimal("10000"), 10, "r1");
             awaitSeq(engine, 1L); // r1 예약 accept

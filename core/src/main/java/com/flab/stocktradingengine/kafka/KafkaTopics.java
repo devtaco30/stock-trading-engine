@@ -31,4 +31,10 @@ public final class KafkaTopics {
      * upsert한다(Unit 2~3). accountId가 파티션 키다(같은 계좌 순서 보장).
      */
     public static String accountState() { return "account-state"; }
+
+    /**
+     * 주문 결과 기록 트랙 토픽. account-worker가 Archive에 남긴 접수 판정(수락·거부·중복)을
+     * 별도 스레드가 여기로 옮긴다. accountId가 파티션 키다(같은 계좌 순서 보장).
+     */
+    public static String orderResults() { return "order-results"; }
 }

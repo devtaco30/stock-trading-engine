@@ -25,6 +25,7 @@ dependencies {
 	annotationProcessor(libs.lombok)
 
 	testImplementation(libs.spring.boot.starter.test)
+	testImplementation(libs.spring.kafka.test) // @EmbeddedKafka — 주문 결과 기록 트랙 U3-a 검증
 	testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
