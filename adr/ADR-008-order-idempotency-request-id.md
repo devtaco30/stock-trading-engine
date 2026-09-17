@@ -7,12 +7,12 @@
 1. 멱등키가 `requestedAt = Instant.now()`(API 수신 서버시각)였다. 버스트 때 서로 다른 정상 주문이 같은 밀리초에 몰리면 `(account_id, requested_at)` UNIQUE가 깨진다. 주식 도메인은 같은 계좌의 연속 주문이 정상인데, 이 키는 그걸 중복으로 오판한다.
 2. `OrderCommandService`의 `catch(DataIntegrityViolationException)`가 **롤백된(rollback-only) 트랜잭션 안에서** 복구 조회를 실행했다. Hibernate `AssertionFailure`가 나고, `DefaultErrorHandler`가 9회 재시도한 뒤 주문이 유실됐다.
 
-시각 기반 키를 쓰는 한 1번은 남는다. 시각은 요청을 구분하는 값이 아니라 요청이 도착한 순간일 뿐이라, 같은 계좌의 정상 연속 주문과 재전달 중복을 구별하지 못한다.
+시각 기반 키를 쓰는 한 1번은 남는다. 시각은 요청이 도착한 순간을 적은 값이다. 같은 계좌에서 주문이 연달아 오면 정상 주문과 재전달 중복이 같은 시각을 받을 수 있어 둘을 구별하지 못한다.
 
 ## 대안
 
-1. **시각 기반 키 유지 + 복구 조회만 REQUIRES_NEW로 분리** — `AssertionFailure`(2번)는 사라진다. 하지만 정상 주문끼리의 충돌(1번)은 그대로 남는다. 원인이 아니라 증상만 다룬다.
-2. **`requestId` 전역 UNIQUE + check-then-act + REQUIRES_NEW 안전망** — 요청마다 고유한 식별자를 키로 삼는다. 저장 전에 조회로 중복을 걸러내고(check-then-act), catch는 동시 삽입 경쟁의 최후 안전망으로만 둔다. 1번·2번을 함께 해결한다.
+1. **시각 기반 키 유지 + 복구 조회만 REQUIRES_NEW로 분리.** `AssertionFailure`(2번)는 사라진다. 하지만 정상 주문끼리의 충돌(1번)은 그대로 남는다. 증상만 다루고 원인은 남긴다.
+2. **`requestId` 전역 UNIQUE + check-then-act + REQUIRES_NEW 안전망.** 요청마다 고유한 식별자를 키로 삼는다. 저장 전에 조회로 중복을 걸러내고(check-then-act), catch는 동시 삽입 경쟁의 최후 안전망으로만 둔다. 1번·2번을 함께 해결한다.
 
 ## 트레이드오프
 

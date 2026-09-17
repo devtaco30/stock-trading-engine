@@ -8,7 +8,7 @@
 
 v2 핫패스는 api → account-worker(검증·예약) → matching-worker(매칭) → account-worker(체결 반영)로 이어진다. 이 경로의 전송 수단을 정해야 한다.
 
-초기 설계는 돈이 오가는 구간(주문 인테이크 `order-requests`, 체결 반영 `account-fills`)을 Kafka로 두고 매칭 입력만 Aeron으로 받았다. 그런데 v2의 목표는 정합성과 속도 둘 다이고, 핫패스에 Kafka 홉이 하나라도 남으면 그 홉이 end-to-end 지연을 지배한다. Kafka 홉은 ms 단위, Aeron은 µs 단위라 대략 1000배 차이가 난다. 한 구간만 Aeron으로 바꿔도 앞뒤 Kafka 홉 때문에 그 Aeron이 전체 지연에서 드러나지 않는다.
+초기 설계는 돈이 오가는 구간(주문 인테이크 `order-requests`, 체결 반영 `account-fills`)을 Kafka로 두고 매칭 입력만 Aeron으로 받았다. 그런데 v2의 목표는 정합성과 속도 둘 다이고, 핫패스에 Kafka 홉이 하나라도 남으면 그 홉이 end-to-end 지연의 대부분을 차지한다. Kafka 홉은 ms 단위, Aeron은 µs 단위라 대략 1000배 차이가 난다. 한 구간만 Aeron으로 바꿔도 앞뒤 Kafka 홉 때문에 그 Aeron이 전체 지연에서 드러나지 않는다.
 
 라우팅 부담이 새로 생기는 것도 아니었다. 매칭축(stockCode)에서 이미 sender가 목적지를 계산해 보내고 있었으므로, 인테이크에서 accountId로 목적지를 계산하는 것도 같은 메커니즘이다.
 
@@ -31,7 +31,7 @@ v2 핫패스는 api → account-worker(검증·예약) → matching-worker(매�
 
 ## 결정
 
-대안 2. 핫패스(api → account → matching → 체결 반영)는 전부 Aeron + Archive 저널로 간다. Kafka는 off-path에만 남긴다. 정산 T+2 왕복(`settlement-requests` · `account-settlements`)과 계좌 조회모델 프로젝션(`account-state`)이 그것이다.
+대안 2. 핫패스(api → account → matching → 체결 반영)는 전부 Aeron + Archive journal로 간다. Kafka는 off-path에만 남긴다. 정산 T+2 왕복(`settlement-requests` · `account-settlements`)과 계좌 조회모델 프로젝션(`account-state`)이 그것이다.
 
 ADR-018·019의 "계좌 = Kafka 복제 로그, Aeron = 전송 전용" 부분은 이 결정이 대체한다.
 
