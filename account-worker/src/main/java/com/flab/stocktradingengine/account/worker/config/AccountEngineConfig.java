@@ -90,7 +90,7 @@ public class AccountEngineConfig {
         long nodeId = SnowflakeNodeIdResolver.resolve(nodeIdConfig);
         AccountEngine engine = new AccountEngine(
             BUFFER_SIZE, new BlockingWaitStrategy(), ProducerType.MULTI, nodeId, matchingOrderSender, listener, journal,
-            accountSnapshotSink, accountLatencyHistogram, shardRoutingTable, ownedShard.endpoint());
+            accountSnapshotSink, accountLatencyHistogram, shardRoutingTable, ownedShard.slots());
         int seededCount = 0;
         int skippedCount = 0;
         for (AccountWorkerProperties.SeedAccount seed : properties.seedAccounts()) {

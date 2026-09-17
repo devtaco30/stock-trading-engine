@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -121,7 +122,7 @@ class AccountEngineTest {
         engine = new AccountEngine(BUFFER_SIZE, NODE_ID,
             (orderId, accountId, stockCode, side, price, quantity) ->
                 forwardedOrders.add(new ForwardedOrder(orderId, accountId, stockCode, side, price, quantity)),
-            new Recorder(events, stateChanges, latch), routingTable, ownedEndpoint);
+            new Recorder(events, stateChanges, latch), routingTable, Set.of(0));
         engine.seed(ownedAccountId, new BigDecimal("1000000"), new BigDecimal("0.40"));
         engine.start();
 
@@ -151,7 +152,7 @@ class AccountEngineTest {
         engine = new AccountEngine(BUFFER_SIZE, NODE_ID,
             (orderId, accountId, stockCode, side, price, quantity) ->
                 forwardedOrders.add(new ForwardedOrder(orderId, accountId, stockCode, side, price, quantity)),
-            new Recorder(events, stateChanges, latch), routingTable, ownedEndpoint);
+            new Recorder(events, stateChanges, latch), routingTable, Set.of(0));
         engine.seed(notOwnedAccountId, new BigDecimal("1000000"), new BigDecimal("0.40")); // 시드 필터 우회 — 강제로 메모리에 올림
         engine.start();
 
