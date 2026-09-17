@@ -7,7 +7,9 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import com.flab.stocktradingengine.aeron.AccountDestinationResolver;
 import com.flab.stocktradingengine.aeron.ShardRoutingTable;
+import com.flab.stocktradingengine.aeron.StaticShardDestinationResolver;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -46,5 +48,15 @@ public class ShardRoutingConfig {
         log.info("[api] shard-routing.shards {}건 로드 — slotCount={} 목적지={}",
             ranges.size(), properties.slotCount(), ranges);
         return new ShardRoutingTable(properties.slotCount(), ranges);
+    }
+
+    /**
+     * 계좌 샤딩 U2 — 보내는 쪽({@link com.flab.stocktradingengine.api.messaging.AeronAccountOrderSender})은
+     * 이 인터페이스에만 의존한다. 이 빈을 나중에(U5) Kafka 배정 결과를 구독하는 동적 구현으로
+     * 바꿔 끼워도 보내는 쪽 코드는 고치지 않는다.
+     */
+    @Bean
+    public AccountDestinationResolver accountDestinationResolver(ShardRoutingTable shardRoutingTable) {
+        return new StaticShardDestinationResolver(shardRoutingTable);
     }
 }

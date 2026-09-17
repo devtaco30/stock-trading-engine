@@ -18,8 +18,10 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import com.flab.stocktradingengine.aeron.AccountDestinationResolver;
 import com.flab.stocktradingengine.aeron.ShardRoutingTable;
 import com.flab.stocktradingengine.aeron.ShardRoutingTable.ShardRange;
+import com.flab.stocktradingengine.aeron.StaticShardDestinationResolver;
 import com.flab.stocktradingengine.codec.AccountOrderCodec;
 import com.flab.stocktradingengine.codec.DecodedAccountOrder;
 import com.flab.stocktradingengine.time.EpochNanos;
@@ -46,8 +48,8 @@ class AeronAccountOrderSenderIntegrationTest {
     private static final int STREAM_ID = 4004;
     private static final long TIMEOUT_NANOS = 5_000_000_000L;
     private static final String STOCK_CODE = "005930";
-    private static final ShardRoutingTable SINGLE_SHARD_ROUTING_TABLE =
-        new ShardRoutingTable(1, List.of(new ShardRange(CHANNEL, 0, 0)));
+    private static final AccountDestinationResolver SINGLE_SHARD_RESOLVER =
+        new StaticShardDestinationResolver(new ShardRoutingTable(1, List.of(new ShardRange(CHANNEL, 0, 0))));
 
     private final AccountOrderCodec codec = new AccountOrderCodec();
 
@@ -75,7 +77,7 @@ class AeronAccountOrderSenderIntegrationTest {
 
     @Test
     void 매수_주문을_발신하면_계좌_인테이크_구독에서_그대로_디코딩된다() {
-        AeronAccountOrderSender sender = new AeronAccountOrderSender(SINGLE_SHARD_ROUTING_TABLE, Map.of(CHANNEL, publication));
+        AeronAccountOrderSender sender = new AeronAccountOrderSender(SINGLE_SHARD_RESOLVER, Map.of(CHANNEL, publication));
         long before = EpochNanos.now();
 
         sender.send(OrderSide.BUY, 1L, STOCK_CODE, new BigDecimal("10000"), 10, "req-buy-1");
@@ -88,7 +90,7 @@ class AeronAccountOrderSenderIntegrationTest {
 
     @Test
     void 매도_주문을_발신하면_계좌_인테이크_구독에서_그대로_디코딩된다() {
-        AeronAccountOrderSender sender = new AeronAccountOrderSender(SINGLE_SHARD_ROUTING_TABLE, Map.of(CHANNEL, publication));
+        AeronAccountOrderSender sender = new AeronAccountOrderSender(SINGLE_SHARD_RESOLVER, Map.of(CHANNEL, publication));
         long before = EpochNanos.now();
 
         sender.send(OrderSide.SELL, 2L, STOCK_CODE, new BigDecimal("11000"), 5, "req-sell-1");
@@ -107,7 +109,7 @@ class AeronAccountOrderSenderIntegrationTest {
      */
     @Test
     void 동시_다발_발신도_인코딩이_섞이지_않는다() throws InterruptedException {
-        AeronAccountOrderSender sender = new AeronAccountOrderSender(SINGLE_SHARD_ROUTING_TABLE, Map.of(CHANNEL, publication));
+        AeronAccountOrderSender sender = new AeronAccountOrderSender(SINGLE_SHARD_RESOLVER, Map.of(CHANNEL, publication));
         int threadCount = 20;
         List<DecodedAccountOrder> expected = new CopyOnWriteArrayList<>();
         ExecutorService pool = Executors.newFixedThreadPool(threadCount);

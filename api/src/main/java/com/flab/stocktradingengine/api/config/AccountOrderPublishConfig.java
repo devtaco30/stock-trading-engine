@@ -6,6 +6,7 @@ import java.util.Map;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import com.flab.stocktradingengine.aeron.AccountDestinationResolver;
 import com.flab.stocktradingengine.aeron.AeronStreamIds;
 import com.flab.stocktradingengine.aeron.ShardRoutingTable;
 import com.flab.stocktradingengine.api.messaging.AeronAccountOrderSender;
@@ -60,7 +61,7 @@ public class AccountOrderPublishConfig {
 
     @Bean
     public AeronAccountOrderSender aeronAccountOrderSender(
-            ShardRoutingTable shardRoutingTable, AccountOrderPublications accountOrderPublications) {
-        return new AeronAccountOrderSender(shardRoutingTable, accountOrderPublications.byEndpoint());
+            AccountDestinationResolver accountDestinationResolver, AccountOrderPublications accountOrderPublications) {
+        return new AeronAccountOrderSender(accountDestinationResolver, accountOrderPublications.byEndpoint());
     }
 }
