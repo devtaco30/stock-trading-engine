@@ -4,7 +4,10 @@ import java.lang.System.Logger;
 import java.lang.System.Logger.Level;
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -42,6 +45,7 @@ public final class AssignmentDestinationResolver implements AccountDestinationRe
     private volatile String[] slotToEndpoint;
     private volatile boolean running;
     private Thread pollThread;
+    private final CountDownLatch initialCatchUpLatch = new CountDownLatch(1);
 
     public AssignmentDestinationResolver(Consumer<Integer, String> consumer, ShardRoutingTable shardRoutingTable, int slotCount) {
         this.consumer = consumer;
@@ -66,10 +70,34 @@ public final class AssignmentDestinationResolver implements AccountDestinationRe
             .toList();
         consumer.assign(partitions);
         consumer.seekToBeginning(partitions);
+        // 지금까지 쌓인 기록을 다 읽었다고 판정할 기준선. 이 값 이후에 도착하는 레코드는 "아직
+        // 못 읽은 과거"가 아니라 "그때부터 새로 일어난 배정 변경"이라 초기 읽기 판정에 안 쓴다.
+        Map<TopicPartition, Long> endOffsets = consumer.endOffsets(partitions);
         running = true;
-        pollThread = new Thread(this::pollLoop, "account-shard-map-poll");
+        pollThread = new Thread(() -> pollLoop(partitions, endOffsets), "account-shard-map-poll");
         pollThread.setDaemon(true);
         pollThread.start();
+    }
+
+    /**
+     * 지금까지 {@code account-shard-map}에 쌓인 기록을 전부 읽을 때까지 호출 스레드를 기다리게
+     * 한다(계좌 샤딩 U6) — api·매칭 워커가 "아직 아무 배정도 모르는 채로" 트래픽을 받기 시작하는
+     * 것을 막는 용도다. 매칭에서는 {@code MatchingOrderReceiverLifecycle}이 이걸로 주문 인테이크
+     * 구독을 늦춘다. 토픽이 비어 있으면(아직 아무도 배정을 못 받음) 곧바로 반환한다 — 데이터가
+     * "언젠가 올 때까지" 무한히 기다리지 않는다.
+     *
+     * @throws IllegalStateException timeout 안에 못 끝나면(브로커 문제 등)
+     */
+    public void awaitInitialCatchUp(Duration timeout) {
+        try {
+            if (!initialCatchUpLatch.await(timeout.toMillis(), TimeUnit.MILLISECONDS)) {
+                throw new IllegalStateException(
+                    MAP_TOPIC + " 초기 읽기가 " + timeout + " 안에 끝나지 않았습니다");
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(MAP_TOPIC + " 초기 읽기 대기 중 인터럽트됨", e);
+        }
     }
 
     public void close() {
@@ -85,17 +113,36 @@ public final class AssignmentDestinationResolver implements AccountDestinationRe
         consumer.close();
     }
 
-    private void pollLoop() {
+    private void pollLoop(List<TopicPartition> partitions, Map<TopicPartition, Long> endOffsets) {
+        boolean caughtUp = false;
         try {
             while (running) {
                 ConsumerRecords<Integer, String> records = consumer.poll(Duration.ofMillis(500));
                 if (!records.isEmpty()) {
                     applyRecords(records);
                 }
+                if (!caughtUp && isCaughtUp(partitions, endOffsets)) {
+                    caughtUp = true;
+                    initialCatchUpLatch.countDown();
+                }
             }
         } catch (WakeupException e) {
             // close()가 의도적으로 poll을 깨운 것 — 정상 종료 경로.
+        } finally {
+            // running이 false가 돼 루프를 빠져나가는 정상 종료 경로에서도(close() 등) 대기 중인
+            // awaitInitialCatchUp 호출자가 영원히 안 깨는 일이 없게 한다.
+            initialCatchUpLatch.countDown();
         }
+    }
+
+    /** consumer.position()은 이 poll 스레드에서만 부른다 — KafkaConsumer는 여러 스레드에서 동시에 쓸 수 없다. */
+    private boolean isCaughtUp(List<TopicPartition> partitions, Map<TopicPartition, Long> endOffsets) {
+        for (TopicPartition partition : partitions) {
+            if (consumer.position(partition) < endOffsets.get(partition)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private void applyRecords(ConsumerRecords<Integer, String> records) {

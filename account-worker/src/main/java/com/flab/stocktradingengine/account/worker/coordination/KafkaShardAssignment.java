@@ -3,6 +3,7 @@ package com.flab.stocktradingengine.account.worker.coordination;
 import java.lang.System.Logger;
 import java.lang.System.Logger.Level;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -67,6 +68,11 @@ public final class KafkaShardAssignment implements IntPredicate {
     private volatile boolean[] ownedSlotFlags;
     private volatile boolean running;
     private Thread pollThread;
+
+    // U6 — L1("배정은 기동할 때 정해지고 바뀌지 않는다")을 코드로 못 박는 안전망. 리밸런스
+    // 콜백은 poll 스레드 하나에서만 불리므로 이 필드들은 그 스레드만 읽고 쓴다(동시성 보호 불필요).
+    private boolean initialAssignmentReceived;
+    private Set<Integer> initialSlots = Set.of();
 
     public KafkaShardAssignment(Consumer<String, String> consumer, Producer<Integer, String> mapProducer,
                                 Admin adminClient, int slotCount, String ownEndpoint) {
@@ -150,13 +156,43 @@ public final class KafkaShardAssignment implements IntPredicate {
                 log.log(Level.WARNING, "[계좌] 담당 슬롯 회수: " + slotNumbers(partitions) + " 남은 담당=" + currentSlotsSnapshot().size() + "개");
             }
 
+            /**
+             * U6 — 이 워커가 살아 있는 동안 처음 받은 배정만 진짜로 받아들인다. 그 뒤 리밸런스로
+             * (Kafka 설정이 뚫려서든, 다른 워커가 죽어 session.timeout 뒤 재배정됐든) 처음 배정에
+             * 없던 슬롯이 섞여 들어오면 거부한다 — 이 워커는 그 슬롯 계좌들의 상태(잔고·예약)를
+             * 메모리에 가진 적이 없으므로, 받아들이면 아무 상태 없이 주문을 처리하는 것과 같다.
+             * 슬롯이 줄어드는 것(회수)은 그대로 받아들인다 — 내가 죽는 중일 수 있어 막을 이유가 없다.
+             */
             @Override
             public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+                List<TopicPartition> accepted;
+                List<TopicPartition> rejected;
+                if (!initialAssignmentReceived) {
+                    accepted = new ArrayList<>(partitions);
+                    rejected = List.of();
+                    initialSlots = partitions.stream().map(TopicPartition::partition).collect(Collectors.toUnmodifiableSet());
+                    initialAssignmentReceived = true;
+                } else {
+                    accepted = new ArrayList<>();
+                    rejected = new ArrayList<>();
+                    for (TopicPartition partition : partitions) {
+                        (initialSlots.contains(partition.partition()) ? accepted : rejected).add(partition);
+                    }
+                }
+
                 boolean[] updated = ownedSlotFlags.clone();
-                partitions.forEach(p -> updated[p.partition()] = true);
+                accepted.forEach(p -> updated[p.partition()] = true);
                 ownedSlotFlags = updated;
-                publishMapEntries(partitions, ownEndpoint);
-                log.log(Level.INFO, "[계좌] 담당 슬롯 배정: 신규=" + slotNumbers(partitions) + " 전체 담당=" + currentSlotsSnapshot().size() + "개");
+                if (!accepted.isEmpty()) {
+                    publishMapEntries(accepted, ownEndpoint);
+                }
+                if (!rejected.isEmpty()) {
+                    // 거부한 슬롯은 account-shard-map에 아무것도 발행하지 않는다 — 이 워커가 담당인
+                    // 척하면 api·매칭이 계속 여기로 보내고 매번 NOT_OWNED로 어긋난다. "목적지 없음"
+                    // (503/재시도) 상태로 두는 편이 낫다.
+                    log.log(Level.WARNING, "[계좌] 최초 배정에 없던 슬롯 거부(상태 없음, L1 안전망): " + slotNumbers(rejected));
+                }
+                log.log(Level.INFO, "[계좌] 담당 슬롯 배정: 신규=" + slotNumbers(accepted) + " 전체 담당=" + currentSlotsSnapshot().size() + "개");
             }
         };
     }

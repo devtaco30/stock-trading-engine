@@ -1,5 +1,7 @@
 package com.flab.stocktradingengine.aeron;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
 import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
@@ -89,6 +91,32 @@ class AssignmentDestinationResolverIntegrationTest {
         producer.flush();
 
         awaitEndpoint(accountId, Optional.empty(), 30);
+    }
+
+    /**
+     * 계좌 샤딩 U6 — awaitInitialCatchUp이 돌아온 시점엔 그 전에 이미 발행돼 있던 기록이 전부
+     * 반영돼 있어야 한다("아직 못 읽었는데 준비됐다고 알림" 방지). 매칭의
+     * {@code MatchingOrderReceiverLifecycle}이 이 보장에 기대 주문 인테이크 구독 시점을 정한다.
+     */
+    @Test
+    void 초기_읽기가_끝나면_그_전에_발행된_배정이_이미_반영돼_있다() {
+        ensureMapTopicExists();
+        ShardRoutingTable routingTable = new ShardRoutingTable(SLOT_COUNT, List.of(
+            new ShardRoutingTable.ShardRange("placeholder", 0, SLOT_COUNT - 1)));
+        long accountId = 3L;
+        int slot = routingTable.slotFor(accountId);
+        String endpoint = "aeron:udp?endpoint=localhost:" + (32000 + slot);
+
+        producer = buildProducer();
+        producer.send(new ProducerRecord<>(MAP_TOPIC, slot, endpoint));
+        producer.flush();
+
+        resolver = new AssignmentDestinationResolver(buildConsumer(), routingTable, SLOT_COUNT);
+        resolver.start();
+        resolver.awaitInitialCatchUp(Duration.ofSeconds(30));
+
+        // await 없이 바로 확인 — 이미 반영돼 있어야 한다.
+        assertEquals(Optional.of(endpoint), resolver.endpointFor(accountId));
     }
 
     private void awaitEndpoint(long accountId, Optional<String> expected, int timeoutSeconds) {

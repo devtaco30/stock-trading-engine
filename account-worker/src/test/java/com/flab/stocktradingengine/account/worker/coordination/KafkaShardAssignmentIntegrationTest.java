@@ -93,6 +93,33 @@ class KafkaShardAssignmentIntegrationTest {
         assertThat(member2.currentSlotsSnapshot()).hasSize(member2SlotsBefore);
     }
 
+    /**
+     * U6 — session.timeout이 진짜로 만료돼 Kafka가 실제로 재배정을 해도(죽은 워커의 슬롯이
+     * 남은 워커에게 넘어가도), 남은 워커는 "최초 배정에 없던 슬롯"이라 거부하고 자기 담당
+     * 집합을 그대로 유지해야 한다 — L1을 코드로 못 박는 안전망.
+     */
+    @Test
+    void 세션_타임아웃이_지나_재배정돼도_최초_배정에_없던_슬롯은_거부한다() throws InterruptedException {
+        String suffix = String.valueOf(System.nanoTime());
+        member1 = newAssignment("test-u6-1-" + suffix);
+        member2 = newAssignment("test-u6-2-" + suffix);
+        member1.start();
+        member2.start();
+        awaitSplit(member1, member2, 60);
+        int member2SlotsBefore = member2.currentSlotsSnapshot().size();
+        assertThat(member2SlotsBefore).isGreaterThan(0);
+
+        member1.close(); // static membership — LeaveGroup 없이 종료.
+        member1 = null;
+
+        // session.timeout(10초)이 실제로 지날 때까지 기다린 뒤, Kafka가 재배정을 마칠 시간까지 더 준다.
+        Thread.sleep(TEST_SESSION_TIMEOUT_MS + 10_000);
+
+        assertThat(member2.currentSlotsSnapshot())
+            .as("U6: 최초 배정에 없던 슬롯은 재배정돼도 거부해 담당 집합이 그대로여야 한다")
+            .hasSize(member2SlotsBefore);
+    }
+
     private KafkaShardAssignment newAssignment(String instanceId) {
         return new KafkaShardAssignment(
             buildConsumer(instanceId), buildMapProducer(), Admin.create(adminProps()), SLOT_COUNT, "endpoint-of-" + instanceId);

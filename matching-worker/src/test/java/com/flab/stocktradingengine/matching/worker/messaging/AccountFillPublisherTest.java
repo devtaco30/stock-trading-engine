@@ -192,8 +192,9 @@ class AccountFillPublisherTest {
 
     @Test
     void 목적지가_있어도_풀에_없는_endpoint면_예외를_던진다() {
-        // 계좌 샤딩 U5 — account-shard-map이 shard-routing.endpoints 풀에 없는 endpoint를 가리키는
-        // 설정 어긋남 상황. 조용히 삼키지 않고 fail-fast로 매칭 소비자 스레드를 멈춘다.
+        // 계좌 샤딩 U5·U6 — account-shard-map이 shard-routing.endpoints 풀에 없는 endpoint를
+        // 가리키는 설정 어긋남 상황. AccountDestinationMisconfiguredException은 IllegalStateException이
+        // 아니라 MatchingEventHandler의 "이벤트만 폐기" catch를 피해 진짜 fail-fast로 간다.
         SnowflakeIdGenerator snowflakeIdGenerator = mock(SnowflakeIdGenerator.class);
         when(snowflakeIdGenerator.nextId()).thenReturn(9001L);
         AccountDestinationResolver unknownPoolResolver = accountId -> java.util.Optional.of("aeron:udp?endpoint=localhost:9999");
@@ -203,7 +204,7 @@ class AccountFillPublisherTest {
         publishers.add(publisher);
         FillResult fill = new FillResult(1001L, 1L, 2001L, 2L, 4, new BigDecimal("10000"));
 
-        assertThatThrownBy(() -> publisher.onFill(STOCK, fill)).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> publisher.onFill(STOCK, fill)).isInstanceOf(AccountDestinationMisconfiguredException.class);
     }
 
     private AccountFillPublisher createStartedPublisher(
