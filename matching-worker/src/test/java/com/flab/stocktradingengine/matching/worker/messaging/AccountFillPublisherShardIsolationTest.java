@@ -18,6 +18,7 @@ import org.junit.jupiter.api.Test;
 
 import com.flab.stocktradingengine.aeron.ShardRoutingTable;
 import com.flab.stocktradingengine.aeron.ShardRoutingTable.ShardRange;
+import com.flab.stocktradingengine.aeron.StaticShardDestinationResolver;
 import com.flab.stocktradingengine.support.SnowflakeIdGenerator;
 import com.flab.stocktradingengine.trading.matching.FillResult;
 
@@ -62,7 +63,7 @@ class AccountFillPublisherShardIsolationTest {
         when(snowflakeIdGenerator.nextId()).thenReturn(9001L, 9002L);
 
         publisher = new AccountFillPublisher(
-            routingTable, Map.of(ENDPOINT_A, publicationA, ENDPOINT_B, publicationB), snowflakeIdGenerator);
+            new StaticShardDestinationResolver(routingTable), Map.of(ENDPOINT_A, publicationA, ENDPOINT_B, publicationB), snowflakeIdGenerator);
         publisher.start();
 
         FillResult stuckFill = new FillResult(1001L, stuckAccountId, 2001L, stuckAccountId, 4, new BigDecimal("10000"));

@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 
 import com.flab.stocktradingengine.aeron.ShardRoutingTable;
 import com.flab.stocktradingengine.aeron.ShardRoutingTable.ShardRange;
+import com.flab.stocktradingengine.aeron.StaticShardDestinationResolver;
 import com.flab.stocktradingengine.trading.entity.OrderSide;
 
 import io.aeron.Publication;
@@ -44,7 +45,7 @@ class AeronAccountOrderSenderRoutingTest {
         when(publicationB.offer(any(DirectBuffer.class), anyInt(), anyInt())).thenReturn(200L);
 
         AeronAccountOrderSender sender = new AeronAccountOrderSender(
-            routingTable, Map.of(ENDPOINT_A, publicationA, ENDPOINT_B, publicationB));
+            new StaticShardDestinationResolver(routingTable), Map.of(ENDPOINT_A, publicationA, ENDPOINT_B, publicationB));
 
         sender.send(OrderSide.BUY, accountInSlotA, STOCK, new BigDecimal("10000"), 10, "req-a");
         sender.send(OrderSide.SELL, accountInSlotB, STOCK, new BigDecimal("10000"), 5, "req-b");

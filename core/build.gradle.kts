@@ -7,6 +7,9 @@ dependencies {
 	implementation(libs.snowflake)
 	implementation(libs.agrona) // wire 패키지의 Aeron 바이너리 코덱(DirectBuffer/MutableDirectBuffer)이 씀
 	implementation(libs.hdrhistogram) // time.LatencyHistogram의 백분위 계산 — public API에 안 드러나 implementation
+	// AssignmentDestinationResolver(계좌 샤딩 U5)가 순수 KafkaConsumer로 account-shard-map을 읽는다.
+	// Spring이 아니라 라이브러리라 ADR-018(core는 프레임워크 없는 라이브러리로 유지)에 안 걸린다.
+	implementation(libs.kafka.clients)
 
 	// Jackson annotations only (compile-time)
 	compileOnly("com.fasterxml.jackson.core:jackson-annotations:2.17.0")

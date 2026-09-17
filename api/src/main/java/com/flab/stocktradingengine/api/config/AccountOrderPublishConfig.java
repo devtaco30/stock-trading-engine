@@ -3,9 +3,13 @@ package com.flab.stocktradingengine.api.config;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import lombok.extern.slf4j.Slf4j;
+
+import com.flab.stocktradingengine.aeron.AccountDestinationResolver;
 import com.flab.stocktradingengine.aeron.AeronStreamIds;
 import com.flab.stocktradingengine.aeron.ShardRoutingTable;
 import com.flab.stocktradingengine.api.messaging.AeronAccountOrderSender;
@@ -31,6 +35,7 @@ import io.aeron.driver.MediaDriver;
  * <p>스트림 ID는 {@link AeronStreamIds#ACCOUNT_INTAKE}로 account-worker
  * {@code AccountOrderIntakeConfig}와 core에서 공유한다.</p>
  */
+@Slf4j
 @Configuration
 public class AccountOrderPublishConfig {
 
@@ -49,7 +54,11 @@ public class AccountOrderPublishConfig {
         return Aeron.connect(new Aeron.Context().aeronDirectoryName(accountOrderMediaDriver.aeronDirectoryName()));
     }
 
+    /**
+     * 정적 모드(U2) — {@code shard-routing.shards}가 가리키는 목적지 endpoint마다 하나씩 연다.
+     */
     @Bean(destroyMethod = "close")
+    @ConditionalOnProperty(prefix = "account-shard.coordination", name = "enabled", havingValue = "false", matchIfMissing = true)
     public AccountOrderPublications accountOrderPublications(Aeron accountOrderAeron, ShardRoutingTable shardRoutingTable) {
         Map<String, Publication> byEndpoint = new LinkedHashMap<>();
         for (String endpoint : shardRoutingTable.distinctEndpoints()) {
@@ -58,9 +67,36 @@ public class AccountOrderPublishConfig {
         return new AccountOrderPublications(byEndpoint);
     }
 
+    /**
+     * 동적 모드(계좌 샤딩 U5) — 담당 배정은 Kafka가 정하지만(U4), "존재하는 워커 주소가 무엇인가"는
+     * 여전히 사람이 {@code shard-routing.endpoints}에 적는다(멤버 목록, 슬롯 범위 없음). 그 풀
+     * 전체로 Publication을 미리 다 열어 둔다 — account-shard-map은 그 풀 중 누가 어느 슬롯을
+     * 맡았는지만 알려주고({@link com.flab.stocktradingengine.aeron.AssignmentDestinationResolver}),
+     * 어떤 endpoint로 Publication을 열지는 안 바꾼다.
+     *
+     * <p>풀에 있는데 아직 안 뜬 워커의 Publication은 연결 전(NOT_CONNECTED) 상태로 남는다 — 정상
+     * 상황이라 에러로 다루지 않는다(연결 여부를 여기서 검사하지 않는다). 실제로 그 endpoint로
+     * 보내려 할 때 offer가 실패하면 {@code AeronAccountOrderSender}의 재시도→503 경로가 처리한다.</p>
+     */
+    @Bean(destroyMethod = "close")
+    @ConditionalOnProperty(prefix = "account-shard.coordination", name = "enabled", havingValue = "true")
+    public AccountOrderPublications dynamicAccountOrderPublications(Aeron accountOrderAeron, ShardRoutingProperties shardRoutingProperties) {
+        if (!shardRoutingProperties.shards().isEmpty()) {
+            log.warn("[api] 조정 모드(account-shard.coordination.enabled=true)에서는 shard-routing.shards를 안 씁니다"
+                + "(무시됨) — shard-routing.endpoints만 워커 풀로 씁니다: shards={}", shardRoutingProperties.shards());
+        }
+        Map<String, Publication> byEndpoint = new LinkedHashMap<>();
+        for (String endpoint : shardRoutingProperties.endpoints()) {
+            byEndpoint.put(endpoint, accountOrderAeron.addPublication(endpoint, AeronStreamIds.ACCOUNT_INTAKE));
+        }
+        log.info("[api] 워커 풀(shard-routing.endpoints) {}건으로 Publication 미리 연결: {}",
+            byEndpoint.size(), shardRoutingProperties.endpoints());
+        return new AccountOrderPublications(byEndpoint);
+    }
+
     @Bean
     public AeronAccountOrderSender aeronAccountOrderSender(
-            ShardRoutingTable shardRoutingTable, AccountOrderPublications accountOrderPublications) {
-        return new AeronAccountOrderSender(shardRoutingTable, accountOrderPublications.byEndpoint());
+            AccountDestinationResolver accountDestinationResolver, AccountOrderPublications accountOrderPublications) {
+        return new AeronAccountOrderSender(accountDestinationResolver, accountOrderPublications.byEndpoint());
     }
 }

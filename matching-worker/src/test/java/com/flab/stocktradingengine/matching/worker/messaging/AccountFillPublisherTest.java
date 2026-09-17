@@ -21,8 +21,10 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+import com.flab.stocktradingengine.aeron.AccountDestinationResolver;
 import com.flab.stocktradingengine.aeron.ShardRoutingTable;
 import com.flab.stocktradingengine.aeron.ShardRoutingTable.ShardRange;
+import com.flab.stocktradingengine.aeron.StaticShardDestinationResolver;
 import com.flab.stocktradingengine.codec.FillCodec;
 import com.flab.stocktradingengine.codec.FilledTrade;
 import com.flab.stocktradingengine.support.SnowflakeIdGenerator;
@@ -138,7 +140,7 @@ class AccountFillPublisherTest {
         when(snowflakeIdGenerator.nextId()).thenReturn(9001L);
 
         AccountFillPublisher publisher = new AccountFillPublisher(
-            routingTable, Map.of(ENDPOINT_A, publication), snowflakeIdGenerator);
+            new StaticShardDestinationResolver(routingTable), Map.of(ENDPOINT_A, publication), snowflakeIdGenerator);
         FillResult fill = new FillResult(1001L, 1L, 2001L, 2L, 4, new BigDecimal("10000"));
 
         Thread onFillThread = new Thread(() -> publisher.onFill(STOCK, fill));
@@ -188,11 +190,29 @@ class AccountFillPublisherTest {
         assertThatThrownBy(() -> publisher.onFill(STOCK, fill)).isInstanceOf(IllegalStateException.class);
     }
 
+    @Test
+    void 목적지가_있어도_풀에_없는_endpoint면_예외를_던진다() {
+        // 계좌 샤딩 U5·U6 — account-shard-map이 shard-routing.endpoints 풀에 없는 endpoint를
+        // 가리키는 설정 어긋남 상황. AccountDestinationMisconfiguredException은 IllegalStateException이
+        // 아니라 MatchingEventHandler의 "이벤트만 폐기" catch를 피해 진짜 fail-fast로 간다.
+        SnowflakeIdGenerator snowflakeIdGenerator = mock(SnowflakeIdGenerator.class);
+        when(snowflakeIdGenerator.nextId()).thenReturn(9001L);
+        AccountDestinationResolver unknownPoolResolver = accountId -> java.util.Optional.of("aeron:udp?endpoint=localhost:9999");
+        AccountFillPublisher publisher = new AccountFillPublisher(
+            unknownPoolResolver, Map.of(ENDPOINT_A, mock(ExclusivePublication.class)), snowflakeIdGenerator);
+        publisher.start();
+        publishers.add(publisher);
+        FillResult fill = new FillResult(1001L, 1L, 2001L, 2L, 4, new BigDecimal("10000"));
+
+        assertThatThrownBy(() -> publisher.onFill(STOCK, fill)).isInstanceOf(AccountDestinationMisconfiguredException.class);
+    }
+
     private AccountFillPublisher createStartedPublisher(
             ShardRoutingTable routingTable,
             Map<String, ExclusivePublication> publicationsByEndpoint,
             SnowflakeIdGenerator snowflakeIdGenerator) {
-        AccountFillPublisher publisher = new AccountFillPublisher(routingTable, publicationsByEndpoint, snowflakeIdGenerator);
+        AccountFillPublisher publisher = new AccountFillPublisher(
+            new StaticShardDestinationResolver(routingTable), publicationsByEndpoint, snowflakeIdGenerator);
         publisher.start();
         publishers.add(publisher);
         return publisher;

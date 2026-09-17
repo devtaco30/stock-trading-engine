@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -121,7 +122,7 @@ class AccountEngineTest {
         engine = new AccountEngine(BUFFER_SIZE, NODE_ID,
             (orderId, accountId, stockCode, side, price, quantity) ->
                 forwardedOrders.add(new ForwardedOrder(orderId, accountId, stockCode, side, price, quantity)),
-            new Recorder(events, stateChanges, latch), routingTable, ownedEndpoint);
+            new Recorder(events, stateChanges, latch), routingTable, Set.of(0)::contains);
         engine.seed(ownedAccountId, new BigDecimal("1000000"), new BigDecimal("0.40"));
         engine.start();
 
@@ -136,11 +137,11 @@ class AccountEngineTest {
     @Test
     @DisplayName("시드 필터를 우회해 담당 아닌 계좌가 메모리에 올라와 있어도 NOT_OWNED로 거부한다(I8 U2, 시드 단계와 독립적인 런타임 판정)")
     void 시드_필터_우회해도_담당_아니면_거부() throws InterruptedException {
-        // account-worker의 실제 배선(AccountEngineConfig)은 시드 전에 owns()로 걸러 담당 아닌
-        // 계좌는 애초에 seed()를 안 부른다. 하지만 그 필터가 유일한 방어선이면, 필터에 버그가
-        // 생기거나 나중에 다른 경로로 시드하게 됐을 때 담당 아닌 계좌가 그냥 메모리에 올라온다.
-        // 이 테스트는 그 필터를 일부러 건너뛰고(seed를 직접 불러 담당 아닌 계좌를 강제로 올림)
-        // 그래도 런타임 판정(rejectIfNotOwned)이 독립적으로 막는지 확인한다.
+        // account-worker의 실제 배선(AccountEngineConfig)은 배정이 비동기(U4)라 시드 단계에서
+        // 담당 여부로 거르지 않고 seed-accounts를 전부 싣는다(A안) — 그래서 담당 아닌 계좌가
+        // 메모리에 있는 것은 실제로도 일어나는 정상 상태다. 이 테스트는 그 상태를 그대로 흉내내
+        // (seed를 직접 불러 담당 아닌 계좌를 올림) 런타임 판정(rejectIfNotOwned)이 유일한
+        // 방어선으로서 제대로 막는지 확인한다.
         latch = new CountDownLatch(1);
         String ownedEndpoint = "aeron:udp?endpoint=localhost:20040";
         String otherEndpoint = "aeron:udp?endpoint=localhost:20041";
@@ -151,7 +152,7 @@ class AccountEngineTest {
         engine = new AccountEngine(BUFFER_SIZE, NODE_ID,
             (orderId, accountId, stockCode, side, price, quantity) ->
                 forwardedOrders.add(new ForwardedOrder(orderId, accountId, stockCode, side, price, quantity)),
-            new Recorder(events, stateChanges, latch), routingTable, ownedEndpoint);
+            new Recorder(events, stateChanges, latch), routingTable, Set.of(0)::contains);
         engine.seed(notOwnedAccountId, new BigDecimal("1000000"), new BigDecimal("0.40")); // 시드 필터 우회 — 강제로 메모리에 올림
         engine.start();
 

@@ -3,6 +3,7 @@ package com.flab.stocktradingengine.account.worker.config;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.IntPredicate;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -84,30 +85,34 @@ public class AccountEngineConfig {
     public AccountEngine accountEngine(AccountWorkerProperties properties, @Value("${snowflake.node-id:}") String nodeIdConfig,
                                        MatchingOrderSender matchingOrderSender, AccountResultListener listener, AccountJournal journal,
                                        AccountSnapshotSink accountSnapshotSink, LatencyHistogram accountLatencyHistogram,
-                                       ShardRoutingTable shardRoutingTable, ShardRoutingConfig.OwnedShard ownedShard,
+                                       ShardRoutingTable shardRoutingTable, IntPredicate ownedSlots,
                                        Optional<StoredAccountSnapshot> accountLoadedSnapshot, List<AccountJournalEntry> accountJournalRecoveredEntries,
                                        List<FilledTrade> accountFillReplayedEntries) {
         long nodeId = SnowflakeNodeIdResolver.resolve(nodeIdConfig);
         AccountEngine engine = new AccountEngine(
             BUFFER_SIZE, new BlockingWaitStrategy(), ProducerType.MULTI, nodeId, matchingOrderSender, listener, journal,
-            accountSnapshotSink, accountLatencyHistogram, shardRoutingTable, ownedShard.endpoint());
-        int seededCount = 0;
-        int skippedCount = 0;
+            accountSnapshotSink, accountLatencyHistogram, shardRoutingTable, ownedSlots);
+        // (A안, 계좌 샤딩 U4) 담당 여부로 걸러 seed 하지 않는다 — Kafka 컨슈머 그룹 배정은 비동기라
+        // 이 시점엔 아직 배정을 못 받았을 수 있다(빈 집합). 걸러서 seed 하면 그 계좌는 seed()가
+        // engine.start() 전에만 되므로 배정이 나중에 와도 영원히 못 실린다. 그래서 seed-accounts를
+        // 전부 싣고, 실제 소유 판정은 이벤트를 처리할 때마다 독립적으로 검증하는 런타임 isOwned()
+        // (U3, AccountEventHandler.rejectIfNotOwned)가 유일한 방어선으로 맡는다. 담당 아닌 계좌가
+        // 메모리에 같이 있는 대가는 이 프로젝트 규모에선 무해하다(정적 모드에서도 마찬가지).
+        int ownedNow = 0;
         for (AccountWorkerProperties.SeedAccount seed : properties.seedAccounts()) {
-            if (!engine.owns(seed.accountId())) {
-                skippedCount++;
-                continue;
+            if (engine.owns(seed.accountId())) {
+                ownedNow++;
             }
             if (seed.holdings() == null || seed.holdings().isEmpty()) {
                 engine.seed(seed.accountId(), seed.balance(), seed.marginRate());
             } else {
                 engine.seed(seed.accountId(), seed.balance(), seed.marginRate(), seed.holdings());
             }
-            seededCount++;
         }
-        // 설정이 어긋나 0건이 올라가도 조용히 뜨면 모든 주문이 거부되고 원인을 못 찾는다(I8 U2).
-        log.info("[계좌] 시드 대상 {}건 중 {}건 담당으로 시드, {}건 담당 아니라 건너뜀",
-            properties.seedAccounts().size(), seededCount, skippedCount);
+        // 이 시점 기준 담당 수만 안내용으로 남긴다(필터링에는 안 쓴다) — 0건이면 아직 배정 전이거나
+        // 설정이 어긋난 것이라 원인 추적의 첫 단서가 된다.
+        log.info("[계좌] 시드 대상 {}건 전부 시드, 이 시점 기준 담당 {}건(나머지는 배정 전이거나 남의 슬롯 — 런타임에 NOT_OWNED로 거부됨)",
+            properties.seedAccounts().size(), ownedNow);
         accountLoadedSnapshot.ifPresent(stored -> {
             engine.restore(stored.snapshot());
             engine.seedFillPositions(stored.fillConsumedPosition());

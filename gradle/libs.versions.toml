@@ -9,6 +9,7 @@ postgresql = "42.7.4"
 snowflake = "1.1"
 junit = "5.10.2"
 spring-kafka = "3.3.4"
+kafka-clients = "3.8.1"
 disruptor = "4.0.0"
 jmh = "1.37"
 aeron = "1.48.0"
@@ -39,6 +40,7 @@ snowflake = { module = "com.relops:snowflake", version.ref = "snowflake" }
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit" }
 
 spring-kafka = { module = "org.springframework.kafka:spring-kafka", version.ref = "spring-kafka" }
+kafka-clients = { module = "org.apache.kafka:kafka-clients", version.ref = "kafka-clients" }
 spring-kafka-test = { module = "org.springframework.kafka:spring-kafka-test", version.ref = "spring-kafka" }
 
 disruptor = { module = "com.lmax:disruptor", version.ref = "disruptor" }

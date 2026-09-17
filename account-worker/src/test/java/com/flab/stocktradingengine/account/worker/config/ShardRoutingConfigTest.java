@@ -2,6 +2,8 @@ package com.flab.stocktradingengine.account.worker.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.Set;
+
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
@@ -23,7 +25,7 @@ class ShardRoutingConfigTest {
         contextRunner.run(context -> {
             assertThat(context).hasSingleBean(ShardRoutingTable.class);
             ShardRoutingConfig.OwnedShard owned = context.getBean(ShardRoutingConfig.OwnedShard.class);
-            assertThat(owned.endpoint()).isEqualTo("aeron:ipc");
+            assertThat(owned.slots()).isEqualTo(Set.of(0));
         });
     }
 
@@ -42,7 +44,26 @@ class ShardRoutingConfigTest {
             )
             .run(context -> {
                 ShardRoutingConfig.OwnedShard owned = context.getBean(ShardRoutingConfig.OwnedShard.class);
-                assertThat(owned.endpoint()).isEqualTo("aeron:udp?endpoint=localhost:20040");
+                assertThat(owned.slots()).isEqualTo(Set.of(0));
+            });
+    }
+
+    @Test
+    void 슬롯_범위가_여러개면_그_범위_전체가_담당_슬롯_집합이_된다() {
+        contextRunner
+            .withPropertyValues(
+                "transport.account-intake.channel=aeron:udp?endpoint=localhost:20040",
+                "shard-routing.slot-count=4",
+                "shard-routing.shards[0].endpoint=aeron:udp?endpoint=localhost:20040",
+                "shard-routing.shards[0].slot-from=0",
+                "shard-routing.shards[0].slot-to=2",
+                "shard-routing.shards[1].endpoint=aeron:udp?endpoint=localhost:20041",
+                "shard-routing.shards[1].slot-from=3",
+                "shard-routing.shards[1].slot-to=3"
+            )
+            .run(context -> {
+                ShardRoutingConfig.OwnedShard owned = context.getBean(ShardRoutingConfig.OwnedShard.class);
+                assertThat(owned.slots()).isEqualTo(Set.of(0, 1, 2));
             });
     }
 

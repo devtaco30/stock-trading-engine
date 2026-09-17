@@ -1,5 +1,7 @@
 package com.flab.stocktradingengine.api.messaging;
 
+import java.lang.System.Logger;
+import java.lang.System.Logger.Level;
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.util.Map;
@@ -8,7 +10,7 @@ import org.agrona.concurrent.BackoffIdleStrategy;
 import org.agrona.concurrent.IdleStrategy;
 import org.agrona.concurrent.UnsafeBuffer;
 
-import com.flab.stocktradingengine.aeron.ShardRoutingTable;
+import com.flab.stocktradingengine.aeron.AccountDestinationResolver;
 import com.flab.stocktradingengine.api.exception.OrderPublishException;
 import com.flab.stocktradingengine.codec.AccountOrderCodec;
 import com.flab.stocktradingengine.codec.DecodedAccountOrder;
@@ -34,18 +36,25 @@ import io.aeron.Publication;
  * 워커의 best-effort와 같은 방식) 이 요청의 유일한 발신 기회가 조용히 사라진다(돈). 클라이언트가
  * 같은 requestId로 재전송하면 계좌 엔진의 멱등이 중복 예약을 막아준다.</p>
  *
- * <h3>계좌번호로 목적지를 고른다 (I8 U1)</h3>
- * <p>{@link ShardRoutingTable#endpointFor}로 accountId가 속한 계좌 샤드 endpoint를 계산해, 그
- * endpoint의 {@link Publication}으로만 보낸다. 계좌 워커가 하나뿐이던 예전에는 {@code shard-routing.shards}가
- * 비어 있어 {@link com.flab.stocktradingengine.api.config.ShardRoutingConfig}가 슬롯 1개짜리 표로
- * 폴백한다 — 이 경우 모든 계좌가 같은 endpoint로 간다(예전과 동일한 동작).</p>
+ * <h3>계좌번호로 목적지를 고른다 (I8 U1, 계좌 샤딩 U2)</h3>
+ * <p>{@link AccountDestinationResolver#endpointFor}로 accountId가 속한 계좌 샤드 endpoint를 찾아,
+ * 그 endpoint의 {@link Publication}으로만 보낸다. 조회 방식(지금은 설정 파일의 슬롯 표, 나중엔
+ * Kafka 배정 결과)을 이 인터페이스 뒤로 숨겨서, 조회 방식이 바뀌어도 이 클래스는 고치지 않는다.
+ * 계좌 워커가 하나뿐이던 예전에는 {@code shard-routing.shards}가 비어 있어
+ * {@link com.flab.stocktradingengine.api.config.ShardRoutingConfig}가 슬롯 1개짜리 표로 폴백한다 —
+ * 이 경우 모든 계좌가 같은 endpoint로 간다(예전과 동일한 동작).</p>
+ *
+ * <h3>목적지가 없으면 조용히 버리지 않고 503</h3>
+ * <p>{@code endpointFor}가 {@link java.util.Optional#empty()}를 주면(아직 배정을 못 받은 계좌
+ * 샤드) {@link OrderPublishException}을 바로 던진다 — offer 자체를 시도하지 않는다.</p>
  */
 public class AeronAccountOrderSender {
 
+    private static final Logger log = System.getLogger(AeronAccountOrderSender.class.getName());
     private static final int ENCODE_BUFFER_SIZE = 256;
     private static final int MAX_ATTEMPTS = 3;
 
-    private final ShardRoutingTable shardRoutingTable;
+    private final AccountDestinationResolver destinationResolver;
     private final Map<String, Publication> publicationsByEndpoint;
     private final AccountOrderCodec codec = new AccountOrderCodec();
     // 요청마다 새로 allocateDirect하면 off-heap 네이티브 메모리 할당·해제가 매번 반복된다(39 리뷰
@@ -57,8 +66,8 @@ public class AeronAccountOrderSender {
     private final ThreadLocal<UnsafeBuffer> encodeBuffer =
         ThreadLocal.withInitial(() -> new UnsafeBuffer(ByteBuffer.allocateDirect(ENCODE_BUFFER_SIZE)));
 
-    public AeronAccountOrderSender(ShardRoutingTable shardRoutingTable, Map<String, Publication> publicationsByEndpoint) {
-        this.shardRoutingTable = shardRoutingTable;
+    public AeronAccountOrderSender(AccountDestinationResolver destinationResolver, Map<String, Publication> publicationsByEndpoint) {
+        this.destinationResolver = destinationResolver;
         this.publicationsByEndpoint = publicationsByEndpoint;
     }
 
@@ -78,7 +87,8 @@ public class AeronAccountOrderSender {
      * v1-v2-e2e-measurement.md)의 끝점① 지연 계산용 발행 시각이다. 이 메서드가 실제 발행
      * 시점이라 여기서 {@link EpochNanos#now()}로 찍는다.</p>
      *
-     * @throws OrderPublishException {@link #MAX_ATTEMPTS}번 재시도해도 offer가 성공하지 못하면
+     * @throws OrderPublishException accountId의 목적지를 아직 못 찾았거나(배정 대기),
+     *         {@link #MAX_ATTEMPTS}번 재시도해도 offer가 성공하지 못하면
      */
     public void send(OrderSide side, long accountId, String stockCode, BigDecimal price, int quantity, String requestId) {
         DecodedAccountOrder order = new DecodedAccountOrder(
@@ -102,10 +112,18 @@ public class AeronAccountOrderSender {
     }
 
     private Publication publicationFor(long accountId) {
-        String endpoint = shardRoutingTable.endpointFor(accountId);
+        String endpoint = destinationResolver.endpointFor(accountId)
+            .orElseThrow(() -> new OrderPublishException(
+                "계좌 인테이크 fan-out 목적지를 아직 찾을 수 없습니다(배정 대기 중일 수 있음): accountId=" + accountId));
         Publication publication = publicationsByEndpoint.get(endpoint);
         if (publication == null) {
-            throw new IllegalStateException("계좌 인테이크 fan-out 목적지에 대응하는 발행 스트림이 없습니다: " + endpoint);
+            // account-shard-map(동적 모드)이 가리키는 endpoint가 shard-routing.endpoints 풀에
+            // 없다 — 설정이 실제 배포와 어긋났다는 신호다(계좌 샤딩 U5). 조용히 지나가면 원인을
+            // 못 찾으니 경고를 남기고, 옛 목적지로 흘리지 않고 503으로 응답한다.
+            log.log(Level.WARNING, "[api] account-shard-map이 가리키는 endpoint가 shard-routing.endpoints 풀에 없습니다"
+                + "(설정 확인 필요): accountId=" + accountId + " endpoint=" + endpoint + " 풀=" + publicationsByEndpoint.keySet());
+            throw new OrderPublishException(
+                "계좌 인테이크 fan-out 목적지가 풀에 없습니다: accountId=" + accountId + " endpoint=" + endpoint);
         }
         return publication;
     }
