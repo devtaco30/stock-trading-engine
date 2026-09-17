@@ -93,4 +93,16 @@ class AeronAccountOrderSenderTest {
         assertThatThrownBy(() -> sender.send(OrderSide.BUY, ACCOUNT_ID, STOCK_CODE, new BigDecimal("10000"), 10, "req-4"))
             .isInstanceOf(OrderPublishException.class);
     }
+
+    @Test
+    void 목적지가_있어도_풀에_없는_endpoint면_503으로_처리한다() {
+        // 계좌 샤딩 U5 — account-shard-map이 shard-routing.endpoints 풀에 없는 endpoint를 가리키는
+        // 설정 어긋남 상황. IllegalStateException(설정 오류)이 아니라 조용히 옛 목적지로 안 보내고
+        // OrderPublishException(503)으로 처리해야 클라이언트가 재시도할 수 있다.
+        AccountDestinationResolver unknownPoolResolver = accountId -> java.util.Optional.of("aeron:udp?endpoint=localhost:9999");
+        AeronAccountOrderSender sender = new AeronAccountOrderSender(unknownPoolResolver, Map.of(ENDPOINT, mock(Publication.class)));
+
+        assertThatThrownBy(() -> sender.send(OrderSide.BUY, ACCOUNT_ID, STOCK_CODE, new BigDecimal("10000"), 10, "req-5"))
+            .isInstanceOf(OrderPublishException.class);
+    }
 }

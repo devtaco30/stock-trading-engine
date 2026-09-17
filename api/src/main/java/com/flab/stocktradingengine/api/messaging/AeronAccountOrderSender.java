@@ -1,5 +1,7 @@
 package com.flab.stocktradingengine.api.messaging;
 
+import java.lang.System.Logger;
+import java.lang.System.Logger.Level;
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.util.Map;
@@ -48,6 +50,7 @@ import io.aeron.Publication;
  */
 public class AeronAccountOrderSender {
 
+    private static final Logger log = System.getLogger(AeronAccountOrderSender.class.getName());
     private static final int ENCODE_BUFFER_SIZE = 256;
     private static final int MAX_ATTEMPTS = 3;
 
@@ -114,7 +117,13 @@ public class AeronAccountOrderSender {
                 "계좌 인테이크 fan-out 목적지를 아직 찾을 수 없습니다(배정 대기 중일 수 있음): accountId=" + accountId));
         Publication publication = publicationsByEndpoint.get(endpoint);
         if (publication == null) {
-            throw new IllegalStateException("계좌 인테이크 fan-out 목적지에 대응하는 발행 스트림이 없습니다: " + endpoint);
+            // account-shard-map(동적 모드)이 가리키는 endpoint가 shard-routing.endpoints 풀에
+            // 없다 — 설정이 실제 배포와 어긋났다는 신호다(계좌 샤딩 U5). 조용히 지나가면 원인을
+            // 못 찾으니 경고를 남기고, 옛 목적지로 흘리지 않고 503으로 응답한다.
+            log.log(Level.WARNING, "[api] account-shard-map이 가리키는 endpoint가 shard-routing.endpoints 풀에 없습니다"
+                + "(설정 확인 필요): accountId=" + accountId + " endpoint=" + endpoint + " 풀=" + publicationsByEndpoint.keySet());
+            throw new OrderPublishException(
+                "계좌 인테이크 fan-out 목적지가 풀에 없습니다: accountId=" + accountId + " endpoint=" + endpoint);
         }
         return publication;
     }

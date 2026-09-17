@@ -17,10 +17,14 @@ import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.WakeupException;
+
+import com.flab.stocktradingengine.aeron.AssignmentDestinationResolver;
 
 /**
  * 계좌 샤딩 U4 — 담당 슬롯을 사람이 적은 정적 설정({@code shard-routing.shards})이 아니라 Kafka
@@ -51,8 +55,10 @@ public final class KafkaShardAssignment implements IntPredicate {
     public static final String GROUP_ID = "account-shard-owners";
 
     private final Consumer<String, String> consumer;
+    private final Producer<Integer, String> mapProducer;
     private final Admin adminClient;
     private final int slotCount;
+    private final String ownEndpoint;
 
     // 핫패스(test)가 매 주문마다 부른다 — Set<Integer>였을 때는 Integer 오토박싱이 캐시 범위
     // (-128~127)를 넘는 슬롯마다 새 객체를 만들었다(slotCount=256이면 절반이 매번 할당). 배열
@@ -62,10 +68,13 @@ public final class KafkaShardAssignment implements IntPredicate {
     private volatile boolean running;
     private Thread pollThread;
 
-    public KafkaShardAssignment(Consumer<String, String> consumer, Admin adminClient, int slotCount) {
+    public KafkaShardAssignment(Consumer<String, String> consumer, Producer<Integer, String> mapProducer,
+                                Admin adminClient, int slotCount, String ownEndpoint) {
         this.consumer = consumer;
+        this.mapProducer = mapProducer;
         this.adminClient = adminClient;
         this.slotCount = slotCount;
+        this.ownEndpoint = ownEndpoint;
         this.ownedSlotFlags = new boolean[slotCount];
     }
 
@@ -84,6 +93,7 @@ public final class KafkaShardAssignment implements IntPredicate {
 
     public void start() {
         ensureTopicPartitionCount();
+        ensureMapTopicExists();
         running = true;
         pollThread = new Thread(this::pollLoop, "account-shard-assignment-poll");
         pollThread.setDaemon(true);
@@ -101,6 +111,7 @@ public final class KafkaShardAssignment implements IntPredicate {
             Thread.currentThread().interrupt();
         }
         consumer.close();
+        mapProducer.close();
         adminClient.close();
     }
 
@@ -115,6 +126,19 @@ public final class KafkaShardAssignment implements IntPredicate {
         }
     }
 
+    /**
+     * 배정을 잃으면(회수) {@code account-shard-map}에 그 슬롯의 값을 tombstone(null)으로 지운다.
+     * L1에서는 살아 있는 다른 워커가 안 가져가므로, 지우지 않으면 그 슬롯이 죽은 나(정확히는 더
+     * 못 받는 나)를 계속 가리켜 api·매칭이 이미 못 받는 목적지로 계속 보낸다 — 요청이 성공한
+     * 것처럼 Aeron까지는 가지만 이 워커의 isOwned()가 거부해 조용히 어긋난다. 지우면 그 순간부터
+     * "목적지 없음"(503/재시도)이 되고, 실제로 재배정이 일어나면 새 주인이 자기 endpoint로 다시
+     * 채운다 — 그때까지의 공백은 L1이 이미 받아들인 대가(그 계좌만 몇 초 503)와 같은 종류다.
+     *
+     * <p>revoke를 동기로(즉시 {@code get()}) 보내는 이유: eager 리밸런스 프로토콜은 참가자 전원의
+     * revoke가 끝나야 다음 참가자의 assign이 열린다 — 그 전에 이 tombstone이 브로커에 실제로
+     * 써져 있어야, 새 주인의 assign 메시지가 먼저 가고 tombstone이 나중에 덮어써 새 값을 지우는
+     * 순서 역전을 막는다.</p>
+     */
     private ConsumerRebalanceListener rebalanceListener() {
         return new ConsumerRebalanceListener() {
             @Override
@@ -122,6 +146,7 @@ public final class KafkaShardAssignment implements IntPredicate {
                 boolean[] updated = ownedSlotFlags.clone();
                 partitions.forEach(p -> updated[p.partition()] = false);
                 ownedSlotFlags = updated;
+                publishMapEntries(partitions, null);
                 log.log(Level.WARNING, "[계좌] 담당 슬롯 회수: " + slotNumbers(partitions) + " 남은 담당=" + currentSlotsSnapshot().size() + "개");
             }
 
@@ -130,9 +155,24 @@ public final class KafkaShardAssignment implements IntPredicate {
                 boolean[] updated = ownedSlotFlags.clone();
                 partitions.forEach(p -> updated[p.partition()] = true);
                 ownedSlotFlags = updated;
+                publishMapEntries(partitions, ownEndpoint);
                 log.log(Level.INFO, "[계좌] 담당 슬롯 배정: 신규=" + slotNumbers(partitions) + " 전체 담당=" + currentSlotsSnapshot().size() + "개");
             }
         };
+    }
+
+    private void publishMapEntries(Collection<TopicPartition> partitions, String value) {
+        for (TopicPartition partition : partitions) {
+            try {
+                mapProducer.send(new ProducerRecord<>(AssignmentDestinationResolver.MAP_TOPIC, partition.partition(), value)).get();
+            } catch (ExecutionException e) {
+                throw new IllegalStateException(
+                    "account-shard-map 발행 실패: slot=" + partition.partition() + " value=" + value, e);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException("account-shard-map 발행 중 인터럽트됨", e);
+            }
+        }
     }
 
     private List<Integer> slotNumbers(Collection<TopicPartition> partitions) {
@@ -176,6 +216,45 @@ public final class KafkaShardAssignment implements IntPredicate {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("조정 토픽 생성 중 인터럽트됨", e);
+        }
+    }
+
+    /**
+     * {@code account-shard-map}은 최신 값만 있으면 되는 KV 저장소라 compacted로 만든다 — delete
+     * (기본값)면 tombstone이 retention 기간 뒤 사라져도 되지만, compact면 tombstone도 "그 키를
+     * 지워라"는 뜻으로 영구히(정확히는 다음 압착 전까지) 남는다. 파티션 수는 1로 둔다 — 키(슬롯)당
+     * 최대 256건뿐이라 병렬성이 필요 없고, 파티션이 하나면 전체 메시지가 하나의 로그로 정렬돼
+     * revoke→assign 순서를 더 단순하게 보장한다(키 해시로도 같은 슬롯은 항상 같은 파티션에 가므로
+     * 여러 파티션이어도 키별 순서는 지켜지지만, 굳이 그 보장에 기댈 이유가 없다).
+     */
+    private void ensureMapTopicExists() {
+        try {
+            adminClient.describeTopics(List.of(AssignmentDestinationResolver.MAP_TOPIC)).allTopicNames().get();
+        } catch (ExecutionException e) {
+            if (e.getCause() instanceof UnknownTopicOrPartitionException) {
+                createMapTopic();
+                return;
+            }
+            throw new IllegalStateException("account-shard-map 조회 실패", e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("account-shard-map 조회 중 인터럽트됨", e);
+        }
+    }
+
+    private void createMapTopic() {
+        try {
+            NewTopic topic = new NewTopic(AssignmentDestinationResolver.MAP_TOPIC, 1, (short) 1)
+                .configs(Map.of("cleanup.policy", "compact"));
+            adminClient.createTopics(List.of(topic)).all().get();
+            log.log(Level.INFO, "[계좌] account-shard-map 토픽 생성(compacted)");
+        } catch (ExecutionException e) {
+            if (!(e.getCause() instanceof TopicExistsException)) {
+                throw new IllegalStateException("account-shard-map 생성 실패", e);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("account-shard-map 생성 중 인터럽트됨", e);
         }
     }
 }

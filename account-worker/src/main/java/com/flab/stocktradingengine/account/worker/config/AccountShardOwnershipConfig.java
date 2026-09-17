@@ -9,7 +9,12 @@ import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.SmartLifecycle;
@@ -58,11 +63,15 @@ public class AccountShardOwnershipConfig {
             @Value("${transport.account-intake.channel:" + AccountOrderIntakeConfig.DEFAULT_INTAKE_CHANNEL + "}") String fallbackEndpoint,
             @Value("${account-shard.coordination.session-timeout-ms:120000}") long sessionTimeoutMs) {
         String instanceId = resolveInstanceId(instanceIdConfig, fallbackEndpoint);
-        log.info("[계좌] 담당 슬롯 소스: Kafka 컨슈머 그룹 배정({}) — 워커 신원={} session.timeout.ms={}",
-            KafkaShardAssignment.GROUP_ID, instanceId, sessionTimeoutMs);
+        log.info("[계좌] 담당 슬롯 소스: Kafka 컨슈머 그룹 배정({}) — 워커 신원={} 내 endpoint={} session.timeout.ms={}",
+            KafkaShardAssignment.GROUP_ID, instanceId, fallbackEndpoint, sessionTimeoutMs);
         Consumer<String, String> consumer = buildConsumer(bootstrapServers, instanceId, sessionTimeoutMs);
+        Producer<Integer, String> mapProducer = buildMapProducer(bootstrapServers);
         Admin adminClient = Admin.create(adminProps(bootstrapServers));
-        return new KafkaShardAssignment(consumer, adminClient, shardRoutingProperties.slotCount());
+        // 배정 대상 endpoint는 항상 이 워커 자신의 인테이크 채널이다 — group.instance.id(워커
+        // 신원, k8s pod 이름 등 임의 문자열일 수 있음)와는 다른 값이다. account-shard-map에
+        // 발행하는 값은 실제 Aeron 주소여야 하므로 fallbackEndpoint(=transport.account-intake.channel)를 쓴다.
+        return new KafkaShardAssignment(consumer, mapProducer, adminClient, shardRoutingProperties.slotCount(), fallbackEndpoint);
     }
 
     @Bean
@@ -101,6 +110,18 @@ public class AccountShardOwnershipConfig {
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         return new KafkaConsumer<>(props);
+    }
+
+    private Producer<Integer, String> buildMapProducer(String bootstrapServers) {
+        Properties props = new Properties();
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class.getName());
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        // 슬롯당 최신 값 하나만 의미 있다(compacted) — 순서 역전을 막으려 레코드마다 즉시 get()으로
+        // 확인하므로(KafkaShardAssignment#publishMapEntries) 재시도 중 중복 발행이 net effect를
+        // 안 바꾼다. acks=all로 durable하게 남긴다.
+        props.put(ProducerConfig.ACKS_CONFIG, "all");
+        return new KafkaProducer<>(props);
     }
 
     private Properties adminProps(String bootstrapServers) {

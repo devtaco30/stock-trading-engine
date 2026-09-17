@@ -1,13 +1,25 @@
 package com.flab.stocktradingengine.matching.worker.config;
 
 import java.util.List;
+import java.util.Properties;
 
+import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.serialization.IntegerDeserializer;
+import org.apache.kafka.common.serialization.StringDeserializer;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.context.SmartLifecycle;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import com.flab.stocktradingengine.aeron.AccountDestinationResolver;
+import com.flab.stocktradingengine.aeron.AssignmentDestinationResolver;
 import com.flab.stocktradingengine.aeron.ShardRoutingTable;
+import com.flab.stocktradingengine.aeron.StaticShardDestinationResolver;
+import com.flab.stocktradingengine.matching.worker.lifecycle.AssignmentDestinationResolverLifecycle;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -48,5 +60,47 @@ public class ShardRoutingConfig {
         log.info("[매칭] shard-routing.shards {}건 로드 — slotCount={} 목적지={}",
             ranges.size(), properties.slotCount(), ranges);
         return new ShardRoutingTable(properties.slotCount(), ranges);
+    }
+
+    /**
+     * 계좌 샤딩 U5 — {@link com.flab.stocktradingengine.matching.worker.messaging.AccountFillPublisher}는
+     * 이 인터페이스에만 의존한다(api의 AeronAccountOrderSender·U2와 같은 이유). 정적(U2)·동적(U5)
+     * 중 정확히 하나만 {@code account-shard.coordination.enabled}로 고른다.
+     */
+    @Bean
+    @ConditionalOnProperty(prefix = "account-shard.coordination", name = "enabled", havingValue = "false", matchIfMissing = true)
+    public AccountDestinationResolver staticAccountDestinationResolver(ShardRoutingTable shardRoutingTable) {
+        return new StaticShardDestinationResolver(shardRoutingTable);
+    }
+
+    @Bean(destroyMethod = "close")
+    @ConditionalOnProperty(prefix = "account-shard.coordination", name = "enabled", havingValue = "true")
+    public AssignmentDestinationResolver assignmentDestinationResolver(
+            ShardRoutingTable shardRoutingTable,
+            ShardRoutingProperties properties,
+            @Value("${spring.kafka.bootstrap-servers}") String bootstrapServers) {
+        log.info("[매칭] 목적지 소스: account-shard-map 구독(동적) — slotCount={}", properties.slotCount());
+        Consumer<Integer, String> consumer = buildMapConsumer(bootstrapServers);
+        return new AssignmentDestinationResolver(consumer, shardRoutingTable, properties.slotCount());
+    }
+
+    @Bean
+    @ConditionalOnProperty(prefix = "account-shard.coordination", name = "enabled", havingValue = "true")
+    public AccountDestinationResolver dynamicAccountDestinationResolver(AssignmentDestinationResolver assignmentDestinationResolver) {
+        return assignmentDestinationResolver;
+    }
+
+    @Bean
+    @ConditionalOnProperty(prefix = "account-shard.coordination", name = "enabled", havingValue = "true")
+    public SmartLifecycle assignmentDestinationResolverLifecycle(AssignmentDestinationResolver assignmentDestinationResolver) {
+        return new AssignmentDestinationResolverLifecycle(assignmentDestinationResolver);
+    }
+
+    private Consumer<Integer, String> buildMapConsumer(String bootstrapServers) {
+        Properties props = new Properties();
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, IntegerDeserializer.class.getName());
+        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+        return new KafkaConsumer<>(props);
     }
 }

@@ -1,9 +1,11 @@
 package com.flab.stocktradingengine.matching.worker.messaging;
 
+import java.lang.System.Logger;
+import java.lang.System.Logger.Level;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-import com.flab.stocktradingengine.aeron.ShardRoutingTable;
+import com.flab.stocktradingengine.aeron.AccountDestinationResolver;
 import com.flab.stocktradingengine.codec.FillCodec;
 import com.flab.stocktradingengine.codec.FilledTrade;
 import com.flab.stocktradingengine.matching.disruptor.io.MatchListener;
@@ -31,23 +33,32 @@ import io.aeron.ExclusivePublication;
  * 소비자 스레드를 그 자리에서 대기시킨다. 큐 용량만큼만 버틴다는 뜻이라, 계좌 샤드가 영구히 안
  * 살아나는 경우까지 닫지는 않는다(대기 프로세스를 두는 I8의 몫).</p>
  *
+ * <h3>목적지 조회 (계좌 샤딩 U5)</h3>
+ * <p>{@link com.flab.stocktradingengine.aeron.ShardRoutingTable}을 직접 참조하던 것을
+ * {@link AccountDestinationResolver}로 갈아탄다 —
+ * api의 {@code AeronAccountOrderSender}(U2)와 같은 이유다. 목적지를 아직 못 찾으면(배정 대기 중)
+ * 조용히 버리지 않고 {@link IllegalStateException}을 던져 매칭 소비자 스레드를 fail-fast로
+ * 멈춘다 — api처럼 503+재시도를 돌려줄 동기 호출자가 없는 콜백이라, "이 체결만 조용히 사라지는"
+ * 대신 복구(재시작+replay)로 다시 시도되게 한다.</p>
+ *
  * <p>{@code stockCode}·{@code tradeId}는 {@link FillResult}에 없다. stockCode는 {@link #onFill}의
  * 인자로 받고, tradeId는 체결이 일어난 순서와 어긋나지 않도록 지금처럼 이 스레드에서 체결 1건당
  * 한 번만 발급한다(발급 자리를 {@link FillOutbox}로 옮기지 않는다).</p>
  */
 public class AccountFillPublisher implements MatchListener {
 
+    private static final Logger log = System.getLogger(AccountFillPublisher.class.getName());
     private static final long CLOSE_DRAIN_TIMEOUT_MILLIS = 5000L;
 
-    private final ShardRoutingTable shardRoutingTable;
+    private final AccountDestinationResolver destinationResolver;
     private final SnowflakeIdGenerator snowflakeIdGenerator;
     private final Map<String, FillOutbox> outboxesByEndpoint;
 
     public AccountFillPublisher(
-            ShardRoutingTable shardRoutingTable,
+            AccountDestinationResolver destinationResolver,
             Map<String, ExclusivePublication> publicationsByEndpoint,
             SnowflakeIdGenerator snowflakeIdGenerator) {
-        this.shardRoutingTable = shardRoutingTable;
+        this.destinationResolver = destinationResolver;
         this.snowflakeIdGenerator = snowflakeIdGenerator;
         this.outboxesByEndpoint = buildOutboxes(publicationsByEndpoint);
     }
@@ -68,17 +79,27 @@ public class AccountFillPublisher implements MatchListener {
             tradeId, stockCode, fill.buyOrderId(), fill.buyAccountId(),
             fill.sellOrderId(), fill.sellAccountId(), fill.filledQuantity(), fill.matchPrice());
 
-        String buyEndpoint = shardRoutingTable.endpointFor(fill.buyAccountId());
-        String sellEndpoint = shardRoutingTable.endpointFor(fill.sellAccountId());
+        String buyEndpoint = requireEndpoint(fill.buyAccountId());
+        String sellEndpoint = requireEndpoint(fill.sellAccountId());
         enqueue(buyEndpoint, trade);
         if (!sellEndpoint.equals(buyEndpoint)) {
             enqueue(sellEndpoint, trade);
         }
     }
 
+    private String requireEndpoint(long accountId) {
+        return destinationResolver.endpointFor(accountId)
+            .orElseThrow(() -> new IllegalStateException(
+                "계좌 " + accountId + "의 체결 fan-out 목적지를 아직 찾을 수 없습니다(배정 대기 중일 수 있음)"));
+    }
+
     private void enqueue(String endpoint, FilledTrade trade) {
         FillOutbox outbox = outboxesByEndpoint.get(endpoint);
         if (outbox == null) {
+            // account-shard-map(동적 모드)이 가리키는 endpoint가 shard-routing.endpoints 풀에
+            // 없다 — 설정이 실제 배포와 어긋났다는 신호다(계좌 샤딩 U5).
+            log.log(Level.WARNING, "[매칭] account-shard-map이 가리키는 endpoint가 shard-routing.endpoints 풀에 없습니다"
+                + "(설정 확인 필요): endpoint=" + endpoint + " 풀=" + outboxesByEndpoint.keySet());
             throw new IllegalStateException("체결 fan-out 목적지에 대응하는 발행 스트림이 없습니다: " + endpoint);
         }
         outbox.enqueueNeverDrop(trade);

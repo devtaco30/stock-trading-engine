@@ -12,7 +12,12 @@ import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -89,7 +94,17 @@ class KafkaShardAssignmentIntegrationTest {
     }
 
     private KafkaShardAssignment newAssignment(String instanceId) {
-        return new KafkaShardAssignment(buildConsumer(instanceId), Admin.create(adminProps()), SLOT_COUNT);
+        return new KafkaShardAssignment(
+            buildConsumer(instanceId), buildMapProducer(), Admin.create(adminProps()), SLOT_COUNT, "endpoint-of-" + instanceId);
+    }
+
+    private Producer<Integer, String> buildMapProducer() {
+        Properties props = new Properties();
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, BOOTSTRAP);
+        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class.getName());
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        props.put(ProducerConfig.ACKS_CONFIG, "all");
+        return new KafkaProducer<>(props);
     }
 
     private void awaitSlotCount(KafkaShardAssignment assignment, int expected, int timeoutSeconds) {
