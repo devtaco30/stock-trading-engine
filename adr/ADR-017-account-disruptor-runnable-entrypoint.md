@@ -1,5 +1,7 @@
+# ADR-017 계좌 워커 실행 진입점 — plain main
+
 > ⚠️ **이 ADR은 ADR-018로 대체됨 (2026-09-08). 여기 결정을 따르지 말 것.**
-> 이 문서가 택한 "plain `main()` + raw kafka + 코어(`account-disruptor`) 안에 main + 하드코딩 시드"는 **폐기됐다.** 실제 구현은 **별도 Spring Boot 호스트 모듈 `account-worker`**(+`matching-worker`)로 갔고, 코어는 프레임워크 0 라이브러리로 유지된다(ADR-018). **진실의 원천은 커밋된 코드다** — account-worker/matching-worker가 Spring Boot로 이미 구현·커밋돼 있다. 이 ADR은 이력 보존용이니 새로 작업할 때 여기 결정을 재적용하지 말 것.
+> 이 문서가 택한 "plain `main()` + raw kafka + 코어(`account-disruptor`) 안에 main + 하드코딩 시드"는 **폐기됐다.** 실제 구현은 **별도 Spring Boot 호스트 모듈 `account-worker`**(+`matching-worker`)로 갔고, 코어는 프레임워크 0 라이브러리로 유지된다(ADR-018). **진실의 원천은 커밋된 코드다.** account-worker/matching-worker가 Spring Boot로 이미 구현·커밋돼 있다. 이 ADR은 이력 보존용이니 새로 작업할 때 여기 결정을 재적용하지 말 것.
 
 ## 문제
 
@@ -11,9 +13,9 @@
 
 ## 대안
 
-1. **plain `main()`** — 프레임워크 없이, `Properties`로 Kafka 컨슈머 설정 + `CountDownLatch`로 메인 스레드 대기 + `Runtime.getRuntime().addShutdownHook(...)`으로 종료 처리.
-2. **`account-disruptor` 자체를 Spring Boot 앱으로 전환** — `@KafkaListener`, `SpringApplication.run()`이 대기·종료 훅을 자동 처리.
-3. **별도 얇은 앱 모듈(Spring Boot)이 `account-disruptor`를 의존으로 감쌈** — 엔진 코드는 순수 자바로 남기고, 실행 껍데기만 Spring.
+1. **plain `main()`.** 프레임워크 없이, `Properties`로 Kafka 컨슈머 설정 + `CountDownLatch`로 메인 스레드 대기 + `Runtime.getRuntime().addShutdownHook(...)`으로 종료 처리.
+2. **`account-disruptor` 자체를 Spring Boot 앱으로 전환.** `@KafkaListener`, `SpringApplication.run()`이 대기·종료 훅을 자동 처리.
+3. **별도 얇은 앱 모듈(Spring Boot)이 `account-disruptor`를 의존으로 감쌈.** 엔진 코드는 순수 자바로 남기고, 실행 껍데기만 Spring.
 
 ## 트레이드오프
 

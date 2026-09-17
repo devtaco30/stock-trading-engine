@@ -2,19 +2,19 @@
 
 ## 문제
 
-`Order.accountId`(비정규화 필드)가 Snowflake accountId 가 아니라 **accounts 테이블의 대리 PK(`id`)** 를 담고 있었다.
+`Order.accountId`(비정규화 필드)에 Snowflake accountId 대신 **accounts 테이블의 대리 PK(`id`)** 가 담겨 있었다.
 
-원인은 매핑이다. `Order.account` 의 `@JoinColumn(name="account_id")` 이 `referencedColumnName` 을 주지 않아 기본값인 Account 의 PK(`id`, auto-increment)를 참조했다. 그래서 `orders.account_id` FK 컬럼에는 Snowflake(1002)가 아니라 대리키(26)가 저장됐고, 같은 컬럼을 읽는 `order.getAccountId()` 도 대리키를 돌려줬다.
+원인은 매핑이다. `Order.account` 의 `@JoinColumn(name="account_id")` 이 `referencedColumnName` 을 주지 않아 기본값인 Account 의 PK(`id`, auto-increment)를 참조했다. 그래서 `orders.account_id` FK 컬럼에 Snowflake(1002) 대신 대리키(26)가 저장됐고, 같은 컬럼을 읽는 `order.getAccountId()` 도 대리키를 돌려줬다.
 
 접수 경로는 `command.accountId()`(Snowflake)로 조회·락을 걸어 정상이었지만, 이 컬럼을 되읽는 정산은 대리키를 Snowflake accountId 로 오인해 계좌·보유 조회에 실패했다. 실제 체결을 처음 태우자 정산에서 `Account not found: 26` 으로 fill 이 폐기되고, 주문은 PENDING 에 머물고 보유가 반영되지 않았다.
 
-ADR-005 의 비정규화 결정(Order 가 accountId 를 직접 보유) 자체는 유효하다. 다만 그 실행에서 재사용한 컬럼이 Snowflake 가 아니라 대리키였다. 이 ADR 은 결정을 뒤집는 게 아니라 매핑 실수를 바로잡는다.
+ADR-005 의 비정규화 결정(Order 가 accountId 를 직접 보유) 자체는 유효하다. 다만 그 실행에서 재사용한 컬럼이 Snowflake 대신 대리키였다. 이 ADR 은 그 결정을 그대로 두고 매핑 실수만 바로잡는다.
 
 ## 대안
 
-1. **FK 를 Snowflake `account_id` 에 맞춘다** — `referencedColumnName="account_id"` + `accounts.account_id` UNIQUE. `orders.account_id` 가 Snowflake 를 담고, `order.getAccountId()` 도 Snowflake.
-2. **Snowflake 를 별도 컬럼으로 실제 저장** — FK 조인 컬럼은 대리키로 두고, 주문 생성 시 `lockedAccount.getAccountId()` 를 별도 컬럼에 명시 저장.
-3. **정산 조회를 대리키 기준으로 통일** — 접수(Snowflake)와 영영 혼재. 파티션 키(Snowflake)와도 어긋나 비권장.
+1. **FK 를 Snowflake `account_id` 에 맞춘다.** `referencedColumnName="account_id"` + `accounts.account_id` UNIQUE. `orders.account_id` 가 Snowflake 를 담고, `order.getAccountId()` 도 Snowflake.
+2. **Snowflake 를 별도 컬럼으로 실제 저장.** FK 조인 컬럼은 대리키로 두고, 주문 생성 시 `lockedAccount.getAccountId()` 를 별도 컬럼에 명시 저장.
+3. **정산 조회를 대리키 기준으로 통일.** 접수(Snowflake)와 영영 혼재. 파티션 키(Snowflake)와도 어긋나 비권장.
 
 ## 트레이드오프
 

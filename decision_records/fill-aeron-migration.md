@@ -12,7 +12,7 @@ feeds: [adr, blog]
 
 ## ADR 네타
 
-### ADR-033 체결 전송을 Aeron+Archive로 — IPC 유지, fan-out 제거, 스냅샷 position 복구
+### ADR-020 첫 실행 기록 — 체결 전송을 Aeron+Archive로, IPC 유지·fan-out 제거·스냅샷 position 복구
 - **context(무슨 상황)**: ADR-032에서 Kafka 완전 제거를 결정했다. 그 첫 실행으로 체결 반영 경로(매칭이 낸 체결을 계좌 엔진에 전달)를 Kafka `account-fills` 토픽에서 Aeron+Archive로 옮긴다. v2는 이미 주문 인테이크·저널이 전부 `aeron:ipc`(같은 JVM)이고, 두 워커를 실제 별도 프로세스로 UDP로 잇는 건 C5로 미뤄둔 상태였다.
 - **왜(문제·동기)**: Kafka를 빼면 그것이 지던 "매칭이 체결을 냈는데 계좌가 아직 못 받은 구간의 내구성"을 다른 게 대신해야 한다. 이게 이 마이그레이션의 핵심 난제 — 속도가 아니라 내구성이다.
 - **어떻게(대안·결정·트레이드오프)**:
