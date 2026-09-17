@@ -17,7 +17,6 @@ import com.flab.stocktradingengine.account.worker.recovery.OrderResultForwardPos
 import com.flab.stocktradingengine.account.worker.recovery.StoredOrderResultForwardPosition;
 import com.flab.stocktradingengine.aeron.AeronStreamIds;
 import com.flab.stocktradingengine.codec.OrderResultEntry;
-import com.flab.stocktradingengine.kafka.KafkaTopics;
 
 import io.aeron.Aeron;
 import io.aeron.ExclusivePublication;
@@ -125,9 +124,8 @@ public class OrderResultArchiveConfig {
             KafkaTemplate<String, Object> kafkaTemplate,
             OrderResultForwardPositionStore orderResultForwardPositionStore,
             Long orderResultRecordingId) {
-        String topic = KafkaTopics.orderResults();
         for (OrderResultEntry entry : orderResultCatchUpEntries) {
-            kafkaTemplate.send(topic, String.valueOf(entry.accountId()), OrderResultForwarder.toEvent(entry));
+            OrderResultForwarder.sendBlocking(kafkaTemplate, entry); // 성공할 때까지 블록 — 실패한 채 position을 0으로 마킹하지 않기 위함
         }
         orderResultForwardPositionStore.write(orderResultRecordingId, 0L);
         return orderResultCatchUpEntries.size();

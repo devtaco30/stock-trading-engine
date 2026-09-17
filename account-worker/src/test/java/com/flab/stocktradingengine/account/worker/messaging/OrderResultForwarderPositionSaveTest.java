@@ -1,12 +1,15 @@
 package com.flab.stocktradingengine.account.worker.messaging;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import java.nio.ByteBuffer;
+import java.util.concurrent.CompletableFuture;
 
 import org.agrona.concurrent.UnsafeBuffer;
 import org.junit.jupiter.api.AfterEach;
@@ -70,6 +73,7 @@ class OrderResultForwarderPositionSaveTest {
     void N건마다_한번_position을_저장한다() {
         @SuppressWarnings("unchecked")
         KafkaTemplate<String, Object> kafkaTemplate = mock(KafkaTemplate.class);
+        when(kafkaTemplate.send(any(String.class), any(), any())).thenReturn(CompletableFuture.completedFuture(null));
         OrderResultForwardPositionStore positionStore = mock(OrderResultForwardPositionStore.class);
         forwarder = new OrderResultForwarder(subscription, kafkaTemplate, positionStore, RECORDING_ID);
         forwarder.start();

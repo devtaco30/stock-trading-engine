@@ -3,6 +3,7 @@ package com.flab.stocktradingengine.account.worker.messaging;
 import java.lang.System.Logger;
 import java.lang.System.Logger.Level;
 import java.util.Optional;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.agrona.DirectBuffer;
@@ -36,13 +37,23 @@ import io.aeron.logbuffer.Header;
  * 않는다(이 스트림은 저널이 아니라 클라이언트 알림용이라, 한 건이 손상됐다고 이후 처리를 전부
  * 멈출 이유가 없다).</p>
  *
- * <h3>position 저장 주기 = 중복 발행 창(U3-b)</h3>
- * <p>{@link #POSITION_SAVE_INTERVAL}건마다 한 번 (recordingId, position)을 디스크에 남긴다.
- * 마지막으로 저장한 뒤 Kafka로 보낸 것은 재시작하면 다시 보내진다(진짜 중복 — {@code
- * OrderResultCatchUpReplayer}가 저장된 position부터 다시 읽으므로) — 그래서 이 재시작 중복 창의
- * 크기는 **최대 {@code POSITION_SAVE_INTERVAL - 1}건**이다. 주기를 줄이면 이 창은 작아지지만
- * 디스크 쓰기(fsync 포함)가 그만큼 잦아진다. {@code AccountState.SETTLEMENT_RETENTION_LIMIT}처럼
- * 상한을 수치로 못 박아 둔다.</p>
+ * <h3>Kafka send 결과 확인 — 건별, 실패하면 그 자리에서 무한 재시도</h3>
+ * <p>{@link #sendBlocking}이 send의 결과({@code Future#get()})를 확인할 때까지 이 스레드를
+ * 블록한다. {@code AccountStatePublisher}·{@code SettlementRequestPublisher}는 결과를 안 보고
+ * fire-and-forget으로 보내는데, 그 둘은 "상태 전체"를 보내 다음 것이 실패한 것을 덮어쓰지만
+ * (다음 상태 발행이 성공하면 이전 실패는 의미가 없어진다), 판정은 사건 하나라 대신할 것이 없다 —
+ * 이 send가 실패한 채로 넘어가면 그 판정은 영영 사라진다. 그래서 여기만 다르게 간다.</p>
+ * <p><b>건별 확인을 고른 이유</b>: 배치로 묶어 확인하면 "N건 중 몇 번째가 실패했나"를 찾는 로직이
+ * 따로 필요하다. 이 스레드가 느려져도 계좌 엔진에는 영향이 없으므로(핫패스 밖) 처리량을 늦추는
+ * 대가로 건별 확인의 단순함을 택했다.</p>
+ * <p><b>재시도(대기, 재부팅에 안 미룸)를 고른 이유</b>: 멈추고 다음 기동에 맡기면 Kafka가 잠깐
+ * 끊긴 것만으로도 사람이 재시작해야 이후 판정이 다시 흐른다. {@code AeronArchiveAccountJournal}이
+ * offer 실패에 재시도로 대응하는 것과 같은 결로, 이 스레드가 살아있는 한 스스로 회복한다. 재시도
+ * 중에도 position은 올라가지 않으므로({@link #maybeSavePosition}이 성공한 뒤에만 불린다) 재시작이
+ * 실제로 필요해지면 U3-b의 캐치업이 그 지점부터 다시 읽어 보낸다 — 새로 만들 게 없다.</p>
+ * <p><b>한계</b>: {@code OrderResultArchiveConfig}의 캐치업 단계도 같은 {@link #sendBlocking}을
+ * 쓰는데, 그 호출은 Spring 빈 생성(앱 기동) 도중 일어난다 — Kafka가 기동 시점에 계속 죽어 있으면
+ * 캐치업이 끝나지 않아 앱 기동 자체가 지연될 수 있다. 이 트랙 안에서 발견한 새 트레이드오프다.</p>
  */
 public final class OrderResultForwarder implements AutoCloseable {
 
@@ -95,7 +106,7 @@ public final class OrderResultForwarder implements AutoCloseable {
             log.log(Level.WARNING, "[계좌] 주문 결과 프레임 디코딩 실패로 skip: offset=" + offset + " length=" + length);
             return;
         }
-        kafkaTemplate.send(TOPIC, String.valueOf(decoded.get().accountId()), toEvent(decoded.get()));
+        sendBlocking(kafkaTemplate, decoded.get());
         if (header != null) { // 단위 테스트가 실제 Aeron 전달 없이 이 메서드를 부를 때는 null(AccountFillReceiver와 같은 관례)
             maybeSavePosition(header.position());
         }
@@ -109,8 +120,32 @@ public final class OrderResultForwarder implements AutoCloseable {
         }
     }
 
-    /** {@code OrderResultArchiveConfig}의 캐치업 단계(U3-b)도 같은 매핑을 쓴다 — 중복 정의 방지. */
-    public static OrderResultEvent toEvent(OrderResultEntry entry) {
+    /**
+     * 엔트리 하나를 Kafka로 보내고, 성공(브로커 ack)할 때까지 이 스레드를 블록한다. 실패하면
+     * 경고를 남기고 같은 엔트리로 재시도한다 — 클래스 javadoc "Kafka send 결과 확인" 절 참고.
+     * {@code OrderResultArchiveConfig}의 캐치업 단계(U3-b)도 이 메서드를 그대로 쓴다.
+     */
+    public static void sendBlocking(KafkaTemplate<String, Object> kafkaTemplate, OrderResultEntry entry) {
+        OrderResultEvent event = toEvent(entry);
+        String key = String.valueOf(entry.accountId());
+        IdleStrategy retryIdle = new BackoffIdleStrategy();
+        while (true) {
+            try {
+                kafkaTemplate.send(TOPIC, key, event).get();
+                return;
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException("주문 결과 Kafka 발행 대기 중 인터럽트됐습니다: accountId=" + entry.accountId(), e);
+            } catch (ExecutionException e) {
+                log.log(Level.WARNING,
+                    "[계좌] 주문 결과 Kafka 발행 실패, 재시도합니다: accountId=" + entry.accountId() + " requestId=" + entry.requestId(),
+                    e.getCause());
+                retryIdle.idle();
+            }
+        }
+    }
+
+    private static OrderResultEvent toEvent(OrderResultEntry entry) {
         return new OrderResultEvent(
             entry.accountId(), entry.orderId(), entry.requestId(), entry.verdict(), entry.rejectReason(), entry.epochMillis());
     }

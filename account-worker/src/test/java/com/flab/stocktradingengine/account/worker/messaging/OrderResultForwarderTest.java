@@ -3,14 +3,17 @@ package com.flab.stocktradingengine.account.worker.messaging;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 import org.agrona.concurrent.UnsafeBuffer;
 import org.apache.kafka.clients.consumer.Consumer;
@@ -104,6 +107,7 @@ class OrderResultForwarderTest {
     void 정상_프레임은_토픽_키_이벤트를_정확히_실어_send를_부른다() {
         @SuppressWarnings("unchecked")
         KafkaTemplate<String, Object> mockKafkaTemplate = mock(KafkaTemplate.class);
+        when(mockKafkaTemplate.send(any(String.class), any(), any())).thenReturn(CompletableFuture.completedFuture(null));
         OrderResultForwarder forwarder =
             new OrderResultForwarder(null, mockKafkaTemplate, mock(OrderResultForwardPositionStore.class), DUMMY_RECORDING_ID);
         OrderResultEntry entry = new OrderResultEntry(7L, 0L, "r7", OrderVerdict.REJECTED, "INSUFFICIENT", 7_000L);
