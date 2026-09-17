@@ -1,3 +1,5 @@
+# ADR-005: Order가 accountId를 직접 보유
+
 ## 문제
 
 `MatchingConsumer.onPartitionsAssigned()`에서 DB PENDING 주문을 로드해 `OrderBook`에 복원할 때,

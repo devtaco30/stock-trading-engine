@@ -1,3 +1,5 @@
+# ADR-017 계좌 워커 실행 진입점 — plain main
+
 > ⚠️ **이 ADR은 ADR-018로 대체됨 (2026-09-08). 여기 결정을 따르지 말 것.**
 > 이 문서가 택한 "plain `main()` + raw kafka + 코어(`account-disruptor`) 안에 main + 하드코딩 시드"는 **폐기됐다.** 실제 구현은 **별도 Spring Boot 호스트 모듈 `account-worker`**(+`matching-worker`)로 갔고, 코어는 프레임워크 0 라이브러리로 유지된다(ADR-018). **진실의 원천은 커밋된 코드다.** account-worker/matching-worker가 Spring Boot로 이미 구현·커밋돼 있다. 이 ADR은 이력 보존용이니 새로 작업할 때 여기 결정을 재적용하지 말 것.
 

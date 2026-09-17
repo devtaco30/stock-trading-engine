@@ -1,3 +1,5 @@
+# ADR-018 v2 엔진 호스트 프레임워크 — Spring Boot + Spring Kafka
+
 ## 문제
 
 v2 매매 엔진은 `api → order-engine → [Aeron] → matching-engine → [Kafka] ↔ settlement` 파이프라인이고, `order-engine`·`matching-engine`·`settlement`은 각각 별개 프로세스(앱)로 Docker 컨테이너로 스케일아웃한다. 계좌는 accountId, 매칭은 stockCode로 샤딩하며 각 샤드는 single-writer다. 매칭·계좌 코어는 이미 프레임워크 0 라이브러리(`matching-disruptor`·`account-disruptor`)로 확정돼 있다(ADR-014). 남은 결정은 **그 코어를 실행하는 각 엔진 호스트 앱을 무엇으로 만드느냐**다.
