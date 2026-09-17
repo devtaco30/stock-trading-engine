@@ -4,9 +4,9 @@ import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
+import java.util.function.IntPredicate;
 
 import com.lmax.disruptor.BlockingWaitStrategy;
 import com.lmax.disruptor.RingBuffer;
@@ -77,10 +77,10 @@ public class AccountEngine {
 
     // 샤딩을 안 쓰는 생성자(대부분의 테스트, I8 이전 코드)를 위한 기본값 — AccountEventHandler의
     // 같은 이름 상수와 같은 의미다("모든 계좌를 내가 담당한다"는 예전 동작을 그대로 재현).
-    // 슬롯 1개짜리 표라 slotFor()는 항상 0을 내므로, 담당 슬롯 집합도 {0} 하나면 전체를 담당한다.
+    // 슬롯 1개짜리 표라 slotFor()는 항상 0을 내므로, 담당 슬롯 판정도 슬롯 0만 참이면 전체를 담당한다.
     private static final ShardRoutingTable DEFAULT_SHARD_ROUTING_TABLE =
         new ShardRoutingTable(1, List.of(new ShardRoutingTable.ShardRange("*", 0, 0)));
-    private static final Set<Integer> DEFAULT_OWNED_SLOTS = Set.of(0);
+    private static final IntPredicate DEFAULT_OWNED_SLOTS = slot -> slot == 0;
 
     // blockUntilJournaled 최대 대기 시간. 저널 스레드가 죽어(fail-fast) 시퀀스가 영영 안 올라오는
     // 상황에서 호출 스레드가 무한 스핀하는 걸 막는다. Kafka max.poll.interval(기본 5분)보다 한참 짧아
@@ -98,7 +98,7 @@ public class AccountEngine {
     private final AccountJournalEventHandler journalHandler;
     private final AccountEventHandler businessHandler;
     private final ShardRoutingTable shardRoutingTable;
-    private final Set<Integer> ownedSlots;
+    private final IntPredicate ownedSlots;
     private final AccountOrderIdGenerator orderIdGenerator;
     private RingBuffer<AccountEvent> ringBuffer;
 
@@ -120,15 +120,17 @@ public class AccountEngine {
      *                          shard-routing 설정을 그대로 읽는다 — 담당 슬롯을 적는 별도 프로퍼티를
      *                          새로 만들지 않는다. 안 쓰면(테스트 등) {@link #DEFAULT_SHARD_ROUTING_TABLE}을
      *                          쓰는 오버로드를 대신 호출한다(모든 계좌를 담당하는 예전 동작과 동일).
-     * @param ownedSlots 이 워커가 담당하는 슬롯 번호 집합(계좌 샤딩 U3). {@code shardRoutingTable.slotFor(accountId)}가
-     *                   이 집합에 있으면 이 워커의 담당이다. 지금은 설정 파일에서 정적으로 받지만,
-     *                   나중에(U4) Kafka 컨슈머 그룹이 배정하는 파티션 집합으로 바뀐다 — 받는 형태를
-     *                   endpoint 문자열이 아니라 슬롯 집합으로 맞춰 둔 이유다.
+     * @param ownedSlots 슬롯 번호가 이 워커의 담당인지 판정하는 함수(계좌 샤딩 U3·U4). {@code
+     *                   shardRoutingTable.slotFor(accountId)}의 결과를 넣어 판정한다. 판정
+     *                   "함수"로 받는 이유는 U4에서 Kafka 컨슈머 그룹의 리밸런스 콜백이 배정을
+     *                   비동기로 바꾸기 때문이다 — 고정된 {@link Set}이면 그 순간의 배정만 담고
+     *                   끝나 이후 리밸런스를 반영할 수 없다. 정적 설정(U3)이면 고정 집합을 감싼
+     *                   판정 함수를, 동적 배정(U4)이면 매번 최신 배정을 읽는 판정 함수를 넘긴다.
      */
     public AccountEngine(int bufferSize, WaitStrategy waitStrategy, ProducerType producerType, long nodeId,
                          MatchingOrderSender matchingOrderSender, AccountResultListener listener, AccountJournal journal,
                          AccountSnapshotSink snapshotSink, LatencyHistogram latencyHistogram,
-                         ShardRoutingTable shardRoutingTable, Set<Integer> ownedSlots) {
+                         ShardRoutingTable shardRoutingTable, IntPredicate ownedSlots) {
         this.journal = journal;
         this.shardRoutingTable = shardRoutingTable;
         this.ownedSlots = ownedSlots;
@@ -205,7 +207,7 @@ public class AccountEngine {
      * account-worker가 별도 저널·스냅샷·지연측정 배선이 필요 없을 때 쓴다.
      */
     public AccountEngine(int bufferSize, long nodeId, MatchingOrderSender matchingOrderSender, AccountResultListener listener,
-                         ShardRoutingTable shardRoutingTable, Set<Integer> ownedSlots) {
+                         ShardRoutingTable shardRoutingTable, IntPredicate ownedSlots) {
         this(bufferSize, new BlockingWaitStrategy(), ProducerType.SINGLE, nodeId, matchingOrderSender, listener,
             new InMemoryAccountJournal(), NO_OP_SNAPSHOT_SINK, NO_OP_LATENCY_HISTOGRAM, shardRoutingTable, ownedSlots);
     }
@@ -242,7 +244,7 @@ public class AccountEngine {
      * 안 쓰는 기본값으로 만든 엔진).
      */
     public boolean owns(long accountId) {
-        return ownedSlots.contains(shardRoutingTable.slotFor(accountId));
+        return ownedSlots.test(shardRoutingTable.slotFor(accountId));
     }
 
     /**

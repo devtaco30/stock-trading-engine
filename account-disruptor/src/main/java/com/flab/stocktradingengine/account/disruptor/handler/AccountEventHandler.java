@@ -6,8 +6,8 @@ import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.IntPredicate;
 
 import com.lmax.disruptor.EventHandler;
 import com.flab.stocktradingengine.aeron.ShardRoutingTable;
@@ -59,7 +59,7 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
     // 담당한다"는 예전 동작(암묵적 전제)을 그대로 재현한다.
     private static final ShardRoutingTable DEFAULT_SHARD_ROUTING_TABLE =
         new ShardRoutingTable(1, List.of(new ShardRoutingTable.ShardRange("*", 0, 0)));
-    private static final Set<Integer> DEFAULT_OWNED_SLOTS = Set.of(0);
+    private static final IntPredicate DEFAULT_OWNED_SLOTS = slot -> slot == 0;
 
     // 접수 지연 측정(끝점①)을 안 쓰는 생성자(대부분의 테스트)를 위한 기본값 — 꺼진 채로 두면
     // record가 분기 하나만 타고 즉시 반환한다.
@@ -82,7 +82,7 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
     private final boolean snapshotTriggerEnabled;
     private final LatencyHistogram latencyHistogram;
     private final ShardRoutingTable shardRoutingTable;
-    private final Set<Integer> ownedSlots;
+    private final IntPredicate ownedSlots;
 
     // sessionId(Aeron 발행자 구분키, ADR-032 I1 D1) → 그 발행자로부터 마지막으로 반영한 체결 수신
     // 위치. 소비자 스레드(이 핸들러)만 쓰고, 호스트 스레드(그레이스풀 스톱)·1-3의 스냅샷 쓰기
@@ -131,13 +131,14 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
      * @param shardRoutingTable accountId가 속한 슬롯 번호를 계산하는 표(I8 U2). api가 체결
      *     fan-out에 쓰는 것과 같은 종류의 표를 계좌 워커도 그대로 읽는다 — 담당 슬롯을 적는
      *     별도 프로퍼티를 새로 만들지 않는다(같은 사실이 두 곳에 각자 적히면 어긋날 수 있다).
-     * @param ownedSlots 이 워커가 담당하는 슬롯 번호 집합(계좌 샤딩 U3). {@code
-     *     shardRoutingTable.slotFor(accountId)}가 이 집합에 있으면 이 워커의 담당이다.
+     * @param ownedSlots 슬롯 번호가 이 워커의 담당인지 판정하는 함수(계좌 샤딩 U3·U4). 고정
+     *     {@link java.util.Set}이 아니라 함수로 받는 이유는 {@link AccountEngine}의 같은 이름
+     *     파라미터 문서 참고 — U4에서 Kafka 리밸런스 콜백이 배정을 비동기로 바꾼다.
      */
     public AccountEventHandler(Map<Long, AccountState> accounts, AccountOrderIdGenerator orderIdGenerator,
                                MatchingOrderSender matchingOrderSender, AccountResultListener listener,
                                AccountSnapshotSink snapshotSink, boolean snapshotTriggerEnabled, LatencyHistogram latencyHistogram,
-                               ShardRoutingTable shardRoutingTable, Set<Integer> ownedSlots) {
+                               ShardRoutingTable shardRoutingTable, IntPredicate ownedSlots) {
         this.accounts = accounts;
         this.orderIdGenerator = orderIdGenerator;
         this.matchingOrderSender = matchingOrderSender;
@@ -151,7 +152,7 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
 
     /** 이 워커가 accountId가 속한 슬롯을 담당하는지 — "내 담당인가"를 묻는 자리를 이 메서드 하나로 모은다(D2). */
     private boolean isOwned(long accountId) {
-        return ownedSlots.contains(shardRoutingTable.slotFor(accountId));
+        return ownedSlots.test(shardRoutingTable.slotFor(accountId));
     }
 
     /**
