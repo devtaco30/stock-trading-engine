@@ -62,6 +62,14 @@ public class OrderQueryService {
     }
 
     /**
+     * PENDING 주문이 남아 있는 종목 코드 목록.
+     * 매칭 엔진이 파티션을 할당받았을 때 어떤 종목 호가창을 복원할지 고르는 데 사용한다.
+     */
+    public List<String> getPendingStockCodes() {
+        return orderRepository.findDistinctStockCodeByStatus(OrderStatus.PENDING);
+    }
+
+    /**
      * 계좌별 주문 내역 페이징 조회. status가 null이면 전체 상태 조회.
      */
     public Page<Order> getOrdersPaged(long accountId, OrderStatus status, Instant start, Instant end, Pageable pageable) {

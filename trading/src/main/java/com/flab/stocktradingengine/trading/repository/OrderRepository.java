@@ -60,6 +60,13 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     List<Order> findByStatusAndStockCodeOrderByOrderAtAsc(@Param("status") OrderStatus status, @Param("stockCode") String stockCode);
 
     /**
+     * 특정 상태의 주문이 남아 있는 종목 코드를 중복 없이 조회.
+     * orders 토픽이 하나라 파티션 할당만으로는 종목을 알 수 없어, 복원 후보를 여기서 얻는다.
+     */
+    @Query("SELECT DISTINCT o.stockCode FROM Order o WHERE o.status = :status")
+    List<String> findDistinctStockCodeByStatus(@Param("status") OrderStatus status);
+
+    /**
      * 계좌 ID와 주문 일시 범위로 주문 조회
      */
     Page<Order> findByAccount_AccountIdAndOrderAtBetweenOrderByOrderAtDesc(

@@ -4,6 +4,8 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
@@ -18,6 +20,7 @@ import com.flab.stocktradingengine.kafka.KafkaTopics;
 import com.flab.stocktradingengine.kafka.event.OrderCancelledEvent;
 import com.flab.stocktradingengine.kafka.event.OrderPlacedEvent;
 import com.flab.stocktradingengine.kafka.event.TradeFilledEvent;
+import com.flab.stocktradingengine.matching.kafka.partition.StockPartitionResolver;
 import com.flab.stocktradingengine.matching.redis.LtpRedisRepository;
 import com.flab.stocktradingengine.matching.redis.OrderbookRedisRepository;
 import com.flab.stocktradingengine.support.SnowflakeIdGenerator;
@@ -32,11 +35,11 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * 매칭 컨슈머. orders.{stockCode} 토픽을 구독해 OrderBook 에 직접 처리한다.
+ * 매칭 컨슈머. orders 토픽을 구독해 OrderBook 에 직접 처리한다.
  *
  * <h3>처리 흐름</h3>
  * <pre>
- * Kafka orders.{stockCode}
+ * Kafka orders (파티션 N개, key=stockCode)
  *     │
  *     ├─ OrderPlacedEvent    → OrderBook.addOrder() + runMatch()
  *     └─ OrderCancelledEvent → OrderBook.cancelOrder()
@@ -47,8 +50,10 @@ import lombok.extern.slf4j.Slf4j;
  * 항상 동일한 컨슈머 스레드에서 순서대로 처리된다.</p>
  *
  * <h3>호가창 복원 (스케일 아웃 대응)</h3>
- * <p>{@link ConsumerSeekAware#onPartitionsAssigned} 에서 이 인스턴스에 할당된
- * 파티션(= 종목코드)의 PENDING 주문만 로드한다.</p>
+ * <p>토픽이 하나라 파티션 하나에 종목이 여럿 실린다. 그래서 파티션 번호에서 종목을
+ * 거꾸로 알아낼 수 없다. {@link ConsumerSeekAware#onPartitionsAssigned} 에서는
+ * PENDING 주문이 남은 종목을 DB 에서 받아 {@link StockPartitionResolver} 로
+ * 파티션을 계산하고, 할당받은 파티션에 속하는 종목만 복원한다.</p>
  *
  * <h3>멱등성</h3>
  * <p>at-least-once 환경에서 같은 메시지가 중복 수신될 수 있다.
@@ -65,27 +70,47 @@ public class MatchingConsumer implements ConsumerSeekAware {
     private final LtpRedisRepository ltpRedisRepository;
     private final OrderbookRedisRepository orderbookRedisRepository;
     private final SnowflakeIdGenerator snowflakeIdGenerator;
+    private final StockPartitionResolver stockPartitionResolver;
 
     // ── 파티션 할당/반환 ────────────────────────────────────────────────────
 
+    /**
+     * 할당받은 파티션에 실리는 종목의 호가창을 DB 의 PENDING 주문으로 복원한다.
+     * 복원이 필요한 종목은 PENDING 주문이 남은 종목뿐이라 그 목록만 조회한다.
+     */
     @Override
     public void onPartitionsAssigned(Map<TopicPartition, Long> assignments, ConsumerSeekCallback callback) {
-        assignments.keySet().forEach(tp -> {
-            String stockCode = extractStockCode(tp.topic());
-            if (stockCode == null) return;
+        Set<Integer> assignedPartitions = partitionNumbersOf(assignments.keySet());
+        List<String> pendingStockCodes = orderQueryService.getPendingStockCodes();
+        List<String> restoreTargets = stockPartitionResolver.filterByPartitions(pendingStockCodes, assignedPartitions);
+
+        restoreTargets.forEach(stockCode -> {
             loadAndMatch(stockCode);
             log.info("[파티션 할당] 종목={} OrderBook 복원 완료", stockCode);
         });
     }
 
+    /**
+     * 반납한 파티션에 실리는 종목의 호가창을 비운다. 그 파티션은 다른 인스턴스가 받으므로
+     * 이 인스턴스의 인메모리 상태를 남겨두면 조회 결과가 실제와 어긋난다.
+     * 반납은 리밸런스를 붙잡고 있는 구간이라 DB 를 조회하지 않고 올라와 있는 종목만 본다.
+     */
     @Override
     public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
-        partitions.forEach(tp -> {
-            String stockCode = extractStockCode(tp.topic());
-            if (stockCode == null) return;
+        Set<Integer> revokedPartitions = partitionNumbersOf(partitions);
+        Set<String> loadedStockCodes = orderBookRegistry.stockCodes();
+        List<String> removeTargets = stockPartitionResolver.filterByPartitions(loadedStockCodes, revokedPartitions);
+
+        removeTargets.forEach(stockCode -> {
             orderBookRegistry.removeBook(stockCode);
             log.info("[파티션 반환] 종목={} OrderBook 제거", stockCode);
         });
+    }
+
+    private static Set<Integer> partitionNumbersOf(Collection<TopicPartition> partitions) {
+        return partitions.stream()
+            .map(TopicPartition::partition)
+            .collect(Collectors.toSet());
     }
 
     // ── 메시지 처리 ─────────────────────────────────────────────────────────
@@ -186,11 +211,6 @@ public class MatchingConsumer implements ConsumerSeekAware {
         OrderBook book = orderBookRegistry.get(stockCode);
         if (book == null) return;
         orderbookRedisRepository.saveSnapshot(stockCode, book.getBidLevels(10), book.getAskLevels(10));
-    }
-
-    private static String extractStockCode(String topic) {
-        int idx = topic.indexOf('.');
-        return idx >= 0 ? topic.substring(idx + 1) : null;
     }
 
     private static OrderEntry toEntry(OrderPlacedEvent e) {
