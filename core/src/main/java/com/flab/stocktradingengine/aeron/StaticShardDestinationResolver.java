@@ -21,7 +21,21 @@ public final class StaticShardDestinationResolver implements AccountDestinationR
      * 않게 하는 것이 목적이다.
      */
     @Override
-    public Optional<String> endpointFor(long accountId) {
+    public Optional<String> orderEndpointFor(long accountId) {
+        return lookup(accountId);
+    }
+
+    /**
+     * 정적 모드의 슬롯 표에는 워커마다 주소가 하나만 적힌다. 그래서 체결도 그 주소로 보낸다 —
+     * <b>정적 모드에서는 워커의 체결 수신 주소를 주문 수신 주소와 같게 설정해야 한다.</b>
+     * 조정 모드는 배정 값에 두 주소를 따로 실어 이 제약이 없다({@link WorkerEndpoints}).
+     */
+    @Override
+    public Optional<String> fillEndpointFor(long accountId) {
+        return lookup(accountId);
+    }
+
+    private Optional<String> lookup(long accountId) {
         try {
             return Optional.ofNullable(shardRoutingTable.endpointFor(accountId));
         } catch (RuntimeException e) {

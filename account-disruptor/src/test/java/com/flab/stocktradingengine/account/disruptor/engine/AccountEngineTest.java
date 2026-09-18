@@ -18,7 +18,7 @@ import org.junit.jupiter.api.Test;
 
 import com.lmax.disruptor.BlockingWaitStrategy;
 import com.lmax.disruptor.dsl.ProducerType;
-import com.flab.stocktradingengine.aeron.ShardRoutingTable;
+import com.flab.stocktradingengine.aeron.SlotHasher;
 import com.flab.stocktradingengine.account.disruptor.domain.AccountResultListener;
 import com.flab.stocktradingengine.account.disruptor.domain.NoOpAccountResultListener;
 import com.flab.stocktradingengine.account.disruptor.domain.RejectReason;
@@ -112,17 +112,13 @@ class AccountEngineTest {
     @DisplayName("담당 슬롯이 아닌 계좌면 NOT_OWNED로 거부한다(I8 U2)")
     void 담당_슬롯이_아니면_NOT_OWNED로_거부() throws InterruptedException {
         latch = new CountDownLatch(1);
-        String ownedEndpoint = "aeron:udp?endpoint=localhost:20040";
-        String otherEndpoint = "aeron:udp?endpoint=localhost:20041";
-        ShardRoutingTable routingTable = new ShardRoutingTable(2, List.of(
-            new ShardRoutingTable.ShardRange(ownedEndpoint, 0, 0),
-            new ShardRoutingTable.ShardRange(otherEndpoint, 1, 1)));
-        long ownedAccountId = firstAccountIdInSlot(routingTable, 0);
-        long notOwnedAccountId = firstAccountIdInSlot(routingTable, 1);
+        SlotHasher slotHasher = new SlotHasher(2);
+        long ownedAccountId = firstAccountIdInSlot(slotHasher, 0);
+        long notOwnedAccountId = firstAccountIdInSlot(slotHasher, 1);
         engine = new AccountEngine(BUFFER_SIZE, NODE_ID,
             (orderId, accountId, stockCode, side, price, quantity) ->
                 forwardedOrders.add(new ForwardedOrder(orderId, accountId, stockCode, side, price, quantity)),
-            new Recorder(events, stateChanges, latch), routingTable, Set.of(0)::contains);
+            new Recorder(events, stateChanges, latch), slotHasher, Set.of(0)::contains);
         engine.seed(ownedAccountId, new BigDecimal("1000000"), new BigDecimal("0.40"));
         engine.start();
 
@@ -143,16 +139,12 @@ class AccountEngineTest {
         // (seed를 직접 불러 담당 아닌 계좌를 올림) 런타임 판정(rejectIfNotOwned)이 유일한
         // 방어선으로서 제대로 막는지 확인한다.
         latch = new CountDownLatch(1);
-        String ownedEndpoint = "aeron:udp?endpoint=localhost:20040";
-        String otherEndpoint = "aeron:udp?endpoint=localhost:20041";
-        ShardRoutingTable routingTable = new ShardRoutingTable(2, List.of(
-            new ShardRoutingTable.ShardRange(ownedEndpoint, 0, 0),
-            new ShardRoutingTable.ShardRange(otherEndpoint, 1, 1)));
-        long notOwnedAccountId = firstAccountIdInSlot(routingTable, 1);
+        SlotHasher slotHasher = new SlotHasher(2);
+        long notOwnedAccountId = firstAccountIdInSlot(slotHasher, 1);
         engine = new AccountEngine(BUFFER_SIZE, NODE_ID,
             (orderId, accountId, stockCode, side, price, quantity) ->
                 forwardedOrders.add(new ForwardedOrder(orderId, accountId, stockCode, side, price, quantity)),
-            new Recorder(events, stateChanges, latch), routingTable, Set.of(0)::contains);
+            new Recorder(events, stateChanges, latch), slotHasher, Set.of(0)::contains);
         engine.seed(notOwnedAccountId, new BigDecimal("1000000"), new BigDecimal("0.40")); // 시드 필터 우회 — 강제로 메모리에 올림
         engine.start();
 
@@ -164,9 +156,9 @@ class AccountEngineTest {
         assertEquals(RejectReason.NOT_OWNED, events.get(0).reason());
     }
 
-    private long firstAccountIdInSlot(ShardRoutingTable table, int targetSlot) {
+    private long firstAccountIdInSlot(SlotHasher slotHasher, int targetSlot) {
         for (long accountId = 0; accountId < 10_000; accountId++) {
-            if (table.slotFor(accountId) == targetSlot) {
+            if (slotHasher.slotFor(accountId) == targetSlot) {
                 return accountId;
             }
         }

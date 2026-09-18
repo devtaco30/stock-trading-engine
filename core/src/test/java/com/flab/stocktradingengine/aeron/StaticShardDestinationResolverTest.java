@@ -40,8 +40,8 @@ class StaticShardDestinationResolverTest {
             long accountIdInSlot0 = firstAccountIdInSlot(table, 0);
             long accountIdInSlot255 = firstAccountIdInSlot(table, 255);
 
-            assertEquals(Optional.of(ENDPOINT_A), resolver.endpointFor(accountIdInSlot0));
-            assertEquals(Optional.of(ENDPOINT_B), resolver.endpointFor(accountIdInSlot255));
+            assertEquals(Optional.of(ENDPOINT_A), resolver.orderEndpointFor(accountIdInSlot0));
+            assertEquals(Optional.of(ENDPOINT_B), resolver.orderEndpointFor(accountIdInSlot255));
         }
 
         @Test
@@ -49,8 +49,8 @@ class StaticShardDestinationResolverTest {
             ShardRoutingTable table = new ShardRoutingTable(1, List.of(new ShardRange(ENDPOINT_A, 0, 0)));
             StaticShardDestinationResolver resolver = new StaticShardDestinationResolver(table);
 
-            assertEquals(Optional.of(ENDPOINT_A), resolver.endpointFor(0L));
-            assertEquals(Optional.of(ENDPOINT_A), resolver.endpointFor(Long.MAX_VALUE));
+            assertEquals(Optional.of(ENDPOINT_A), resolver.orderEndpointFor(0L));
+            assertEquals(Optional.of(ENDPOINT_A), resolver.orderEndpointFor(Long.MAX_VALUE));
         }
 
         private long firstAccountIdInSlot(ShardRoutingTable table, int targetSlot) {

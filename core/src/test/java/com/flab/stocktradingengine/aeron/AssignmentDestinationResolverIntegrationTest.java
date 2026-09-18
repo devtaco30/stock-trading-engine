@@ -54,36 +54,55 @@ class AssignmentDestinationResolverIntegrationTest {
     @Test
     void 발행된_배정을_읽어_목적지를_돌려준다() {
         ensureMapTopicExists();
-        ShardRoutingTable routingTable = new ShardRoutingTable(SLOT_COUNT, List.of(
-            new ShardRoutingTable.ShardRange("placeholder", 0, SLOT_COUNT - 1)));
+        SlotHasher slotHasher = new SlotHasher(SLOT_COUNT);
         long accountId = 1L;
-        int slot = routingTable.slotFor(accountId);
+        int slot = slotHasher.slotFor(accountId);
         String endpoint = "aeron:udp?endpoint=localhost:" + (30000 + slot);
 
         producer = buildProducer();
         producer.send(new ProducerRecord<>(MAP_TOPIC, slot, endpoint));
         producer.flush();
 
-        resolver = new AssignmentDestinationResolver(buildConsumer(), routingTable, SLOT_COUNT);
+        resolver = new AssignmentDestinationResolver(buildConsumer(), slotHasher);
         resolver.start();
 
         awaitEndpoint(accountId, Optional.of(endpoint), 30);
     }
 
     @Test
+    void 주문_주소와_체결_주소를_따로_돌려준다() {
+        ensureMapTopicExists();
+        SlotHasher slotHasher = new SlotHasher(SLOT_COUNT);
+        long accountId = 7L;
+        int slot = slotHasher.slotFor(accountId);
+        String orderEndpoint = "aeron:udp?endpoint=localhost:" + (30000 + slot);
+        String fillEndpoint = "aeron:udp?endpoint=localhost:" + (31000 + slot);
+
+        producer = buildProducer();
+        producer.send(new ProducerRecord<>(MAP_TOPIC, slot,
+            new WorkerEndpoints(orderEndpoint, fillEndpoint).encode()));
+        producer.flush();
+
+        resolver = new AssignmentDestinationResolver(buildConsumer(), slotHasher);
+        resolver.start();
+
+        awaitEndpoint(accountId, Optional.of(orderEndpoint), 30);
+        assertEquals(Optional.of(fillEndpoint), resolver.fillEndpointFor(accountId));
+    }
+
+    @Test
     void tombstone을_받으면_목적지가_다시_비워진다() {
         ensureMapTopicExists();
-        ShardRoutingTable routingTable = new ShardRoutingTable(SLOT_COUNT, List.of(
-            new ShardRoutingTable.ShardRange("placeholder", 0, SLOT_COUNT - 1)));
+        SlotHasher slotHasher = new SlotHasher(SLOT_COUNT);
         long accountId = 2L;
-        int slot = routingTable.slotFor(accountId);
+        int slot = slotHasher.slotFor(accountId);
         String endpoint = "aeron:udp?endpoint=localhost:" + (31000 + slot);
 
         producer = buildProducer();
         producer.send(new ProducerRecord<>(MAP_TOPIC, slot, endpoint));
         producer.flush();
 
-        resolver = new AssignmentDestinationResolver(buildConsumer(), routingTable, SLOT_COUNT);
+        resolver = new AssignmentDestinationResolver(buildConsumer(), slotHasher);
         resolver.start();
         awaitEndpoint(accountId, Optional.of(endpoint), 30);
 
@@ -101,29 +120,28 @@ class AssignmentDestinationResolverIntegrationTest {
     @Test
     void 초기_읽기가_끝나면_그_전에_발행된_배정이_이미_반영돼_있다() {
         ensureMapTopicExists();
-        ShardRoutingTable routingTable = new ShardRoutingTable(SLOT_COUNT, List.of(
-            new ShardRoutingTable.ShardRange("placeholder", 0, SLOT_COUNT - 1)));
+        SlotHasher slotHasher = new SlotHasher(SLOT_COUNT);
         long accountId = 3L;
-        int slot = routingTable.slotFor(accountId);
+        int slot = slotHasher.slotFor(accountId);
         String endpoint = "aeron:udp?endpoint=localhost:" + (32000 + slot);
 
         producer = buildProducer();
         producer.send(new ProducerRecord<>(MAP_TOPIC, slot, endpoint));
         producer.flush();
 
-        resolver = new AssignmentDestinationResolver(buildConsumer(), routingTable, SLOT_COUNT);
+        resolver = new AssignmentDestinationResolver(buildConsumer(), slotHasher);
         resolver.start();
         resolver.awaitInitialCatchUp(Duration.ofSeconds(30));
 
         // await 없이 바로 확인 — 이미 반영돼 있어야 한다.
-        assertEquals(Optional.of(endpoint), resolver.endpointFor(accountId));
+        assertEquals(Optional.of(endpoint), resolver.orderEndpointFor(accountId));
     }
 
     private void awaitEndpoint(long accountId, Optional<String> expected, int timeoutSeconds) {
         long deadline = System.nanoTime() + Duration.ofSeconds(timeoutSeconds).toNanos();
         Optional<String> last = Optional.empty();
         while (true) {
-            last = resolver.endpointFor(accountId);
+            last = resolver.orderEndpointFor(accountId);
             if (last.equals(expected)) {
                 return;
             }

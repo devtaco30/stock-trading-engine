@@ -12,7 +12,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 
-import com.flab.stocktradingengine.aeron.ShardRoutingTable;
+import com.flab.stocktradingengine.aeron.SlotHasher;
 import com.flab.stocktradingengine.account.disruptor.domain.AccountResultListener;
 import com.flab.stocktradingengine.account.disruptor.engine.AccountEngine;
 import com.flab.stocktradingengine.account.disruptor.io.AccountSnapshotSink;
@@ -85,13 +85,13 @@ public class AccountEngineConfig {
     public AccountEngine accountEngine(AccountWorkerProperties properties, @Value("${snowflake.node-id:}") String nodeIdConfig,
                                        MatchingOrderSender matchingOrderSender, AccountResultListener listener, AccountJournal journal,
                                        AccountSnapshotSink accountSnapshotSink, LatencyHistogram accountLatencyHistogram,
-                                       ShardRoutingTable shardRoutingTable, IntPredicate ownedSlots,
+                                       SlotHasher slotHasher, IntPredicate ownedSlots,
                                        Optional<StoredAccountSnapshot> accountLoadedSnapshot, List<AccountJournalEntry> accountJournalRecoveredEntries,
                                        List<FilledTrade> accountFillReplayedEntries) {
         long nodeId = SnowflakeNodeIdResolver.resolve(nodeIdConfig);
         AccountEngine engine = new AccountEngine(
             BUFFER_SIZE, new BlockingWaitStrategy(), ProducerType.MULTI, nodeId, matchingOrderSender, listener, journal,
-            accountSnapshotSink, accountLatencyHistogram, shardRoutingTable, ownedSlots);
+            accountSnapshotSink, accountLatencyHistogram, slotHasher, ownedSlots);
         // (A안, 계좌 샤딩 U4) 담당 여부로 걸러 seed 하지 않는다 — Kafka 컨슈머 그룹 배정은 비동기라
         // 이 시점엔 아직 배정을 못 받았을 수 있다(빈 집합). 걸러서 seed 하면 그 계좌는 seed()가
         // engine.start() 전에만 되므로 배정이 나중에 와도 영원히 못 실린다. 그래서 seed-accounts를
