@@ -29,6 +29,7 @@ import com.flab.stocktradingengine.kafka.event.OrderCancelledEvent;
 import com.flab.stocktradingengine.kafka.event.OrderPlacedEvent;
 import com.flab.stocktradingengine.kafka.event.TradeFilledEvent;
 import com.flab.stocktradingengine.matching.kafka.consumer.MatchingConsumer;
+import com.flab.stocktradingengine.matching.kafka.partition.StockPartitionResolver;
 import com.flab.stocktradingengine.matching.redis.LtpRedisRepository;
 import com.flab.stocktradingengine.matching.redis.OrderbookRedisRepository;
 import com.flab.stocktradingengine.settlement.service.OrderSettlementService;
@@ -64,6 +65,7 @@ import com.flab.stocktradingengine.trading.service.OrderQueryService;
 @SpringBootTest(classes = {
     OrderBookRegistry.class,
     MatchingConsumer.class,
+    StockPartitionResolver.class,
 })
 @DisplayName("매칭 컨슈머 통합 테스트")
 class MatchingEngineIntegrationTest {

@@ -2,6 +2,7 @@ package com.flab.stocktradingengine.trading.matching;
 
 import java.math.BigDecimal;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.springframework.stereotype.Component;
@@ -40,6 +41,14 @@ public class OrderBookRegistry {
     /** 종목 호가창 반환. 없으면 null. 취소 처리 등 조회 전용에 사용. */
     public OrderBook get(String stockCode) {
         return books.get(stockCode);
+    }
+
+    /**
+     * 호가창이 올라와 있는 종목 코드 스냅샷.
+     * 파티션 반납 시 어떤 호가창을 비울지 고르는 데 사용한다. 내부 맵을 노출하지 않도록 복사본을 준다.
+     */
+    public Set<String> stockCodes() {
+        return Set.copyOf(books.keySet());
     }
 
     /** 체결 후 최근 체결가 갱신. 매칭 컨슈머(Single Writer per partition)만 호출. */

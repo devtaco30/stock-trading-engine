@@ -30,6 +30,7 @@ import org.springframework.kafka.support.Acknowledgment;
 import com.flab.stocktradingengine.kafka.event.OrderCancelledEvent;
 import com.flab.stocktradingengine.kafka.event.OrderPlacedEvent;
 import com.flab.stocktradingengine.kafka.event.TradeFilledEvent;
+import com.flab.stocktradingengine.matching.kafka.partition.StockPartitionResolver;
 import com.flab.stocktradingengine.matching.redis.LtpRedisRepository;
 import com.flab.stocktradingengine.matching.redis.OrderbookRedisRepository;
 import com.flab.stocktradingengine.support.SnowflakeIdGenerator;
@@ -50,6 +51,7 @@ class MatchingConsumerTest {
     @Mock LtpRedisRepository ltpRedisRepository;
     @Mock OrderbookRedisRepository orderbookRedisRepository;
     @Mock SnowflakeIdGenerator snowflakeIdGenerator;
+    @Mock StockPartitionResolver stockPartitionResolver;
     @Mock Acknowledgment ack;
 
     @InjectMocks
