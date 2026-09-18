@@ -87,7 +87,7 @@ class AeronAccountOrderSenderTest {
 
     @Test
     void 목적지를_아직_찾지_못하면_offer를_시도하지_않고_예외를_던진다() {
-        AccountDestinationResolver noDestinationResolver = accountId -> java.util.Optional.empty();
+        AccountDestinationResolver noDestinationResolver = resolverReturning(java.util.Optional.empty());
         AeronAccountOrderSender sender = new AeronAccountOrderSender(noDestinationResolver, Map.of(ENDPOINT, mock(Publication.class)));
 
         assertThatThrownBy(() -> sender.send(OrderSide.BUY, ACCOUNT_ID, STOCK_CODE, new BigDecimal("10000"), 10, "req-4"))
@@ -99,10 +99,29 @@ class AeronAccountOrderSenderTest {
         // 계좌 샤딩 U5 — account-shard-map이 shard-routing.endpoints 풀에 없는 endpoint를 가리키는
         // 설정 어긋남 상황. IllegalStateException(설정 오류)이 아니라 조용히 옛 목적지로 안 보내고
         // OrderPublishException(503)으로 처리해야 클라이언트가 재시도할 수 있다.
-        AccountDestinationResolver unknownPoolResolver = accountId -> java.util.Optional.of("aeron:udp?endpoint=localhost:9999");
+        AccountDestinationResolver unknownPoolResolver = resolverReturning(java.util.Optional.of("aeron:udp?endpoint=localhost:9999"));
         AeronAccountOrderSender sender = new AeronAccountOrderSender(unknownPoolResolver, Map.of(ENDPOINT, mock(Publication.class)));
 
         assertThatThrownBy(() -> sender.send(OrderSide.BUY, ACCOUNT_ID, STOCK_CODE, new BigDecimal("10000"), 10, "req-5"))
             .isInstanceOf(OrderPublishException.class);
+    }
+
+    /**
+     * 주문·체결 목적지로 같은 값을 돌려주는 조회 창구. {@link AccountDestinationResolver}가 메서드
+     * 둘(주문용·체결용)을 가지게 되어 람다로 못 만든다.
+     */
+    private static AccountDestinationResolver resolverReturning(java.util.Optional<String> endpoint) {
+        return new AccountDestinationResolver() {
+
+            @Override
+            public java.util.Optional<String> orderEndpointFor(long accountId) {
+                return endpoint;
+            }
+
+            @Override
+            public java.util.Optional<String> fillEndpointFor(long accountId) {
+                return endpoint;
+            }
+        };
     }
 }
