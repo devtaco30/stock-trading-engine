@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>v1 부하 테스트 리포트 — 주문 접수 경로</title>
+<style>
+  :root{
+    --bg:#faf9f6; --ink:#1c1d21; --muted:#5b6068; --line:#e4dfd6; --card:#ffffff;
+    --good:#12855a; --pick:#1f6fb2; --no:#b42318; --warn:#c2740a;
+    color-scheme:light;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+    line-height:1.72;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1000px;margin:0 auto;padding:44px 20px 96px}
+  h1{font-size:clamp(26px,6vw,36px);font-weight:800;letter-spacing:-.02em;margin:0 0 10px;text-wrap:balance}
+  h1 .sub{display:block;font-size:.46em;font-weight:700;color:var(--muted);margin-top:10px;letter-spacing:0}
+  h2{font-size:clamp(19px,5vw,24px);font-weight:800;margin:50px 0 12px;padding-top:20px;border-top:2px solid var(--line);text-wrap:balance}
+  h3{font-size:16px;font-weight:800;margin:22px 0 8px}
+  p{margin:11px 0;word-break:keep-all;text-wrap:pretty}
+  .lead{font-size:clamp(16px,4vw,18px);color:#2f333a}
+  .note{font-size:13.5px;color:var(--muted)}
+  code{background:#efece6;padding:1px 6px;border-radius:5px;font-size:.9em;font-family:"SF Mono",ui-monospace,Menlo,monospace}
+  .pick{color:var(--pick);font-weight:800}
+
+  /* 용어 카드 */
+  .terms{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:11px;margin:16px 0}
+  .term{background:var(--card);border:1px solid var(--line);border-radius:11px;padding:13px 15px}
+  .term b{display:block;font-size:14.5px;margin-bottom:4px}
+  .term span{font-size:13.5px;color:#3a3e45}
+
+  /* 도식 패널 */
+  .fig{background:#0d1117;border:1px solid #2a3442;border-radius:16px;padding:18px 16px 14px;margin:16px 0;box-shadow:0 8px 30px rgba(0,0,0,.28);overflow-x:auto}
+  .fig .cap{color:#8b93a1;font-size:12px;font-weight:800;letter-spacing:.05em;margin:0 0 3px;text-transform:uppercase}
+  .fig .capsub{color:#c9d1da;font-size:14px;font-weight:700;margin:0 0 12px}
+  .fig svg{width:100%;min-width:860px;height:auto;display:block}
+  .fignote{color:#8b93a1;font-size:12.5px;margin:10px 2px 0;line-height:1.6}
+
+  /* 표 */
+  table{width:100%;border-collapse:collapse;font-size:14px;margin:14px 0;background:var(--card);
+    border:1px solid var(--line);border-radius:11px;overflow:hidden}
+  th,td{padding:10px 13px;border-bottom:1px solid var(--line);text-align:left}
+  th{background:#f3f0e9;font-weight:800;font-size:13px;color:#3a3e45}
+  tr:last-child td{border-bottom:none}
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+  .v1c{color:var(--warn);font-weight:800}
+  .v2c{color:var(--pick);font-weight:800}
+  .badv{color:var(--no);font-weight:800}
+  .goodv{color:var(--good);font-weight:800}
+
+  .pickbox{background:#eef4fb;border:1px solid #cddff2;border-left:4px solid var(--pick);border-radius:10px;padding:11px 15px;margin:12px 0;font-size:14px}
+  .pickbox b{color:var(--pick)}
+  .pickbox.warn{background:#fdf3e3;border-color:#f0dcb4;border-left-color:var(--warn)}
+  .pickbox.warn b{color:#8a5610}
+  .pickbox.bad{background:#fdeeec;border-color:#f3cdc6;border-left-color:var(--no)}
+  .pickbox.bad b{color:var(--no)}
+  .pickbox.good{background:#eaf6f0;border-color:#c7e6d6;border-left-color:var(--good)}
+  .pickbox.good b{color:var(--good)}
+
+  pre{background:#0d1117;color:#e6edf3;border:1px solid #2a3442;border-radius:12px;padding:14px 16px;
+    overflow-x:auto;font-size:12.5px;line-height:1.62;font-family:"SF Mono",ui-monospace,Menlo,monospace}
+  pre .c{color:#8b93a1} pre .r{color:#f5a0a0} pre .g{color:#7fd6b0}
+  ul{margin:10px 0;padding-left:20px}
+  li{margin-bottom:7px}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;font-size:13px;color:var(--muted);margin:14px 0 0}
+  .legend span{display:inline-flex;align-items:center;gap:7px}
+  .dot{width:11px;height:11px;border-radius:3px;display:inline-block}
+  .footer{margin-top:44px;padding-top:16px;border-top:1px solid var(--line);font-size:13px;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>v1 부하 테스트 리포트 — 주문 접수 경로
+    <span class="sub">k6로 매수 주문 3,000건을 쏘아 접수 파이프라인의 처리량과 결함을 확인했다</span></h1>
+
+  <p class="lead">이 엔진은 매수 주문을 받을 때 계좌 잔고를 확인하고 주문 금액만큼을 예약 증거금으로 잡는다. 같은 계좌에 주문이 동시에 들어오면 두 요청이 같은 잔고를 근거로 검증을 통과할 수 있어, 한 계좌의 처리가 한 번에 하나씩만 실행돼야 한다. v1은 그것을 Postgres 계좌 행 비관적 락과 Kafka <code>accountId</code> 파티셔닝으로 했고, 그 직렬화가 곧 속도의 천장이 될 것이라는 가설을 세웠다. <b>그 천장이 실제로 어디인지, 그리고 부하에서만 드러나는 결함이 있는지를 확인하려고 부하를 걸었다.</b></p>
+
+  <p>결과는 둘로 나뉜다. 접수 계층(HTTP 202를 내려주는 데까지)은 초당 수백 건을 실패 없이 받았다. 그런데 그 뒤 Kafka를 거쳐 주문을 DB에 저장하는 단계에서 <b class="badv">서로 다른 정상 주문이 같은 멱등키를 받아 중복으로 판정됐고, 그 충돌을 복구하려던 코드가 깨져 주문이 폐기됐다.</b> 멱등키가 중복을 걸러내는 것은 설계대로다. 걸러진 것이 정상 주문이었고, 그것을 되살리려던 코드가 예외를 내고 멈춘 것이 결함이다. 모든 주문을 계좌 하나로 보낸 경우 3,000건 중 180건이 사라졌다.</p>
+
+  <div class="legend">
+    <span><i class="dot" style="background:#1f6fb2"></i> 시나리오 B · 계좌 50개로 분산</span>
+    <span><i class="dot" style="background:#c2740a"></i> 시나리오 A · 계좌 하나로 집중</span>
+    <span><i class="dot" style="background:#b42318"></i> 결함과 유실</span>
+    <span><i class="dot" style="background:#12855a"></i> 의도대로 동작한 것</span>
+  </div>
+
+  <h2>먼저 용어</h2>
+  <div class="terms">
+    <div class="term"><b>k6</b><span>서버에 요청을 대량으로 보내 처리량·지연·한계를 측정하는 오픈소스 부하 테스트 도구(Grafana Labs). 여기서는 매수 요청을 쏘는 발생기로 썼다. 폭주를 재현하자 원래 있던 결함이 드러났다.</span></div>
+    <div class="term"><b>VU (virtual user, 가상 사용자)</b><span>k6가 동시에 굴리는 가상 사용자 수. 동시에 몇 개의 요청이 진행 중인지를 정한다. 이 테스트는 50 VU다.</span></div>
+    <div class="term"><b>파티션 (partition)</b><span>Kafka 토픽을 나눈 분할 단위. 같은 키의 메시지는 같은 파티션으로 가고, 파티션 하나는 컨슈머 스레드 하나가 맡는다. 그래서 파티션 수가 곧 병렬 처리 폭이다.</span></div>
+    <div class="term"><b>핫 파티션 (hot partition)</b><span>같은 키를 가진 메시지가 많아 특정 파티션에만 쌓이는 상태. 파티션을 아무리 늘려도 그 하나를 맡은 스레드가 혼자 처리하므로 병렬성이 사라진다.</span></div>
+    <div class="term"><b>멱등키 (idempotency key)</b><span>같은 요청이 두 번 처리되지 않게 구분하는 값. 이 시점의 코드는 <code>(account_id, requested_at)</code>에 UNIQUE 제약을 걸어 중복 주문을 막았다.</span></div>
+    <div class="term"><b>p95 · p99</b><span>응답 시간을 느린 순으로 정렬했을 때 상위 5%·1% 지점의 값. 평균은 느린 소수를 가려버리므로, <b>tail latency</b>(가장 느린 요청들의 응답 시간)를 보려면 이 값을 본다.</span></div>
+  </div>
+
+  <h2>무엇을 어떻게 측정했나</h2>
+  <p>부하 대상은 주문 접수 경로 하나로 한정했다. 매도와 체결을 빼고 매수만 보낸 이유는, 문서에 적힌 병목이 접수 단계의 계좌 락과 직렬화이기 때문이다. 같은 종목(A900110) 매수만 넣으면 상대방 매도 주문이 없어 매칭은 일어나지 않고, 부하가 접수 경로에만 걸린다.</p>
+  <p>비교하는 조건은 하나다. <b>같은 부하를 파티션 키만 바꿔 두 번 돌린다.</b> 시나리오 B는 계좌 1001~1050 중에서 무작위로 골라 보낸다. 주문마다 파티션 키가 달라진다. 시나리오 A는 모든 주문을 계좌 1001로 보내므로 파티션 키가 전부 같다. 한 사람이 사용하는 계좌에 주문이 초당 수백 건 들어오는 일은 실제로 없다. 계좌 단위 직렬화가 가장 불리해지는 조건을 일부러 준 것이다. 아래 그림이 그 둘이 파이프라인에서 어떻게 달라지는지다.</p>
+
+  <div class="fig">
+    <div class="cap">측정 경로와 파티션 분포</div>
+    <div class="capsub">주문 3,000건이 어디를 지나는지, 그리고 계좌를 여러 개로 나눠 보냈을 때와 하나로만 보냈을 때 파티션에 어떻게 쌓였는지</div>
+    <svg viewBox="0 0 1180 470" role="img" aria-label="부하 경로와 시나리오 A·B의 파티션 분포 비교">
+      <defs>
+        <marker id="aB" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#60a5fa"/></marker>
+        <marker id="aG" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#34d399"/></marker>
+        <marker id="aO" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#f5c46b"/></marker>
+      </defs>
+
+      <!-- 파이프라인 -->
+      <text x="20" y="26" fill="#8b93a1" font-size="12.5" font-weight="800">주문 한 건이 지나는 경로</text>
+
+      <rect x="20" y="42" width="165" height="62" rx="9" fill="#101c2e" stroke="#60a5fa"/>
+      <text x="102" y="66" text-anchor="middle" fill="#cfe1fb" font-size="12" font-weight="700">k6 (50 VU)</text>
+      <text x="102" y="86" text-anchor="middle" fill="#8fb0da" font-size="10.5">매수 3,000건을 한꺼번에</text>
+
+      <path d="M 185 73 L 222 73" stroke="#60a5fa" stroke-width="2" marker-end="url(#aB)"/>
+
+      <rect x="224" y="42" width="196" height="62" rx="9" fill="#101c2e" stroke="#60a5fa"/>
+      <text x="322" y="66" text-anchor="middle" fill="#cfe1fb" font-size="12" font-weight="700">api :8080</text>
+      <text x="322" y="86" text-anchor="middle" fill="#8fb0da" font-size="10.5">검증만 하고 202를 바로 응답</text>
+
+      <path d="M 420 73 L 457 73" stroke="#60a5fa" stroke-width="2" marker-end="url(#aB)"/>
+
+      <rect x="459" y="42" width="216" height="62" rx="9" fill="#1c1610" stroke="#c79433"/>
+      <text x="567" y="66" text-anchor="middle" fill="#f5e0b8" font-size="12" font-weight="700">Kafka order-requests</text>
+      <text x="567" y="86" text-anchor="middle" fill="#e0c48a" font-size="10.5">파티션 3개, 키는 accountId</text>
+
+      <path d="M 675 73 L 712 73" stroke="#60a5fa" stroke-width="2" marker-end="url(#aB)"/>
+
+      <rect x="714" y="42" width="216" height="62" rx="9" fill="#101c2e" stroke="#60a5fa"/>
+      <text x="822" y="66" text-anchor="middle" fill="#cfe1fb" font-size="12" font-weight="700">order-engine</text>
+      <text x="822" y="86" text-anchor="middle" fill="#8fb0da" font-size="10.5">스레드 3개, 계좌 행에 락을 잡는다</text>
+
+      <path d="M 930 73 L 967 73" stroke="#60a5fa" stroke-width="2" marker-end="url(#aB)"/>
+
+      <rect x="969" y="42" width="191" height="62" rx="9" fill="#101c2e" stroke="#60a5fa"/>
+      <text x="1064" y="66" text-anchor="middle" fill="#cfe1fb" font-size="12" font-weight="700">Postgres</text>
+      <text x="1064" y="86" text-anchor="middle" fill="#8fb0da" font-size="10.5">orders 테이블에 저장</text>
+
+      <line x1="20" y1="132" x2="1160" y2="132" stroke="#2a3442" stroke-width="1"/>
+
+      <!-- 시나리오 B -->
+      <text x="20" y="166" fill="#7cc0ff" font-size="13" font-weight="800">시나리오 B — 계좌 1001~1050을 무작위로 골라 보냈다</text>
+      <text x="20" y="188" fill="#aeb6c2" font-size="11.5">주문마다 키가 달라 세 파티션에 나뉘어 쌓였고,</text>
+      <text x="20" y="206" fill="#aeb6c2" font-size="11.5">세 스레드가 동시에 소비했다.</text>
+
+      <rect x="404" y="150" width="128" height="52" rx="8" fill="#101c2e" stroke="#3b6bb0"/>
+      <text x="468" y="172" text-anchor="middle" fill="#a9c6ef" font-size="11">파티션 0</text>
+      <text x="468" y="191" text-anchor="middle" fill="#cfe1fb" font-size="12" font-weight="700">일부</text>
+
+      <rect x="548" y="150" width="128" height="52" rx="8" fill="#101c2e" stroke="#3b6bb0"/>
+      <text x="612" y="172" text-anchor="middle" fill="#a9c6ef" font-size="11">파티션 1</text>
+      <text x="612" y="191" text-anchor="middle" fill="#cfe1fb" font-size="12" font-weight="700">990건</text>
+
+      <rect x="692" y="150" width="128" height="52" rx="8" fill="#101c2e" stroke="#3b6bb0"/>
+      <text x="756" y="172" text-anchor="middle" fill="#a9c6ef" font-size="11">파티션 2</text>
+      <text x="756" y="191" text-anchor="middle" fill="#cfe1fb" font-size="12" font-weight="700">835건</text>
+
+      <path d="M 820 176 L 862 176" stroke="#34d399" stroke-width="2" marker-end="url(#aG)"/>
+      <rect x="864" y="150" width="296" height="52" rx="8" fill="#122a1f" stroke="#34d399"/>
+      <text x="1012" y="172" text-anchor="middle" fill="#8fe6c1" font-size="11.5" font-weight="700">컨슈머 스레드 셋이 함께 처리했다</text>
+      <text x="1012" y="191" text-anchor="middle" fill="#7fd6b0" font-size="10.5">파티션 하나를 스레드 하나가 맡는다</text>
+
+      <line x1="20" y1="238" x2="1160" y2="238" stroke="#2a3442" stroke-width="1" stroke-dasharray="4 4"/>
+
+      <!-- 시나리오 A -->
+      <text x="20" y="272" fill="#f5c46b" font-size="13" font-weight="800">시나리오 A — 모든 주문을 계좌 1001 하나로 보냈다</text>
+      <text x="20" y="294" fill="#aeb6c2" font-size="11.5">키가 같아 파티션 하나에 전부 쌓였다.</text>
+      <text x="20" y="312" fill="#aeb6c2" font-size="11.5">이것이 핫 파티션이다.</text>
+
+      <rect x="404" y="256" width="128" height="52" rx="8" fill="#241416" stroke="#c0392b"/>
+      <text x="468" y="278" text-anchor="middle" fill="#f5a0a0" font-size="11">파티션 0</text>
+      <text x="468" y="297" text-anchor="middle" fill="#ffd0cb" font-size="12" font-weight="700">3,000건 전부</text>
+
+      <rect x="548" y="256" width="128" height="52" rx="8" fill="#161a20" stroke="#3a424e"/>
+      <text x="612" y="278" text-anchor="middle" fill="#7d8592" font-size="11">파티션 1</text>
+      <text x="612" y="297" text-anchor="middle" fill="#7d8592" font-size="12" font-weight="700">0건</text>
+
+      <rect x="692" y="256" width="128" height="52" rx="8" fill="#161a20" stroke="#3a424e"/>
+      <text x="756" y="278" text-anchor="middle" fill="#7d8592" font-size="11">파티션 2</text>
+      <text x="756" y="297" text-anchor="middle" fill="#7d8592" font-size="12" font-weight="700">0건</text>
+
+      <path d="M 820 282 L 862 282" stroke="#f5c46b" stroke-width="2" marker-end="url(#aO)"/>
+      <rect x="864" y="256" width="296" height="52" rx="8" fill="#1c1610" stroke="#c79433"/>
+      <text x="1012" y="278" text-anchor="middle" fill="#f5e0b8" font-size="11.5" font-weight="700">스레드 하나가 3,000건을 차례로 처리했다</text>
+      <text x="1012" y="297" text-anchor="middle" fill="#e0c48a" font-size="10.5">나머지 둘은 맡은 파티션이 비어 놀았다</text>
+
+      <!-- 결론 띠 -->
+      <rect x="20" y="346" width="1140" height="96" rx="10" fill="#101c2e" stroke="#2a3442"/>
+      <text x="40" y="374" fill="#c9d1da" font-size="12.5" font-weight="700">accountId로 파티셔닝하면 서로 다른 계좌의 주문은 병렬로 처리된다. Kafka 설정은 문서대로 동작했다.</text>
+      <text x="40" y="400" fill="#f5c46b" font-size="12.5" font-weight="700">시나리오 A는 계좌 단위 직렬화가 가장 불리해지는 조건을 일부러 준 것이다. 실제 주문 분포와는 다르다.</text>
+      <text x="40" y="426" fill="#f5a0a0" font-size="12.5" font-weight="700">그 조건에서 멱등키 충돌이 1,807건까지 늘었고, 정상 주문 180건이 폐기됐다.</text>
+    </svg>
+    <p class="fignote">파티션 0의 B 시나리오 건수를 "일부"로 적은 것은 측정 당시 오프셋을 p1·p2만 기록해서다. 세 파티션 합이 3,000건인 것은 확인했다.</p>
+  </div>
+
+  <h3>환경</h3>
+  <table>
+    <tr><th>구성</th><th>내용</th></tr>
+    <tr><td>인프라(Docker)</td><td>Postgres 16 (:9702) · Redis 7 (:6379) · Kafka(KRaft 단일 브로커, :9092)</td></tr>
+    <tr><td>애플리케이션</td><td>Spring Boot 앱 4개가 Postgres 하나를 공유한다 — api(:8080) · order-engine · matching-engine · settlement-engine, <code>loadtest</code> 프로파일</td></tr>
+    <tr><td>토픽</td><td><code>order-requests</code> 파티션 3 · order-engine 리스너 concurrency 3 (스레드 하나가 파티션 하나를 맡는 것을 확인)</td></tr>
+    <tr><td>시드</td><td>사용자 1명 · 계좌 50개(잔액 10<sup>11</sup>, 증거금률 1.00, ACTIVE) · 종목 A900110(전일 종가 1,003) · Redis 토큰</td></tr>
+    <tr><td>부하 도구</td><td>k6 v2.2.0 — 3,000 요청, 50 VU, shared-iterations(한꺼번에 밀어 넣는 버스트)</td></tr>
+  </table>
+  <p class="note">인증 endpoint가 없어 토큰은 Redis에 직접 넣었다(<code>auth:token:&lt;SHA-256&gt;</code> → userId, <code>TokenService</code>와 같은 포맷). 계좌·종목은 <code>loadtest</code> 프로파일의 시드 SQL로 적재했다.</p>
+
+  <h2>결과</h2>
+  <h3>1. 접수 계층은 3,000건을 실패 없이 받았다</h3>
+  <p>두 시나리오 모두 3,000 요청 전부 <b class="goodv">202 Accepted</b>였고 HTTP 실패는 0%다. api는 검증을 마치면 Kafka에 넘기고 곧바로 응답하므로, order-engine이 밀리는 것과 무관하게 안정적이었다.</p>
+  <table>
+    <tr><th>지표</th><th class="num">B · 계좌 분산</th><th class="num">A · 단일 계좌</th></tr>
+    <tr><td>초당 접수 건수</td><td class="num">479 req/s</td><td class="num">649 req/s</td></tr>
+    <tr><td>지연 p95</td><td class="num">293 ms</td><td class="num">240 ms</td></tr>
+    <tr><td>지연 p99</td><td class="num">1,465 ms</td><td class="num">452 ms</td></tr>
+    <tr><td>지연 최대</td><td class="num">1,680 ms</td><td class="num">874 ms</td></tr>
+    <tr><td>HTTP 실패</td><td class="num">0%</td><td class="num">0%</td></tr>
+  </table>
+  <p class="note">초당 접수 건수는 3,000건을 보내는 동안의 평균값이다. 총 요청 수를 그 구간의 시간으로 나눈 것이고, k6가 보고한 <code>http_reqs</code> 비율을 그대로 적었다. 단일 계좌인 A가 오히려 처리량이 높고 p99가 낮게 나왔다. api는 발행만 하므로 이 차이는 부하 도구의 스케줄링과 JVM 워밍업 편차 범위이고, 이 리포트가 보려는 order-engine 병목과는 관계가 없다.</p>
+
+  <h3>2. 파티션은 Kafka 설정대로 나뉘었다</h3>
+  <p>프로듀서(api)가 파티션 3개를 인식하도록 다시 띄운 뒤 측정했다. 주문들의 accountId가 서로 다른지에 따라 소비 폭이 나뉘었고, 그 수치가 위 도식의 두 행이다. <b>이 결과가 말해 주는 것은 Kafka 파티셔닝과 컨슈머 설정이 문서대로 동작한다는 것까지다.</b> 엔진이 주문 한 건을 얼마나 빨리 처리하는지는 여기서 나오지 않는다. 이 측정에서 얻은 것은 그다음 항목이다.</p>
+  
+  <h3>3. 부하를 걸자 정상 주문이 폐기됐다</h3>
+  <p>order-engine에서 심각한 결함이 나왔다. 부하를 걸자 <code>(account_id, requested_at)</code> UNIQUE 제약에서 충돌이 대량으로 발생했고, 그 충돌을 복구하려던 코드가 함께 깨졌다.</p>
+  <table>
+    <tr><th>order-engine 지표 (로그 델타)</th><th class="num">B · 계좌 분산</th><th class="num">A · 단일 계좌</th></tr>
+    <tr><td>중복키 충돌 (duplicate key)</td><td class="num">110건</td><td class="num badv">1,807건</td></tr>
+    <tr><td>재시도를 모두 소진한 뒤 사라진 주문</td><td class="num badv">11건</td><td class="num badv">180건</td></tr>
+  </table>
+
+  <div class="fig">
+    <div class="cap">주문이 폐기되는 경로와 그 뒤의 수정</div>
+    <div class="capsub">왼쪽은 이 측정 시점의 코드에서 주문 한 건이 폐기되기까지, 오른쪽은 멱등키를 requestId로 교체하고 중복 확인 조회를 별도 트랜잭션으로 분리한 뒤의 같은 구간</div>
+    <svg viewBox="0 0 1180 520" role="img" aria-label="주문이 폐기되는 경로와 멱등키 교체 후 구조 비교">
+      <defs>
+        <marker id="bR" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#f26d6d"/></marker>
+        <marker id="bG2" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#34d399"/></marker>
+      </defs>
+
+      <text x="20" y="26" fill="#f5a0a0" font-size="13" font-weight="800">측정 시점의 코드에서 주문이 폐기되는 다섯 단계</text>
+      <text x="620" y="26" fill="#6ee7b4" font-size="13" font-weight="800">멱등키를 requestId로 바꾼 뒤에는 같은 상황에서 폐기되지 않는다</text>
+
+      <!-- AS-IS -->
+      <rect x="20" y="44" width="520" height="50" rx="9" fill="#101c2e" stroke="#60a5fa"/>
+      <text x="40" y="66" fill="#cfe1fb" font-size="12">같은 계좌의 주문 두 건이 같은 밀리초에 도착한다.</text>
+      <text x="40" y="84" fill="#8fb0da" font-size="11">멱등키가 서버 시각 requestedAt이라 두 건이 같은 키를 받는다.</text>
+      <path d="M 280 94 L 280 112" stroke="#f26d6d" stroke-width="2" marker-end="url(#bR)"/>
+
+      <rect x="20" y="116" width="520" height="50" rx="9" fill="#241416" stroke="#c0392b"/>
+      <text x="40" y="138" fill="#ffd0cb" font-size="12">정상 주문 두 건인데 saveAndFlush가 UNIQUE 제약을 위반한다.</text>
+      <text x="40" y="156" fill="#f5a0a0" font-size="11">이 트랜잭션은 이 시점에 rollback-only 상태가 된다.</text>
+      <path d="M 280 166 L 280 184" stroke="#f26d6d" stroke-width="2" marker-end="url(#bR)"/>
+
+      <rect x="20" y="188" width="520" height="50" rx="9" fill="#241416" stroke="#c0392b"/>
+      <text x="40" y="210" fill="#ffd0cb" font-size="12">catch 블록이 같은 트랜잭션에서 기존 주문을 조회한다.</text>
+      <text x="40" y="228" fill="#f5a0a0" font-size="11">Hibernate가 AssertionFailure를 던진다.</text>
+      <path d="M 280 238 L 280 256" stroke="#f26d6d" stroke-width="2" marker-end="url(#bR)"/>
+
+      <rect x="20" y="260" width="520" height="50" rx="9" fill="#241416" stroke="#c0392b"/>
+      <text x="40" y="282" fill="#ffd0cb" font-size="12">Hibernate가 던진 예외라 비즈니스 예외 처리 분기에 걸리지 않는다.</text>
+      <text x="40" y="300" fill="#f5a0a0" font-size="11">컨슈머가 잡지 못하고 그대로 위로 전파된다.</text>
+      <path d="M 280 310 L 280 328" stroke="#f26d6d" stroke-width="2" marker-end="url(#bR)"/>
+
+      <rect x="20" y="332" width="520" height="50" rx="9" fill="#241416" stroke="#c0392b"/>
+      <text x="40" y="354" fill="#ffd0cb" font-size="12">DefaultErrorHandler가 9회 재시도한 뒤 포기한다.</text>
+      <text x="40" y="372" fill="#f5a0a0" font-size="11">메시지를 버리므로 그 주문은 DB에 남지 않는다.</text>
+      <path d="M 280 382 L 280 400" stroke="#f26d6d" stroke-width="2" marker-end="url(#bR)"/>
+
+      <rect x="20" y="404" width="520" height="56" rx="9" fill="#2b0f12" stroke="#f26d6d" stroke-width="2"/>
+      <text x="40" y="428" fill="#ffd0cb" font-size="12.5" font-weight="800">사용자는 202를 받았는데 주문은 없다.</text>
+      <text x="40" y="448" fill="#f5a0a0" font-size="11.5">단일 계좌에서 180건, 계좌를 분산했을 때 11건.</text>
+
+      <!-- TO-BE -->
+      <rect x="620" y="44" width="540" height="50" rx="9" fill="#101c2e" stroke="#60a5fa"/>
+      <text x="640" y="66" fill="#cfe1fb" font-size="12">멱등키를 요청마다 고유한 requestId로 바꿨다.</text>
+      <text x="640" y="84" fill="#8fb0da" font-size="11">서로 다른 정상 주문끼리는 애초에 키가 겹치지 않는다.</text>
+      <path d="M 890 94 L 890 112" stroke="#34d399" stroke-width="2" marker-end="url(#bG2)"/>
+
+      <rect x="620" y="116" width="540" height="50" rx="9" fill="#101c2e" stroke="#60a5fa"/>
+      <text x="640" y="138" fill="#cfe1fb" font-size="12">오케스트레이터가 트랜잭션 없이 요청을 받는다.</text>
+      <text x="640" y="156" fill="#8fb0da" font-size="11">저장을 직접 하지 않으므로 이 층에는 깨질 트랜잭션이 없다.</text>
+      <path d="M 890 166 L 890 184" stroke="#34d399" stroke-width="2" marker-end="url(#bG2)"/>
+
+      <rect x="620" y="188" width="540" height="50" rx="9" fill="#122a1f" stroke="#34d399"/>
+      <text x="640" y="210" fill="#d6f5e6" font-size="12">OrderIdempotencyReader가 별도 트랜잭션에서 먼저 조회한다.</text>
+      <text x="640" y="228" fill="#8fe6c1" font-size="11">REQUIRES_NEW라 커밋된 데이터만 본다. 이미 있으면 그 주문을 돌려준다.</text>
+      <path d="M 890 238 L 890 256" stroke="#34d399" stroke-width="2" marker-end="url(#bG2)"/>
+
+      <rect x="620" y="260" width="540" height="50" rx="9" fill="#122a1f" stroke="#34d399"/>
+      <text x="640" y="282" fill="#d6f5e6" font-size="12">없으면 OrderWriter가 락·검증·저장을 한 트랜잭션에서 한다.</text>
+      <text x="640" y="300" fill="#8fe6c1" font-size="11">트랜잭션 경계가 저장 안쪽으로만 좁혀졌다.</text>
+      <path d="M 890 310 L 890 328" stroke="#34d399" stroke-width="2" marker-end="url(#bG2)"/>
+
+      <rect x="620" y="332" width="540" height="50" rx="9" fill="#122a1f" stroke="#34d399"/>
+      <text x="640" y="354" fill="#d6f5e6" font-size="12">저장이 롤백돼도 복구 조회는 오케스트레이터에서 돈다.</text>
+      <text x="640" y="372" fill="#8fe6c1" font-size="11">망가진 트랜잭션을 다시 쓰지 않으므로 AssertionFailure가 나지 않는다.</text>
+      <path d="M 890 382 L 890 400" stroke="#34d399" stroke-width="2" marker-end="url(#bG2)"/>
+
+      <rect x="620" y="404" width="540" height="56" rx="9" fill="#0e2a1e" stroke="#34d399" stroke-width="2"/>
+      <text x="640" y="428" fill="#d6f5e6" font-size="12.5" font-weight="800">재전송과 이중 클릭은 같은 requestId로 걸러진다.</text>
+      <text x="640" y="448" fill="#8fe6c1" font-size="11.5">같은 계좌의 연속 주문은 정상으로 통과한다.</text>
+
+      <text x="20" y="494" fill="#8b93a1" font-size="11.5">왼쪽 다섯 단계는 이 측정에서 로그로 확인한 것이고, 오른쪽은 이 리포트의 권고를 반영한 결과다.</text>
+    </svg>
+  </div>
+
+  <h2>근본 원인</h2>
+  <h3>1. 서버가 찍는 수신 시각으로는 주문을 구분할 수 없다</h3>
+  <p><code>OrderApiService</code>가 요청마다 <code>requestedAt = Instant.now()</code>를 찍고, 그 값을 계좌 번호와 묶어 멱등키로 사용한다. 같은 밀리초에 도착한 주문들은 같은 값을 받는다. 그래서 계좌가 같고 도착 시각이 겹치면 <code>(account_id, requested_at)</code> UNIQUE를 위반한다. 단일 계좌인 A에서는 모든 요청이 한 계좌로 가서 충돌이 1,807건까지 늘었고, 계좌를 분산한 B에서는 110건에 그쳤다. 이 키는 같은 요청이 연달아 두 번 들어오는 것을 막으려고 설계됐는데, 부하에서는 서로 다른 정상 주문끼리도 충돌한다.</p>
+
+  <h3>2. 롤백된 트랜잭션 안에서 복구 조회를 한다</h3>
+  <p class="note"><code>OrderCommandService.placeBuyOrder:96~101</code>, 매도 경로도 <code>:144~148</code>에서 같다.</p>
+<pre><span class="c">// saveAndFlush가 UNIQUE 위반 → 이 트랜잭션은 rollback-only가 된다</span>
+order = orderRepository.saveAndFlush(order);
+} catch (DataIntegrityViolationException e) {
+    <span class="c">// 같은(망가진) 트랜잭션에서 다시 조회 → Hibernate가 거부한다</span>
+    Order existing = orderRepository
+        .findByAccountIdAndRequestedAt(...)   <span class="r">// AssertionFailure</span>
+        .orElseThrow(...);
+}</pre>
+  <p>충돌을 잡아 기존 주문을 돌려주려는 의도였다. 그런데 예외가 난 트랜잭션 안에서 조회하면 Hibernate가 <b class="badv">don't flush the Session after an exception occurs</b> AssertionFailure를 던진다. Hibernate가 던진 예외라 컨슈머의 ack 후 폐기 분기에 걸리지 않고 그대로 전파된다. Spring Kafka의 <code>DefaultErrorHandler</code>가 9회 재시도한 뒤 포기하고 메시지를 버려 주문이 폐기된다.</p>
+  <p>이 <code>catch</code> 분기는 UNIQUE 충돌이 실제로 나야 실행된다. 당시 이 경로를 재현하는 테스트가 없어 한 번도 실행되지 않은 채 남아 있었고, 부하 테스트가 처음으로 이 분기를 실행시켰다.</p>
+<pre><span class="c">로그 증거</span>
+duplicate key value violates unique constraint "uk84…"
+  → org.hibernate.AssertionFailure: <span class="r">don't flush the Session after an exception occurs</span>
+  → DefaultErrorHandler: <span class="r">Backoff maxAttempts=9 exhausted for order-requests-2</span></pre>
+
+  <h2>이 측정에서 무엇을 정했나</h2>
+  <div class="pickbox good">
+    <b>파티셔닝은 유지한다.</b> accountId를 키로 사용하면 같은 계좌의 주문이 언제나 한 스레드로 모여 순서대로 처리된다. 계좌 단위 직렬화라는 목적이 지켜지는 것을 확인했고, 계좌를 여럿으로 나눠 보냈을 때 세 스레드가 함께 소비하는 것도 함께 봤다.
+  </div>
+  <div class="pickbox bad">
+    <b>멱등키와 복구 경로는 바꿔야 한다.</b> 시각 기반 키를 사용하면 서로 다른 정상 주문끼리도 계속 충돌하는데, 그 충돌을 롤백된 트랜잭션 안에서 복구하려 하면 결국 주문이 폐기된다. 두 가지가 같은 경로에서 이어져 터지므로 함께 고쳐야 한다.
+  </div>
+  <div class="pickbox warn">
+    <b>엔진의 처리 능력은 이 측정으로 알 수 없다.</b> 이 리포트에 실린 수치는 둘 다 엔진이 주문을 처리하는 속도가 아니다. 접수 계층 수치는 api가 검증을 마치고 Kafka에 발행하는 데까지 걸리는 시간이고, 파티션 결과는 Kafka 설정이 동작하는지를 보여준다. order-engine이 실제로 처리하는 속도는 아래 한계 절에 적은 이유로 신뢰할 수 없어 싣지 않았다.
+  </div>
+  <div class="pickbox">
+    <b>그 뒤 무엇을 했나.</b> 위 두 원인을 결정 하나로 함께 처리했다(ADR-008 「주문 접수 멱등키를 requestId로 교체」). 멱등키를 요청마다 고유한 <code>requestId</code>로 교체했고, 중복 확인 조회를 <code>REQUIRES_NEW</code> 트랜잭션으로 분리해 망가진 트랜잭션을 다시 쓰지 않게 했다.
+  </div>
+
+  <h2>이 측정이 답하지 못하는 것</h2>
+  <ul>
+    <li><b>order-engine의 처리량(TPS)은 신뢰할 수 없어 싣지 않았다.</b> DB 저장 건수로 소화 시간을 측정하려 했으나, Kafka 컨슈머 오프셋과 DB TRUNCATE가 따로 놀았고 위 결함의 재시도 재처리가 겹쳐 카운트가 오염됐다. 그래서 믿을 수 있는 신호만 실었다 — k6 접수 지표, 로그 기반 충돌·유실 델타, 파티션별 오프셋.</li>
+    <li>브로커가 하나인 KRaft 단일 머신이라 네트워크와 복제 비용은 측정 밖이다.</li>
+    <li>매수만 넣어 매칭·정산 경로는 이번 부하 밖이다. 접수 병목에 집중하려고 그렇게 설계했다.</li>
+    <li>k6와 애플리케이션과 DB가 한 머신에서 자원을 나눠 사용한다. 절대 수치보다 두 시나리오 사이의 상대 비교가 유효하다.</li>
+  </ul>
+
+  <div class="footer">
+    재현: <code>docker compose -f docker-compose.yml -f docker-compose.loadtest.yml up -d</code> → 앱 4개를 <code>--spring.profiles.active=loadtest</code>로 기동 → Redis 토큰 시드 → <code>k6 run -e HOT=0|1 buy.js</code>.<br>
+    이 측정 뒤 별도 브랜치에서 끝내 main에 병합한 것 셋: <code>decreaseHolding</code>에 비관적 락 추가, 호가창 스냅샷 직렬화를 <code>OrderbookRedisRepository</code>로 이동, 컨슈머 ack 분기에 <code>BusinessException</code> 추가.
+  </div>
+
+</div>
+</body>
+</html>

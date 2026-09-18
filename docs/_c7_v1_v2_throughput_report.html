@@ -1,0 +1,873 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>v1 · v2 주문 처리 성능 측정</title>
+<style>
+  :root{
+    --bg:#faf9f6; --ink:#1c1d21; --muted:#5b6068; --line:#e4dfd6; --card:#ffffff;
+    --pick:#1f6fb2; --v1:#b45309; --v1-bg:#fdf1e0; --v2:#12855a; --v2-bg:#e6f5f0;
+    color-scheme:light;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+    line-height:1.72;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1000px;margin:0 auto;padding:44px 20px 96px}
+  h1{font-size:clamp(26px,6vw,36px);font-weight:800;letter-spacing:-.02em;margin:0 0 10px;text-wrap:balance}
+  h1 .sub{display:block;font-size:.44em;font-weight:700;color:var(--muted);margin-top:10px;letter-spacing:0}
+  h2{font-size:clamp(19px,5vw,24px);font-weight:800;margin:50px 0 12px;padding-top:20px;border-top:2px solid var(--line);text-wrap:balance}
+  h3{font-size:16px;font-weight:800;margin:24px 0 8px}
+  p{margin:11px 0;word-break:keep-all;text-wrap:pretty}
+  .lead{font-size:clamp(16px,4vw,18px);color:#2f333a}
+  .note{font-size:13.5px;color:var(--muted)}
+  code{background:#efece6;padding:1px 6px;border-radius:5px;font-size:.9em;font-family:"SF Mono",ui-monospace,Menlo,monospace}
+
+  /* 용어 카드 */
+  .terms{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:11px;margin:16px 0}
+  .term{background:var(--card);border:1px solid var(--line);border-radius:11px;padding:13px 15px}
+  .term b{display:block;font-size:14.5px;margin-bottom:4px}
+  .term span{font-size:13.5px;color:#3a3e45}
+
+  /* 다크 네온 도식 패널 */
+  .fig{background:#0d1117;border:1px solid #2a3442;border-radius:16px;padding:18px 16px 16px;margin:18px 0;
+    box-shadow:0 8px 30px rgba(0,0,0,.28);overflow-x:auto;
+    --grid:#161d27; --text:#e6edf3; --text-muted:#aeb6c2; --text-dim:#9aa4b2; --mask:#0d1117;
+    --lane-fill:rgba(20,27,37,.55); --lane-stroke:#2a3442;
+    --arrow:#637082; --arrow-emphasis:#34d399;
+    --frontend-fill:rgba(59,130,246,.18);  --frontend-stroke:#3b82f6;
+    --backend-fill:rgba(52,211,153,.14);   --backend-stroke:#34d399;
+    --database-fill:rgba(124,192,255,.13); --database-stroke:#7cc0ff;
+    --cloud-fill:rgba(245,158,11,.14);     --cloud-stroke:#f59e0b;
+    --security-fill:rgba(245,177,58,.15);  --security-stroke:#f5b13a;
+    --messagebus-fill:rgba(245,196,107,.14); --messagebus-stroke:#f5c46b;
+    --external-fill:rgba(30,38,50,.7);     --external-stroke:#94a3b8;
+  }
+  .fig .cap{color:#8b93a1;font-size:12px;font-weight:800;letter-spacing:.05em;margin:0 0 3px;text-transform:uppercase}
+  .fig .capsub{color:#c9d1da;font-size:14px;font-weight:700;margin:0 0 12px}
+  .fig svg{width:100%;min-width:960px;height:auto;display:block}
+  .fig .c-grid{stroke:var(--grid);fill:none}
+  .fig .c-mask{fill:var(--mask);stroke:none}
+  .fig .c-lane{fill:var(--lane-fill);stroke:var(--lane-stroke);stroke-dasharray:6,6}
+  .fig .c-frontend{fill:var(--frontend-fill);stroke:var(--frontend-stroke)}
+  .fig .c-backend{fill:var(--backend-fill);stroke:var(--backend-stroke)}
+  .fig .c-database{fill:var(--database-fill);stroke:var(--database-stroke)}
+  .fig .c-cloud{fill:var(--cloud-fill);stroke:var(--cloud-stroke)}
+  .fig .c-security{fill:var(--security-fill);stroke:var(--security-stroke)}
+  .fig .c-messagebus{fill:var(--messagebus-fill);stroke:var(--messagebus-stroke)}
+  .fig .c-external{fill:var(--external-fill);stroke:var(--external-stroke)}
+  .fig .t-primary{fill:var(--text)}
+  .fig .t-muted{fill:var(--text-muted)}
+  .fig .t-dim{fill:var(--text-dim)}
+  .fig .t-frontend{fill:var(--frontend-stroke)}
+  .fig .t-backend{fill:var(--backend-stroke)}
+  .fig .t-database{fill:var(--database-stroke)}
+  .fig .t-security{fill:var(--security-stroke)}
+  .fig .t-messagebus{fill:var(--messagebus-stroke)}
+  .fig .t-external{fill:var(--external-stroke)}
+  .fig .a-default{stroke:var(--arrow);fill:none}
+  .fig .a-emphasis{stroke:var(--arrow-emphasis);fill:none}
+  .fig .a-security{stroke:var(--security-stroke);fill:none;stroke-dasharray:5,5}
+  .fig .a-dashed{stroke:var(--database-stroke);fill:none;stroke-dasharray:4,4}
+  .fig .m-default{fill:var(--arrow)}
+  .fig .m-emphasis{fill:var(--arrow-emphasis)}
+  .fig .m-security{fill:var(--security-stroke)}
+  .fig .m-dashed{fill:var(--database-stroke)}
+  .fig svg .semantic-sigil{fill:none;stroke:currentColor;stroke-width:1.35;stroke-linecap:round;stroke-linejoin:round;opacity:.78;pointer-events:none}
+  .fig svg .semantic-sigil>*{vector-effect:non-scaling-stroke}
+  .fig svg .semantic-sigil .sigil-fill{fill:currentColor;stroke:none}
+  .fig svg .s-frontend{color:var(--frontend-stroke)}
+  .fig svg .s-backend{color:var(--backend-stroke)}
+  .fig svg .s-database{color:var(--database-stroke)}
+  .fig svg .s-cloud{color:var(--cloud-stroke)}
+  .fig svg .s-security{color:var(--security-stroke)}
+  .fig svg .s-messagebus{color:var(--messagebus-stroke)}
+  .fig svg .s-external{color:var(--external-stroke)}
+  .leg{display:flex;flex-wrap:wrap;gap:7px 20px;margin:13px 2px 0;font-size:12.5px;color:#aeb6c2;
+    border-top:1px solid #1e2734;padding-top:11px}
+  .leg span{white-space:nowrap}
+  .leg i{display:inline-block;width:15px;height:10px;border-radius:3px;border:1px solid;margin-right:7px;vertical-align:0}
+  .leg u{display:inline-block;width:24px;height:0;border-top:2px solid;margin-right:7px;vertical-align:4px;text-decoration:none}
+  .panelnote{color:#8b93a1;font-size:12.5px;margin:12px 2px 0;line-height:1.66;word-break:keep-all}
+  .panelnote code{background:rgba(255,255,255,.07);color:#c9d1da}
+  .fignote{font-size:13px;color:var(--muted);margin:6px 0 18px}
+
+  /* 결론 상자 */
+  .pickbox{background:#eef4fb;border:1px solid #cddff2;border-left:4px solid var(--pick);border-radius:10px;padding:12px 16px;margin:14px 0;font-size:14.5px}
+  .pickbox b{color:var(--pick)}
+  .callout{background:#f6f4ef;border:1px solid var(--line);border-left:4px solid var(--muted);border-radius:0 10px 10px 0;padding:12px 16px;margin:14px 0;font-size:14px}
+  .callout.warn{border-left-color:var(--v1);background:#fdf1e0;border-color:#f0dfc4}
+
+  /* 요약 */
+  .summary{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px 22px;margin:18px 0 6px}
+  .summary h3{margin-top:18px}
+  .summary h3:first-of-type{margin-top:10px}
+
+  table{width:100%;border-collapse:collapse;font-size:14px;margin:12px 0}
+  th,td{padding:9px 10px;border-bottom:1px solid var(--line);text-align:right}
+  th:first-child,td:first-child{text-align:left}
+  th{font-weight:700;color:var(--muted);font-size:13px}
+  tr.v1-row td:first-child{color:var(--v1);font-weight:700}
+  tr.v2-row td:first-child{color:var(--v2);font-weight:700}
+  .badge{display:inline-block;font-size:11.5px;font-weight:800;padding:2px 8px;border-radius:999px;margin-left:6px}
+  .badge.v1{background:var(--v1-bg);color:var(--v1)}
+  .badge.v2{background:var(--v2-bg);color:var(--v2)}
+  ul{margin:8px 0;padding-left:20px}
+  li{margin-bottom:6px;font-size:14.5px}
+
+  /* 막대 (정정 이력) */
+  .chart{margin:18px 0}
+  .chart-row{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+  .chart-label{width:150px;font-size:13px;text-align:right;flex-shrink:0}
+  .bar-track{flex:1;background:#efece4;border-radius:6px;height:26px}
+  .bar-fill{height:100%;border-radius:6px;display:flex;align-items:center;padding-left:8px}
+  .bar-fill.v1{background:var(--v1)}
+  .bar-fill.v2{background:var(--v2)}
+  .bar-fill span{color:#fff;font-size:12.5px;font-weight:700;white-space:nowrap}
+  .range-note{font-size:12px;color:var(--muted);margin-left:160px;margin-top:-6px;margin-bottom:8px}
+  .footer{margin-top:24px;font-size:13px;color:var(--muted)}
+
+  /* 접은 정정 이력 */
+  details.history{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:0 20px;margin:40px 0 0}
+  details.history>summary{cursor:pointer;padding:16px 0;font-weight:800;font-size:15px;list-style:none;word-break:keep-all}
+  details.history>summary::-webkit-details-marker{display:none}
+  details.history>summary::before{content:"\25B8";display:inline-block;margin-right:8px;color:var(--muted)}
+  details.history[open]>summary::before{content:"\25BE"}
+  details.history[open]{padding-bottom:24px}
+  details.history h2{font-size:18px;margin-top:34px}
+  details.history h2:first-of-type{margin-top:10px;border-top:none;padding-top:0}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>v1 · v2 주문 처리 성능 측정
+    <span class="sub">같은 매수 주문을 같은 속도로 보내고, 주문이 계좌에 반영된 시점에서 두 구현을 비교했습니다</span></h1>
+
+  <p class="lead">이 레포에는 같은 매매 엔진이 두 벌 있습니다. <b>v1</b>은 Postgres 계좌 행에 비관적 락을 걸어 정합성을 지키고, <b>v2</b>는 그 락을 걷어내고 계좌 상태를 프로세스 메모리에 둔 뒤 한 스레드에서만 다룹니다. 아래는 두 구현에 같은 입력을 보내고, <b>초당 몇 건을 반영하는지(용량)</b>와 <b>한 건이 반영되기까지 몇 밀리초가 걸리는지(지연)</b>를 측정한 결과입니다.</p>
+
+  <div class="summary">
+    <h3>측정 구간</h3>
+    <p>api가 HTTP 요청을 받은 순간 측정을 시작해서, <b class="pick">주문이 실제로 계좌에 반영된 시점</b>에 멈춥니다. v1은 Postgres <code>orders</code> 테이블에 주문이 저장된 시점, v2는 계좌 엔진이 매수 대금 예약을 끝낸 시점입니다. 두 구현 모두 예약보다 HTTP 202를 먼저 응답하기 때문에, 202까지만 측정하면 v1이 응답 뒤로 미룬 Kafka 발행·컨슈머 처리·DB 저장이 측정에서 빠집니다.</p>
+
+    <h3>용량 — 초당 몇 건을 반영하나</h3>
+    <table>
+      <thead><tr><th>구성</th><th>용량</th><th>측정값</th></tr></thead>
+      <tbody>
+        <tr class="v1-row"><td>v1 · 컨슈머 3스레드 · 파티션 3</td><td>227.3건/초</td><td>30,000건 / 132초</td></tr>
+        <tr class="v1-row"><td>v1 · 컨슈머 9스레드 · 파티션 9</td><td>384.6건/초</td><td>30,000건 / 78초</td></tr>
+        <tr class="v2-row"><td>v2 · 계좌 워커 1개</td><td>4,000건/초 이상</td><td>30,000건 / 7.5초</td></tr>
+      </tbody>
+    </table>
+    <p class="note">v2 값은 하한입니다. 부하 생성기(k6)의 송신 속도가 먼저 한계에 도달해 v2가 전혀 밀리지 않았고, 이 장비에서 v2의 천장은 측정하지 못했습니다.</p>
+
+    <h3>지연 — 같은 도착률에서 한 건에 걸리는 시간</h3>
+    <p class="note">양쪽에 똑같이 초당 192건(v1 용량의 절반)을 보낸 조건입니다. 값은 측정 2·3패스 기준입니다.</p>
+    <table>
+      <thead><tr><th>도착률 초당 192건</th><th>p50</th><th>p99</th></tr></thead>
+      <tbody>
+        <tr class="v1-row"><td>v1 · 컨슈머 9스레드</td><td>12~13ms</td><td>50~56ms</td></tr>
+        <tr class="v2-row"><td>v2 · 계좌 워커 1개</td><td>1.9~2.0ms</td><td>3.9~4.2ms</td></tr>
+      </tbody>
+    </table>
+
+    <div class="pickbox">
+      <b>같은 트래픽에서 v2가 p50 약 6~7배, p99 약 13배 빠르게 반영합니다.</b>
+      패스별로 짝지어 계산하면 p50은 12.4÷1.89=6.6배와 13.3÷2.04=6.5배, p99는 50.1÷3.89=12.9배와 55.9÷4.18=13.4배입니다.
+      용량은 v1이 초당 384.6건에서 포화하는 반면 v2는 초당 4,000건을 보내도 밀리지 않았습니다.
+    </div>
+
+    <p class="note">원본 데이터는 <code>loadtest/evidence/latency-v1-{warmup,pass1,pass2,pass3}.json</code>(v1 지연)과 <code>loadtest/evidence/latency-v2-b1-{warmup,pass1,pass2,pass3}.json</code>(v2 지연)에 있습니다. 측정 설계는 <code>decision_records/v1-v2-e2e-measurement.md</code>와 ADR-036(주문 한 건이 잔고 예약까지 끝난 시점에서 v1과 v2를 비교하기로 한 결정)에 있습니다.</p>
+  </div>
+
+  <h2>먼저 용어</h2>
+  <div class="terms">
+    <div class="term"><b>접수·예약</b><span>주문 한 건을 받아 잔고를 확인하고 매수 대금을 묶어 두는 것까지. 이 리포트가 측정을 멈추는 지점이며, v1은 DB 트랜잭션이 끝난 시점, v2는 계좌 엔진이 메모리에서 예약을 끝낸 시점입니다.</span></div>
+    <div class="term"><b>도착률</b><span>부하 생성기가 초당 몇 건을 보내는지. 이 리포트의 지연 측정은 도착률을 초당 192건으로 고정했습니다.</span></div>
+    <div class="term"><b>용량</b><span>그 구성이 초당 실제로 반영할 수 있는 최대 건수. 총 반영 건수를 총 소요 시간으로 나눠 구합니다.</span></div>
+    <div class="term"><b>이용률</b><span>도착률을 용량으로 나눈 값. 100%에 가까울수록 대기 줄이 줄지 않아 대기 시간이 계속 늘어납니다.</span></div>
+    <div class="term"><b>p50 · p95 · p99</b><span>요청들의 응답 시간을 빠른 것부터 정렬했을 때 50%·95%·99% 지점의 값. p50은 한가운데 값이고, p99는 느린 1%가 얼마나 느린지를 말합니다.</span></div>
+    <div class="term"><b>패스(pass)</b><span>같은 조건으로 1만 건을 한 번 보내는 단위. 워밍업 1패스를 버리고 측정 3패스를 재기동 없이 연속으로 실행했습니다.</span></div>
+    <div class="term"><b>k6</b><span>부하 생성기. 정해진 속도로 HTTP 요청을 계속 보내는 <code>constant-arrival-rate</code> 모드를 사용했습니다.</span></div>
+    <div class="term"><b>Aeron</b><span>UDP 위에서 도는 저지연 메시징 라이브러리. v2의 api가 계좌 워커에 주문을 보낼 때 사용합니다.</span></div>
+  </div>
+
+  <h2>측정 구간 — 어디서 시작해 어디서 멈췄나</h2>
+
+  <p>두 구현의 api는 같은 두 검증(계좌 소유·활성, 최근 체결가 대비 ±30% 가격 제한폭)을 거친 뒤, 검증을 마친 주문을 각자 다른 곳으로 보냅니다. v1은 Kafka 토픽에 발행하고 v2는 Aeron으로 계좌 워커에 보냅니다. 그 뒤에 남는 처리량이 두 구현에서 크게 다르기 때문에, 어디서 측정을 멈추느냐에 따라 결과가 달라집니다.</p>
+
+  <div class="fig">
+    <div class="cap">측정 구간</div>
+    <div class="capsub">주문 한 건이 지나는 단계와, 이 리포트가 시간 측정을 멈추는 지점</div>
+    <svg viewBox="0 0 1080 490" role="img" aria-labelledby="f1-archify-diagram-title f1-archify-diagram-description" data-preset="classic" data-quality-profile="showcase">
+        <title id="f1-archify-diagram-title">주문 한 건이 지나는 단계와 시간 측정을 멈추는 지점</title>
+        <desc id="f1-archify-diagram-description">A data-flow diagram generated by Archify.</desc>
+        <!-- Definitions -->
+        <defs>
+          <marker id="f1-arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" class="m-default" />
+          </marker>
+          <marker id="f1-arrowhead-emphasis" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" class="m-emphasis" />
+          </marker>
+          <marker id="f1-arrowhead-security" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" class="m-security" />
+          </marker>
+          <marker id="f1-arrowhead-dashed" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" class="m-dashed" />
+          </marker>
+          <pattern id="f1-grid" width="40" height="40" patternUnits="userSpaceOnUse">
+            <path d="M 40 0 L 0 0 0 40" class="c-grid" stroke-width="0.5"/>
+          </pattern>
+        </defs>
+
+        <!-- Background Grid -->
+        <rect width="100%" height="100%" fill="url(#f1-grid)" />
+
+        <!-- Data Stages -->
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="stage" data-composition-frame-id="0" x="16" y="46" width="168" height="370" rx="10" class="c-lane" stroke-width="1"/>
+        <text x="100" y="68" class="t-dim" font-size="9" font-weight="600" text-anchor="middle">01 / 요청 전송</text>
+
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="stage" data-composition-frame-id="1" x="231" y="46" width="168" height="370" rx="10" class="c-lane" stroke-width="1"/>
+        <text x="315" y="68" class="t-dim" font-size="9" font-weight="600" text-anchor="middle">02 / api 검증</text>
+
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="stage" data-composition-frame-id="2" x="446" y="46" width="168" height="370" rx="10" class="c-lane" stroke-width="1"/>
+        <text x="530" y="68" class="t-dim" font-size="9" font-weight="600" text-anchor="middle">03 / 전달과 202 응답</text>
+
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="stage" data-composition-frame-id="3" x="661" y="46" width="168" height="370" rx="10" class="c-lane" stroke-width="1"/>
+        <text x="745" y="68" class="t-dim" font-size="9" font-weight="600" text-anchor="middle">04 / 잔고 확인과 예약</text>
+
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="stage" data-composition-frame-id="4" x="876" y="46" width="168" height="370" rx="10" class="c-lane" stroke-width="1"/>
+        <text x="960" y="68" class="t-dim" font-size="9" font-weight="600" text-anchor="middle">05 / 주문 저장</text>
+
+        <!-- Flow paths -->
+        <path data-edge-from="k6v1" data-edge-to="apiv1" data-edge-label="주문 한 건을 보낸다" data-edge-key="0" data-edge-id="fk6v1" data-composition-points="175,157;240,157" d="M 175 157 L 240 157" class="a-emphasis" stroke-width="1.8" marker-end="url(#f1-arrowhead-emphasis)"/>
+        <path data-edge-from="apiv1" data-edge-to="kafka" data-edge-label="검증을 마치고 발행한다" data-edge-key="1" data-edge-id="fapiv1" data-composition-points="390,157;455,157" d="M 390 157 L 455 157" class="a-emphasis" stroke-width="1.8" marker-end="url(#f1-arrowhead-emphasis)"/>
+        <path data-edge-from="kafka" data-edge-to="consumer" data-edge-label="202 응답 뒤에 읽는다" data-edge-key="2" data-edge-id="fkafka" data-composition-points="605,157;670,157" d="M 605 157 L 670 157" class="a-dashed" stroke-width="1.4" marker-end="url(#f1-arrowhead-dashed)"/>
+        <path data-edge-from="consumer" data-edge-to="pg" data-edge-label="확인한 주문을 저장한다" data-edge-key="3" data-edge-id="fconsumer" data-composition-points="820,157;885,157" d="M 820 157 L 885 157" class="a-dashed" stroke-width="1.4" marker-end="url(#f1-arrowhead-dashed)"/>
+        <path data-edge-from="k6v2" data-edge-to="apiv2" data-edge-label="주문 한 건을 보낸다" data-edge-key="4" data-edge-id="fk6v2" data-composition-points="175,385;240,385" d="M 175 385 L 240 385" class="a-emphasis" stroke-width="1.8" marker-end="url(#f1-arrowhead-emphasis)"/>
+        <path data-edge-from="apiv2" data-edge-to="aeron" data-edge-label="검증을 마치고 보낸다" data-edge-key="5" data-edge-id="fapiv2" data-composition-points="390,385;455,385" d="M 390 385 L 455 385" class="a-emphasis" stroke-width="1.8" marker-end="url(#f1-arrowhead-emphasis)"/>
+        <path data-edge-from="aeron" data-edge-to="engine" data-edge-label="202 응답 뒤에 받는다" data-edge-key="6" data-edge-id="faeron" data-composition-points="605,385;670,385" d="M 605 385 L 670 385" class="a-dashed" stroke-width="1.4" marker-end="url(#f1-arrowhead-dashed)"/>
+
+        <!-- Nodes -->
+        <g id="f1-node-k6v1" data-node-id="k6v1" data-node-label="v1 측정" tabindex="0" role="button" aria-label="Focus v1 측정, k6가 주문을 보낸다, 01 / 요청 전송" aria-pressed="false" data-node-kind="external" data-node-sublabel="k6가 주문을 보낸다" data-node-context="01 / 요청 전송">
+          <title>v1 측정 · k6가 주문을 보낸다 · 01 / 요청 전송</title>
+          <rect x="25" y="128" width="150" height="58" rx="6" class="c-mask"/>
+          <rect x="25" y="128" width="150" height="58" rx="6" class="c-external" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(31 134) scale(0.6875)">
+            <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
+            <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="100" y="149" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">v1 측정</text>
+          <text data-detail="context" x="100" y="165" class="t-muted" font-size="7" text-anchor="middle">k6가 주문을 보낸다</text>
+        </g>
+
+        <g id="f1-node-apiv1" data-node-id="apiv1" data-node-label="v1 api" tabindex="0" role="button" aria-label="Focus v1 api, 계좌와 가격을 검증한다, 02 / api 검증" aria-pressed="false" data-node-kind="backend" data-node-sublabel="계좌와 가격을 검증한다" data-node-context="02 / api 검증">
+          <title>v1 api · 계좌와 가격을 검증한다 · 02 / api 검증</title>
+          <rect x="240" y="128" width="150" height="58" rx="6" class="c-mask"/>
+          <rect x="240" y="128" width="150" height="58" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(246 134) scale(0.6875)">
+            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="315" y="149" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">v1 api</text>
+          <text data-detail="context" x="315" y="165" class="t-muted" font-size="7" text-anchor="middle">계좌와 가격을 검증한다</text>
+        </g>
+
+        <g id="f1-node-kafka" data-node-id="kafka" data-node-label="order-requests" tabindex="0" role="button" aria-label="Focus order-requests, 발행하고 기다리지 않는다, 03 / 전달과 202 응답" aria-pressed="false" data-node-kind="messagebus" data-node-sublabel="발행하고 기다리지 않는다" data-node-tag="202로 답한다" data-node-context="03 / 전달과 202 응답">
+          <title>order-requests · 발행하고 기다리지 않는다 · 03 / 전달과 202 응답 · 202로 답한다</title>
+          <rect x="455" y="128" width="150" height="58" rx="6" class="c-mask"/>
+          <rect x="455" y="128" width="150" height="58" rx="6" class="c-messagebus" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="messagebus" class="semantic-sigil s-messagebus" transform="translate(461 134) scale(0.6875)">
+            <path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/>
+            <circle cx="5" cy="4.5" r="1" class="sigil-fill"/>
+            <circle cx="10.5" cy="8" r="1" class="sigil-fill"/>
+            <circle cx="7" cy="11.5" r="1" class="sigil-fill"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="530" y="149" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">order-requests</text>
+          <text data-detail="context" x="530" y="165" class="t-muted" font-size="7" text-anchor="middle">발행하고 기다리지 않는다</text>
+        <text data-detail="fine" x="530" y="175" class="t-messagebus" font-size="7" text-anchor="middle">202로 답한다</text>
+        </g>
+
+        <g id="f1-node-consumer" data-node-id="consumer" data-node-label="주문 컨슈머" tabindex="0" role="button" aria-label="Focus 주문 컨슈머, 잔고를 검증한다, 04 / 잔고 확인과 예약" aria-pressed="false" data-node-kind="backend" data-node-sublabel="잔고를 검증한다" data-node-tag="계좌 행을 잠근다" data-node-context="04 / 잔고 확인과 예약">
+          <title>주문 컨슈머 · 잔고를 검증한다 · 04 / 잔고 확인과 예약 · 계좌 행을 잠근다</title>
+          <rect x="670" y="128" width="150" height="58" rx="6" class="c-mask"/>
+          <rect x="670" y="128" width="150" height="58" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(676 134) scale(0.6875)">
+            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="745" y="149" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">주문 컨슈머</text>
+          <text data-detail="context" x="745" y="165" class="t-muted" font-size="7" text-anchor="middle">잔고를 검증한다</text>
+        <text data-detail="fine" x="745" y="175" class="t-backend" font-size="7" text-anchor="middle">계좌 행을 잠근다</text>
+        </g>
+
+        <g id="f1-node-pg" data-node-id="pg" data-node-label="orders 테이블" tabindex="0" role="button" aria-label="Focus orders 테이블, 주문 행이 생긴다, 05 / 주문 저장" aria-pressed="false" data-node-kind="database" data-node-sublabel="주문 행이 생긴다" data-node-tag="측정을 여기서 멈춘다" data-node-context="05 / 주문 저장">
+          <title>orders 테이블 · 주문 행이 생긴다 · 05 / 주문 저장 · 측정을 여기서 멈춘다</title>
+          <rect x="885" y="128" width="150" height="58" rx="6" class="c-mask"/>
+          <rect x="885" y="128" width="150" height="58" rx="6" class="c-database" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(891 134) scale(0.6875)">
+            <ellipse cx="8" cy="4" rx="5" ry="2"/>
+            <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="960" y="149" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">orders 테이블</text>
+          <text data-detail="context" x="960" y="165" class="t-muted" font-size="7" text-anchor="middle">주문 행이 생긴다</text>
+        <text data-detail="fine" x="960" y="175" class="t-database" font-size="7" text-anchor="middle">측정을 여기서 멈춘다</text>
+        </g>
+
+        <g id="f1-node-k6v2" data-node-id="k6v2" data-node-label="v2 측정" tabindex="0" role="button" aria-label="Focus v2 측정, k6가 주문을 보낸다, 01 / 요청 전송" aria-pressed="false" data-node-kind="external" data-node-sublabel="k6가 주문을 보낸다" data-node-context="01 / 요청 전송">
+          <title>v2 측정 · k6가 주문을 보낸다 · 01 / 요청 전송</title>
+          <rect x="25" y="356" width="150" height="58" rx="6" class="c-mask"/>
+          <rect x="25" y="356" width="150" height="58" rx="6" class="c-external" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(31 362) scale(0.6875)">
+            <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
+            <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="100" y="377" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">v2 측정</text>
+          <text data-detail="context" x="100" y="393" class="t-muted" font-size="7" text-anchor="middle">k6가 주문을 보낸다</text>
+        </g>
+
+        <g id="f1-node-apiv2" data-node-id="apiv2" data-node-label="v2 api" tabindex="0" role="button" aria-label="Focus v2 api, 같은 두 검증을 한다, 02 / api 검증" aria-pressed="false" data-node-kind="backend" data-node-sublabel="같은 두 검증을 한다" data-node-context="02 / api 검증">
+          <title>v2 api · 같은 두 검증을 한다 · 02 / api 검증</title>
+          <rect x="240" y="356" width="150" height="58" rx="6" class="c-mask"/>
+          <rect x="240" y="356" width="150" height="58" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(246 362) scale(0.6875)">
+            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="315" y="377" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">v2 api</text>
+          <text data-detail="context" x="315" y="393" class="t-muted" font-size="7" text-anchor="middle">같은 두 검증을 한다</text>
+        </g>
+
+        <g id="f1-node-aeron" data-node-id="aeron" data-node-label="Aeron 채널" tabindex="0" role="button" aria-label="Focus Aeron 채널, 계좌 워커로 보낸다, 03 / 전달과 202 응답" aria-pressed="false" data-node-kind="messagebus" data-node-sublabel="계좌 워커로 보낸다" data-node-tag="202로 답한다" data-node-context="03 / 전달과 202 응답">
+          <title>Aeron 채널 · 계좌 워커로 보낸다 · 03 / 전달과 202 응답 · 202로 답한다</title>
+          <rect x="455" y="356" width="150" height="58" rx="6" class="c-mask"/>
+          <rect x="455" y="356" width="150" height="58" rx="6" class="c-messagebus" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="messagebus" class="semantic-sigil s-messagebus" transform="translate(461 362) scale(0.6875)">
+            <path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/>
+            <circle cx="5" cy="4.5" r="1" class="sigil-fill"/>
+            <circle cx="10.5" cy="8" r="1" class="sigil-fill"/>
+            <circle cx="7" cy="11.5" r="1" class="sigil-fill"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="530" y="377" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">Aeron 채널</text>
+          <text data-detail="context" x="530" y="393" class="t-muted" font-size="7" text-anchor="middle">계좌 워커로 보낸다</text>
+        <text data-detail="fine" x="530" y="403" class="t-messagebus" font-size="7" text-anchor="middle">202로 답한다</text>
+        </g>
+
+        <g id="f1-node-engine" data-node-id="engine" data-node-label="계좌 엔진" tabindex="0" role="button" aria-label="Focus 계좌 엔진, 매수 대금을 예약한다, 04 / 잔고 확인과 예약" aria-pressed="false" data-node-kind="backend" data-node-sublabel="매수 대금을 예약한다" data-node-tag="측정을 여기서 멈춘다" data-node-context="04 / 잔고 확인과 예약">
+          <title>계좌 엔진 · 매수 대금을 예약한다 · 04 / 잔고 확인과 예약 · 측정을 여기서 멈춘다</title>
+          <rect x="670" y="356" width="150" height="58" rx="6" class="c-mask"/>
+          <rect x="670" y="356" width="150" height="58" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(676 362) scale(0.6875)">
+            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="745" y="377" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">계좌 엔진</text>
+          <text data-detail="context" x="745" y="393" class="t-muted" font-size="7" text-anchor="middle">매수 대금을 예약한다</text>
+        <text data-detail="fine" x="745" y="403" class="t-backend" font-size="7" text-anchor="middle">측정을 여기서 멈춘다</text>
+        </g>
+
+        <!-- Flow labels -->
+        <g data-detail="context" data-edge-from="k6v1" data-edge-to="apiv1" data-edge-label="주문 한 건을 보낸다" data-edge-key="0" data-edge-id="fk6v1">
+          <rect x="154.95" y="106" width="105.1" height="16" rx="4" class="c-mask"/>
+          <text x="207.5" y="117" class="t-backend" font-size="8" text-anchor="middle">주문 한 건을 보낸다</text>
+        </g>
+        <g data-detail="context" data-edge-from="apiv1" data-edge-to="kafka" data-edge-label="검증을 마치고 발행한다" data-edge-key="1" data-edge-id="fapiv1">
+          <rect x="362.6" y="106" width="119.8" height="16" rx="4" class="c-mask"/>
+          <text x="422.5" y="117" class="t-backend" font-size="8" text-anchor="middle">검증을 마치고 발행한다</text>
+        </g>
+        <g data-detail="context" data-edge-from="kafka" data-edge-to="consumer" data-edge-label="202 응답 뒤에 읽는다" data-edge-key="2" data-edge-id="fkafka">
+          <rect x="582.5" y="106" width="110" height="16" rx="4" class="c-mask"/>
+          <text x="637.5" y="117" class="t-messagebus" font-size="8" text-anchor="middle">202 응답 뒤에 읽는다</text>
+        </g>
+        <g data-detail="context" data-edge-from="consumer" data-edge-to="pg" data-edge-label="확인한 주문을 저장한다" data-edge-key="3" data-edge-id="fconsumer">
+          <rect x="792.6" y="106" width="119.8" height="16" rx="4" class="c-mask"/>
+          <text x="852.5" y="117" class="t-messagebus" font-size="8" text-anchor="middle">확인한 주문을 저장한다</text>
+        </g>
+        <g data-detail="context" data-edge-from="k6v2" data-edge-to="apiv2" data-edge-label="주문 한 건을 보낸다" data-edge-key="4" data-edge-id="fk6v2">
+          <rect x="154.95" y="439" width="105.1" height="16" rx="4" class="c-mask"/>
+          <text x="207.5" y="450" class="t-backend" font-size="8" text-anchor="middle">주문 한 건을 보낸다</text>
+        </g>
+        <g data-detail="context" data-edge-from="apiv2" data-edge-to="aeron" data-edge-label="검증을 마치고 보낸다" data-edge-key="5" data-edge-id="fapiv2">
+          <rect x="367.5" y="439" width="110" height="16" rx="4" class="c-mask"/>
+          <text x="422.5" y="450" class="t-backend" font-size="8" text-anchor="middle">검증을 마치고 보낸다</text>
+        </g>
+        <g data-detail="context" data-edge-from="aeron" data-edge-to="engine" data-edge-label="202 응답 뒤에 받는다" data-edge-key="6" data-edge-id="faeron">
+          <rect x="582.5" y="439" width="110" height="16" rx="4" class="c-mask"/>
+          <text x="637.5" y="450" class="t-messagebus" font-size="8" text-anchor="middle">202 응답 뒤에 받는다</text>
+        </g>
+
+        <!-- Legend -->
+
+      </svg>
+    <div class="leg">
+      <span><i style="background:rgba(30,38,50,.7);border-color:#94a3b8"></i>부하 생성기</span>
+      <span><i style="background:rgba(52,211,153,.14);border-color:#34d399"></i>주문을 처리하는 프로세스</span>
+      <span><i style="background:rgba(245,196,107,.14);border-color:#f5c46b"></i>프로세스 사이를 잇는 전달 수단</span>
+      <span><i style="background:rgba(124,192,255,.13);border-color:#7cc0ff"></i>주문이 저장되는 곳</span>
+      <span><u style="border-color:#34d399"></u>HTTP 202를 응답하기 전 구간</span>
+      <span><u style="border-color:#7cc0ff;border-top-style:dashed"></u>202를 응답한 뒤 구간</span>
+    </div>
+    <p class="panelnote">그림의 첫 줄은 v1이 지나는 단계이고, 둘째 줄에 v2를 나란히 놓았습니다. 두 구현 모두 03단계에서 HTTP 202를 먼저 응답하고, 잔고 처리는 그 뒤에 실행합니다. 그 뒤 구간을 점선으로 그렸습니다. 문서 끝에 접어 둔 정정 이력은 이 202 지점까지만 측정한 회차들입니다. 그래서 v1이 응답 뒤로 미룬 Kafka 발행·컨슈머 처리·DB 저장이 그 회차의 측정에서 빠졌습니다. v2에는 브로커 쓰기와 DB 저장 단계가 없어서 202 뒤에 남는 처리가 한 단계입니다. v1의 주문 컨슈머는 <code>OrderRequestConsumer</code>입니다.</p>
+  
+  </div>
+  <p class="fignote">매칭(체결)은 이 그림에 없습니다. 입력이 전부 같은 종목의 매수라 상대 매도 주문이 없고, 매칭 자체가 실행되지 않습니다. 정산(T+2)과 계좌 프로젝션도 이 구간 밖입니다.</p>
+
+  <h2>측정을 용량과 지연으로 나눈 이유</h2>
+
+  <p>처음 설계는 10만 건을 한 번에 보내고 지연(p50/p95/p99)만 보는 것이었습니다. 실행해 보니 v1의 반영 속도가 api의 접수 속도보다 훨씬 느려서, 부하를 계속 보내는 동안 대기 줄이 줄지 않았습니다. 그 상태에서 기록된 값은 한 건을 처리하는 데 걸린 시간에 대기 줄에서 기다린 시간이 더해진 값입니다. 패스를 거듭할수록 p50이 18초에서 118초까지 늘어난 것이 그 증거입니다.</p>
+
+  <div class="fig">
+    <div class="cap">도착률과 지연</div>
+    <div class="capsub">같은 시스템이라도 도착률을 어디에 두느냐에 따라 측정값의 의미가 달라진다</div>
+    <svg viewBox="0 0 1080 490" role="img" aria-labelledby="f2-archify-diagram-title f2-archify-diagram-description" data-preset="classic" data-quality-profile="showcase">
+        <title id="f2-archify-diagram-title">도착률을 어디에 두느냐에 따라 달라지는 지연 측정값</title>
+        <desc id="f2-archify-diagram-description">A data-flow diagram generated by Archify.</desc>
+        <!-- Definitions -->
+        <defs>
+          <marker id="f2-arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" class="m-default" />
+          </marker>
+          <marker id="f2-arrowhead-emphasis" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" class="m-emphasis" />
+          </marker>
+          <marker id="f2-arrowhead-security" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" class="m-security" />
+          </marker>
+          <marker id="f2-arrowhead-dashed" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" class="m-dashed" />
+          </marker>
+          <pattern id="f2-grid" width="40" height="40" patternUnits="userSpaceOnUse">
+            <path d="M 40 0 L 0 0 0 40" class="c-grid" stroke-width="0.5"/>
+          </pattern>
+        </defs>
+
+        <!-- Background Grid -->
+        <rect width="100%" height="100%" fill="url(#f2-grid)" />
+
+        <!-- Data Stages -->
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="stage" data-composition-frame-id="0" x="16" y="46" width="168" height="370" rx="10" class="c-lane" stroke-width="1"/>
+        <text x="100" y="68" class="t-dim" font-size="9" font-weight="600" text-anchor="middle">01 / 포화 조건 실행</text>
+
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="stage" data-composition-frame-id="1" x="231" y="46" width="168" height="370" rx="10" class="c-lane" stroke-width="1"/>
+        <text x="315" y="68" class="t-dim" font-size="9" font-weight="600" text-anchor="middle">02 / 그때 기록된 값</text>
+
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="stage" data-composition-frame-id="2" x="446" y="46" width="168" height="370" rx="10" class="c-lane" stroke-width="1"/>
+        <text x="530" y="68" class="t-dim" font-size="9" font-weight="600" text-anchor="middle">03 / 판정과 설계 변경</text>
+
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="stage" data-composition-frame-id="3" x="661" y="46" width="168" height="370" rx="10" class="c-lane" stroke-width="1"/>
+        <text x="745" y="68" class="t-dim" font-size="9" font-weight="600" text-anchor="middle">04 / 다시 정한 도착률</text>
+
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="stage" data-composition-frame-id="4" x="876" y="46" width="168" height="370" rx="10" class="c-lane" stroke-width="1"/>
+        <text x="960" y="68" class="t-dim" font-size="9" font-weight="600" text-anchor="middle">05 / 확정 지연</text>
+
+        <!-- Flow paths -->
+        <path data-edge-from="run" data-edge-to="early" data-edge-label="패스를 처음 실행했다" data-edge-key="0" data-edge-id="frun" data-composition-points="175,271;207.5,271;207.5,157;240,157" d="M 175 271 L 207.5 271 L 207.5 157 L 240 157" class="a-default" stroke-width="1.4" marker-end="url(#f2-arrowhead)"/>
+        <path data-edge-from="early" data-edge-to="late" data-edge-label="패스를 거듭했다" data-edge-key="1" data-edge-id="fearly" data-composition-points="315,186;315,356" d="M 315 186 L 315 356" class="a-default" stroke-width="1.4" marker-end="url(#f2-arrowhead)"/>
+        <path data-edge-from="late" data-edge-to="verdict" data-edge-label="대기 줄이 줄지 않는다" data-edge-key="2" data-edge-id="flate" data-composition-points="390,385;422.5,385;422.5,271;455,271" d="M 390 385 L 422.5 385 L 422.5 271 L 455 271" class="a-default" stroke-width="1.4" marker-end="url(#f2-arrowhead)"/>
+        <path data-edge-from="verdict" data-edge-to="fixed" data-edge-label="용량을 먼저 측정한다" data-edge-key="3" data-edge-id="fverdict" data-composition-points="605,271;670,271" d="M 605 271 L 670 271" class="a-emphasis" stroke-width="1.8" marker-end="url(#f2-arrowhead-emphasis)"/>
+        <path data-edge-from="fixed" data-edge-to="v1r" data-edge-label="이 도착률로 v1을 측정했다" data-edge-key="4" data-edge-id="fv1" data-composition-points="820,264;852.5,264;852.5,157;885,157" d="M 820 264 L 852.5 264 L 852.5 157 L 885 157" class="a-emphasis" stroke-width="1.8" marker-end="url(#f2-arrowhead-emphasis)"/>
+        <path data-edge-from="fixed" data-edge-to="v2r" data-edge-label="이 도착률로 v2를 측정했다" data-edge-key="5" data-edge-id="fv2" data-composition-points="820,278;852.5,278;852.5,385;885,385" d="M 820 278 L 852.5 278 L 852.5 385 L 885 385" class="a-emphasis" stroke-width="1.8" marker-end="url(#f2-arrowhead-emphasis)"/>
+
+        <!-- Nodes -->
+        <g id="f2-node-run" data-node-id="run" data-node-label="포화 조건" tabindex="0" role="button" aria-label="Focus 포화 조건, 부하를 최대한 빨리 보낸다, 01 / 포화 조건 실행" aria-pressed="false" data-node-kind="external" data-node-sublabel="부하를 최대한 빨리 보낸다" data-node-tag="도착률이 용량을 넘는다" data-node-context="01 / 포화 조건 실행">
+          <title>포화 조건 · 부하를 최대한 빨리 보낸다 · 01 / 포화 조건 실행 · 도착률이 용량을 넘는다</title>
+          <rect x="25" y="242" width="150" height="58" rx="6" class="c-mask"/>
+          <rect x="25" y="242" width="150" height="58" rx="6" class="c-external" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(31 248) scale(0.6875)">
+            <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
+            <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="100" y="263" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">포화 조건</text>
+          <text data-detail="context" x="100" y="279" class="t-muted" font-size="7" text-anchor="middle">부하를 최대한 빨리 보낸다</text>
+        <text data-detail="fine" x="100" y="289" class="t-external" font-size="7" text-anchor="middle">도착률이 용량을 넘는다</text>
+        </g>
+
+        <g id="f2-node-early" data-node-id="early" data-node-label="먼저 실행한 패스" tabindex="0" role="button" aria-label="Focus 먼저 실행한 패스, p50이 18초로 기록됐다, 02 / 그때 기록된 값" aria-pressed="false" data-node-kind="security" data-node-sublabel="p50이 18초로 기록됐다" data-node-context="02 / 그때 기록된 값">
+          <title>먼저 실행한 패스 · p50이 18초로 기록됐다 · 02 / 그때 기록된 값</title>
+          <rect x="240" y="128" width="150" height="58" rx="6" class="c-mask"/>
+          <rect x="240" y="128" width="150" height="58" rx="6" class="c-security" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-security" transform="translate(246 134) scale(0.6875)">
+            <path d="M8 2.2 13 4v3.5c0 3.1-1.8 5.4-5 6.5-3.2-1.1-5-3.4-5-6.5V4Z"/>
+            <path d="m5.8 8 1.5 1.5 3-3"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="315" y="149" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">먼저 실행한 패스</text>
+          <text data-detail="context" x="315" y="165" class="t-muted" font-size="7" text-anchor="middle">p50이 18초로 기록됐다</text>
+        </g>
+
+        <g id="f2-node-late" data-node-id="late" data-node-label="나중에 실행한 패스" tabindex="0" role="button" aria-label="Focus 나중에 실행한 패스, p50이 118초로 늘었다, 02 / 그때 기록된 값" aria-pressed="false" data-node-kind="security" data-node-sublabel="p50이 118초로 늘었다" data-node-context="02 / 그때 기록된 값">
+          <title>나중에 실행한 패스 · p50이 118초로 늘었다 · 02 / 그때 기록된 값</title>
+          <rect x="240" y="356" width="150" height="58" rx="6" class="c-mask"/>
+          <rect x="240" y="356" width="150" height="58" rx="6" class="c-security" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-security" transform="translate(246 362) scale(0.6875)">
+            <path d="M8 2.2 13 4v3.5c0 3.1-1.8 5.4-5 6.5-3.2-1.1-5-3.4-5-6.5V4Z"/>
+            <path d="m5.8 8 1.5 1.5 3-3"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="315" y="377" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">나중에 실행한 패스</text>
+          <text data-detail="context" x="315" y="393" class="t-muted" font-size="7" text-anchor="middle">p50이 118초로 늘었다</text>
+        </g>
+
+        <g id="f2-node-verdict" data-node-id="verdict" data-node-label="인용할 수 없다" tabindex="0" role="button" aria-label="Focus 인용할 수 없다, 대기 시간이 섞여 있다, 03 / 판정과 설계 변경" aria-pressed="false" data-node-kind="security" data-node-sublabel="대기 시간이 섞여 있다" data-node-tag="처음 설계를 접었다" data-node-context="03 / 판정과 설계 변경">
+          <title>인용할 수 없다 · 대기 시간이 섞여 있다 · 03 / 판정과 설계 변경 · 처음 설계를 접었다</title>
+          <rect x="455" y="242" width="150" height="58" rx="6" class="c-mask"/>
+          <rect x="455" y="242" width="150" height="58" rx="6" class="c-security" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-security" transform="translate(461 248) scale(0.6875)">
+            <path d="M8 2.2 13 4v3.5c0 3.1-1.8 5.4-5 6.5-3.2-1.1-5-3.4-5-6.5V4Z"/>
+            <path d="m5.8 8 1.5 1.5 3-3"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="530" y="263" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">인용할 수 없다</text>
+          <text data-detail="context" x="530" y="279" class="t-muted" font-size="7" text-anchor="middle">대기 시간이 섞여 있다</text>
+        <text data-detail="fine" x="530" y="289" class="t-security" font-size="7" text-anchor="middle">처음 설계를 접었다</text>
+        </g>
+
+        <g id="f2-node-fixed" data-node-id="fixed" data-node-label="고친 도착률" tabindex="0" role="button" aria-label="Focus 고친 도착률, 초당 192건으로 고정한다, 04 / 다시 정한 도착률" aria-pressed="false" data-node-kind="external" data-node-sublabel="초당 192건으로 고정한다" data-node-tag="이용률 약 50%" data-node-context="04 / 다시 정한 도착률">
+          <title>고친 도착률 · 초당 192건으로 고정한다 · 04 / 다시 정한 도착률 · 이용률 약 50%</title>
+          <rect x="670" y="242" width="150" height="58" rx="6" class="c-mask"/>
+          <rect x="670" y="242" width="150" height="58" rx="6" class="c-external" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(676 248) scale(0.6875)">
+            <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
+            <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="745" y="263" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">고친 도착률</text>
+          <text data-detail="context" x="745" y="279" class="t-muted" font-size="7" text-anchor="middle">초당 192건으로 고정한다</text>
+        <text data-detail="fine" x="745" y="289" class="t-external" font-size="7" text-anchor="middle">이용률 약 50%</text>
+        </g>
+
+        <g id="f2-node-v1r" data-node-id="v1r" data-node-label="v1 지연" tabindex="0" role="button" aria-label="Focus v1 지연, p50이 12.4ms다, 05 / 확정 지연" aria-pressed="false" data-node-kind="database" data-node-sublabel="p50이 12.4ms다" data-node-tag="컨슈머 9스레드" data-node-context="05 / 확정 지연">
+          <title>v1 지연 · p50이 12.4ms다 · 05 / 확정 지연 · 컨슈머 9스레드</title>
+          <rect x="885" y="128" width="150" height="58" rx="6" class="c-mask"/>
+          <rect x="885" y="128" width="150" height="58" rx="6" class="c-database" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(891 134) scale(0.6875)">
+            <ellipse cx="8" cy="4" rx="5" ry="2"/>
+            <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="960" y="149" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">v1 지연</text>
+          <text data-detail="context" x="960" y="165" class="t-muted" font-size="7" text-anchor="middle">p50이 12.4ms다</text>
+        <text data-detail="fine" x="960" y="175" class="t-database" font-size="7" text-anchor="middle">컨슈머 9스레드</text>
+        </g>
+
+        <g id="f2-node-v2r" data-node-id="v2r" data-node-label="v2 지연" tabindex="0" role="button" aria-label="Focus v2 지연, p50이 1.89ms다, 05 / 확정 지연" aria-pressed="false" data-node-kind="database" data-node-sublabel="p50이 1.89ms다" data-node-tag="계좌 워커 1개" data-node-context="05 / 확정 지연">
+          <title>v2 지연 · p50이 1.89ms다 · 05 / 확정 지연 · 계좌 워커 1개</title>
+          <rect x="885" y="356" width="150" height="58" rx="6" class="c-mask"/>
+          <rect x="885" y="356" width="150" height="58" rx="6" class="c-database" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(891 362) scale(0.6875)">
+            <ellipse cx="8" cy="4" rx="5" ry="2"/>
+            <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="960" y="377" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">v2 지연</text>
+          <text data-detail="context" x="960" y="393" class="t-muted" font-size="7" text-anchor="middle">p50이 1.89ms다</text>
+        <text data-detail="fine" x="960" y="403" class="t-database" font-size="7" text-anchor="middle">계좌 워커 1개</text>
+        </g>
+
+        <!-- Flow labels -->
+        <g data-detail="context" data-edge-from="run" data-edge-to="early" data-edge-label="패스를 처음 실행했다" data-edge-key="0" data-edge-id="frun">
+          <rect x="152.5" y="193" width="110" height="16" rx="4" class="c-mask"/>
+          <text x="207.5" y="204" class="t-muted" font-size="8" text-anchor="middle">패스를 처음 실행했다</text>
+        </g>
+        <g data-detail="context" data-edge-from="early" data-edge-to="late" data-edge-label="패스를 거듭했다" data-edge-key="1" data-edge-id="fearly">
+          <rect x="272.25" y="263" width="85.5" height="16" rx="4" class="c-mask"/>
+          <text x="315" y="274" class="t-muted" font-size="8" text-anchor="middle">패스를 거듭했다</text>
+        </g>
+        <g data-detail="context" data-edge-from="late" data-edge-to="verdict" data-edge-label="대기 줄이 줄지 않는다" data-edge-key="2" data-edge-id="flate">
+          <rect x="365.05" y="307" width="114.9" height="16" rx="4" class="c-mask"/>
+          <text x="422.5" y="318" class="t-muted" font-size="8" text-anchor="middle">대기 줄이 줄지 않는다</text>
+        </g>
+        <g data-detail="context" data-edge-from="verdict" data-edge-to="fixed" data-edge-label="용량을 먼저 측정한다" data-edge-key="3" data-edge-id="fverdict">
+          <rect x="582.5" y="220" width="110" height="16" rx="4" class="c-mask"/>
+          <text x="637.5" y="231" class="t-backend" font-size="8" text-anchor="middle">용량을 먼저 측정한다</text>
+        </g>
+        <g data-detail="context" data-edge-from="fixed" data-edge-to="v1r" data-edge-label="이 도착률로 v1을 측정했다" data-edge-key="4" data-edge-id="fv1">
+          <rect x="785.25" y="189.5" width="134.5" height="16" rx="4" class="c-mask"/>
+          <text x="852.5" y="200.5" class="t-backend" font-size="8" text-anchor="middle">이 도착률로 v1을 측정했다</text>
+        </g>
+        <g data-detail="context" data-edge-from="fixed" data-edge-to="v2r" data-edge-label="이 도착률로 v2를 측정했다" data-edge-key="5" data-edge-id="fv2">
+          <rect x="785.25" y="310.5" width="134.5" height="16" rx="4" class="c-mask"/>
+          <text x="852.5" y="321.5" class="t-backend" font-size="8" text-anchor="middle">이 도착률로 v2를 측정했다</text>
+        </g>
+
+        <!-- Legend -->
+
+      </svg>
+    <div class="leg">
+      <span><i style="background:rgba(30,38,50,.7);border-color:#94a3b8"></i>부하 생성기에 준 실행 조건</span>
+      <span><i style="background:rgba(245,177,58,.15);border-color:#f5b13a"></i>대기 줄이 쌓인 채 나온 값과, 그 값을 인용하지 않기로 한 판정</span>
+      <span><i style="background:rgba(124,192,255,.13);border-color:#7cc0ff"></i>확정 수치로 인용하는 값</span>
+      <span><u style="border-color:#637082"></u>처음 설계에서 값이 나온 경로</span>
+      <span><u style="border-color:#34d399"></u>설계를 고친 뒤의 경로</span>
+    </div>
+    <p class="panelnote">04단계에서는 대기 줄이 쌓이지 않아, 한 건이 반영되기까지 걸린 시간이 그대로 기록됩니다. 이 조건(도착률 초당 192건)에서 나온 05단계 값을 확정 수치로 인용하며, 적힌 p50은 측정 2패스의 값입니다.</p>
+  
+  </div>
+  <p class="fignote">02단계에 적힌 값은 초 단위이고 05단계에 적힌 값은 밀리초 단위라, 두 구간의 숫자를 나란히 놓고 비교할 수 없습니다. 이용률이 100%에 가까워지면 대기 시간이 계속 늘어난다는 것은 Little의 법칙이 말하는 내용이고, 여기서는 그것을 실측으로 확인한 뒤 측정을 용량과 지연 둘로 나눴습니다.</p>
+
+  <h2>용량 — 각자 초당 몇 건을 반영하나</h2>
+
+  <p>부하를 최대한 빨리 보내고 전부 소화될 때까지 기다린 뒤, <b>총 반영 건수를 총 소요 시간으로 나눠</b> 구했습니다. v1은 Postgres <code>orders</code> 테이블의 증가분, v2는 계좌 엔진의 반영 카운터를 셌습니다. 3만 건씩 보냈습니다. 용량은 비율이라 건수를 줄여도 같은 값이 나옵니다.</p>
+
+  <table>
+    <thead><tr><th>조건</th><th>용량</th><th>비고</th></tr></thead>
+    <tbody>
+      <tr class="v1-row"><td>v1 · 컨슈머 3스레드 · 파티션 3(기본 설정)</td><td>227.3건/초</td><td>30,000건 / 132초</td></tr>
+      <tr class="v1-row"><td>v1 · 컨슈머 9스레드 · 파티션 9</td><td>384.6건/초</td><td>30,000건 / 78초</td></tr>
+      <tr class="v2-row"><td>v2 · 계좌 워커 1개</td><td>4,000건/초 이상</td><td>30,000건 / 7.5초. k6 송신 속도가 먼저 한계에 도달했고 v2는 전혀 밀리지 않았다. 실제 천장은 이 장비에서 측정하지 못했다.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout">
+    <b>컨슈머를 3배로 늘렸는데 처리량은 1.7배만 올랐습니다.</b>
+    컨슈머 스레드를 3개에서 9개로(파티션도 같이) 늘렸더니 227.3건/초에서 384.6건/초가 됐습니다. 컨슈머 병렬성만 부족했다면 3배에 가깝게 올라야 합니다. 오르긴 올랐으니 병렬성도 일부 기여하지만, DB 단계(계좌 행 락 경합 또는 insert 자체의 단가)가 이미 일부 벽으로 작용한다는 뜻입니다. 락 대기 시간과 insert 단가 중 어느 것이 더 큰 비중인지는 프로파일링하지 않아 미확인입니다.
+  </div>
+
+  <p>이후 v1의 지연 측정은 전부 <b>컨슈머 9스레드 · 파티션 9</b> 기준으로 진행했습니다. v1에 더 나은 설정을 주고 비교해야 결과를 방어할 수 있습니다.</p>
+
+  <h2>지연 — 대기 줄이 쌓이지 않는 조건에서 한 건에 걸리는 시간</h2>
+
+  <p>v1 용량(384.6건/초)의 절반을 기준 도착률로 고정해, 양쪽 다 대기 줄이 쌓이지 않는 상태에서 측정했습니다. k6의 <code>constant-arrival-rate</code>(정해진 속도로 계속 보내는 실행 모드)로 1만 건씩, 워밍업 1패스(버림)와 측정 3패스를 재기동 없이 연속으로 실행했습니다. 재기동해도 v1은 Postgres가, v2는 계좌 워커 스냅샷이 상태를 그대로 복구하므로 패스 초기화 효과가 없고, 재기동은 JIT 워밍업만 되돌리는 손해였습니다. 모든 패스에서 보낸 건수와 실제 반영 건수가 정확히 일치했고(v1은 DB row 증가분, v2는 히스토그램 count), 실패율은 0%였습니다.</p>
+
+  <div class="terms">
+    <div class="term"><b>B-1 · 동일 절대 도착률</b><span>양쪽에 초당 192건(v1 용량의 절반)을 똑같이 보냅니다. "같은 트래픽이 왔을 때 두 아키텍처가 각각 얼마나 걸리나"에 답합니다.</span></div>
+    <div class="term"><b>B-2 · 동일 상대 이용률</b><span>v2에 초당 2,000건(v2 용량 추정치의 절반 이하)을 보냅니다. "줄 서는 효과를 빼면 한 건 처리에 본질적으로 얼마나 걸리나"에 답합니다.</span></div>
+  </div>
+
+  <table>
+    <thead>
+      <tr><th>조건</th><th>이용률</th><th>패스</th><th>p50</th><th>p95</th><th>p99</th><th>max</th></tr>
+    </thead>
+    <tbody>
+      <tr class="v1-row"><td rowspan="3">v1 · B-1=B-2<br/>(컨슈머 9스레드, 192건/초)</td><td rowspan="3">약 50%</td>
+        <td>pass1<span class="badge v1">워밍업 잔재</span></td><td>11.5</td><td>33.5</td><td>466.6</td><td>708.8</td></tr>
+      <tr class="v1-row"><td>pass2</td><td>12.4</td><td>26.0</td><td>50.1</td><td>169.1</td></tr>
+      <tr class="v1-row"><td>pass3</td><td>13.3</td><td>28.4</td><td>55.9</td><td>153.4</td></tr>
+      <tr class="v2-row"><td rowspan="3">v2 · B-1(192건/초)</td><td rowspan="3">4.8% 이하</td>
+        <td>pass1</td><td>1.83</td><td>2.99</td><td>3.50</td><td>10.6</td></tr>
+      <tr class="v2-row"><td>pass2</td><td>1.89</td><td>3.21</td><td>3.89</td><td>9.09</td></tr>
+      <tr class="v2-row"><td>pass3</td><td>2.04</td><td>3.56</td><td>4.18</td><td>24.8</td></tr>
+      <tr class="v2-row"><td rowspan="3">v2 · B-2(2,000건/초)</td><td rowspan="3">50% 이하</td>
+        <td>pass1</td><td>0.36 / 0.48</td><td>1.19 / 2.03</td><td style="color:#9a958c">측정 불가</td><td style="color:#9a958c">측정 불가</td></tr>
+      <tr class="v2-row"><td>pass2</td><td>0.50 / 0.50</td><td>9.36 / 4.38</td><td style="color:#9a958c">측정 불가</td><td style="color:#9a958c">측정 불가</td></tr>
+      <tr class="v2-row"><td>pass3</td><td>0.37 / 0.63</td><td>1.73 / 8.14</td><td style="color:#9a958c">측정 불가</td><td style="color:#9a958c">측정 불가</td></tr>
+    </tbody>
+  </table>
+  <p class="note">단위는 ms입니다. v1·v2의 B-1은 각각 실행 1회입니다. v2 B-2는 두 번 실행한 값을 "1차 / 재실행"으로 같이 적었습니다. p50은 두 실행을 다 남겼고, p95는 참고용으로만 남겼으며, p99와 max는 아래 이유로 숫자를 내지 않습니다.</p>
+
+  <div class="pickbox">
+    <b>헤드라인은 B-1입니다.</b>
+    초당 192건에서는 부하 생성기(k6)의 CPU 사용이 낮아 측정 대상과 경쟁하지 않고, 이 조건에서는 p50과 p99를 모두 신뢰할 수 있습니다.
+    측정 2·3패스 기준으로 v1(컨슈머 9스레드)은 p50 12~13ms · p99 50~56ms, v2는 p50 1.9~2.0ms · p99 3.9~4.2ms입니다. p50은 약 6~7배, p99는 약 13배 차이입니다.
+    pass1은 v1에 워밍업 잔재가 남아 있어 헤드라인 계산에서 뺐고, v2도 같은 기준을 적용해 pass2·3만 인용했습니다.
+  </div>
+
+  <div class="callout warn">
+    <b>B-2의 p99와 max는 이 장비에서 측정할 수 없었습니다.</b>
+    v2를 자기 용량의 절반(초당 2,000건)까지 밀어 보려 했는데, 그 부하를 만드는 k6 자체가 CPU 샘플링 결과 부하가 집중되는 구간(약 5초)에 CPU 54~69%를 사용했고, 그동안 전체 CPU idle이 11~26%까지 내려갔습니다(재실행 4패스 전부 같은 패턴). 측정 대상(v2)과 부하 생성기(k6)가 같은 CPU를 놓고 다투는 구간의 tail latency(가장 느린 요청들의 응답 시간)는 v2의 값으로 인용할 수 없어서 p99와 max는 숫자를 내지 않습니다. 중앙값(p50)은 이 경쟁에 상대적으로 덜 흔들려 그대로 인용합니다. 측정 3패스의 p50은 두 번의 실행을 합쳐 0.36~0.63ms이고, 양쪽 실행 모두 v1(12~13ms)보다 확연히 낮습니다. 이것은 이번 측정 방식의 한계입니다. 같은 노트북 한 대에서 부하 생성기와 측정 대상을 같이 돌렸기 때문입니다. 제대로 측정하려면 부하 생성기를 별도 장비에 둬야 하는데, 이번 범위에서는 하지 않았습니다.
+  </div>
+
+  <h2>관찰된 패턴 — 원인까지는 확인하지 않은 것</h2>
+  <ul>
+    <li><b>v1의 pass1은 워밍업 1패스로 부족했습니다.</b> p99 466.6ms · max 708.8ms가 pass2·3(50~56ms · 150~170ms)과 확연히 다릅니다. 워밍업 패스를 하나 더 두거나 pass1을 헤드라인 계산에서 빼는 것이 맞고, 이 리포트는 후자를 택해 pass2·3만 인용했습니다.</li>
+    <li><b>v1의 p50이 패스마다 조금씩 오릅니다</b>(11.5 → 12.4 → 13.3ms). GC나 커넥션 풀 상태가 누적되는 것일 수 있으나 프로파일링하지 않아 미확인입니다.</li>
+    <li><b>v2는 부하가 오를수록 오히려 p50이 낮아집니다</b>(B-1의 192건/초에서 1.9ms, B-2의 2,000건/초에서 0.4ms대). v1과 반대 방향이라 눈에 띕니다. 계좌 엔진의 Disruptor(링버퍼 기반 이벤트 처리 라이브러리) 소비자 스레드가 <code>BlockingWaitStrategy</code>(코드 확인: <code>AccountEngineConfig.java</code>)를 사용합니다. 이 전략은 처리할 이벤트가 없으면 소비자 스레드를 park(운영체제가 그 스레드의 실행을 멈추는 것)하고, 새 이벤트가 들어오면 unpark합니다. 부하가 낮으면 그 park·unpark 비용을 매번 치르고, 부하가 높으면 링버퍼가 잘 비지 않아 소비자가 계속 돌고 있어 그 비용이 없다는 가설로 설명할 수 있습니다. 다만 이것은 가설이고, 실측으로 검증하지 않았습니다.</li>
+  </ul>
+
+  <h2>재측정 전에 초기화하는 것</h2>
+  <ul>
+    <li><b>Kafka 토픽을 삭제하고 다시 생성합니다.</b> Postgres만 초기화하면 <code>order-requests</code> 토픽에 남은 이전 실행의 메시지(최대 48만 건)를 새 컨슈머 그룹이 그대로 이어받아 소비합니다. 초기화 스크립트(<code>loadtest/reset-e2e-v1-state.sh</code>)로 매 측정 전에 토픽을 다시 만듭니다.</li>
+    <li><b>매 패스마다 보낸 건수와 반영된 건수가 일치하는지 검증합니다.</b> v2 api에 Aeron 계좌 인테이크 채널 설정이 실리지 않은 상태로 기동하면 주문이 전량 실패(<code>ORDER_PUBLISH_FAILED</code>)하는데, 부하 생성기 출력만으로는 늦게 발견됩니다. 건수 대조를 하네스 안에 넣어, 사람이 우연히 알아채는 것에 의존하지 않게 했습니다.</li>
+  </ul>
+
+  <h2>측정에 넣지 않은 것</h2>
+  <ul>
+    <li>매칭·체결 — 입력이 전부 같은 종목의 매수라 상대 주문이 없고, 매칭이 실행되지 않습니다.</li>
+    <li>정산(T+2)과 계좌 프로젝션(조회 모델 DB 반영) — 이 측정 구간 밖입니다.</li>
+    <li>v2의 다중 샤드(계좌 워커를 여러 개로 분산) — 이번 측정은 계좌 워커 1개로 고정했습니다.</li>
+    <li>부하 생성기를 별도 장비에 둔 구성 — 같은 노트북 한 대에서 측정했고, 그 한계는 B-2 항목에 적었습니다.</li>
+  </ul>
+
+  <div class="footer">
+    원본 데이터: <code>loadtest/evidence/latency-v1-{warmup,pass1,pass2,pass3}.json</code>(v1 지연) ·
+    <code>loadtest/evidence/latency-v2-b1-{warmup,pass1,pass2,pass3}.json</code>(v2 지연 B-1) ·
+    <code>loadtest/evidence/latency-v2-b2-*.json</code>과 <code>latency-v2-b2r-*.json</code>(B-2 1차와 재실행) ·
+    <code>loadtest/evidence/latency-v2-capA.json</code>(v2 용량) ·
+    <code>loadtest/evidence/cpu-v2-b2*-*.log</code>(CPU 샘플링)<br/>
+    측정 설계: <code>decision_records/v1-v2-e2e-measurement.md</code>, ADR-036(주문 한 건이 잔고 예약까지 끝난 시점에서 v1과 v2를 비교하기로 한 결정) ·
+    하네스: <code>loadtest/reset-e2e-v1-state.sh</code> · <code>replay-e2e.js</code> · <code>measure-e2e.sh</code>
+  </div>
+
+  <details class="history">
+    <summary>정정 이력 — 초기 회차는 api가 202를 응답하는 지점까지만 측정했고, 그 측정 구간 설계가 v1에 불리하지 않은지 확인해 바로잡은 과정을 여기 접어 두었습니다.</summary>
+
+    <div class="callout warn">
+      아래 1~8은 위 확정 수치가 나오기까지의 초기 측정입니다. 측정 구간이 api의 202 응답까지로 잡혀 있었고(v1이 응답 뒤로 미룬 처리가 빠졌습니다), 조합당 3회·회당 1~2초라 표본도 작습니다. 확정 수치로 인용하지 말고, 측정 설계를 어떻게 고쳤는지의 기록으로 읽어 주십시오.
+    </div>
+
+    <h2>1. 무엇을, 왜 측정했나</h2>
+
+    <div class="callout warn">
+      <b>이 절의 초판을 고쳤습니다.</b>
+      초판은 "v1은 api가 그 자리에서 Postgres Account 행에 비관적 락을 걸고 잔고를 차감한다"고 적었습니다. 그 서술은 이 프로젝트의 Phase 1 구조이고 지금 코드와 다릅니다. <code>api/.../service/OrderApiService.java</code>의 <code>placeBuyOrder</code>를 직접 읽고 아래 내용으로 고쳤습니다. 그 클래스 주석에도 "API 서버는 입력 검증만 수행하고 order-requests 토픽에 발행한 뒤 즉시 202 반환. OrderRequestConsumer가 수신해 잔고·보유 검증 후 DB 저장"이라고 적혀 있습니다.
+    </div>
+
+    <p>
+      <b>v1</b>의 api(<code>OrderApiService.placeBuyOrder</code>)는 ①계좌 소유·활성 검증 ②가격 제한폭 검증(최근 체결가 대비 ±30%)을 마치면, Kafka <code>order-requests</code> 토픽에 발행만 하고(발행 완료를 기다리지 않습니다) 곧바로 202를 응답합니다. 잔고 확인·차감과 Postgres 비관적 락은 <b>이 api 요청 스레드 안에 없습니다</b>. 그 토픽을 구독하는 <code>OrderRequestConsumer</code>가 이후에 처리합니다. <b>v2</b>의 api(<code>OrderV2ApiService.placeBuyOrder</code>)는 같은 두 검증을 그대로 거친 뒤, 발행 대상만 Kafka 토픽 대신 Aeron으로 계좌 워커에 직접 보내고 202를 응답합니다. 두 버전 모두 비동기 접수(202를 먼저 주고 실제 처리는 나중) 구조이고, 이 api 경로에서 실제로 다른 부분은 검증을 마친 요청을 어디로 보내는가 한 줄뿐입니다(Kafka produce 대 Aeron UDP offer).
+    </p>
+    <p>
+      그래서 1~8의 측정 대상은 <b>동일한 검증 2단계와 메시지 발행 1회를 처리하고 202를 내려주는 api 요청의 처리량</b>까지입니다. 잔고 검증·차감, 계좌 워커의 인메모리 처리, Postgres 비관적 락은 전부 이 범위 밖에 있습니다(v1은 Kafka 컨슈머로, v2는 계좌 워커로 옮겨져 있고 둘 다 HTTP 응답 이후에 비동기로 실행됩니다). 이 구간 설정이 v1에 불리하다는 것을 확인하고 측정 구간을 계좌 반영 시점까지 늘린 것이 위 확정 수치입니다.
+    </p>
+
+    <h2>2. 용어</h2>
+    <div class="terms">
+      <div class="term"><b>HOT=1 <span class="badge v1">단일 계좌</span></b><span>모든 요청의 대상 계좌가 1001 하나입니다. 그 계좌 하나에 대한 처리가 직렬화될 수밖에 없는 조건입니다.</span></div>
+      <div class="term"><b>HOT=0 <span class="badge v2">50계좌 분산</span></b><span>계좌 1001~1050에 요청이 무작위로 분산됩니다. 이 측정의 대상 구간(api 검증과 발행)에는 계좌별 락이나 순차 처리가 없어서(1 참고), HOT=1과 HOT=0의 차이가 구조적으로 왜 생겨야 하는지는 이 경로만 봐서는 분명하지 않습니다. 4와 6에서 실측으로 확인합니다.</span></div>
+      <div class="term"><b>req/s</b><span>k6가 측정한, 초당 처리된 HTTP 요청 수. 요청 3000건을 가상 사용자(VU) 50개가 나눠 보내고, 전부 끝나는 데 걸린 시간으로 나눈 값입니다.</span></div>
+      <div class="term"><b>중앙값(median)</b><span>같은 조건으로 3회 반복한 결과를 크기순으로 놓았을 때 가운데 값. 1회성 튐(GC, OS 스케줄링 등)의 영향을 평균보다 덜 받습니다.</span></div>
+    </div>
+
+    <h2>3. 측정 방법</h2>
+    <ul>
+      <li>도구: <code>k6</code> v2.2.0, executor <code>shared-iterations</code>, N=3000건, VU=50개, 조합당 3회.</li>
+      <li>순서: v1 기동 → HOT=1 3회 → HOT=0 3회 → v1 종료 → v2 기동 → HOT=1 3회 → HOT=0 3회. v1과 v2를 동시에 띄우지 않아 CPU·인프라 자원 경합은 없습니다.</li>
+      <li>공유 인프라(Postgres:9702, Redis, Kafka)는 두 버전이 그대로 재사용했습니다. 컨테이너 재시작은 없습니다.</li>
+      <li>v2 구성: 계좌 워커 1개(1샤드), 매칭 워커 1개, api 1개. 자원 관리 수정 2건(주문 발신 버퍼 재사용, 체결 fan-out Publication close 수정)이 반영된 main 기준입니다.</li>
+    </ul>
+
+    <div class="callout warn">
+      <b>표본이 크지 않습니다.</b>
+      각 회차가 1~2초 안에 끝날 만큼 짧고 N=3000·3회뿐입니다. 각 그룹의 첫 회차가 이후 회차보다 낮게 나오는 경향이 보였는데, JVM이 막 기동한 직후라 JIT 컴파일이 아직 끝나지 않았을 가능성이 있습니다(원인을 프로파일러로 직접 확인하지는 않았습니다). 이 편향은 v1과 v2 양쪽에 동일한 순서(기동 직후 HOT=1 먼저)로 걸렸으므로 v1과 v2의 비교 자체를 왜곡하지는 않습니다. 다만 절대값은 이 머신의 이 순간 값이고 안정 상태(steady-state) 처리량은 아닙니다.
+    </div>
+
+    <h2>4. 결과 — 접수 처리량(req/s) <span class="badge v1">발신 버퍼 재사용 수정 전</span></h2>
+    <p class="note">
+      이 절의 수치는 <code>AeronAccountOrderSender</code>의 발신 버퍼를 스레드로컬로 재사용하도록 고치기 <b>전</b> 시점 코드로 측정한 것입니다. 8에 그 수정 <b>후</b> 수치를 나란히 뒀습니다.
+    </p>
+
+    <div class="chart">
+      <div class="chart-row">
+        <div class="chart-label">v1 · HOT=1</div>
+        <div class="bar-track"><div class="bar-fill v1" style="width:71.6%"><span>2289</span></div></div>
+      </div>
+      <div class="range-note">3회: 1629 / 2375 / 2289</div>
+
+      <div class="chart-row">
+        <div class="chart-label">v2 · HOT=1</div>
+        <div class="bar-track"><div class="bar-fill v2" style="width:72.6%"><span>2320</span></div></div>
+      </div>
+      <div class="range-note">3회: 1396 / 2320 / 2914</div>
+
+      <div class="chart-row">
+        <div class="chart-label">v1 · HOT=0</div>
+        <div class="bar-track"><div class="bar-fill v1" style="width:66.7%"><span>2130</span></div></div>
+      </div>
+      <div class="range-note">3회: 1631 / 2184 / 2130</div>
+
+      <div class="chart-row">
+        <div class="chart-label">v2 · HOT=0</div>
+        <div class="bar-track"><div class="bar-fill v2" style="width:100%"><span>3197</span></div></div>
+      </div>
+      <div class="range-note">3회: 3092 / 3251 / 3197</div>
+    </div>
+
+    <table>
+      <thead>
+        <tr><th>시나리오</th><th>중앙값 req/s</th><th>범위(min~max)</th><th>지연 avg</th><th>p95</th><th>p99</th></tr>
+      </thead>
+      <tbody>
+        <tr class="v1-row"><td>v1 · HOT=1</td><td>2289</td><td>1629 ~ 2375</td><td>21.6ms</td><td>43.1ms</td><td>74.2ms</td></tr>
+        <tr class="v1-row"><td>v1 · HOT=0</td><td>2130</td><td>1631 ~ 2184</td><td>23.2ms</td><td>45.4ms</td><td>74.0ms</td></tr>
+        <tr class="v2-row"><td>v2 · HOT=1</td><td>2320</td><td>1396 ~ 2914</td><td>21.2ms</td><td>47.1ms</td><td>73.3ms</td></tr>
+        <tr class="v2-row"><td>v2 · HOT=0</td><td>3197</td><td>3092 ~ 3251</td><td>15.4ms</td><td>29.8ms</td><td>45.5ms</td></tr>
+      </tbody>
+    </table>
+    <p class="note">지연 수치는 각 그룹의 중앙값에 해당하는 회차 1건의 값입니다(3회 평균이 아닙니다).</p>
+
+    <div class="callout">
+      <b>관찰된 사실.</b>
+      HOT=1(단일 계좌)에서는 v1(2289)과 v2(2320)가 거의 같습니다. HOT=0(50계좌 분산)에서는 v2(3197)가 v1(2130)보다 약 50% 높게 나왔습니다. v2는 HOT=1보다 HOT=0에서 오히려 더 높게 나왔는데, 이 측정은 계좌 워커·컨슈머의 처리 구조까지 보지 않으므로(1 참고, api의 검증과 발행 구간까지만 측정합니다) 그 구조로 설명할 수 없습니다. HOT=0 그룹이 v2 세션에서 나중에(4~6번째) 실행돼 누적 워밍업 효과를 더 받았을 가능성이 우선 의심됩니다. 계좌 수 분산 자체가 원인인지 순서 효과인지는 이 측정만으로 분리되지 않아서, 순서를 뒤집어 6에서 다시 측정했습니다.
+    </div>
+
+    <h2>5. 부가 지표 — v2 계좌 워커 반영 처리량 (v1에는 대응 수치 없음)</h2>
+    <p>
+      account-worker의 <code>MetricsAccountResultListener</code>가 1초 주기로 남기는 <code>accepted=</code>(그 1초 동안 계좌 상태에 실제 반영된 주문 수) 로그에서, v2의 6회 실행 구간 전체를 통틀어 관측된 <b>1초 구간 최대값은 2222건</b>이었습니다.
+    </p>
+    <div class="callout warn">
+      <b>4의 표와 나란히 읽을 수 없는 수치입니다.</b>
+      이 수치는 v2에만 있습니다. v1의 <code>OrderRequestConsumer</code>에는 이번 측정에서 대응하는 지표를 남기지 않았습니다(하네스에 없습니다). "v2가 초당 2222건 처리, v1은 4에서 최대 2375req/s" 식으로 두 수치를 겹쳐 읽을 수 없습니다. 측정 지점 자체가 다르고(v2는 계좌 상태 반영, v1은 api의 HTTP 응답), 한쪽만 측정한 수치입니다.
+    </div>
+    <div class="callout warn">
+      이 값은 1초 단위로만 남는 로그라 정밀하지 않습니다. 각 k6 회차가 1~2초 안에 끝나 로그의 1초 경계와 실제 부하 구간이 딱 맞아떨어지지 않습니다. "그 1초 동안 우연히 가장 많이 잡힌 값" 정도로 읽어야 하고, k6가 측정한 req/s(위 표)와는 측정 지점이 달라(HTTP 접수 대 계좌 상태 반영) 직접 비교할 수치가 아닙니다.
+    </div>
+
+    <h2>6. 순서 반전 재측정 — 워밍업 효과와 구조 차이를 분리하려는 시도</h2>
+    <p>
+      4의 결과에서 v2 HOT=0(3197)이 v2 HOT=1(2320)보다 높게 나온 것이 <b>계좌 분산 구조 때문인지, 아니면 그 그룹이 같은 JVM 세션에서 4~6번째로(즉 더 워밍업된 상태로) 실행됐기 때문인지</b>를 구분하려고 실행 순서를 완전히 뒤집어 다시 측정했습니다. 4와 같은 코드로, 격리된 워크트리(docker compose 프로젝트명은 기존 인프라와 공유)에서 진행했습니다.
+    </p>
+    <p>순서: v2 HOT=0 → v2 HOT=1 → v1 HOT=0 → v1 HOT=1 (4와 정반대). 각 3회.</p>
+
+    <div class="callout warn">
+      <b>재측정 환경에서 발견한 것.</b>
+      재측정 워크트리를 새로 만들었더니 <code>trading</code> 모듈이 <code>account</code> 모듈의 클래스를 찾지 못해 컴파일이 실패했습니다. 원인은 머신 전역 Gradle 빌드 캐시(<code>~/.gradle/caches/build-cache-1</code>, 여러 워크트리가 같은 <code>rootProject.name</code>을 사용하면 공유됩니다)에 <code>account</code> 모듈의 오래되고 불완전한 컴파일 결과(엔티티·서비스 패키지 없이 exception 패키지만 있는 상태)가 캐시돼 있었고, Gradle이 이것을 최신이라고 판단해 그대로 재사용한 것입니다. <code>--no-build-cache</code>로 전체를 다시 빌드해 우회했고, 재측정 워크트리에는 <code>org.gradle.caching=false</code>를 로컬 <code>gradle.properties</code>에 넣어 고정했습니다. 4의 측정 자체는 빌드·테스트가 통과한 상태에서 실행했으므로 영향이 없다고 보지만, 다른 워크트리에서도 같은 캐시 오염이 재현될 수 있다는 뜻이라 별도로 남깁니다.
+    </div>
+
+    <table>
+      <thead>
+        <tr><th>시나리오</th><th>4(정순) 중앙값</th><th>재측정(역순) 중앙값</th><th>재측정 3회</th></tr>
+      </thead>
+      <tbody>
+        <tr class="v1-row"><td>v1 · HOT=1</td><td>2289 (1·2·3번째 실행)</td><td>1576 (10·11·12번째)</td><td>1221 / 1576 / 1756</td></tr>
+        <tr class="v1-row"><td>v1 · HOT=0</td><td>2130 (4·5·6번째)</td><td>1826 (7·8·9번째)</td><td>1826 / 2366 / 1612</td></tr>
+        <tr class="v2-row"><td>v2 · HOT=1</td><td>2320 (1·2·3번째)</td><td>2627 (4·5·6번째)</td><td>2627 / 2726 / 2362</td></tr>
+        <tr class="v2-row"><td>v2 · HOT=0</td><td>3197 (4·5·6번째)</td><td>2676 (1·2·3번째)</td><td>1231 / 2676 / 3257</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout">
+      <b>판정.</b>
+      순서를 뒤집어도 <b>v2가 v1보다 높은 경향 자체는 유지</b>됐습니다(HOT=1: 2627 대 1576, HOT=0: 2676 대 1826). 그런데 v1은 역순에서 오히려 4보다 더 낮게 나왔고(HOT=1 2289→1576, HOT=0 2130→1826), "나중에 실행되면 더 빨라진다"던 애초 워밍업 가설과는 반대 방향입니다. 이번 재측정에서는 <b>순서 효과보다 세션 간 변동성(run-to-run variance)이 더 크게 작용한 것으로 보입니다</b>. 같은 설정을 3회만 반복한 표본으로는 워밍업 효과와 구조 차이를 깔끔하게 분리하지 못했습니다. v2·HOT=0의 첫 실행(1231)처럼 세션의 첫 회차가 유독 낮게 튀는 현상은 4와 재측정 양쪽의 v2에서 공통으로 나타났고(4의 v2·HOT=1 첫 실행 1396, 재측정 v2·HOT=0 첫 실행 1231), v1에서는 이 정도로 두드러지지 않았습니다. v2가 Aeron UDP 채널을 새로 여는 과정이 v1의 JPA/Hibernate 초기화보다 첫 요청 비용이 더 크다는 가설을 둘 수는 있지만, 이 리포트의 측정만으로 확정할 근거는 아닙니다.
+    </div>
+
+    <div class="callout warn">
+      <b>4와 6을 합쳐도 신뢰구간을 낼 표본이 아닙니다.</b>
+      두 세션(총 24회 실행)을 다 모아도 셀당 6회뿐입니다. "v2가 v1보다 몇 % 빠르다"는 단정은 이 데이터로 하지 않습니다. 말할 수 있는 것은 "이 두 세션 모두에서 v2 중앙값이 v1 중앙값보다 높게 나왔다"는 관찰 사실까지입니다.
+    </div>
+
+    <div class="footer">
+      원본 데이터: <code>loadtest/evidence/rev-{v1,v2}-hot{0,1}-run{1,2,3}.json</code>
+    </div>
+
+    <h2>7. 이 초기 측정에 들어가지 않은 것</h2>
+    <ul>
+      <li>매칭·체결 — 전부 같은 종목 매수라 상대 주문이 없어 매칭이 실행되지 않습니다.</li>
+      <li>정산(T+2), 계좌 프로젝션(DB 반영 지연) — 이 경로 밖입니다.</li>
+      <li>v2 다중 샤드(계좌 워커 여러 개로 분산) — 이번 측정은 계좌 워커 1개로 고정했습니다.</li>
+      <li>장시간 부하(수 분 이상 지속) — 회차당 1~2초로 매우 짧습니다. 안정 상태 처리량보다 순간 처리량에 가깝습니다.</li>
+    </ul>
+
+    <h2>8. 발신 버퍼 재사용 수정 전후 비교</h2>
+    <p>
+      <code>AeronAccountOrderSender</code>의 인코딩 버퍼를 요청마다 새로 할당하던 것을 스레드로컬로 재사용하도록 고쳤습니다(v2 게이트웨이만 해당합니다. Kafka를 사용하는 v1 경로는 이 수정과 무관합니다). 그 수정이 main에 들어간 뒤 같은 하네스·같은 조합·같은 회차(3회)로 다시 측정했습니다. 순서는 4와 같은 방향(v1 HOT=1→HOT=0→v2 HOT=1→HOT=0) 한 번만 실행했습니다. 순서 효과는 6에서 이미 확인했습니다.
+    </p>
+
+    <table>
+      <thead>
+        <tr><th>시나리오</th><th>수정 전(4) 중앙값</th><th>수정 후 중앙값</th><th>수정 후 3회</th></tr>
+      </thead>
+      <tbody>
+        <tr class="v1-row"><td>v1 · HOT=1</td><td>2289</td><td>2780</td><td>2054 / 3170 / 2780</td></tr>
+        <tr class="v1-row"><td>v1 · HOT=0</td><td>2130</td><td>2392</td><td>2366 / 2392 / 2396</td></tr>
+        <tr class="v2-row"><td>v2 · HOT=1</td><td>2320</td><td>2135</td><td>1195 / 2135 / 2692</td></tr>
+        <tr class="v2-row"><td>v2 · HOT=0</td><td>3197</td><td>3470</td><td>3480 / 2910 / 3470</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout warn">
+      <b>손대지 않은 v1도 같이 움직였습니다.</b>
+      버퍼 수정은 v2의 <code>AeronAccountOrderSender</code>에만 닿는데, v1도 수정 전 대비 HOT=1은 22%(2289→2780), HOT=0은 12%(2130→2392) 올랐습니다. v1이 손대지 않은 코드에서 이만큼 움직였다는 것 자체가, 이 정도 폭의 변화는 <b>버퍼 수정의 효과인지 이 머신의 회차 간 변동성인지 이 데이터만으로 분리할 수 없다</b>는 뜻입니다. v2조차 HOT=1에서는 2320→2135로 오히려 낮아졌습니다(3회 표본 안의 흔들림입니다. 3회차 2692가 중앙값을 끌어올릴 수도 있었던 폭입니다). 관찰할 수 있는 것은 "버퍼 수정 후에도 v2가 v1보다 낮게 나온 적은 없었다"는 사실까지이고, 몇 % 개선됐다는 판정은 이 수정의 효과로 단정하지 않습니다.
+    </div>
+
+    <div class="footer">
+      원본 데이터: <code>loadtest/evidence/{v1,v2}-hot{0,1}-run{1,2,3}.json</code>(수정 전),
+      <code>loadtest/evidence/post-buf-{v1,v2}-hot{0,1}-run{1,2,3}.json</code>(수정 후) ·
+      하네스: <code>loadtest/run-v1.sh</code> · <code>run-v2.sh</code>
+    </div>
+
+  </details>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>주식 매매 엔진 · 문서</title>
+<style>
+  :root {
+    --bg: #faf9f7;
+    --surface: #ffffff;
+    --border: #e5e2dc;
+    --text: #1c1b19;
+    --muted: #5f5b54;
+    --v1: #2563eb;
+    --v2: #059669;
+    --measure: #b45309;
+    --basic: #6d28d9;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 0 16px 80px;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", "Noto Sans KR", sans-serif;
+    line-height: 1.7;
+    word-break: keep-all;
+  }
+  .wrap { max-width: 900px; margin: 0 auto; }
+  header { padding: 64px 0 40px; border-bottom: 1px solid var(--border); }
+  h1 { font-size: 34px; font-weight: 800; margin: 0 0 16px; letter-spacing: -0.02em; text-wrap: balance; }
+  header p { margin: 0 0 12px; font-size: 16px; color: var(--muted); text-wrap: pretty; }
+  header p.lead { color: var(--text); font-size: 17px; }
+  .repo { display: inline-block; margin-top: 12px; font-size: 14px; color: var(--muted); }
+  .repo a { color: var(--v1); text-decoration: none; border-bottom: 1px solid #c7d7f8; }
+
+  section { margin-top: 48px; }
+  .section-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  h2 { font-size: 22px; font-weight: 700; margin: 0; letter-spacing: -0.01em; }
+  .tag {
+    font-size: 12px; font-weight: 700; letter-spacing: 0.04em;
+    padding: 3px 9px; border-radius: 999px; color: #fff;
+  }
+  .tag.basic { background: var(--basic); }
+  .tag.v1 { background: var(--v1); }
+  .tag.v2 { background: var(--v2); }
+  .tag.measure { background: var(--measure); }
+  .section-note { margin: 10px 0 20px; color: var(--muted); font-size: 15px; text-wrap: pretty; }
+
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 14px; }
+  @media (max-width: 720px) { .cards { grid-template-columns: 1fr; } }
+  .card {
+    display: block; padding: 18px 20px; background: var(--surface);
+    border: 1px solid var(--border); border-left-width: 4px; border-radius: 10px;
+    text-decoration: none; color: inherit; transition: box-shadow .15s, transform .15s;
+  }
+  .card:hover { box-shadow: 0 4px 16px rgba(28, 27, 25, .09); transform: translateY(-1px); }
+  .card.basic { border-left-color: var(--basic); }
+  .card.v1 { border-left-color: var(--v1); }
+  .card.v2 { border-left-color: var(--v2); }
+  .card.measure { border-left-color: var(--measure); }
+  .card h3 { margin: 0 0 6px; font-size: 16px; font-weight: 700; }
+  .card p { margin: 0; font-size: 14px; color: var(--muted); text-wrap: pretty; }
+
+  footer { margin-top: 64px; padding-top: 24px; border-top: 1px solid var(--border); font-size: 14px; color: var(--muted); }
+  footer a { color: var(--v1); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>주식 매매 엔진 · 문서</h1>
+  <p class="lead">증권 계좌 도메인(증거금 검증 · T+2 결제 · 미수금)을 다루는 Java 매매 엔진입니다. 같은 시나리오를 두 가지 방법론으로 구현했습니다.</p>
+  <p>v1은 DB 비관적 락으로 정합성을 지킵니다. v2는 그 락을 걷어내고 계좌 상태를 프로세스 메모리에 둔 뒤 단일 스레드에서만 다룹니다. 두 구현이 무엇을 얻고 무엇을 대가로 치렀는지가 이 문서들의 내용입니다.</p>
+  <span class="repo">코드와 결정 기록: <a href="https://github.com/devtaco30/stock-trading-engine">github.com/devtaco30/stock-trading-engine</a></span>
+</header>
+
+<section>
+  <div class="section-head"><h2>먼저 읽을 것</h2><span class="tag basic">배경</span></div>
+  <p class="section-note">구조 문서에 나오는 도메인 용어와 숫자가 어디서 오는지 먼저 정리합니다.</p>
+  <div class="cards">
+    <a class="card basic" href="_domain_basics.html">
+      <h3>도메인 기본 개념</h3>
+      <p>증거금·미수금·T+2 결제가 각각 무엇이고 계좌 잔고를 어떻게 움직이는지 설명합니다.</p>
+    </a>
+    <a class="card basic" href="_scenario_walkthrough.html">
+      <h3>시나리오</h3>
+      <p>100주 매수 한 건을 따라가며 주문 접수부터 정산까지 숫자가 어떻게 달라지는지 계산합니다.</p>
+    </a>
+  </div>
+</section>
+
+<section>
+  <div class="section-head"><h2>v1 — DB 락과 Kafka로 만든 구성</h2><span class="tag v1">v1</span></div>
+  <p class="section-note">계좌 행에 비관적 락을 걸어 정합성을 지키고, 주문과 체결을 Kafka로 넘깁니다.</p>
+  <div class="cards">
+    <a class="card v1" href="_v1_architecture_implementation.html">
+      <h3>구조 정본</h3>
+      <p>프로세스 넷과 토픽 셋이 무엇을 맡는지, 상태를 어디에 두고 락을 어디서 잡는지, 그 대가로 처리량과 지연이 어떻게 되는지를 한 장에 담았습니다.</p>
+    </a>
+    <a class="card v1" href="_v1_order_fill_settlement_flow.html">
+      <h3>주문에서 체결, 정산까지</h3>
+      <p>주문 한 건이 접수돼 체결되고 이틀 뒤 정산되기까지 어느 프로세스를 어떤 순서로 지나는지 따라갑니다.</p>
+    </a>
+    <a class="card v1" href="_kafka_internals_flow.html">
+      <h3>Kafka 내부 동작</h3>
+      <p>파티셔너가 종목을 어느 파티션으로 보내는지, 오프셋 커밋과 리밸런스가 매칭 결과에 어떻게 영향을 주는지 설명합니다.</p>
+    </a>
+    <a class="card v1" href="_v1_bottleneck_matching_design.html">
+      <h3>병목 분석</h3>
+      <p>계좌 행 락이 어디서 걸려 무엇을 붙잡는지 짚고, 그 구간을 어떻게 줄일 수 있는지 따집니다.</p>
+    </a>
+  </div>
+</section>
+
+<section>
+  <div class="section-head"><h2>v2 — 메모리 단일 스레드와 Aeron으로 만든 구성</h2><span class="tag v2">v2</span></div>
+  <p class="section-note">락을 걷어낸 대신 상태를 메모리에 두고, 잃어버리지 않기 위해 저널과 스냅샷을 씁니다.</p>
+  <div class="cards">
+    <a class="card v2" href="_v2_architecture_implementation.html">
+      <h3>구조 정본</h3>
+      <p>계좌와 매칭을 각각 한 스레드가 독점 처리하는 구성과, 그 상태를 디스크에 남겨 재시작 때 되살리는 방법을 담았습니다.</p>
+    </a>
+    <a class="card v2" href="_disruptor_ringbuffer_matching_mechanism.html">
+      <h3>링버퍼 매칭</h3>
+      <p>매칭 코어가 이벤트를 어떤 순서로 집어 처리하는지, 링버퍼가 큐 대신 쓰이는 이유가 무엇인지 설명합니다.</p>
+    </a>
+    <a class="card v2" href="_fork3_fanout_design.html">
+      <h3>체결 전달 분리</h3>
+      <p>체결 한 건이 매수·매도 두 계좌를 건드리기 때문에 같은 체결을 두 목적지로 나눠 보냅니다. 중복 도착은 tradeId로 걸러냅니다.</p>
+    </a>
+    <a class="card v2" href="_tradeid_snapshot_prune.html">
+      <h3>스냅샷과 tradeId 삭제</h3>
+      <p>재시작 복구 시간과 메모리 사용량이 서로 맞물려 있습니다. 주기 스냅샷과 오래된 tradeId 삭제로 그 둘을 함께 묶어 두는 방법을 다룹니다.</p>
+    </a>
+    <a class="card v2" href="_settlement_roundtrip_migration.html">
+      <h3>정산 왕복</h3>
+      <p>정산만 Kafka로 남긴 이유와, 계좌 워커가 가져간 책임이 무엇인지 설명합니다.</p>
+    </a>
+  </div>
+</section>
+
+<section>
+  <div class="section-head"><h2>v1과 v2 비교</h2><span class="tag measure">비교</span></div>
+  <p class="section-note">무엇을 무엇으로 바꿨고, 같은 부하에서 용량과 지연이 어떻게 달라졌는지입니다.</p>
+  <div class="cards">
+    <a class="card measure" href="_final_hybrid_architecture.html">
+      <h3>v1에서 v2로</h3>
+      <p>어느 부분을 무엇으로 바꿨는지 AS-IS와 TO-BE로 나란히 놓았습니다.</p>
+    </a>
+    <a class="card measure" href="_v1_v2_comparison.html">
+      <h3>두 구현 비교</h3>
+      <p>같은 시나리오에서 두 구현이 무엇을 다르게 하는지와, 그 선택이 지연과 정합성에 미치는 영향을 정리했습니다.</p>
+    </a>
+    <a class="card measure" href="_c7_v1_v2_throughput_report.html">
+      <h3>처리량 측정 결과</h3>
+      <p>도착률을 올려 가며 두 구현이 어디까지 받아내는지 측정한 결과입니다.</p>
+    </a>
+    <a class="card measure" href="_load_test_report.html">
+      <h3>부하 측정 리포트</h3>
+      <p>측정을 어떻게 설계했고 무엇을 어떻게 기록했는지, 그리고 결과를 어떻게 읽어야 하는지 담았습니다.</p>
+    </a>
+  </div>
+</section>
+
+<footer>
+  <p>결정 근거는 레포의 <a href="https://github.com/devtaco30/stock-trading-engine/blob/main/adr/README.md">adr/</a>에 번호로 남겨 두었습니다. 작업하면서 남긴 검토 기록은 <a href="https://github.com/devtaco30/stock-trading-engine/blob/main/decision_records/README.md">decision_records/</a>에 있습니다.</p>
+</footer>
+
+</div>
+</body>
+</html>

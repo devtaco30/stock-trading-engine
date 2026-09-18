@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>주식 거래 기본 개념</title>
+<style>
+  :root{
+    --bg:#faf9f6; --ink:#1c1d21; --muted:#5b6068; --line:#e4dfd6; --card:#ffffff;
+    --good:#12855a; --pick:#1f6fb2; --no:#b42318; --warn:#c2740a;
+    color-scheme:light;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+    line-height:1.72;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1060px;margin:0 auto;padding:44px 20px 96px}
+  h1{font-size:clamp(26px,6vw,36px);font-weight:800;letter-spacing:-.02em;margin:0 0 10px;text-wrap:balance}
+  h1 .sub{display:block;font-size:.46em;font-weight:700;color:var(--muted);margin-top:10px;letter-spacing:0}
+  h2{font-size:clamp(19px,5vw,24px);font-weight:800;margin:50px 0 12px;padding-top:20px;border-top:2px solid var(--line);text-wrap:balance}
+  h3{font-size:16px;font-weight:800;margin:26px 0 8px}
+  p{margin:11px 0;word-break:keep-all;text-wrap:pretty}
+  .lead{font-size:clamp(16px,4vw,18px);color:#2f333a}
+  .note{font-size:13.5px;color:var(--muted)}
+  code{background:#efece6;padding:1px 6px;border-radius:5px;font-size:.9em;font-family:"SF Mono",ui-monospace,Menlo,monospace}
+
+  .terms{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:11px;margin:16px 0}
+  .term{background:var(--card);border:1px solid var(--line);border-radius:11px;padding:13px 15px}
+  .term > b{display:block;font-size:14.5px;margin-bottom:4px}
+  .term span{font-size:13.5px;color:#3a3e45}
+  .term.absent{background:#f6f5f2;border-style:dashed}
+  .term.absent > b{color:#6b7280}
+
+  /* 도식 패널: 라이트 본문 안의 다크 카드 */
+  .fig{background:#0d1117;border:1px solid #2a3442;border-radius:16px;padding:18px 16px 16px;margin:16px 0;
+    box-shadow:0 8px 30px rgba(0,0,0,.28);overflow-x:auto;
+    --grid:#161d27; --text:#e6edf3; --text-muted:#aeb6c2; --text-dim:#9aa4b2; --mask:#0d1117;
+    --lane-fill:rgba(20,27,37,.55); --lane-stroke:#2a3442;
+    --arrow:#637082; --arrow-emphasis:#34d399;
+    --frontend-fill:rgba(96,165,250,.18);  --frontend-stroke:#60a5fa;
+    --backend-fill:rgba(52,211,153,.14);   --backend-stroke:#34d399;
+    --database-fill:rgba(124,192,255,.13); --database-stroke:#7cc0ff;
+    --cloud-fill:rgba(245,158,11,.14);     --cloud-stroke:#f59e0b;
+    --security-fill:rgba(245,196,107,.15); --security-stroke:#f5c46b;
+    --messagebus-fill:rgba(245,196,107,.14); --messagebus-stroke:#f5c46b;
+    --external-fill:rgba(30,38,50,.7);     --external-stroke:#94a3b8;
+    --offpath-fill:rgba(30,38,50,.72);     --offpath-stroke:#94a3b8;
+  }
+  .fig .cap{color:#8b93a1;font-size:12px;font-weight:800;letter-spacing:.05em;margin:0 0 3px;text-transform:uppercase}
+  .fig .capsub{color:#c9d1da;font-size:14px;font-weight:700;margin:0 0 12px}
+  .fig svg{width:100%;min-width:940px;height:auto;display:block}
+  .fignote{color:#8b93a1;font-size:12.5px;margin:12px 2px 0;line-height:1.6}
+
+  .fig .c-grid{stroke:var(--grid);fill:none}
+  .fig .c-mask{fill:var(--mask);stroke:none}
+  .fig .c-lane{fill:var(--lane-fill);stroke:var(--lane-stroke);stroke-dasharray:6,6}
+  .fig .c-frontend{fill:var(--frontend-fill);stroke:var(--frontend-stroke)}
+  .fig .c-backend{fill:var(--backend-fill);stroke:var(--backend-stroke)}
+  .fig .c-database{fill:var(--database-fill);stroke:var(--database-stroke)}
+  .fig .c-cloud{fill:var(--cloud-fill);stroke:var(--cloud-stroke)}
+  .fig .c-security{fill:var(--security-fill);stroke:var(--security-stroke)}
+  .fig .c-messagebus{fill:var(--messagebus-fill);stroke:var(--messagebus-stroke)}
+  .fig .c-external{fill:var(--external-fill);stroke:var(--external-stroke)}
+  .fig .c-offpath{fill:var(--offpath-fill);stroke:var(--offpath-stroke)}
+  .fig .t-primary{fill:var(--text)}
+  .fig .t-muted{fill:var(--text-muted)}
+  .fig .t-dim{fill:var(--text-dim)}
+  .fig .t-frontend{fill:var(--frontend-stroke)}
+  .fig .t-backend{fill:var(--backend-stroke)}
+  .fig .t-database{fill:var(--database-stroke)}
+  .fig .t-cloud{fill:var(--cloud-stroke)}
+  .fig .t-security{fill:var(--security-stroke)}
+  .fig .t-messagebus{fill:var(--messagebus-stroke)}
+  .fig .t-external{fill:var(--external-stroke)}
+  .fig .t-offpath{fill:#9aa4b2}
+  .fig .a-default{stroke:var(--arrow);fill:none}
+  .fig .a-emphasis{stroke:var(--arrow-emphasis);fill:none}
+  .fig .a-security{stroke:var(--security-stroke);fill:none;stroke-dasharray:5,5}
+  .fig .a-dashed{stroke:var(--database-stroke);fill:none;stroke-dasharray:4,4}
+  .fig .m-default{fill:var(--arrow)}
+  .fig .m-emphasis{fill:var(--arrow-emphasis)}
+  .fig .m-security{fill:var(--security-stroke)}
+  .fig .m-dashed{fill:var(--database-stroke)}
+  .fig svg .semantic-sigil{fill:none;stroke:currentColor;stroke-width:1.35;stroke-linecap:round;stroke-linejoin:round;opacity:.78;pointer-events:none}
+  .fig svg .semantic-sigil>*{vector-effect:non-scaling-stroke}
+  .fig svg .semantic-sigil .sigil-fill{fill:currentColor;stroke:none}
+  .fig svg .s-frontend{color:var(--frontend-stroke)}
+  .fig svg .s-backend{color:var(--backend-stroke)}
+  .fig svg .s-database{color:var(--database-stroke)}
+  .fig svg .s-cloud{color:var(--cloud-stroke)}
+  .fig svg .s-security{color:var(--security-stroke)}
+  .fig svg .s-messagebus{color:var(--messagebus-stroke)}
+  .fig svg .s-external{color:var(--external-stroke)}
+  .fig svg .s-offpath{color:var(--offpath-stroke)}
+
+  /* 첫째 도식: 색이 구현 여부를 가리킨다 */
+  .fig-timeline{--cloud-fill:rgba(52,211,153,.14); --cloud-stroke:#34d399;
+    --database-fill:rgba(52,211,153,.14); --database-stroke:#34d399}
+  .fig-timeline .a-emphasis{stroke:#34d399}
+  .fig-timeline .m-emphasis{fill:#34d399}
+  .fig-timeline .a-dashed{stroke:#60a5fa}
+  .fig-timeline .m-dashed{fill:#60a5fa}
+  .fig-timeline .t-messagebus{fill:#8ec3ff}
+  .fig-timeline .a-security{stroke:#94a3b8}
+  .fig-timeline .m-security{fill:#94a3b8}
+
+  /* 둘째 도식: 색이 값의 출처를 가리킨다 */
+  .fig-dataflow{--database-fill:rgba(96,165,250,.16); --database-stroke:#60a5fa}
+  .fig-dataflow .a-emphasis{stroke:#34d399}
+  .fig-dataflow .m-emphasis{fill:#34d399}
+  .fig-dataflow .a-dashed{stroke:#94a3b8}
+  .fig-dataflow .m-dashed{fill:#94a3b8}
+  .fig-dataflow .t-messagebus{fill:#9aa4b2}
+
+  .leg{display:flex;flex-wrap:wrap;gap:7px 20px;margin:13px 2px 0;font-size:12.5px;color:#aeb6c2;
+    border-top:1px solid #1e2734;padding-top:11px}
+  .leg span{white-space:nowrap}
+  .leg i{display:inline-block;width:15px;height:10px;border-radius:3px;border:1px solid;margin-right:7px;vertical-align:0}
+  .leg u{display:inline-block;width:24px;height:0;border-top:2px solid;margin-right:7px;vertical-align:4px;text-decoration:none}
+
+  .notes{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;margin:18px 0 6px}
+  .nc{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+  .nc > b{display:block;font-size:14.5px;margin-bottom:7px;padding-left:15px;position:relative}
+  .nc > b::before{content:"";position:absolute;left:0;top:7px;width:8px;height:8px;border-radius:50%}
+  .nc.blue > b::before{background:#1f6fb2} .nc.green > b::before{background:#12855a} .nc.amber > b::before{background:#c2740a} .nc.red > b::before{background:#b42318}
+  .nc li{font-size:13.5px;color:#3a3e45;margin-bottom:6px}
+  .nc ul{margin:0;padding-left:18px}
+
+  table{width:100%;border-collapse:collapse;font-size:14px;margin:14px 0;background:var(--card);
+    border:1px solid var(--line);border-radius:11px;overflow:hidden}
+  th,td{padding:10px 13px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+  th{background:#f3f0e9;font-weight:800;font-size:13px;color:#3a3e45}
+  tr:last-child td{border-bottom:none}
+
+  .pickbox{background:#eef4fb;border:1px solid #cddff2;border-left:4px solid var(--pick);border-radius:10px;padding:11px 15px;margin:12px 0;font-size:14px}
+  .pickbox b{color:var(--pick)}
+  .pickbox.warn{background:#fdf3e3;border-color:#f0dcb4;border-left-color:var(--warn)}
+  .pickbox.warn b{color:#8a5610}
+
+  pre{background:#0d1117;color:#e6edf3;border:1px solid #2a3442;border-radius:12px;padding:14px 16px;
+    overflow-x:auto;font-size:12.5px;line-height:1.62;font-family:"SF Mono",ui-monospace,Menlo,monospace}
+  pre .c{color:#8b93a1} pre .r{color:#f5a0a0} pre .g{color:#7fd6b0} pre .b{color:#8fb0da}
+  ul{margin:10px 0;padding-left:20px}
+  li{margin-bottom:9px}
+  .footer{margin-top:44px;padding-top:16px;border-top:1px solid var(--line);font-size:13px;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>주식 거래 기본 개념
+    <span class="sub">증거금·미수금·T+2 결제가 각각 무엇이고, 그중 어디까지가 이 레포에 코드로 있는지</span></h1>
+
+  <p class="lead">주식을 산다는 말은 돈과 주식이 그 자리에서 맞바뀐다는 뜻이 아니다. 한국 주식시장에서 매수 주문이 체결되면 주식은 바로 계좌에 들어오지만 대금은 이틀 뒤에 빠져나간다. 그래서 투자자는 체결 시점에 대금 전부를 들고 있지 않아도 되고, 일부만 먼저 내고(<b>증거금</b>) 나머지를 계좌의 빚으로 남긴다(<b>미수금</b>). 이 레포 코드에 나오는 <code>marginRate</code>·<code>Unpaid</code>·<code>PendingSettlement</code>가 전부 이 구조에서 나온 이름이다. 이 문서는 다른 문서를 읽기 전에 그 말들의 뜻을 붙여 두는 자리다.</p>
+
+  <div class="pickbox warn">
+    <b>도메인과 구현을 나눠 적었다.</b> 한국 주식시장이 실제로 돌아가는 방식과 이 레포가 그중 코드로 만든 부분에는 차이가 있다. 도식에서 회색으로 칠한 것과 「이 레포에 없다」라고 적은 것은 시장에는 있지만 이 레포에 코드가 없는 개념이다. 이 프로젝트는 매칭과 계좌 처리를 익히려고 만든 것이라 결제와 신용 거래를 얕게 두었다.
+  </div>
+
+  <h2>먼저 용어</h2>
+  <div class="terms">
+    <div class="term"><b>매수와 매도</b><span>주식을 사는 주문을 매수, 파는 주문을 매도라고 부른다. 이 레포에서는 <code>OrderSide</code>의 두 값이다. 매수 주문은 계좌의 현금을 담보로 잡고, 매도 주문은 보유 수량을 담보로 잡는다.</span></div>
+    <div class="term"><b>호가와 체결</b><span>호가는 사겠다 또는 팔겠다고 내놓은 가격이다. 호가창에서 매수 호가는 높은 값부터, 매도 호가는 낮은 값부터 꺼내고, 두 값이 맞으면 체결된다. 체결 한 건마다 <code>tradeId</code>가 붙는다.</span></div>
+    <div class="term"><b>지정가 주문 (LIMIT)</b><span>가격을 적어서 내는 주문이다. 적은 가격보다 불리한 값에는 체결되지 않는다. 이 레포의 매칭 엔진이 처리하는 주문은 이것뿐이다.</span></div>
+    <div class="term absent"><b>시장가 주문 (MARKET)</b><span>가격을 적지 않고 지금 나와 있는 호가에 그대로 체결시키는 주문이다. <code>OrderType</code>에 값은 있지만 이 레포의 주문 접수와 매칭 어디에도 이 값을 따로 다루는 코드가 없다.</span></div>
+    <div class="term"><b>증거금률 (marginRate)</b><span>매수 주문 금액 가운데 지금 당장 내야 하는 비율이다. 시장에서는 종목마다 다르게 매기지만, 이 레포는 계좌마다 <code>Account.marginRate</code> 컬럼 하나로 갖고 있고 로컬 데이터에 0.40을 넣어 둔다.</span></div>
+    <div class="term"><b>예약 증거금 (reservedMargin)</b><span>주문을 받을 때 주문 금액에 증거금률을 곱해 계좌에 묶어 두는 금액이다. 그 주문이 체결되거나 취소되기 전까지 다른 주문이 이 금액을 쓰지 못한다.</span></div>
+    <div class="term"><b>미수금 (Unpaid)</b><span>체결됐지만 아직 내지 않은 대금이다. 체결 금액에서 증거금으로 낸 몫을 뺀 값이고, 결제 예정일을 이틀 뒤로 적어 둔다. 갚으면 <code>SETTLED</code>로 바뀐다.</span></div>
+    <div class="term"><b>T+2 결제</b><span>체결한 날을 T라고 할 때 이틀 뒤에 대금이 실제로 계좌에서 빠져나가는 것을 말한다. 시장 전체가 같은 주기를 사용해서 투자자가 고를 수 없다.</span></div>
+    <div class="term"><b>출금 가능 금액</b><span>계좌 잔고에서 예약 증거금 합계와 미수금 합계를 뺀 값이다. 지금 이 계좌에서 실제로 꺼낼 수 있는 현금이 얼마인지를 말한다.</span></div>
+    <div class="term"><b>매수 가능 금액</b><span>출금 가능 금액을 증거금률로 나눈 값이다. 새 매수 주문의 금액이 이 값을 넘으면 주문을 거절한다.</span></div>
+    <div class="term absent"><b>대용가</b><span>이미 갖고 있는 주식을 담보로 쳐서 매수 여력에 더해 주는 금액이다. 증권사는 보통 현재가의 일정 비율로 매긴다. 이 레포의 매수 가능 금액 계산에는 이 항목이 들어가지 않는다.</span></div>
+    <div class="term absent"><b>반대매매</b><span>미수금을 갚지 못한 계좌의 보유 주식을 증권사가 강제로 팔아 대금을 회수하는 것이다. 이 레포에는 이 동작을 하는 코드가 없다.</span></div>
+  </div>
+
+  <h2>매수 주문 한 건이 결제일까지 지나는 길</h2>
+  <p>증거금과 미수금과 T+2 결제는 매수 주문 한 건에서 차례로 일어나는 일이다. 주문을 받을 때 증거금을 묶고, 체결될 때 증거금을 실제로 내면서 나머지를 미수금으로 남기고, 이틀 뒤 결제일에 그 미수금만큼을 잔고에서 뺀다. 아래 그림은 그 순서를 시간 순서대로 늘어놓은 것이다. 맨 위 줄이 아무 일 없이 결제까지 가는 경로다. 그 아래 두 줄에는 결제일 전에 갚는 경우와 결제일에 현금이 모자란 경우를 따로 놓았다.</p>
+
+  <div class="fig fig-timeline">
+    <div class="cap">체결일부터 결제일까지</div>
+    <div class="capsub">매수 주문 한 건에서 증거금·미수금·T+2 결제가 각각 언제 일어나는지, 그리고 그중 무엇이 이 레포에 있는지</div>
+<svg viewBox="0 0 1040 640" role="img" aria-labelledby="f1-archify-diagram-title f1-archify-diagram-description" data-preset="classic" data-quality-profile="showcase">
+        <title id="f1-archify-diagram-title">매수 주문 한 건의 대금이 결제일까지 지나는 상태</title>
+        <desc id="f1-archify-diagram-description">A lifecycle diagram generated by Archify.</desc>
+        <!-- Definitions -->
+        <defs>
+          <marker id="f1-arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" class="m-default" />
+          </marker>
+          <marker id="f1-arrowhead-emphasis" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" class="m-emphasis" />
+          </marker>
+          <marker id="f1-arrowhead-security" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" class="m-security" />
+          </marker>
+          <marker id="f1-arrowhead-dashed" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" class="m-dashed" />
+          </marker>
+          <pattern id="f1-grid" width="40" height="40" patternUnits="userSpaceOnUse">
+            <path d="M 40 0 L 0 0 0 40" class="c-grid" stroke-width="0.5"/>
+          </pattern>
+        </defs>
+
+        <!-- Background Grid -->
+        <rect width="100%" height="100%" fill="url(#f1-grid)" />
+
+        <!-- Lifecycle bands -->
+        <path d="M 72 112 L 968 112" class="a-default" stroke-width="0.8" stroke-dasharray="3,8"/>
+        <text x="72" y="100" class="t-dim" font-size="10" font-weight="600">01 / 체결일(T)부터 결제일(T+2)까지</text>
+        <path d="M 72 264 L 968 264" class="a-default" stroke-width="0.8" stroke-dasharray="3,8"/>
+        <text x="72" y="252" class="t-dim" font-size="10" font-weight="600">02 / 결제일 전에 갚는 경우</text>
+        <path d="M 72 436 L 968 436" class="a-default" stroke-width="0.8" stroke-dasharray="3,8"/>
+        <text x="72" y="424" class="t-dim" font-size="10" font-weight="600">03 / 결제일에 현금이 모자란 경우</text>
+
+        <!-- Primary lifecycle rail -->
+        <path d="M 154 157 L 748 157" class="a-emphasis" stroke-width="2.2" marker-end="url(#f1-arrowhead-emphasis)"/>
+
+        <!-- Transition paths -->
+        <path data-edge-from="accepted" data-edge-to="filled" data-edge-label="매도 호가와 가격이 맞는다" data-edge-key="0" data-edge-id="t-accept-fill" data-composition-points="153,157;189,157" d="M 153 157 L 189 157" class="a-emphasis" stroke-width="2" marker-end="url(#f1-arrowhead-emphasis)"/>
+        <path data-edge-from="filled" data-edge-to="waitday" data-edge-label="결제 예정일을 이틀 뒤로 적는다" data-edge-key="1" data-edge-id="t-fill-wait" data-composition-points="307,157;343,157" d="M 307 157 L 343 157" class="a-emphasis" stroke-width="2" marker-end="url(#f1-arrowhead-emphasis)"/>
+        <path data-edge-from="waitday" data-edge-to="dueday" data-edge-key="2" data-edge-id="t-wait-due" data-composition-points="461,157;497,157" d="M 461 157 L 497 157" class="a-emphasis" stroke-width="2" marker-end="url(#f1-arrowhead-emphasis)"/>
+        <path data-edge-from="dueday" data-edge-to="settled" data-edge-label="현금이 미수금 이상이다" data-edge-key="3" data-edge-id="t-due-settled" data-composition-points="615,157;651,157" d="M 615 157 L 651 157" class="a-emphasis" stroke-width="2" marker-end="url(#f1-arrowhead-emphasis)"/>
+        <path data-edge-from="filled" data-edge-to="prepay" data-edge-label="투자자가 현금을 넣는다" data-edge-key="4" data-edge-id="t-fill-prepay" data-composition-points="248,188;248,307;339,307" d="M 248 188 L 248 297 Q 248 307 258 307 L 339 307" class="a-dashed" stroke-width="1.1" marker-end="url(#f1-arrowhead-dashed)"/>
+        <path data-edge-from="prepay" data-edge-to="dueday" data-edge-label="결제일 전에 미수금이 줄어든다" data-edge-key="5" data-edge-id="t-prepay-due" data-composition-points="465,307;481,307;481,157;497,157" d="M 465 307 L 473 307 Q 481 307 481 299 L 481 165 Q 481 157 489 157 L 497 157" class="a-dashed" stroke-width="1.1" marker-end="url(#f1-arrowhead-dashed)"/>
+        <path data-edge-from="dueday" data-edge-to="arrear" data-edge-label="현금이 모자란다" data-edge-key="6" data-edge-id="t-due-arrear" data-composition-points="556,188;556,450" d="M 556 188 L 556 450" class="a-security" stroke-width="1.1" marker-end="url(#f1-arrowhead-security)"/>
+        <path data-edge-from="arrear" data-edge-to="liquidation" data-edge-label="상환기일이 지나도 갚지 않는다" data-edge-key="7" data-edge-id="t-arrear-liq" data-composition-points="615,479;651,479" d="M 615 479 L 651 479" class="a-security" stroke-width="1.1" marker-end="url(#f1-arrowhead-security)"/>
+
+        <!-- States -->
+        <g id="f1-node-accepted" data-node-id="accepted" data-node-label="주문을 접수한다" tabindex="0" role="button" aria-label="Focus 주문을 접수한다, T일에 증거금을 묶는다, 체결일(T)부터 결제일(T+2)까지" aria-pressed="false" data-node-kind="start" data-node-sublabel="T일에 증거금을 묶는다" data-node-tag="구현됨" data-node-context="체결일(T)부터 결제일(T+2)까지">
+          <title>주문을 접수한다 · T일에 증거금을 묶는다 · 체결일(T)부터 결제일(T+2)까지 · 구현됨</title>
+          <rect x="35" y="126" width="118" height="62" rx="7" class="c-mask"/>
+          <rect x="35" y="126" width="118" height="62" rx="7" class="c-frontend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="start" class="semantic-sigil s-frontend" transform="translate(136 132) scale(0.6875)">
+            <circle cx="8" cy="8" r="5"/>
+            <path d="m7 5.4 3.6 2.6L7 10.6Z" class="sigil-fill"/>
+          </g>
+        <text data-detail="fine" x="45" y="140" class="t-frontend" font-size="7" font-weight="700">01</text>
+          <text data-node-label="" data-detail-anchor="" x="94" y="147" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">주문을 접수한다</text>
+          <text data-detail="context" x="94" y="163" class="t-muted" font-size="7" text-anchor="middle">T일에 증거금을 묶는다</text>
+        <text data-detail="fine" x="94" y="177" class="t-frontend" font-size="7" text-anchor="middle">구현됨</text>
+        </g>
+
+        <g id="f1-node-filled" data-node-id="filled" data-node-label="체결된다" tabindex="0" role="button" aria-label="Focus 체결된다, T일에 미수금을 적는다, 체결일(T)부터 결제일(T+2)까지" aria-pressed="false" data-node-kind="active" data-node-sublabel="T일에 미수금을 적는다" data-node-tag="구현됨" data-node-context="체결일(T)부터 결제일(T+2)까지">
+          <title>체결된다 · T일에 미수금을 적는다 · 체결일(T)부터 결제일(T+2)까지 · 구현됨</title>
+          <rect x="189" y="126" width="118" height="62" rx="7" class="c-mask"/>
+          <rect x="189" y="126" width="118" height="62" rx="7" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="active" class="semantic-sigil s-backend" transform="translate(290 132) scale(0.6875)">
+            <path d="M2 8h3l1.5-3.5L9 12l1.6-4H14"/>
+          </g>
+        <text data-detail="fine" x="199" y="140" class="t-backend" font-size="7" font-weight="700">02</text>
+          <text data-node-label="" data-detail-anchor="" x="248" y="147" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">체결된다</text>
+          <text data-detail="context" x="248" y="163" class="t-muted" font-size="7" text-anchor="middle">T일에 미수금을 적는다</text>
+        <text data-detail="fine" x="248" y="177" class="t-backend" font-size="7" text-anchor="middle">구현됨</text>
+        </g>
+
+        <g id="f1-node-waitday" data-node-id="waitday" data-node-label="결제일을 기다린다" tabindex="0" role="button" aria-label="Focus 결제일을 기다린다, T+1일에는 그대로다, 체결일(T)부터 결제일(T+2)까지" aria-pressed="false" data-node-kind="waiting" data-node-sublabel="T+1일에는 그대로다" data-node-tag="구현됨" data-node-context="체결일(T)부터 결제일(T+2)까지">
+          <title>결제일을 기다린다 · T+1일에는 그대로다 · 체결일(T)부터 결제일(T+2)까지 · 구현됨</title>
+          <rect x="343" y="126" width="118" height="62" rx="7" class="c-mask"/>
+          <rect x="343" y="126" width="118" height="62" rx="7" class="c-cloud" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="waiting" class="semantic-sigil s-cloud" transform="translate(444 132) scale(0.6875)">
+            <path d="M4 2.5h8M4 13.5h8M5 3c0 2.8 2 3.2 3 5-1 1.8-3 2.2-3 5M11 3c0 2.8-2 3.2-3 5 1 1.8 3 2.2 3 5"/>
+          </g>
+        <text data-detail="fine" x="353" y="140" class="t-cloud" font-size="7" font-weight="700">03</text>
+          <text data-node-label="" data-detail-anchor="" x="402" y="147" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">결제일을 기다린다</text>
+          <text data-detail="context" x="402" y="163" class="t-muted" font-size="7" text-anchor="middle">T+1일에는 그대로다</text>
+        <text data-detail="fine" x="402" y="177" class="t-cloud" font-size="7" text-anchor="middle">구현됨</text>
+        </g>
+
+        <g id="f1-node-dueday" data-node-id="dueday" data-node-label="결제일에 잔고를 본다" tabindex="0" role="button" aria-label="Focus 결제일에 잔고를 본다, T+2일에 현금을 확인한다, 체결일(T)부터 결제일(T+2)까지" aria-pressed="false" data-node-kind="decision" data-node-sublabel="T+2일에 현금을 확인한다" data-node-tag="분기는 미구현" data-node-context="체결일(T)부터 결제일(T+2)까지">
+          <title>결제일에 잔고를 본다 · T+2일에 현금을 확인한다 · 체결일(T)부터 결제일(T+2)까지 · 분기는 미구현</title>
+          <rect x="497" y="126" width="118" height="62" rx="7" class="c-mask"/>
+          <rect x="497" y="126" width="118" height="62" rx="7" class="c-security" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="neutral" class="semantic-sigil s-external" transform="translate(598 132) scale(0.6875)">
+            <rect x="3" y="3" width="10" height="10" rx="2"/>
+            <circle cx="8" cy="8" r="1.2" class="sigil-fill"/>
+          </g>
+        <text data-detail="fine" x="507" y="140" class="t-security" font-size="7" font-weight="700">04</text>
+          <text data-node-label="" data-detail-anchor="" x="556" y="147" class="t-primary" font-size="9.1" font-weight="600" text-anchor="middle">결제일에 잔고를 본다</text>
+          <text data-detail="context" x="556" y="163" class="t-muted" font-size="7" text-anchor="middle">T+2일에 현금을 확인한다</text>
+        <text data-detail="fine" x="556" y="177" class="t-security" font-size="7" text-anchor="middle">분기는 미구현</text>
+        </g>
+
+        <g id="f1-node-settled" data-node-id="settled" data-node-label="대금을 전부 낸다" tabindex="0" role="button" aria-label="Focus 대금을 전부 낸다, 잔고에서 미수금을 뺀다, 체결일(T)부터 결제일(T+2)까지" aria-pressed="false" data-node-kind="success" data-node-sublabel="잔고에서 미수금을 뺀다" data-node-tag="구현됨" data-node-context="체결일(T)부터 결제일(T+2)까지">
+          <title>대금을 전부 낸다 · 잔고에서 미수금을 뺀다 · 체결일(T)부터 결제일(T+2)까지 · 구현됨</title>
+          <rect x="651" y="126" width="118" height="62" rx="7" class="c-mask"/>
+          <rect x="651" y="126" width="118" height="62" rx="7" class="c-database" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="success" class="semantic-sigil s-database" transform="translate(752 132) scale(0.6875)">
+            <circle cx="8" cy="8" r="5.3"/>
+            <path d="m5.2 8 1.8 1.8 3.8-4"/>
+          </g>
+        <text data-detail="fine" x="661" y="140" class="t-database" font-size="7" font-weight="700">05</text>
+          <text data-node-label="" data-detail-anchor="" x="710" y="147" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">대금을 전부 낸다</text>
+          <text data-detail="context" x="710" y="163" class="t-muted" font-size="7" text-anchor="middle">잔고에서 미수금을 뺀다</text>
+        <text data-detail="fine" x="710" y="177" class="t-database" font-size="7" text-anchor="middle">구현됨</text>
+        </g>
+
+        <g id="f1-node-prepay" data-node-id="prepay" data-node-label="미리 갚는다" tabindex="0" role="button" aria-label="Focus 미리 갚는다, 이자가 붙지 않는다, 결제일 전에 갚는 경우" aria-pressed="false" data-node-kind="active" data-node-sublabel="이자가 붙지 않는다" data-node-tag="상환 API로 구현" data-node-context="결제일 전에 갚는 경우">
+          <title>미리 갚는다 · 이자가 붙지 않는다 · 결제일 전에 갚는 경우 · 상환 API로 구현</title>
+          <rect x="339" y="278" width="126" height="58" rx="7" class="c-mask"/>
+          <rect x="339" y="278" width="126" height="58" rx="7" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="active" class="semantic-sigil s-backend" transform="translate(448 284) scale(0.6875)">
+            <path d="M2 8h3l1.5-3.5L9 12l1.6-4H14"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="402" y="299" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">미리 갚는다</text>
+          <text data-detail="context" x="402" y="315" class="t-muted" font-size="7" text-anchor="middle">이자가 붙지 않는다</text>
+        <text data-detail="fine" x="402" y="325" class="t-backend" font-size="7" text-anchor="middle">상환 API로 구현</text>
+        </g>
+
+        <g id="f1-node-arrear" data-node-id="arrear" data-node-label="미수금이 남는다" tabindex="0" role="button" aria-label="Focus 미수금이 남는다, 계좌가 매수를 못 한다, 결제일에 현금이 모자란 경우" aria-pressed="false" data-node-kind="failure" data-node-sublabel="계좌가 매수를 못 한다" data-node-tag="이 레포에 없다" data-node-context="결제일에 현금이 모자란 경우">
+          <title>미수금이 남는다 · 계좌가 매수를 못 한다 · 결제일에 현금이 모자란 경우 · 이 레포에 없다</title>
+          <rect x="497" y="450" width="118" height="58" rx="7" class="c-mask"/>
+          <rect x="497" y="450" width="118" height="58" rx="7" class="c-offpath" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="failure" class="semantic-sigil s-offpath" transform="translate(598 456) scale(0.6875)">
+            <circle cx="8" cy="8" r="5.3"/>
+            <path d="m5.7 5.7 4.6 4.6m0-4.6-4.6 4.6"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="556" y="471" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">미수금이 남는다</text>
+          <text data-detail="context" x="556" y="487" class="t-muted" font-size="7" text-anchor="middle">계좌가 매수를 못 한다</text>
+        <text data-detail="fine" x="556" y="497" class="t-offpath" font-size="7" text-anchor="middle">이 레포에 없다</text>
+        </g>
+
+        <g id="f1-node-liquidation" data-node-id="liquidation" data-node-label="반대매매" tabindex="0" role="button" aria-label="Focus 반대매매, 증권사가 강제로 판다, 결제일에 현금이 모자란 경우" aria-pressed="false" data-node-kind="failure" data-node-sublabel="증권사가 강제로 판다" data-node-tag="이 레포에 없다" data-node-context="결제일에 현금이 모자란 경우">
+          <title>반대매매 · 증권사가 강제로 판다 · 결제일에 현금이 모자란 경우 · 이 레포에 없다</title>
+          <rect x="651" y="450" width="118" height="58" rx="7" class="c-mask"/>
+          <rect x="651" y="450" width="118" height="58" rx="7" class="c-offpath" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="failure" class="semantic-sigil s-offpath" transform="translate(752 456) scale(0.6875)">
+            <circle cx="8" cy="8" r="5.3"/>
+            <path d="m5.7 5.7 4.6 4.6m0-4.6-4.6 4.6"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="710" y="471" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">반대매매</text>
+          <text data-detail="context" x="710" y="487" class="t-muted" font-size="7" text-anchor="middle">증권사가 강제로 판다</text>
+        <text data-detail="fine" x="710" y="497" class="t-offpath" font-size="7" text-anchor="middle">이 레포에 없다</text>
+        </g>
+
+        <!-- Transition labels -->
+        <g data-detail="context" data-edge-from="accepted" data-edge-to="filled" data-edge-label="매도 호가와 가격이 맞는다" data-edge-key="0" data-edge-id="t-accept-fill">
+          <rect x="103.75" y="196" width="134.5" height="16" rx="4" class="c-mask"/>
+          <text x="171" y="207" class="t-backend" font-size="8" text-anchor="middle">매도 호가와 가격이 맞는다</text>
+        </g>
+        <g data-detail="context" data-edge-from="filled" data-edge-to="waitday" data-edge-label="결제 예정일을 이틀 뒤로 적는다" data-edge-key="1" data-edge-id="t-fill-wait">
+          <rect x="265.5" y="196" width="159" height="16" rx="4" class="c-mask"/>
+          <text x="345" y="207" class="t-backend" font-size="8" text-anchor="middle">결제 예정일을 이틀 뒤로 적는다</text>
+        </g>
+
+        <g data-detail="context" data-edge-from="dueday" data-edge-to="settled" data-edge-label="현금이 미수금 이상이다" data-edge-key="3" data-edge-id="t-due-settled">
+          <rect x="573.1" y="196" width="119.80000000000001" height="16" rx="4" class="c-mask"/>
+          <text x="633" y="207" class="t-backend" font-size="8" text-anchor="middle">현금이 미수금 이상이다</text>
+        </g>
+        <g data-detail="context" data-edge-from="filled" data-edge-to="prepay" data-edge-label="투자자가 현금을 넣는다" data-edge-key="4" data-edge-id="t-fill-prepay">
+          <rect x="110.1" y="226.5" width="119.80000000000001" height="16" rx="4" class="c-mask"/>
+          <text x="170" y="237.5" class="t-messagebus" font-size="8" text-anchor="middle">투자자가 현금을 넣는다</text>
+        </g>
+        <g data-detail="context" data-edge-from="prepay" data-edge-to="dueday" data-edge-label="결제일 전에 미수금이 줄어든다" data-edge-key="5" data-edge-id="t-prepay-due">
+          <rect x="373.95" y="211" width="154.10000000000002" height="16" rx="4" class="c-mask"/>
+          <text x="451" y="222" class="t-messagebus" font-size="8" text-anchor="middle">결제일 전에 미수금이 줄어든다</text>
+        </g>
+        <g data-detail="context" data-edge-from="dueday" data-edge-to="arrear" data-edge-label="현금이 모자란다" data-edge-key="6" data-edge-id="t-due-arrear">
+          <rect x="513.25" y="327" width="85.5" height="16" rx="4" class="c-mask"/>
+          <text x="556" y="338" class="t-offpath" font-size="8" text-anchor="middle">현금이 모자란다</text>
+        </g>
+        <g data-detail="context" data-edge-from="arrear" data-edge-to="liquidation" data-edge-label="상환기일이 지나도 갚지 않는다" data-edge-key="7" data-edge-id="t-arrear-liq">
+          <rect x="585.95" y="431" width="154.10000000000002" height="16" rx="4" class="c-mask"/>
+          <text x="663" y="442" class="t-offpath" font-size="8" text-anchor="middle">상환기일이 지나도 갚지 않는다</text>
+        </g>
+
+        <!-- Legend -->
+
+      </svg>
+    <div class="leg">
+      <span><i style="background:rgba(96,165,250,.18);border-color:#60a5fa"></i>주문이 들어오는 자리</span>
+      <span><i style="background:rgba(52,211,153,.14);border-color:#34d399"></i>이 레포가 코드로 만든 상태</span>
+      <span><i style="background:rgba(245,196,107,.15);border-color:#f5c46b"></i>이 레포가 일부만 만든 자리</span>
+      <span><i style="background:rgba(30,38,50,.72);border-color:#94a3b8"></i>시장에는 있지만 이 레포에 없는 상태</span>
+      <span><u style="border-color:#34d399"></u>결제일까지 그대로 가는 경로</span>
+      <span><u style="border-color:#60a5fa;border-top-style:dashed"></u>투자자가 결제일 전에 갚는 경로</span>
+      <span><u style="border-color:#94a3b8;border-top-style:dashed"></u>이 레포가 만들지 않은 경로</span>
+    </div>
+    <p class="fignote">「T+1일에는 그대로다」는 계좌에서 아무 일도 하지 않는다는 뜻이다. 주식은 체결된 날에 이미 계좌에 들어와 있고, 대금만 결제일까지 미수금으로 남아 있다. 「분기는 미구현」이라고 적은 자리에서 이 레포는 잔고를 확인하지 않고 미수금만큼을 그냥 뺀다. 칸 맨 아래 줄에 적은 「구현됨」·「분기는 미구현」·「이 레포에 없다」는 그 상태를 이 레포가 코드로 만들었는지를 가리킨다.</p>
+  </div>
+
+  <div class="notes">
+    <div class="nc blue"><b>주문을 받을 때와 체결될 때 잔고에서 빠지는 금액이 다르다</b><ul>
+      <li>주문을 받을 때는 잔고가 줄지 않는다. 주문 금액에 증거금률을 곱한 금액을 예약 증거금으로 묶어 두기만 한다.</li>
+      <li>체결될 때 그 예약 증거금이 실제로 잔고에서 빠지고, 체결 금액에서 그만큼을 뺀 나머지가 미수금으로 쌓인다.</li>
+      <li>주문 하나가 여러 번에 걸쳐 체결되면 예약 증거금도 체결된 수량만큼씩 줄어든다. 줄어든 금액을 다 더했을 때 처음 묶은 금액과 원 단위까지 같아야 해서, 체결마다 다시 계산하지 않고 잔량 기준으로 다시 잡는다(ADR-015 「부분 체결 시 예약 장부를 잔량 기준으로 다시 계산」).</li>
+    </ul></div>
+    <div class="nc green"><b>결제일에 실제로 도는 코드</b><ul>
+      <li><code>settlement-worker</code>가 일정 간격으로 결제 예정일이 지난 미수금을 찾아 처리한다. 이 레포에서 <code>@Scheduled</code>가 붙은 곳은 여기 하나다.</li>
+      <li>처리 내용은 계좌 잔고에서 미수금만큼을 빼고 미수금을 같은 금액만큼 줄이는 것이다. 같은 건이 두 번 들어와도 결과가 같도록, 한 번 처리한 체결 번호를 기억해 두고 걸러 낸다.</li>
+      <li>잔고가 미수금보다 적은 경우를 가르는 분기는 없다. 아래 「이 레포에 없는 것」에 적어 두었다.</li>
+    </ul></div>
+    <div class="nc amber"><b>이 레포의 이틀은 달력 이틀이다</b><ul>
+      <li>시장의 T+2는 영업일 기준이라 금요일에 체결하면 결제일이 다음 주 화요일이다.</li>
+      <li>이 레포는 결제 예정일을 현재 시각에 24시간 두 번을 더해서 잡는다. 코드에도 영업일을 따지지 않는다고 적어 두었다.</li>
+      <li>휴일과 주말을 담은 달력이 이 레포에 없어서 내린 선택이다. 매칭과 계좌 처리를 보려고 만든 프로젝트라 결제 달력까지 만들지 않았다.</li>
+    </ul></div>
+  </div>
+
+  <h2>매수 주문을 얼마까지 받아 줄지 계산하는 자리</h2>
+  <p>매수 주문이 들어오면 그 계좌가 이 금액을 감당할 수 있는지를 먼저 본다. 이때 사용하는 값이 <b>매수 가능 금액</b>이다. 계좌 잔고를 그대로 사용하지 않고, 아직 체결되지 않은 매수 주문이 묶어 둔 예약 증거금과 아직 갚지 않은 미수금을 뺀 다음, 그 값을 증거금률로 나눈다. 증거금률이 0.40이면 현금 한 원으로 2.5원어치를 주문할 수 있다는 뜻이다.</p>
+
+  <div class="fig fig-dataflow">
+    <div class="cap">매수 가능 금액</div>
+    <div class="capsub">계좌 잔고에서 무엇을 빼고 무엇으로 나눠서 주문 한 건을 받을지 정하는지</div>
+<svg viewBox="0 0 1068 470" role="img" aria-labelledby="f2-archify-diagram-title f2-archify-diagram-description" data-preset="classic" data-quality-profile="showcase">
+        <title id="f2-archify-diagram-title">매수 주문을 얼마까지 받아 줄지 계산하는 순서</title>
+        <desc id="f2-archify-diagram-description">A data-flow diagram generated by Archify.</desc>
+        <!-- Definitions -->
+        <defs>
+          <marker id="f2-arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" class="m-default" />
+          </marker>
+          <marker id="f2-arrowhead-emphasis" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" class="m-emphasis" />
+          </marker>
+          <marker id="f2-arrowhead-security" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" class="m-security" />
+          </marker>
+          <marker id="f2-arrowhead-dashed" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" class="m-dashed" />
+          </marker>
+          <pattern id="f2-grid" width="40" height="40" patternUnits="userSpaceOnUse">
+            <path d="M 40 0 L 0 0 0 40" class="c-grid" stroke-width="0.5"/>
+          </pattern>
+        </defs>
+
+        <!-- Background Grid -->
+        <rect width="100%" height="100%" fill="url(#f2-grid)" />
+
+        <!-- Data Stages -->
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="stage" data-composition-frame-id="0" x="16" y="46" width="168" height="350" rx="10" class="c-lane" stroke-width="1"/>
+        <text x="100" y="68" class="t-dim" font-size="9" font-weight="600" text-anchor="middle">01 / 계좌 잔고를 읽는다</text>
+
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="stage" data-composition-frame-id="1" x="231" y="46" width="168" height="350" rx="10" class="c-lane" stroke-width="1"/>
+        <text x="315" y="68" class="t-dim" font-size="9" font-weight="600" text-anchor="middle">02 / 묶어 둔 돈을 뺀다</text>
+
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="stage" data-composition-frame-id="2" x="446" y="46" width="168" height="350" rx="10" class="c-lane" stroke-width="1"/>
+        <text x="530" y="68" class="t-dim" font-size="9" font-weight="600" text-anchor="middle">03 / 내지 않은 돈을 뺀다</text>
+
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="stage" data-composition-frame-id="3" x="661" y="46" width="168" height="350" rx="10" class="c-lane" stroke-width="1"/>
+        <text x="745" y="68" class="t-dim" font-size="9" font-weight="600" text-anchor="middle">04 / 증거금률로 나눈다</text>
+
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="stage" data-composition-frame-id="4" x="876" y="46" width="168" height="350" rx="10" class="c-lane" stroke-width="1"/>
+        <text x="960" y="68" class="t-dim" font-size="9" font-weight="600" text-anchor="middle">05 / 주문 한 건을 판정한다</text>
+
+        <!-- Flow paths -->
+        <path data-edge-from="balance" data-edge-to="reserved" data-edge-label="잔고에서 예약 증거금을 뺀다" data-edge-key="0" data-edge-id="f-balance" data-composition-points="156,157;259,157" d="M 156 157 L 259 157" class="a-emphasis" stroke-width="1.8" marker-end="url(#f2-arrowhead-emphasis)"/>
+        <path data-edge-from="reserved" data-edge-to="unpaidsum" data-edge-label="거기서 미수금 합계도 뺀다" data-edge-key="1" data-edge-id="f-reserved" data-composition-points="371,157;474,157" d="M 371 157 L 474 157" class="a-emphasis" stroke-width="1.8" marker-end="url(#f2-arrowhead-emphasis)"/>
+        <path data-edge-from="unpaidsum" data-edge-to="buylimit" data-edge-label="남은 값이 출금 가능 금액이다" data-edge-key="2" data-edge-id="f-unpaid" data-composition-points="586,157;689,157" d="M 586 157 L 689 157" class="a-emphasis" stroke-width="1.8" marker-end="url(#f2-arrowhead-emphasis)"/>
+        <path data-edge-from="buylimit" data-edge-to="verdict" data-edge-label="주문 금액과 비교한다" data-edge-key="3" data-edge-id="f-verdict" data-composition-points="801,157;895,157" d="M 801 157 L 895 157" class="a-emphasis" stroke-width="1.8" marker-end="url(#f2-arrowhead-emphasis)"/>
+        <path data-edge-from="missing" data-edge-to="buylimit" data-edge-label="증권사라면 여기에 더한다" data-edge-key="4" data-edge-id="f-missing" data-composition-points="610,271;745,271;745,186" d="M 610 271 L 745 271 L 745 186" class="a-dashed" stroke-width="1.4" marker-end="url(#f2-arrowhead-dashed)"/>
+
+        <!-- Nodes -->
+        <g id="f2-node-balance" data-node-id="balance" data-node-label="계좌 잔고" tabindex="0" role="button" aria-label="Focus 계좌 잔고, 현금이 얼마인지 읽는다, 01 / 계좌 잔고를 읽는다" aria-pressed="false" data-node-kind="database" data-node-sublabel="현금이 얼마인지 읽는다" data-node-context="01 / 계좌 잔고를 읽는다">
+          <title>계좌 잔고 · 현금이 얼마인지 읽는다 · 01 / 계좌 잔고를 읽는다</title>
+          <rect x="44" y="128" width="112" height="58" rx="6" class="c-mask"/>
+          <rect x="44" y="128" width="112" height="58" rx="6" class="c-database" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(50 134) scale(0.6875)">
+            <ellipse cx="8" cy="4" rx="5" ry="2"/>
+            <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="100" y="149" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">계좌 잔고</text>
+          <text data-detail="context" x="100" y="165" class="t-muted" font-size="7" text-anchor="middle">현금이 얼마인지 읽는다</text>
+        </g>
+
+        <g id="f2-node-reserved" data-node-id="reserved" data-node-label="예약 증거금 합계" tabindex="0" role="button" aria-label="Focus 예약 증거금 합계, 미체결 매수가 묶은 돈, 02 / 묶어 둔 돈을 뺀다" aria-pressed="false" data-node-kind="database" data-node-sublabel="미체결 매수가 묶은 돈" data-node-context="02 / 묶어 둔 돈을 뺀다">
+          <title>예약 증거금 합계 · 미체결 매수가 묶은 돈 · 02 / 묶어 둔 돈을 뺀다</title>
+          <rect x="259" y="128" width="112" height="58" rx="6" class="c-mask"/>
+          <rect x="259" y="128" width="112" height="58" rx="6" class="c-database" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(265 134) scale(0.6875)">
+            <ellipse cx="8" cy="4" rx="5" ry="2"/>
+            <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="315" y="149" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">예약 증거금 합계</text>
+          <text data-detail="context" x="315" y="165" class="t-muted" font-size="7" text-anchor="middle">미체결 매수가 묶은 돈</text>
+        </g>
+
+        <g id="f2-node-unpaidsum" data-node-id="unpaidsum" data-node-label="미수금 합계" tabindex="0" role="button" aria-label="Focus 미수금 합계, 아직 내지 않은 대금, 03 / 내지 않은 돈을 뺀다" aria-pressed="false" data-node-kind="database" data-node-sublabel="아직 내지 않은 대금" data-node-context="03 / 내지 않은 돈을 뺀다">
+          <title>미수금 합계 · 아직 내지 않은 대금 · 03 / 내지 않은 돈을 뺀다</title>
+          <rect x="474" y="128" width="112" height="58" rx="6" class="c-mask"/>
+          <rect x="474" y="128" width="112" height="58" rx="6" class="c-database" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(480 134) scale(0.6875)">
+            <ellipse cx="8" cy="4" rx="5" ry="2"/>
+            <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="530" y="149" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">미수금 합계</text>
+          <text data-detail="context" x="530" y="165" class="t-muted" font-size="7" text-anchor="middle">아직 내지 않은 대금</text>
+        </g>
+
+        <g id="f2-node-missing" data-node-id="missing" data-node-label="이 레포에 없는 항목" tabindex="0" role="button" aria-label="Focus 이 레포에 없는 항목, 대용가와 매도 예정금액, 03 / 내지 않은 돈을 뺀다" aria-pressed="false" data-node-kind="external" data-node-sublabel="대용가와 매도 예정금액" data-node-context="03 / 내지 않은 돈을 뺀다">
+          <title>이 레포에 없는 항목 · 대용가와 매도 예정금액 · 03 / 내지 않은 돈을 뺀다</title>
+          <rect x="450" y="242" width="160" height="58" rx="6" class="c-mask"/>
+          <rect x="450" y="242" width="160" height="58" rx="6" class="c-external" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(456 248) scale(0.6875)">
+            <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
+            <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="530" y="263" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">이 레포에 없는 항목</text>
+          <text data-detail="context" x="530" y="279" class="t-muted" font-size="7" text-anchor="middle">대용가와 매도 예정금액</text>
+        </g>
+
+        <g id="f2-node-buylimit" data-node-id="buylimit" data-node-label="매수 가능 금액" tabindex="0" role="button" aria-label="Focus 매수 가능 금액, 이 금액까지 주문을 받는다, 04 / 증거금률로 나눈다" aria-pressed="false" data-node-kind="backend" data-node-sublabel="이 금액까지 주문을 받는다" data-node-context="04 / 증거금률로 나눈다">
+          <title>매수 가능 금액 · 이 금액까지 주문을 받는다 · 04 / 증거금률로 나눈다</title>
+          <rect x="689" y="128" width="112" height="58" rx="6" class="c-mask"/>
+          <rect x="689" y="128" width="112" height="58" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(695 134) scale(0.6875)">
+            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="745" y="149" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">매수 가능 금액</text>
+          <text data-detail="context" x="745" y="165" class="t-muted" font-size="6.9" text-anchor="middle">이 금액까지 주문을 받는다</text>
+        </g>
+
+        <g id="f2-node-verdict" data-node-id="verdict" data-node-label="주문을 받을지 정한다" tabindex="0" role="button" aria-label="Focus 주문을 받을지 정한다, 넘으면 거절한다, 05 / 주문 한 건을 판정한다" aria-pressed="false" data-node-kind="security" data-node-sublabel="넘으면 거절한다" data-node-context="05 / 주문 한 건을 판정한다">
+          <title>주문을 받을지 정한다 · 넘으면 거절한다 · 05 / 주문 한 건을 판정한다</title>
+          <rect x="895" y="128" width="130" height="58" rx="6" class="c-mask"/>
+          <rect x="895" y="128" width="130" height="58" rx="6" class="c-security" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-security" transform="translate(901 134) scale(0.6875)">
+            <path d="M8 2.2 13 4v3.5c0 3.1-1.8 5.4-5 6.5-3.2-1.1-5-3.4-5-6.5V4Z"/>
+            <path d="m5.8 8 1.5 1.5 3-3"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="960" y="149" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">주문을 받을지 정한다</text>
+          <text data-detail="context" x="960" y="165" class="t-muted" font-size="7" text-anchor="middle">넘으면 거절한다</text>
+        </g>
+
+        <!-- Flow labels -->
+        <g data-detail="context" data-edge-from="balance" data-edge-to="reserved" data-edge-label="잔고에서 예약 증거금을 뺀다" data-edge-key="0" data-edge-id="f-balance">
+          <rect x="135.35" y="191" width="144.3" height="16" rx="4" class="c-mask"/>
+          <text x="207.5" y="202" class="t-backend" font-size="8" text-anchor="middle">잔고에서 예약 증거금을 뺀다</text>
+        </g>
+        <g data-detail="context" data-edge-from="reserved" data-edge-to="unpaidsum" data-edge-label="거기서 미수금 합계도 뺀다" data-edge-key="1" data-edge-id="f-reserved">
+          <rect x="355.25" y="191" width="134.5" height="16" rx="4" class="c-mask"/>
+          <text x="422.5" y="202" class="t-backend" font-size="8" text-anchor="middle">거기서 미수금 합계도 뺀다</text>
+        </g>
+        <g data-detail="context" data-edge-from="unpaidsum" data-edge-to="buylimit" data-edge-label="남은 값이 출금 가능 금액이다" data-edge-key="2" data-edge-id="f-unpaid">
+          <rect x="562.9" y="191" width="149.2" height="16" rx="4" class="c-mask"/>
+          <text x="637.5" y="202" class="t-backend" font-size="8" text-anchor="middle">남은 값이 출금 가능 금액이다</text>
+        </g>
+        <g data-detail="context" data-edge-from="buylimit" data-edge-to="verdict" data-edge-label="주문 금액과 비교한다" data-edge-key="3" data-edge-id="f-verdict">
+          <rect x="793" y="191" width="110" height="16" rx="4" class="c-mask"/>
+          <text x="848" y="202" class="t-backend" font-size="8" text-anchor="middle">주문 금액과 비교한다</text>
+        </g>
+        <g data-detail="context" data-edge-from="missing" data-edge-to="buylimit" data-edge-label="증권사라면 여기에 더한다" data-edge-key="4" data-edge-id="f-missing">
+          <rect x="652.7" y="295" width="129.6" height="16" rx="4" class="c-mask"/>
+          <text x="717.5" y="306" class="t-messagebus" font-size="8" text-anchor="middle">증권사라면 여기에 더한다</text>
+        </g>
+
+        <!-- Legend -->
+
+      </svg>
+    <div class="leg">
+      <span><i style="background:rgba(96,165,250,.16);border-color:#60a5fa"></i>계좌에서 읽어 오는 값</span>
+      <span><i style="background:rgba(52,211,153,.14);border-color:#34d399"></i>계산해서 나오는 값</span>
+      <span><i style="background:rgba(245,196,107,.15);border-color:#f5c46b"></i>주문을 받을지 정하는 자리</span>
+      <span><i style="background:rgba(30,38,50,.7);border-color:#94a3b8"></i>이 레포가 계산에 넣지 않는 값</span>
+      <span><u style="border-color:#34d399"></u>이 레포가 실제로 계산하는 순서</span>
+      <span><u style="border-color:#94a3b8;border-top-style:dashed"></u>증권사라면 더 넣을 값</span>
+    </div>
+    <p class="fignote">같은 계산이 이 레포 세 군데에 있다. 관계형 DB에 잔고를 두고 계좌 행을 잠그는 v1 경로, 계좌 상태를 메모리에 올려 스레드 하나가 전담하는 v2 경로, 그리고 계좌 조회 API가 화면에 내려 주는 값이다. 세 곳의 식은 같다.</p>
+  </div>
+
+  <p>숫자를 넣어 보면 이렇게 된다. 증거금률은 0.40이고, 이 계좌에는 아직 체결되지 않은 매수 주문도 갚지 않은 미수금도 없는 상태에서 시작한다.</p>
+
+<pre><span class="c"># 주문을 내기 전</span>
+출금 가능 금액 = 1,000만원 - 0 - 0          = 1,000만원
+매수 가능 금액 = 1,000만원 / 0.40           = 2,500만원
+
+<span class="c"># 70,000원짜리 주식 100주를 매수 주문 = 700만원</span>
+700만원 <span class="g">&lt;=</span> 2,500만원                       <span class="c">-&gt; 주문을 받는다</span>
+예약 증거금    = 700만원 x 0.40             =   280만원
+출금 가능 금액 = 1,000만원 - 280만원         =   720만원
+매수 가능 금액 = 720만원 / 0.40             = 1,800만원
+
+<span class="c"># 100주가 전량 체결되면</span>
+잔고에서 빠지는 증거금 = 280만원             <span class="c">-&gt; 잔고 720만원</span>
+미수금으로 쌓이는 대금 = 700만원 x 0.60      =   420만원
+결제 예정일                                 <span class="c">= 체결 시각 + 48시간</span>
+
+<span class="c"># 결제일이 되면</span>
+잔고에서 빠지는 대금   = 420만원             <span class="c">-&gt; 잔고 300만원, 미수금 0원</span>
+</pre>
+
+  <p>주문을 받는 자리에서 한 가지를 더 본다. 주문 가격이 기준가의 ±30% 안에 있는지다. 기준가는 그 종목의 최근 체결가를 먼저 사용하고, 아직 체결이 없으면 전일 종가를 사용한다. 둘 다 없으면 존재하지 않는 종목으로 보고 거절한다. 이 검사는 API 서버에서만 한다.</p>
+
+  <h2>이 레포에 없는 것</h2>
+  <p>아래는 실제 증권사에는 있고 이 문서 앞부분에서 이름을 붙여 둔 개념 가운데, 이 레포에 코드가 없는 것이다. 없다는 사실 자체를 적어 두어야 도식과 코드를 대조할 때 헷갈리지 않는다.</p>
+  <ul>
+    <li><b>대용가와 매도 예정금액.</b> 증권사의 매수 여력은 현금에 더해 보유 주식의 담보 가치와 팔기로 한 주식의 대금까지 합쳐서 나온다. 이 레포의 매수 가능 금액은 현금에서 빼기만 하고 더하지 않는다. 계좌 조회 응답에 <code>pendingSellAmount</code> 항목이 있기는 하지만 값은 언제나 0이다.</li>
+    <li><b>회전매매.</b> 팔아서 들어올 돈을 담보로 잡아 결제 전에 다시 사는 거래다. 위의 매도 예정금액이 계산에 없으므로 이 레포에서는 성립하지 않는다.</li>
+    <li><b>미수금 연체 이자.</b> 미수금 조회 응답에 경과일수와 누적이자 항목이 있지만 둘 다 0으로 고정돼 있다. 이자율 상수도, 날마다 이자를 쌓는 처리도 없다.</li>
+    <li><b>반대매매.</b> 미수금을 갚지 못한 계좌의 주식을 강제로 파는 처리가 없다. 담보유지비율을 계산하는 코드도 없다.</li>
+    <li><b>계좌를 미수 상태로 바꾸는 처리.</b> <code>AccountStatus</code>에 <code>IN_ARREARS</code> 값이 있고 상태 전이 규칙도 적혀 있지만, 이 값을 실제로 넣는 코드는 테스트에만 있다. 결제일에 잔고가 모자라도 계좌 상태는 <code>ACTIVE</code>로 남는다.</li>
+    <li><b>영업일 달력.</b> 결제 예정일을 달력 이틀 뒤로 잡는다. 주말과 공휴일을 건너뛰지 않는다.</li>
+    <li><b>시장가 주문 처리.</b> <code>OrderType</code>에 <code>MARKET</code> 값은 있지만 주문 접수와 매칭 어디에도 이 값에 따라 처리가 나뉘는 코드가 없다.</li>
+  </ul>
+
+  <h2>개념이 코드에서 불리는 이름</h2>
+  <p>앞의 용어가 코드에서 어떤 이름으로 있는지 모아 둔 것이다. 매수 경로가 v1과 v2 둘로 나뉘어 있어서 같은 개념이 두 군데에 서로 다른 모양으로 있는 경우가 있다.</p>
+  <table>
+    <tr><th>개념</th><th>v1 경로 (관계형 DB)</th><th>v2 경로 (메모리)</th></tr>
+    <tr><td>증거금률</td><td colspan="2"><code>Account.marginRate</code> — 계좌 행의 컬럼 하나. 두 경로가 같은 값을 읽는다.</td></tr>
+    <tr><td>예약 증거금</td><td><code>Order.reservedMargin</code> 컬럼, 계좌별 합계는 SUM 쿼리로 구한다</td><td><code>AccountState.reservations</code> — 주문 번호마다 가격과 잔량을 든 장부</td></tr>
+    <tr><td>미수금</td><td><code>Unpaid</code> 엔티티 — 계좌·주문·금액·결제 예정일·상태</td><td><code>AccountState.unpaid</code> 합계 하나와, 결제를 기다리는 <code>PendingSettlement</code> 행</td></tr>
+    <tr><td>결제 예정일</td><td><code>settlementDate</code> — 날짜 값, 오늘에 이틀을 더한다</td><td><code>dueAtEpochMillis</code> — 절대 시각, 지금에 48시간을 더한다</td></tr>
+    <tr><td>결제일 처리</td><td>사용자가 상환 API를 부를 때만 처리한다</td><td><code>settlement-worker</code>가 일정 간격으로 예정일이 지난 건을 찾아 처리한다</td></tr>
+    <tr><td>계좌 상태</td><td colspan="2"><code>AccountStatus</code> — <code>ACTIVE</code>·<code>IN_ARREARS</code>·<code>FROZEN</code>. 실제로 사용되는 값은 <code>ACTIVE</code>뿐이다.</td></tr>
+    <tr><td>체결 번호</td><td colspan="2"><code>tradeId</code> — 체결 한 건마다 붙는 번호. 같은 체결이 두 번 전달돼도 한 번만 반영하려고 사용한다.</td></tr>
+  </table>
+
+  <div class="footer">
+    이 문서의 서술은 레포의 계좌·주문·정산 경로 코드를 열어 확인한 것이다. 「이 레포에 없다」라고 적은 항목은 해당 이름으로 코드를 찾아 결과가 없었거나, 값이 상수로 고정돼 있는 것을 보고 적었다. 도식은 Archify로 만들어 레이아웃 검사(showcase)를 통과시킨 뒤 이 문서의 색으로 맞춘 것이다.
+  </div>
+
+</div>
+</body>
+</html>

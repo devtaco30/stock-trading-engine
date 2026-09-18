@@ -1,0 +1,225 @@
+<title>체결 전달 분리</title>
+<style>
+  :root{
+    --bg:#faf9f6; --panel:#fff; --ink:#1c1e21; --sub:#4b5058; --line:#e3e0d8;
+    --asis:#2563eb; --asis-soft:#eaf1fe; --asis-line:#bcd3fb;
+    --tobe:#15803d; --tobe-soft:#e8f6ec; --tobe-line:#b6e2c3;
+    --warn:#b45309; --warn-soft:#fdf1e0; --warn-line:#f0d9b0;
+    --fig-bg:#0d1117; --fig-card:#141b25; --fig-line:#2a3442;
+    --ng:#34d399; --ng2:#5eead4; --nb:#60a5fa; --nb2:#7cc0ff; --na:#f5b13a; --nr:#f87171; --ngrey:#8b94a3;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Pretendard",system-ui,sans-serif;
+    line-height:1.72;word-break:keep-all;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1120px;margin:0 auto;padding:48px 20px 120px}
+  header.top{border-bottom:2px solid var(--ink);padding-bottom:22px;margin-bottom:12px}
+  .tag{display:inline-block;font-size:12px;font-weight:700;letter-spacing:.04em;color:var(--warn);
+    background:var(--warn-soft);border:1px solid var(--warn-line);border-radius:999px;padding:3px 12px;margin-bottom:14px}
+  h1{font-size:31px;line-height:1.3;margin:0 0 10px;text-wrap:balance;font-weight:800}
+  .lead{font-size:16.5px;color:var(--sub);max-width:76ch;margin:0}
+  h2{font-size:23px;font-weight:800;margin:58px 0 6px;text-wrap:balance}
+  h2 .num{color:#b9b3a6;margin-right:10px}
+  h3{font-size:17.5px;font-weight:700;margin:30px 0 8px}
+  p{margin:12px 0;max-width:78ch;text-wrap:pretty}
+  .section-sub{color:var(--sub);font-size:15px;margin-top:2px;max-width:78ch}
+  code{font-family:"SF Mono",ui-monospace,Menlo,monospace;font-size:.86em;
+    background:#f0eee7;border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+  .terms{display:grid;grid-template-columns:repeat(auto-fill,minmax(248px,1fr));gap:13px;margin-top:20px}
+  .term{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:15px 17px}
+  .term .name{font-weight:700;font-size:14.5px;margin-bottom:5px}
+  .term .name .en{color:var(--sub);font-weight:500;font-size:12.5px}
+  .term p{font-size:13.5px;color:var(--sub);margin:0;line-height:1.58}
+  .legend{display:flex;flex-wrap:wrap;gap:10px 22px;background:var(--panel);border:1px solid var(--line);
+    border-radius:12px;padding:15px 20px;margin-top:20px;font-size:13.5px}
+  .legend .item{display:flex;align-items:center;gap:8px}
+  .swatch{width:14px;height:14px;border-radius:4px;flex:none}
+  .fig{background:var(--fig-bg);border-radius:14px;padding:20px 18px 10px;margin:22px 0 6px;
+    box-shadow:0 2px 16px rgba(13,17,23,.3)}
+  .fig svg{width:100%;height:auto;display:block}
+  .fig .cap{color:#8b94a3;font-size:12.5px;margin-top:8px;text-align:center;line-height:1.55}
+  .callout{border-radius:12px;padding:16px 20px;margin:18px 0;font-size:14.5px}
+  .callout.asis{background:var(--asis-soft);border:1px solid var(--asis-line)}
+  .callout.tobe{background:var(--tobe-soft);border:1px solid var(--tobe-line)}
+  .callout.warn{background:var(--warn-soft);border:1px solid var(--warn-line)}
+  .callout b{font-weight:700}
+  .tbl-scroll{overflow-x:auto;margin-top:20px}
+  table{border-collapse:collapse;width:100%;min-width:640px;font-size:14px;background:var(--panel);
+    border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  th,td{text-align:left;padding:12px 15px;border-bottom:1px solid var(--line);vertical-align:top}
+  thead th{background:#f4f2ec;font-weight:700;font-size:13px}
+  th.k{width:150px;color:var(--sub);background:#faf8f2}
+  tr:last-child td{border-bottom:none}
+  ol.units{counter-reset:u;list-style:none;padding:0;margin:18px 0}
+  ol.units li{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--tobe);
+    border-radius:0 10px 10px 0;padding:14px 18px 14px 52px;margin:10px 0;position:relative;font-size:14.5px}
+  ol.units li::before{counter-increment:u;content:"U" counter(u);position:absolute;left:14px;top:13px;
+    font-weight:800;color:var(--tobe);font-family:"SF Mono",monospace;font-size:14px}
+  ol.units b{font-weight:700}
+  ol.units .path{font-family:"SF Mono",monospace;font-size:12px;color:var(--sub)}
+  footer{margin-top:64px;padding-top:20px;border-top:1px solid var(--line);color:#8b8578;font-size:13px}
+</style>
+<div class="wrap">
+
+<header class="top">
+    <h1>체결 하나를 두 프로세스로 나눠 반영하기</h1>
+  <p class="lead">v2는 계좌를 <code>accountId</code>로 샤딩해 계좌마다 한 프로세스가 전담한다(single-writer). 그런데 한 번의 체결은 매수 계좌와 매도 계좌를 동시에 바꾼다. 두 계좌가 서로 다른 프로세스에 있으면, 체결 하나를 두 프로세스에 각각 보내야 한다. 이것이 fan-out이다.</p>
+</header>
+
+<h2><span class="num">①</span>맥락 — 왜 지금 fan-out인가</h2>
+<p>지금까지 v2는 계좌 프로세스가 하나라는 가정으로 돌았다. 매칭이 체결을 만들면 그 체결 하나를 계좌 프로세스로 보내고, 그 프로세스가 매수 계좌와 매도 계좌를 둘 다 메모리에서 바꿨다. 두 계좌가 같은 프로세스 안에 있으니 문제가 없었다.</p>
+<p>샤딩을 켜면 상황이 달라진다. 계좌 90001(매수)과 90002(매도)가 슬롯 계산 결과 서로 다른 프로세스로 나뉠 수 있다. 이때 체결 하나를 한 프로세스에만 보내면 다른 쪽 계좌는 갱신되지 않는다. 매수자는 주식을 받았는데 매도자의 보유는 그대로 남는 어긋남이 생긴다.</p>
+<p>그래서 매칭은 체결의 매수·매도 <code>accountId</code>를 각각 슬롯으로 계산해, 그 체결을 두 목적지 프로세스에 보낸다. 두 프로세스는 각자 자기가 소유한 계좌만 반영한다. 이 문서가 다루는 범위는 <b>라이브 경로</b>까지다. 재기동 복구(매칭이 남긴 기록을 계좌가 다시 재생할 때 기록이 여러 개인 경우)는 여기서 다루지 않는다.</p>
+
+<h2><span class="num">②</span>용어</h2>
+<div class="terms">
+  <div class="term"><div class="name">fan-out <span class="en">팬아웃</span></div><p>체결 하나를 매수·매도 두 계좌 소유 프로세스에 각각 보내는 것. 각 프로세스는 <code>tradeId</code>로 중복 반영을 막는다.</p></div>
+  <div class="term"><div class="name">샤드 <span class="en">shard</span></div><p><code>accountId</code>로 나뉜 계좌 묶음 하나를 전담하는 계좌 프로세스. 자기 샤드의 계좌만 메모리에 들고 있다.</p></div>
+  <div class="term"><div class="name">슬롯 <span class="en">slot</span></div><p><code>hash(accountId) % P</code>로 나온 고정 번호(P=슬롯 총수). 계좌를 어느 샤드가 맡을지 결정하는 안정적 키다.</p></div>
+  <div class="term"><div class="name">라우팅 테이블 <span class="en">routing table</span></div><p>슬롯 번호를 목적지 Aeron endpoint(샤드 주소)로 잇는 정적 표. 매칭이 어디로 보낼지 이 표로 정한다.</p></div>
+  <div class="term"><div class="name">unicast <span class="en">유니캐스트</span></div><p>한 목적지에 1:1로 보내는 방식. fan-out은 unicast를 목적지 수만큼 반복한다(여기선 매수·매도 두 번).</p></div>
+  <div class="term"><div class="name">tradeId 멱등 <span class="en">idempotency</span></div><p>계좌마다 이미 반영한 <code>tradeId</code> 집합을 들고 있어, 같은 체결이 두 번 와도 한 번만 반영한다. 여기서도 그대로 재사용한다.</p></div>
+  <div class="term"><div class="name">ACCOUNT_NOT_FOUND 격리 <span class="en">self-isolation</span></div><p>자기 샤드에 없는 계좌의 반영 요청이 오면 엔진이 조용히 거부한다. 남의 계좌를 잘못 건드리지 않게 하는 안전망.</p></div>
+</div>
+
+<h2><span class="num">③</span>범례</h2>
+<div class="legend">
+  <div class="item"><span class="swatch" style="background:var(--asis)"></span>AS-IS (단일 프로세스)</div>
+  <div class="item"><span class="swatch" style="background:var(--tobe)"></span>TO-BE (샤딩 + fan-out)</div>
+  <div class="item"><span class="swatch" style="background:var(--na)"></span>변경 지점 · 신규</div>
+  <div class="item"><span class="swatch" style="background:var(--nr)"></span>격리 (NOT_FOUND)</div>
+  <div class="item"><span class="swatch" style="background:var(--ngrey)"></span>멱등으로 흡수</div>
+</div>
+
+<h2><span class="num">④</span>AS-IS — 지금은 한 곳에 한 번</h2>
+<p class="section-sub">매칭이 체결 하나를 fill 스트림에 1회 발행하고, 계좌 프로세스 하나가 매수·매도를 둘 다 반영한다.</p>
+<div class="fig">
+  <svg viewBox="0 0 720 280" role="img" aria-label="AS-IS 단일 프로세스 체결 반영">
+    <defs>
+      <marker id="ab" markerWidth="9" markerHeight="9" refX="7" refY="3.2" orient="auto"><path d="M0 0 L7 3.2 L0 6.4 z" fill="#60a5fa"/></marker>
+      <filter id="gb" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    </defs>
+    <!-- 매칭 -->
+    <rect x="24" y="96" width="150" height="80" rx="12" fill="#141b25" stroke="#3b4a63"/>
+    <text x="99" y="128" fill="#7cc0ff" font-family="monospace" font-size="12.5" text-anchor="middle" font-weight="bold">matching-worker</text>
+    <text x="99" y="148" fill="#aeb6c2" font-family="monospace" font-size="10" text-anchor="middle">onFill: tradeId 1개</text>
+    <text x="99" y="163" fill="#7f8896" font-family="monospace" font-size="9" text-anchor="middle">FilledTrade 인코딩</text>
+    <!-- 화살표 1발행 -->
+    <path d="M174 136 H288" stroke="#60a5fa" stroke-width="2.2" fill="none" marker-end="url(#ab)"/>
+    <text x="231" y="124" fill="#60a5fa" font-family="monospace" font-size="10" text-anchor="middle">offer 1회</text>
+    <text x="231" y="152" fill="#7f8896" font-family="monospace" font-size="9" text-anchor="middle">FILL 스트림 6001</text>
+    <!-- account 단일 프로세스 -->
+    <rect x="292" y="60" width="220" height="160" rx="12" fill="#141b25" stroke="#3b4a63"/>
+    <text x="402" y="86" fill="#aeb6c2" font-family="monospace" font-size="12" text-anchor="middle" font-weight="bold">account-worker (단일)</text>
+    <rect x="312" y="100" width="180" height="30" rx="6" fill="#0d1a2b" stroke="#3b4a63"/>
+    <text x="402" y="120" fill="#7cc0ff" font-family="monospace" font-size="9.5" text-anchor="middle">AccountFillReceiver</text>
+    <text x="402" y="146" fill="#aeb6c2" font-family="monospace" font-size="9.5" text-anchor="middle">publishBuyFill + publishSellFill</text>
+    <rect x="312" y="158" width="86" height="46" rx="6" fill="#0f2e22" stroke="#34d399"/>
+    <text x="355" y="178" fill="#5eead4" font-family="monospace" font-size="9.5" text-anchor="middle">매수 90001</text>
+    <text x="355" y="194" fill="#7f8896" font-family="monospace" font-size="8.5" text-anchor="middle">반영</text>
+    <rect x="406" y="158" width="86" height="46" rx="6" fill="#0f2e22" stroke="#34d399"/>
+    <text x="449" y="178" fill="#5eead4" font-family="monospace" font-size="9.5" text-anchor="middle">매도 90002</text>
+    <text x="449" y="194" fill="#7f8896" font-family="monospace" font-size="8.5" text-anchor="middle">반영</text>
+    <!-- 오른쪽 설명 -->
+    <line x1="548" y1="72" x2="548" y2="208" stroke="#2a3442"/>
+    <text x="566" y="104" fill="#e6ebf2" font-family="monospace" font-size="11" font-weight="bold">두 계좌가</text>
+    <text x="566" y="122" fill="#e6ebf2" font-family="monospace" font-size="11" font-weight="bold">같은 메모리에</text>
+    <text x="566" y="150" fill="#7f8896" font-family="monospace" font-size="9.5">라우팅 불필요</text>
+    <text x="566" y="167" fill="#7f8896" font-family="monospace" font-size="9.5">한 수신기가</text>
+    <text x="566" y="181" fill="#7f8896" font-family="monospace" font-size="9.5">buy·sell 둘 다</text>
+    <text x="566" y="200" fill="#f5b13a" font-family="monospace" font-size="9.5">샤딩하면 깨짐 ↓</text>
+  </svg>
+  <div class="cap">체결 하나가 fill 스트림에 한 번 실려 오고, 계좌 프로세스 하나가 매수·매도 두 계좌를 같은 메모리에서 반영한다. 목적지가 하나라 라우팅이 필요 없다.</div>
+</div>
+
+<h2><span class="num">⑤</span>TO-BE — 슬롯으로 계산해 두 목적지로</h2>
+<p class="section-sub">매칭이 매수·매도 <code>accountId</code>를 각각 슬롯으로 바꿔 목적지를 정하고, 같은 체결을 두 샤드에 보낸다. 각 샤드는 자기 소유 계좌만 반영하고 나머지는 격리한다.</p>
+<div class="fig">
+  <svg viewBox="0 0 720 440" role="img" aria-label="TO-BE 샤딩 fan-out 체결 반영">
+    <defs>
+      <marker id="tg" markerWidth="9" markerHeight="9" refX="7" refY="3.2" orient="auto"><path d="M0 0 L7 3.2 L0 6.4 z" fill="#34d399"/></marker>
+      <marker id="ta" markerWidth="9" markerHeight="9" refX="7" refY="3.2" orient="auto"><path d="M0 0 L7 3.2 L0 6.4 z" fill="#f5b13a"/></marker>
+      <filter id="gg" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="3.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    </defs>
+    <!-- 매칭 -->
+    <rect x="20" y="176" width="140" height="88" rx="12" fill="#141b25" stroke="#3b4a63"/>
+    <text x="90" y="206" fill="#7cc0ff" font-family="monospace" font-size="12" text-anchor="middle" font-weight="bold">matching-worker</text>
+    <text x="90" y="226" fill="#aeb6c2" font-family="monospace" font-size="9.5" text-anchor="middle">onFill: tradeId 1개</text>
+    <text x="90" y="242" fill="#7f8896" font-family="monospace" font-size="8.5" text-anchor="middle">FilledTrade</text>
+    <!-- 라우팅 테이블 (신규) -->
+    <path d="M160 220 H196" stroke="#34d399" stroke-width="2.2" fill="none" marker-end="url(#tg)"/>
+    <g filter="url(#gg)"><rect x="200" y="168" width="150" height="104" rx="12" fill="#2a1c08" stroke="#f5b13a" stroke-width="1.8"/></g>
+    <text x="275" y="190" fill="#f5b13a" font-family="monospace" font-size="11.5" text-anchor="middle" font-weight="bold">라우팅 테이블</text>
+    <text x="275" y="205" fill="#f5c46b" font-family="monospace" font-size="8.5" text-anchor="middle">신규</text>
+    <text x="275" y="224" fill="#aeb6c2" font-family="monospace" font-size="9" text-anchor="middle">hash(buyAcct)%P</text>
+    <text x="275" y="238" fill="#aeb6c2" font-family="monospace" font-size="9" text-anchor="middle">hash(sellAcct)%P</text>
+    <text x="275" y="256" fill="#7f8896" font-family="monospace" font-size="8.5" text-anchor="middle">slot → endpoint</text>
+    <!-- 두 목적지로 발행 -->
+    <path d="M350 200 C400 200 400 120 452 120" stroke="#34d399" stroke-width="2.2" fill="none" marker-end="url(#tg)"/>
+    <path d="M350 240 C400 240 400 320 452 320" stroke="#34d399" stroke-width="2.2" fill="none" marker-end="url(#tg)"/>
+    <text x="405" y="150" fill="#34d399" font-family="monospace" font-size="9" text-anchor="middle">offer → 매수 endpoint</text>
+    <text x="405" y="300" fill="#34d399" font-family="monospace" font-size="9" text-anchor="middle">offer → 매도 endpoint</text>
+    <text x="401" y="222" fill="#7f8896" font-family="monospace" font-size="8.5" text-anchor="middle">같은 FilledTrade</text>
+    <text x="401" y="235" fill="#7f8896" font-family="monospace" font-size="8.5" text-anchor="middle">(unicast 2번)</text>
+    <!-- 매수 샤드 -->
+    <rect x="456" y="56" width="238" height="120" rx="12" fill="#141b25" stroke="#34d399" stroke-width="1.4"/>
+    <text x="575" y="80" fill="#5eead4" font-family="monospace" font-size="11" text-anchor="middle" font-weight="bold">샤드 A · 매수 90001 소유</text>
+    <text x="575" y="99" fill="#7f8896" font-family="monospace" font-size="8.5" text-anchor="middle">buy+sell 둘 다 시도</text>
+    <rect x="474" y="112" width="100" height="46" rx="6" fill="#0f2e22" stroke="#34d399"/>
+    <text x="524" y="132" fill="#5eead4" font-family="monospace" font-size="9.5" text-anchor="middle">buyFill</text>
+    <text x="524" y="148" fill="#5eead4" font-family="monospace" font-size="8.5" text-anchor="middle">✓ 반영</text>
+    <rect x="580" y="112" width="100" height="46" rx="6" fill="#2a1414" stroke="#f87171"/>
+    <text x="630" y="132" fill="#f87171" font-family="monospace" font-size="9.5" text-anchor="middle">sellFill</text>
+    <text x="630" y="148" fill="#f87171" font-family="monospace" font-size="8" text-anchor="middle">✕ NOT_FOUND</text>
+    <!-- 매도 샤드 -->
+    <rect x="456" y="264" width="238" height="120" rx="12" fill="#141b25" stroke="#34d399" stroke-width="1.4"/>
+    <text x="575" y="288" fill="#5eead4" font-family="monospace" font-size="11" text-anchor="middle" font-weight="bold">샤드 B · 매도 90002 소유</text>
+    <text x="575" y="307" fill="#7f8896" font-family="monospace" font-size="8.5" text-anchor="middle">buy+sell 둘 다 시도</text>
+    <rect x="474" y="320" width="100" height="46" rx="6" fill="#2a1414" stroke="#f87171"/>
+    <text x="524" y="340" fill="#f87171" font-family="monospace" font-size="9.5" text-anchor="middle">buyFill</text>
+    <text x="524" y="356" fill="#f87171" font-family="monospace" font-size="8" text-anchor="middle">✕ NOT_FOUND</text>
+    <rect x="580" y="320" width="100" height="46" rx="6" fill="#0f2e22" stroke="#34d399"/>
+    <text x="630" y="340" fill="#5eead4" font-family="monospace" font-size="9.5" text-anchor="middle">sellFill</text>
+    <text x="630" y="356" fill="#5eead4" font-family="monospace" font-size="8.5" text-anchor="middle">✓ 반영</text>
+    <!-- 하단 -->
+    <line x1="24" y1="410" x2="696" y2="410" stroke="#2a3442"/>
+    <text x="360" y="430" fill="#8b94a3" font-family="monospace" font-size="10" text-anchor="middle">각 샤드는 같은 체결을 받아 buy·sell 둘 다 시도하되, 자기 소유가 아닌 쪽은 ACCOUNT_NOT_FOUND로 조용히 버린다.</text>
+  </svg>
+  <div class="cap">매칭이 매수·매도 <code>accountId</code>를 슬롯으로 바꿔 목적지를 정하고, 같은 <code>FilledTrade</code>를 두 샤드에 unicast로 보낸다. 코덱은 그대로 두고, 반영 여부는 각 샤드의 소유 판정에 맡긴다.</div>
+</div>
+
+<h2><span class="num">⑥</span>수신 모델 A — 같은 바이트, 각자 자기 것만</h2>
+<p>매칭은 목적지별로 내용을 다르게 만들지 않는다. 같은 <code>FilledTrade</code>를 두 샤드에 그대로 보내고, 각 샤드가 <code>publishBuyFill</code>·<code>publishSellFill</code>을 둘 다 호출한다. 자기 샤드에 있는 계좌만 반영되고 없는 계좌는 <code>ACCOUNT_NOT_FOUND</code>로 거부된다. 코덱에 방향 표시나 분리 레코드를 넣지 않아 <code>FillCodec</code>이 그대로 남는다.</p>
+<div class="callout tobe">
+  <b>같은 샤드에 매수·매도가 같이 있는 경우.</b> 슬롯 계산 결과 두 계좌의 목적지가 같으면 같은 체결이 그 샤드에 두 번 도착한다. 계좌마다 이미 반영한 <code>tradeId</code>를 들고 있어 두 번째는 그냥 무시된다(<code>processedTradeIds</code>). 발행 쪽에서 목적지가 같으면 한 번만 보내는 최적화도 가능하지만, 두 번 보내도 멱등이 흡수하므로 라이브 경로의 정합성에는 영향이 없다.
+</div>
+
+<h2><span class="num">⑦</span>고쳐야 할 곳 = LLD 유닛 후보</h2>
+<p class="section-sub">위 흐름을 실제 코드로 옮기면 손대는 곳은 네 군데다. 아래를 LLD 단위로 잡을 생각이다(확정 전 초안).</p>
+<ol class="units">
+  <li><b>라우팅 테이블 (신규)</b> — <code>hash(accountId) % P</code>로 슬롯을 내고, 슬롯을 목적지 Aeron endpoint로 잇는 정적 표. 슬롯 수 <code>P</code>와 표 형식(config)을 정한다. <span class="path">core 또는 공용 위치 · matching-worker가 참조</span></li>
+  <li><b>매칭 발행 (변경)</b> — <code>AccountFillPublisher.onFill</code>이 단일 Publication에 1회 offer하던 것을, 라우팅 테이블로 매수·매도 목적지를 계산해 목적지별 Publication에 각각 offer하도록 바꾼다. never-drop·재시도 정책은 유지. <span class="path">matching-worker/.../messaging/AccountFillPublisher · MatchingFillPublishConfig</span></li>
+  <li><b>수신 구독 (변경)</b> — 지금은 모든 워커가 공유 스트림(6001)을 구독한다. 샤드별 endpoint로 나눠 각 샤드가 자기 목적지만 구독하게 한다. 반영 로직(buy+sell 둘 다 시도 + <code>NOT_FOUND</code> 격리)은 그대로 재사용. <span class="path">account-worker/.../config/AccountFillIntakeConfig · AccountFillReceiver</span></li>
+  <li><b>로컬 크로스샤드 검증</b> — <code>account-worker</code>를 두 샤드로 띄워(매수 90001 / 매도 90002 각각 다른 프로세스) 체결 한 건이 두 프로세스에 각각 반영되는지 확인한다. U3b 데모 시드를 두 샤드로 나누는 형태. <span class="path">application-udp.yml 계열 · seed 분할</span></li>
+</ol>
+
+<h2><span class="num">⑧</span>결정 요약</h2>
+<div class="tbl-scroll">
+<table>
+  <thead><tr><th class="k">항목</th><th>결정</th><th>근거</th></tr></thead>
+  <tbody>
+    <tr><td class="k">스코프</td><td>라이브 fan-out만 (복구·recording 다중화는 별도)</td><td>라이브가 서야 복구 대상이 생긴다. 한 번에 다 하려다 터진 정산 되돌림 교훈.</td></tr>
+    <tr><td class="k">수신 모델</td><td>A — 같은 <code>FilledTrade</code>를 두 목적지로, 각 샤드가 자기 것만 반영</td><td>코덱 무변경 + per-account <code>tradeId</code> 멱등 재사용. 전송을 unicast 2번으로 두기로 한 결정과 일치한다.</td></tr>
+    <tr><td class="k">라우팅</td><td>고정 슬롯 <code>hash(accountId)%P</code> → 정적 라우팅 테이블</td><td>ADR-031. 동적 리밸런싱은 HA 쪽에서 다루고, 여기서는 정적 표로 시작한다.</td></tr>
+    <tr><td class="k">멱등</td><td>기존 <code>processedTradeIds</code> 그대로</td><td>fan-out 중복·같은 샤드 이중 도착을 계좌별로 흡수하는 검증된 자산.</td></tr>
+    <tr><td class="k">코덱</td><td><code>FillCodec</code>·<code>FilledTrade</code> 변경 없음</td><td>수신 모델 A라 방향 플래그·분리 레코드가 불필요.</td></tr>
+    <tr><td class="k">범위 밖</td><td>단일 recording 가정 해소, UDP 바이트 순서 고정</td><td>복구와 전송은 각각 따로 다룬다. 라이브 경로와 분리한다.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<footer>
+  체결 전달 분리 설계 도식. 근거: 현재 체결 반영 경로 실측(AccountFillPublisher · AccountFillReceiver · FilledTrade/FillCodec · AccountState.processedTradeIds · AccountFillReplayer 단일 recording 가정), ADR-031(계좌 샤딩·정적 라우팅 테이블), ADR-033(fan-out 복원), 전송 결정(unicast 2번 · 수신자 측 Archive).
+</footer>
+
+</div>

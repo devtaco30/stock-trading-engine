@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>정산 왕복 마이그레이션</title>
+<style>
+  :root{
+    --bg:#faf9f6; --ink:#1c1d21; --muted:#5b6068; --line:#e4dfd6; --card:#ffffff;
+    --keep:#12855a; --drop:#b4520e; --new:#1f6fb2;
+    --keep-bg:#eaf6ee; --keep-bd:#bfe2ca;
+    --drop-bg:#f7e9df; --drop-bd:#e6c3a6;
+    color-scheme:light;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+    line-height:1.72;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1000px;margin:0 auto;padding:44px 20px 96px}
+  h1{font-size:clamp(27px,6vw,37px);font-weight:800;letter-spacing:-.02em;margin:0 0 10px;text-wrap:balance}
+  h1 .sub{display:block;font-size:.46em;font-weight:700;color:var(--muted);margin-top:10px;letter-spacing:0}
+  h2{font-size:clamp(20px,5vw,25px);font-weight:800;margin:56px 0 14px;padding-top:22px;border-top:2px solid var(--line);text-wrap:balance}
+  h3{font-size:16.5px;font-weight:800;margin:26px 0 8px}
+  p{margin:12px 0;word-break:keep-all;text-wrap:pretty}
+  .lead{font-size:clamp(16px,4vw,18px);color:#2f333a}
+  .note{font-size:13.5px;color:var(--muted)}
+  b.keep{color:var(--keep)} b.drop{color:var(--drop)} b.new{color:var(--new)}
+
+  /* 용어 카드 */
+  .terms{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:11px;margin:16px 0}
+  .term{background:var(--card);border:1px solid var(--line);border-radius:11px;padding:13px 15px}
+  .term b{display:block;font-size:14.5px;margin-bottom:3px}
+  .term span{font-size:13.5px;color:var(--muted)}
+
+  /* 도식 패널 (다크) */
+  .fig{background:#0d1117;border:1px solid #2a3442;border-radius:16px;padding:18px 16px 14px;margin:20px 0;box-shadow:0 8px 30px rgba(0,0,0,.28);overflow-x:auto}
+  .fig .cap{color:#8b93a1;font-size:12.5px;font-weight:800;letter-spacing:.06em;margin:0 0 4px;text-transform:uppercase}
+  .fig .capsub{color:#c9d1da;font-size:14.5px;font-weight:700;margin:0 0 12px}
+  .fig svg{width:100%;min-width:660px;height:auto;display:block}
+  .figlegend{display:flex;flex-wrap:wrap;gap:8px 16px;margin:12px 2px 0;font-size:12.5px;color:#aeb6c2}
+  .figlegend span{display:inline-flex;align-items:center;gap:6px}
+  .figlegend i{display:inline-block;width:12px;height:12px;border-radius:3px}
+  .figlegend i.dash{border-radius:0;height:3px;width:20px}
+
+  /* 비교표 */
+  .cmpwrap{overflow-x:auto;margin:16px 0}
+  table.cmp{border-collapse:collapse;width:100%;min-width:560px;font-size:14px}
+  table.cmp th,table.cmp td{border:1px solid var(--line);padding:10px 13px;text-align:left;vertical-align:top}
+  table.cmp thead th{background:#f1efe9;font-weight:800}
+  table.cmp th[scope=row]{background:#faf8f3;font-weight:700;white-space:nowrap}
+  table.cmp .a{color:var(--drop)} table.cmp .b{color:var(--keep)}
+
+  /* 유닛 목록 */
+  .units{display:flex;flex-direction:column;gap:10px;margin:18px 0}
+  .unit{display:flex;gap:13px;align-items:flex-start;background:var(--card);border:1px solid var(--line);border-radius:11px;padding:13px 15px}
+  .unit .u{flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;min-width:46px;height:26px;padding:0 8px;border-radius:8px;background:#eef4fb;color:#1f6fb2;font-weight:800;font-size:12.5px}
+  .unit .ut{font-weight:800;font-size:14.5px}
+  .unit .us{font-size:13px;color:var(--muted);margin-top:3px;line-height:1.6}
+
+  /* 박스 */
+  .box{border-radius:12px;padding:14px 17px;margin:20px 0}
+  .box b{display:block;margin-bottom:5px}
+  .box.key{background:#fdf3e3;border:1px solid #f0dcb4;border-left:4px solid #c2740a}
+  .box.info{background:#eef4fb;border:1px solid #cddff2;border-left:4px solid #2f6fc4}
+  code{background:#efece6;padding:1px 6px;border-radius:5px;font-size:.9em;font-family:"SF Mono",ui-monospace,Menlo,monospace}
+  .fig code{background:#1c2530;color:#cdd6e0}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>정산 왕복 마이그레이션
+    <span class="sub">Kafka → Aeron+Archive · AS-IS / TO-BE 설계안 (ADR-032)</span></h1>
+
+  <p class="lead">주식을 사면 대금이 바로 다 빠지지 않습니다. 매수 증거금만 먼저 예약되고, 체결로 생긴 나머지 대금(미수금)은 이틀 뒤(T+2)에 실제 잔고에서 빠집니다. 이 "미수금이 생겼다 → 이틀 뒤 잔고를 차감한다"를 계좌 워커와 정산 워커가 메시지로 주고받는 왕복이 <b>정산 왕복</b>입니다.</p>
+
+  <p>지금 이 왕복만 Kafka로 돌고 있습니다. 체결 경로는 이미 Aeron+Archive로 옮겼고(U2~U5), <b class="drop">정산 왕복이 v2에 남은 마지막 Kafka</b>입니다. 이걸 없애면 v2에서 Kafka가 완전히 빠집니다(ADR-032). 이 문서는 그 마이그레이션의 현재 모습(AS-IS)과 옮긴 뒤 모습(TO-BE), 그리고 설계에서 가장 까다로운 <b>"계좌로 들어가는 순서를 무엇이 보장하는가"</b>를 정리합니다.</p>
+
+  <h2>먼저 알아둘 이름</h2>
+  <div class="terms">
+    <div class="term"><b>미수금</b><span>매수 체결로 생겼지만 아직 안 낸 대금. 증거금으로 예약해둔 것 말고 나머지 몫이다.</span></div>
+    <div class="term"><b>T+2 정산</b><span>체결일로부터 2영업일 뒤 실제 잔고에서 미수금을 차감하는 것(여기선 영업일 미고려, 단순화).</span></div>
+    <div class="term"><b>settlementRef</b><span>정산 한 건의 신원값. 체결 하나당 정산 하나라 tradeId를 그대로 쓴다. 중복 도착을 막는 멱등키다.</span></div>
+    <div class="term"><b>Aeron</b><span>마이크로초(µs)급 저지연 메시징. UDP 위에 순서·유실복구를 얹은 것. 한 스트림 안에서만 순서를 보장한다.</span></div>
+    <div class="term"><b>Aeron Archive</b><span>Aeron 스트림을 디스크에 순서대로 기록(저널)하고 나중에 다시 재생(replay)하게 해주는 컴포넌트. 내구성·복구를 여기서 얻는다.</span></div>
+    <div class="term"><b>링버퍼 (single-writer)</b><span>계좌 엔진(LMAX Disruptor)의 입력 큐. 여러 스레드가 넣어도 한 소비자가 한 줄로 하나씩 처리한다 — 한 계좌를 한 곳만 만진다.</span></div>
+  </div>
+
+  <!-- ===================== AS-IS ===================== -->
+  <h2>AS-IS — 지금 (Kafka 왕복)</h2>
+  <p>왕복은 두 방향입니다. 위 줄(Forward)은 계좌가 정산에 "미수금 생겼다"를 알리는 방향, 아래 줄(Backward)은 정산이 계좌에 "이틀 지났으니 차감하라"를 되돌리는 방향입니다. 두 방향 다 Kafka 토픽 하나씩을 건넙니다.</p>
+
+  <div class="fig">
+    <div class="cap">AS-IS</div>
+    <div class="capsub">계좌 ↔ 정산 왕복이 Kafka 토픽 두 개를 건넌다</div>
+    <svg viewBox="0 0 900 430" role="img" aria-label="Kafka 기반 정산 왕복 AS-IS 도식">
+      <defs>
+        <marker id="aAmber" markerWidth="11" markerHeight="11" refX="7" refY="3.2" orient="auto"><path d="M0,0 L7.5,3.2 L0,6.4 Z" fill="#f5b13a"/></marker>
+        <marker id="aGreen" markerWidth="11" markerHeight="11" refX="7" refY="3.2" orient="auto"><path d="M0,0 L7.5,3.2 L0,6.4 Z" fill="#34d399"/></marker>
+      </defs>
+
+      <!-- 열 라벨 -->
+      <text x="175" y="30" text-anchor="middle" fill="#8ec0ff" font-size="14" font-weight="800">account-worker (계좌)</text>
+      <text x="725" y="30" text-anchor="middle" fill="#f5c46b" font-size="14" font-weight="800">settlement-worker (정산)</text>
+      <line x1="450" y1="44" x2="450" y2="410" stroke="#232c38" stroke-width="1.5" stroke-dasharray="3 6"/>
+
+      <!-- FORWARD 라벨 -->
+      <text x="24" y="78" fill="#7fd6b0" font-size="12.5" font-weight="800">FORWARD · 미수금 통지 (계좌 → 정산)</text>
+
+      <!-- forward: 계좌 엔진 -->
+      <rect x="40" y="92" width="150" height="52" rx="9" fill="#101c2e" stroke="#60a5fa"/>
+      <text x="115" y="114" text-anchor="middle" fill="#cfe1fb" font-size="12.5" font-weight="700">계좌 엔진</text>
+      <text x="115" y="132" text-anchor="middle" fill="#a9c6ef" font-size="10.5">매수 체결 → 미수금 기록</text>
+      <!-- 인메모리 콜백 -->
+      <line x1="190" y1="118" x2="228" y2="118" stroke="#60a5fa" stroke-width="2" marker-end="url(#aGreen)"/>
+      <text x="209" y="108" text-anchor="middle" fill="#7f93ad" font-size="9.5">콜백</text>
+      <rect x="230" y="92" width="180" height="52" rx="9" fill="#101c2e" stroke="#60a5fa"/>
+      <text x="320" y="114" text-anchor="middle" fill="#cfe1fb" font-size="12.5" font-weight="700">SettlementRequestPublisher</text>
+      <text x="320" y="132" text-anchor="middle" fill="#a9c6ef" font-size="10.5">인메모리 결과 리스너</text>
+
+      <!-- Kafka forward pipe -->
+      <rect x="450" y="98" width="0" height="0"/>
+      <line x1="410" y1="118" x2="588" y2="118" stroke="#f5b13a" stroke-width="2.6" marker-end="url(#aAmber)"/>
+      <rect x="452" y="103" width="146" height="30" rx="6" fill="#2a2110" stroke="#f5b13a"/>
+      <text x="525" y="123" text-anchor="middle" fill="#f5c46b" font-size="11.5" font-weight="800">Kafka · settlement-requests</text>
+
+      <!-- forward: settlement 수신 → PENDING -->
+      <rect x="590" y="92" width="170" height="52" rx="9" fill="#2a2110" stroke="#c79433"/>
+      <text x="675" y="114" text-anchor="middle" fill="#f5e0b8" font-size="12.5" font-weight="700">SettlementRequestConsumer</text>
+      <text x="675" y="132" text-anchor="middle" fill="#d8c197" font-size="10.5">소비 → 저장 위임</text>
+      <line x1="760" y1="118" x2="792" y2="118" stroke="#f5b13a" stroke-width="2" marker-end="url(#aAmber)"/>
+      <rect x="778" y="150" width="102" height="52" rx="9" fill="#0e2a1e" stroke="#34d399"/>
+      <line x1="795" y1="144" x2="820" y2="150" stroke="#34d399" stroke-width="0"/>
+      <text x="829" y="172" text-anchor="middle" fill="#8fe6c1" font-size="12" font-weight="700">PENDING</text>
+      <text x="829" y="189" text-anchor="middle" fill="#7fd6b0" font-size="10">Postgres (잡큐)</text>
+      <line x1="792" y1="126" x2="820" y2="150" stroke="#c79433" stroke-width="2" marker-end="url(#aAmber)"/>
+
+      <!-- BACKWARD 라벨 -->
+      <text x="24" y="258" fill="#f5c46b" font-size="12.5" font-weight="800">BACKWARD · T+2 차감 명령 (정산 → 계좌)</text>
+
+      <!-- backward: T+2 스캔 → Settler -->
+      <rect x="700" y="272" width="160" height="52" rx="9" fill="#2a2110" stroke="#c79433"/>
+      <text x="780" y="294" text-anchor="middle" fill="#f5e0b8" font-size="12.5" font-weight="700">T+2 스캔 스케줄러</text>
+      <text x="780" y="312" text-anchor="middle" fill="#d8c197" font-size="10.5">만기 PENDING 조회</text>
+      <line x1="700" y1="298" x2="662" y2="298" stroke="#f5b13a" stroke-width="2" marker-end="url(#aAmber)"/>
+      <rect x="500" y="272" width="160" height="52" rx="9" fill="#2a2110" stroke="#c79433"/>
+      <text x="580" y="294" text-anchor="middle" fill="#f5e0b8" font-size="12.5" font-weight="700">PendingSettlementSettler</text>
+      <text x="580" y="312" text-anchor="middle" fill="#d8c197" font-size="10.5">발행 성공 후 SETTLED</text>
+
+      <!-- Kafka backward pipe -->
+      <line x1="500" y1="298" x2="322" y2="298" stroke="#f5b13a" stroke-width="2.6" marker-end="url(#aAmber)"/>
+      <rect x="332" y="283" width="146" height="30" rx="6" fill="#2a2110" stroke="#f5b13a"/>
+      <text x="405" y="303" text-anchor="middle" fill="#f5c46b" font-size="11.5" font-weight="800">Kafka · account-settlements</text>
+
+      <!-- backward: 계좌 수신 → applySettlement -->
+      <rect x="150" y="272" width="170" height="52" rx="9" fill="#101c2e" stroke="#60a5fa"/>
+      <text x="235" y="294" text-anchor="middle" fill="#cfe1fb" font-size="12.5" font-weight="700">AccountSettlementConsumer</text>
+      <text x="235" y="312" text-anchor="middle" fill="#a9c6ef" font-size="10.5">→ publishSettlement (링버퍼)</text>
+      <line x1="150" y1="298" x2="118" y2="298" stroke="#60a5fa" stroke-width="2" marker-end="url(#aGreen)"/>
+      <rect x="8" y="340" width="132" height="48" rx="9" fill="#101c2e" stroke="#60a5fa"/>
+      <text x="74" y="361" text-anchor="middle" fill="#cfe1fb" font-size="12" font-weight="700">applySettlement</text>
+      <text x="74" y="378" text-anchor="middle" fill="#a9c6ef" font-size="10">실제 잔고 차감</text>
+      <line x1="98" y1="306" x2="82" y2="340" stroke="#60a5fa" stroke-width="2" marker-end="url(#aGreen)"/>
+    </svg>
+    <div class="figlegend">
+      <span><i style="background:#f5b13a"></i>Kafka (제거 대상)</span>
+      <span><i style="background:#60a5fa"></i>계좌 워커</span>
+      <span><i style="background:#c79433"></i>정산 워커</span>
+      <span><i style="background:#34d399"></i>Postgres 잡큐 (유지)</span>
+    </div>
+  </div>
+
+  <!-- ===================== TO-BE ===================== -->
+  <h2>TO-BE — 옮긴 뒤 (Aeron+Archive 왕복)</h2>
+  <p>두 방향 다 Kafka 토픽을 <b>Aeron 스트림 + Archive 녹화</b>로 바꿉니다. 체결 마이그레이션(U2~U5)과 똑같은 패턴입니다 — 발행 쪽이 Aeron으로 쏘면서 Archive에 녹화하고, 받는 쪽이 구독하며, 재시작 때는 마지막으로 읽은 position부터 Archive를 replay해 못 받은 걸 메웁니다. <b class="new">정산의 잡큐(PENDING·T+2 만기)는 그대로 Postgres에 남습니다</b> — Aeron으로 옮기는 건 잡큐가 아니라 두 방향의 "메시지"뿐입니다.</p>
+
+  <div class="fig">
+    <div class="cap">TO-BE</div>
+    <div class="capsub">Kafka 두 토픽 → Aeron 스트림 + Archive 녹화 두 개. 잡큐는 Postgres 유지</div>
+    <svg viewBox="0 0 900 470" role="img" aria-label="Aeron+Archive 기반 정산 왕복 TO-BE 도식">
+      <defs>
+        <marker id="bGreen" markerWidth="11" markerHeight="11" refX="7" refY="3.2" orient="auto"><path d="M0,0 L7.5,3.2 L0,6.4 Z" fill="#34d399"/></marker>
+        <marker id="bBlue" markerWidth="11" markerHeight="11" refX="7" refY="3.2" orient="auto"><path d="M0,0 L7.5,3.2 L0,6.4 Z" fill="#60a5fa"/></marker>
+        <marker id="bPurple" markerWidth="11" markerHeight="11" refX="7" refY="3.2" orient="auto"><path d="M0,0 L7.5,3.2 L0,6.4 Z" fill="#a78bfa"/></marker>
+      </defs>
+
+      <text x="175" y="30" text-anchor="middle" fill="#8ec0ff" font-size="14" font-weight="800">account-worker (계좌)</text>
+      <text x="725" y="30" text-anchor="middle" fill="#f5c46b" font-size="14" font-weight="800">settlement-worker (정산)</text>
+      <line x1="450" y1="44" x2="450" y2="452" stroke="#232c38" stroke-width="1.5" stroke-dasharray="3 6"/>
+
+      <!-- FORWARD -->
+      <text x="24" y="78" fill="#7fd6b0" font-size="12.5" font-weight="800">FORWARD · 미수금 통지 (계좌 → 정산)</text>
+      <rect x="40" y="92" width="150" height="52" rx="9" fill="#101c2e" stroke="#60a5fa"/>
+      <text x="115" y="114" text-anchor="middle" fill="#cfe1fb" font-size="12.5" font-weight="700">계좌 엔진</text>
+      <text x="115" y="132" text-anchor="middle" fill="#a9c6ef" font-size="10.5">미수금 기록</text>
+
+      <line x1="190" y1="118" x2="228" y2="118" stroke="#34d399" stroke-width="2" marker-end="url(#bGreen)"/>
+      <rect x="230" y="88" width="180" height="60" rx="9" fill="#0e2a1e" stroke="#34d399" stroke-width="1.8"/>
+      <text x="320" y="108" text-anchor="middle" fill="#8fe6c1" font-size="12.5" font-weight="700">결과 출력 스트림</text>
+      <text x="320" y="125" text-anchor="middle" fill="#7fd6b0" font-size="10">Aeron 발행 + Archive 녹화</text>
+      <text x="320" y="140" text-anchor="middle" fill="#f5b13a" font-size="9.5" font-weight="700">★ 계좌 최초의 출력</text>
+
+      <line x1="410" y1="118" x2="588" y2="118" stroke="#34d399" stroke-width="2.6" marker-end="url(#bGreen)"/>
+      <rect x="454" y="103" width="142" height="30" rx="6" fill="#0e2a1e" stroke="#34d399"/>
+      <text x="525" y="123" text-anchor="middle" fill="#8fe6c1" font-size="11" font-weight="800">Aeron+Archive · 미수금</text>
+
+      <rect x="590" y="92" width="180" height="52" rx="9" fill="#2a2110" stroke="#c79433"/>
+      <text x="680" y="113" text-anchor="middle" fill="#f5e0b8" font-size="12.5" font-weight="700">미수금 수신기</text>
+      <text x="680" y="131" text-anchor="middle" fill="#d8c197" font-size="10.5">구독 + 복구 replay</text>
+      <line x1="770" y1="118" x2="798" y2="140" stroke="#c79433" stroke-width="2" marker-end="url(#bGreen)"/>
+      <rect x="788" y="150" width="104" height="52" rx="9" fill="#0e2a1e" stroke="#34d399"/>
+      <text x="840" y="172" text-anchor="middle" fill="#8fe6c1" font-size="12" font-weight="700">PENDING</text>
+      <text x="840" y="189" text-anchor="middle" fill="#7fd6b0" font-size="10">Postgres (유지)</text>
+
+      <!-- replay 표시 -->
+      <path d="M 636 150 C 620 175, 700 180, 690 152" fill="none" stroke="#a78bfa" stroke-width="1.8" marker-end="url(#bPurple)"/>
+      <text x="663" y="197" text-anchor="middle" fill="#b9a4f0" font-size="10">재시작 시 Archive replay</text>
+
+      <!-- BACKWARD -->
+      <text x="24" y="298" fill="#f5c46b" font-size="12.5" font-weight="800">BACKWARD · T+2 차감 명령 (정산 → 계좌)</text>
+      <rect x="700" y="312" width="160" height="52" rx="9" fill="#2a2110" stroke="#c79433"/>
+      <text x="780" y="334" text-anchor="middle" fill="#f5e0b8" font-size="12.5" font-weight="700">T+2 스캔 스케줄러</text>
+      <text x="780" y="352" text-anchor="middle" fill="#d8c197" font-size="10.5">만기 PENDING 조회</text>
+      <line x1="700" y1="338" x2="662" y2="338" stroke="#c79433" stroke-width="2" marker-end="url(#bGreen)"/>
+      <rect x="490" y="308" width="170" height="60" rx="9" fill="#0e2a1e" stroke="#34d399" stroke-width="1.8"/>
+      <text x="575" y="330" text-anchor="middle" fill="#8fe6c1" font-size="12" font-weight="700">차감 명령 발행</text>
+      <text x="575" y="347" text-anchor="middle" fill="#7fd6b0" font-size="10">Aeron + Archive 녹화</text>
+      <text x="575" y="361" text-anchor="middle" fill="#f5b13a" font-size="9.5" font-weight="700">★ 정산 최초의 Aeron</text>
+
+      <line x1="490" y1="338" x2="322" y2="338" stroke="#34d399" stroke-width="2.6" marker-end="url(#bGreen)"/>
+      <rect x="336" y="323" width="142" height="30" rx="6" fill="#0e2a1e" stroke="#34d399"/>
+      <text x="407" y="343" text-anchor="middle" fill="#8fe6c1" font-size="11" font-weight="800">Aeron+Archive · 차감</text>
+
+      <rect x="150" y="312" width="170" height="52" rx="9" fill="#101c2e" stroke="#60a5fa"/>
+      <text x="235" y="333" text-anchor="middle" fill="#cfe1fb" font-size="12.5" font-weight="700">AccountSettlementReceiver</text>
+      <text x="235" y="351" text-anchor="middle" fill="#a9c6ef" font-size="10.5">→ publishSettlement (링버퍼)</text>
+      <line x1="150" y1="338" x2="118" y2="338" stroke="#60a5fa" stroke-width="2" marker-end="url(#bBlue)"/>
+      <rect x="8" y="380" width="132" height="48" rx="9" fill="#101c2e" stroke="#60a5fa"/>
+      <text x="74" y="401" text-anchor="middle" fill="#cfe1fb" font-size="12" font-weight="700">applySettlement</text>
+      <text x="74" y="418" text-anchor="middle" fill="#a9c6ef" font-size="10">실제 잔고 차감</text>
+      <line x1="98" y1="346" x2="82" y2="380" stroke="#60a5fa" stroke-width="2" marker-end="url(#bBlue)"/>
+      <path d="M 200 364 C 185 392, 265 396, 255 366" fill="none" stroke="#a78bfa" stroke-width="1.8" marker-end="url(#bPurple)"/>
+      <text x="227" y="413" text-anchor="middle" fill="#b9a4f0" font-size="10">재시작 시 Archive replay</text>
+    </svg>
+    <div class="figlegend">
+      <span><i style="background:#34d399"></i>Aeron+Archive (신규·유지)</span>
+      <span><i style="background:#60a5fa"></i>계좌 워커</span>
+      <span><i style="background:#c79433"></i>정산 워커</span>
+      <span><i style="background:#a78bfa"></i>복구 replay</span>
+      <span><i style="background:#f5b13a"></i>★ 이번에 새로 생기는 것</span>
+    </div>
+  </div>
+
+  <!-- ===================== 핵심 결정: 순서 ===================== -->
+  <h2>핵심 결정 — 계좌로 들어가는 순서는 무엇이 보장하나</h2>
+  <p>ADR-032는 계좌→정산(Forward)만 규정하고, 정산→계좌(Backward)를 "설계 몫"으로 남겼습니다. 결정은 <b>차감 명령을 계좌의 Aeron 입력으로 넣는다</b>입니다. 이유가 강제적입니다 — 차감(<code>applySettlement</code>)은 잔고를 줄이고, 주문 접수는 그 잔고를 검증합니다. 그래서 차감 명령은 같은 계좌의 주문·체결과 <b>반드시 같은 순서로 직렬화</b>돼야 하고, 그게 성립하는 자리가 계좌의 입력 경로입니다.</p>
+
+  <p><b>그런데 Aeron은 한 스트림 안에서만 순서를 보장합니다.</b> 주문·체결·정산은 서로 다른 스트림으로 오는데, 스트림 사이 순서는 Aeron이 안 잡아줍니다. 그 순서를 잡는 건 Aeron이 아니라 <b class="new">계좌 엔진의 단일 링버퍼</b>입니다.</p>
+
+  <div class="fig">
+    <div class="cap">순서 보장</div>
+    <div class="capsub">세 입력이 한 링버퍼로 모이고, next()가 한 줄로 세운다 (single-writer)</div>
+    <svg viewBox="0 0 900 320" role="img" aria-label="계좌 링버퍼가 세 입력을 직렬화하는 도식">
+      <defs>
+        <marker id="cWhite" markerWidth="11" markerHeight="11" refX="7" refY="3.2" orient="auto"><path d="M0,0 L7.5,3.2 L0,6.4 Z" fill="#c9d1da"/></marker>
+        <marker id="cGreen2" markerWidth="11" markerHeight="11" refX="7" refY="3.2" orient="auto"><path d="M0,0 L7.5,3.2 L0,6.4 Z" fill="#34d399"/></marker>
+      </defs>
+
+      <!-- 세 프로듀서 -->
+      <rect x="30" y="40" width="210" height="46" rx="9" fill="#101c2e" stroke="#60a5fa"/>
+      <text x="135" y="60" text-anchor="middle" fill="#cfe1fb" font-size="12.5" font-weight="700">주문 수신기</text>
+      <text x="135" y="76" text-anchor="middle" fill="#a9c6ef" font-size="10">publishBuy / publishSell</text>
+      <rect x="30" y="127" width="210" height="46" rx="9" fill="#122a1f" stroke="#34d399"/>
+      <text x="135" y="147" text-anchor="middle" fill="#8fe6c1" font-size="12.5" font-weight="700">체결 수신기</text>
+      <text x="135" y="163" text-anchor="middle" fill="#7fd6b0" font-size="10">publishBuyFill / publishSellFill</text>
+      <rect x="30" y="214" width="210" height="46" rx="9" fill="#241a34" stroke="#a78bfa"/>
+      <text x="135" y="234" text-anchor="middle" fill="#c9b6f5" font-size="12.5" font-weight="700">정산 수신기 <tspan fill="#f5b13a" font-size="10" font-weight="700">(신규)</tspan></text>
+      <text x="135" y="250" text-anchor="middle" fill="#b9a4f0" font-size="10">publishSettlement</text>
+
+      <text x="135" y="290" text-anchor="middle" fill="#7d8592" font-size="10.5">세 스레드가 동시에 발행 (ProducerType.MULTI)</text>
+
+      <!-- 화살표 → 링버퍼 -->
+      <line x1="240" y1="63" x2="392" y2="140" stroke="#c9d1da" stroke-width="2" marker-end="url(#cWhite)"/>
+      <line x1="240" y1="150" x2="392" y2="150" stroke="#c9d1da" stroke-width="2" marker-end="url(#cWhite)"/>
+      <line x1="240" y1="237" x2="392" y2="162" stroke="#c9d1da" stroke-width="2" marker-end="url(#cWhite)"/>
+
+      <!-- 링버퍼 (셀) -->
+      <text x="520" y="92" text-anchor="middle" fill="#e7edf3" font-size="13" font-weight="800">계좌 링버퍼 · ringBuffer.next()</text>
+      <g>
+        <rect x="400" y="108" width="48" height="48" rx="6" fill="#1c2530" stroke="#3b4a5c"/>
+        <rect x="452" y="108" width="48" height="48" rx="6" fill="#1c2530" stroke="#3b4a5c"/>
+        <rect x="504" y="108" width="48" height="48" rx="6" fill="#1c2530" stroke="#3b4a5c"/>
+        <rect x="556" y="108" width="48" height="48" rx="6" fill="#1c2530" stroke="#3b4a5c"/>
+        <rect x="608" y="108" width="48" height="48" rx="6" fill="#1c2530" stroke="#3b4a5c"/>
+      </g>
+      <text x="424" y="138" text-anchor="middle" fill="#8ec0ff" font-size="13" font-weight="800">주문</text>
+      <text x="476" y="138" text-anchor="middle" fill="#6ee7b4" font-size="13" font-weight="800">체결</text>
+      <text x="528" y="138" text-anchor="middle" fill="#c9b6f5" font-size="13" font-weight="800">정산</text>
+      <text x="580" y="138" text-anchor="middle" fill="#8ec0ff" font-size="13" font-weight="800">주문</text>
+      <text x="632" y="138" text-anchor="middle" fill="#6ee7b4" font-size="13" font-weight="800">체결</text>
+      <text x="528" y="180" text-anchor="middle" fill="#9aa3b0" font-size="10.5">시퀀스 번호 순서로 한 줄</text>
+
+      <!-- 단일 소비자 + 저널 -->
+      <line x1="656" y1="132" x2="700" y2="132" stroke="#34d399" stroke-width="2.4" marker-end="url(#cGreen2)"/>
+      <rect x="702" y="86" width="176" height="52" rx="9" fill="#0e2a1e" stroke="#34d399" stroke-width="1.8"/>
+      <text x="790" y="107" text-anchor="middle" fill="#8fe6c1" font-size="12.5" font-weight="700">단일 소비자</text>
+      <text x="790" y="125" text-anchor="middle" fill="#7fd6b0" font-size="10.5">계좌 핸들러 · 하나씩 처리</text>
+      <line x1="790" y1="138" x2="790" y2="176" stroke="#34d399" stroke-width="2.4" marker-end="url(#cGreen2)"/>
+      <rect x="702" y="178" width="176" height="52" rx="9" fill="#0e2a1e" stroke="#34d399"/>
+      <text x="790" y="199" text-anchor="middle" fill="#8fe6c1" font-size="12.5" font-weight="700">Archive 저널</text>
+      <text x="790" y="217" text-anchor="middle" fill="#7fd6b0" font-size="10.5">처리 순서 그대로 기록 → replay 재현</text>
+    </svg>
+    <div class="figlegend">
+      <span>세 입력의 스트림-사이 순서는 <b style="color:#e7edf3">링버퍼 시퀀스 claim</b>이 확정한다. Aeron은 각 스트림 <b style="color:#e7edf3">안</b>의 순서만 책임진다.</span>
+    </div>
+  </div>
+
+  <div class="box key">
+    <b>그럼 순서가 아무렇게나 섞여도 되나 — 됩니다</b>
+    <p style="margin:6px 0 0">독립된 이벤트엔 "정답 순서"가 없어서, 링버퍼가 세운 어떤 순서든 유효한 single-writer 순서입니다. 유일한 인과 제약은 "체결은 자기 주문-accept 뒤에 온다"인데, 이건 주문이 물리적으로 계좌→매칭→체결을 돌고 오는 흐름이 이미 보장합니다(체결이 자기 주문보다 먼저 도착할 수 없음). 정산(T+2)은 이틀 전 tradeId라 신규 이벤트와 순서 제약이 없습니다. 그리고 링버퍼가 세운 그 순서를 <b>저널이 그대로 기록</b>하므로, 재시작 replay도 같은 순서를 재현합니다(결정론).</p>
+  </div>
+
+  <div class="box info">
+    <b>샤딩은 이 판단에 안 걸립니다</b>
+    <p style="margin:6px 0 0">지금은 계좌가 한 프로세스·링버퍼 하나라 정산 수신기를 세 번째 프로듀서로 얹으면 끝입니다. accountId 샤딩(ADR-031, 고정 슬롯+정적 라우팅)은 멀티프로세스(C5)에서야 등장하고, 그때는 계좌 X의 주문·체결·정산이 같은 샤드로 라우팅되면 이 링버퍼 직렬화가 그대로 성립합니다. 정산 때문에 생기는 새 난제가 아니라, 이미 있는 "두 경로 정렬" 과제에 정산도 같은 accountId 맵을 타는 것뿐입니다.</p>
+  </div>
+
+  <!-- ===================== 비교표 ===================== -->
+  <h2>Kafka vs Aeron+Archive — 무엇이 바뀌나</h2>
+  <div class="cmpwrap">
+    <table class="cmp">
+      <thead>
+        <tr><th scope="col">항목</th><th scope="col">AS-IS · Kafka</th><th scope="col">TO-BE · Aeron+Archive</th></tr>
+      </thead>
+      <tbody>
+        <tr><th scope="row">전달</th><td class="a">브로커 경유 (ms)</td><td class="b">Aeron 직접 (µs) — 정산은 배치라 속도 이득이 크진 않음</td></tr>
+        <tr><th scope="row">내구성</th><td class="a">Kafka 디스크 로그</td><td class="b">Archive 녹화</td></tr>
+        <tr><th scope="row">순서</th><td class="a">토픽 파티션(accountId 키)</td><td class="b">스트림 안 순서 + <b>계좌 링버퍼가 소스-사이 직렬화</b></td></tr>
+        <tr><th scope="row">복구</th><td class="a">컨슈머 offset 재개</td><td class="b">consumedPosition부터 Archive replay (U4 미러)</td></tr>
+        <tr><th scope="row">멱등</th><td class="a">settlementRef</td><td class="b">settlementRef (동일 — 로직 안 바뀜)</td></tr>
+        <tr><th scope="row">잡큐(PENDING·T+2)</th><td class="a">Postgres</td><td class="b">Postgres (그대로)</td></tr>
+        <tr><th scope="row">서드파티</th><td class="a">Aeron + Kafka 둘</td><td class="b">Aeron 하나</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="note">정산은 T+2 배치라 Aeron의 µs 저지연이 목적이 아닙니다. 옮기는 이유는 속도가 아니라 <b>서드파티를 하나로 줄이고(Kafka 제거) 내구성을 Archive 하나로 통일</b>하는 것입니다. Aeron을 타는 건 그 잡의 결과 메시지뿐이고, 잡큐 자체는 Postgres에 남습니다 — ADR-032가 경고한 "정산 잡큐를 Aeron에 얹지 말라"를 지키는 지점입니다.</p>
+
+  <!-- ===================== 유닛 ===================== -->
+  <h2>구현 유닛 (워커에 넘길 뼈대)</h2>
+  <p>체결 마이그레이션(U2~U5)보다 큽니다 — 양방향인 데다, 계좌가 처음으로 결과 출력 스트림을 갖고, settlement-worker가 처음으로 Aeron+Archive를 갖습니다. 아래는 유닛 후보이고, 각 유닛의 상세 LLD(입출력·처리순서·에러·테스트)는 착수 직전에 확정합니다.</p>
+  <div class="units">
+    <div class="unit"><span class="u">S1</span><div><div class="ut">코덱</div><div class="us">미수금 통지·차감 명령 두 메시지의 손코덱(<code>FilledTrade</code> 미러, tryDecode로 poison skip). core/codec에 record로.</div></div></div>
+    <div class="unit"><span class="u">S2</span><div><div class="ut">Forward 발행 — 계좌 결과 출력 스트림</div><div class="us">계좌가 미수금을 Aeron 스트림 + Archive 녹화로 발행. 지금 인메모리 리스너(<code>SettlementRequestPublisher</code>)를 대체. 계좌 최초의 출력 경로.</div></div></div>
+    <div class="unit"><span class="u">S3</span><div><div class="ut">Forward 수신 — settlement 구독</div><div class="us">settlement-worker가 그 스트림을 구독해 PENDING(Postgres) 저장. settlement-worker 최초의 Aeron+Archive 배선.</div></div></div>
+    <div class="unit"><span class="u">S4</span><div><div class="ut">Backward 발행 — 차감 명령</div><div class="us">T+2 스캔이 차감 명령을 Aeron + Archive 녹화로 발행(<code>PendingSettlementSettler</code> Kafka 발행 대체). 발행 성공 후 SETTLED 순서 유지.</div></div></div>
+    <div class="unit"><span class="u">S5</span><div><div class="ut">Backward 수신 — 계좌 입력</div><div class="us"><code>AccountSettlementConsumer</code>(Kafka) → <code>AccountSettlementReceiver</code>(Aeron). <code>engine.publishSettlement</code>로 링버퍼에 넣는 건 그대로. 체결 U3 미러.</div></div></div>
+    <div class="unit"><span class="u">S6</span><div><div class="ut">복구 position</div><div class="us">양쪽 수신기의 consumedPosition을 각자 스냅샷/스토어에 저장, 재시작 시 그 position부터 Archive replay(U4 미러).</div></div></div>
+    <div class="unit"><span class="u">S7</span><div><div class="ut">Kafka 잔재 제거</div><div class="us">두 토픽·두 이벤트 record·<code>AccountKafkaErrorHandlerConfig</code>·docker-compose Kafka 제거. 이 시점에 v2에서 Kafka 완전 소멸.</div></div></div>
+  </div>
+
+  <div class="box info">
+    <b>이 문서의 상태</b>
+    <p style="margin:6px 0 0">설계안(미구현)입니다. backward=계좌 Aeron 입력 결정과 위 유닛 뼈대까지가 이 세션(설계·리뷰)의 산출물이고, 실제 구현은 워커 세션이 유닛별 TDD로 진행합니다. 유닛 순서(Forward 먼저 vs Backward 먼저)와 스트림 ID 번호는 착수 직전 LLD에서 확정합니다.</p>
+  </div>
+
+</div>
+</body>
+</html>

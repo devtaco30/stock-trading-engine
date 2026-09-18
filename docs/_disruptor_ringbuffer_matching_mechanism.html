@@ -1,0 +1,426 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Disruptor RingBuffer 매칭 대체 메커니즘</title>
+<style>
+  :root{
+    --bg:#faf9f6; --ink:#1b1f24; --sub:#4b5563; --line:#e5e1d8;
+    --card:#ffffff; --accent:#2563eb; --green:#15803d; --amber:#b45309;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Pretendard",system-ui,sans-serif;
+    line-height:1.7;word-break:keep-all;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1040px;margin:0 auto;padding:40px 24px 80px}
+  h1{font-size:29px;font-weight:800;letter-spacing:-.02em;margin:0 0 6px;text-wrap:balance}
+  h2{font-size:21px;font-weight:800;letter-spacing:-.01em;margin:44px 0 14px;padding-top:18px;border-top:2px solid var(--line)}
+  h3{font-size:16.5px;font-weight:800;margin:22px 0 8px}
+  .lede{font-size:15px;color:var(--sub);margin:0 0 4px}
+  p{font-size:15.5px;text-wrap:pretty}
+  .muted{color:var(--sub)}
+  b.g{color:var(--green)} b.b{color:var(--accent)} b.a{color:var(--amber)}
+  code{background:#f0eee8;padding:1px 6px;border-radius:5px;font-size:13px;
+    font-family:"SF Mono",ui-monospace,Menlo,monospace}
+
+  .terms{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;margin:8px 0}
+  .term{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+  .term .name{font-weight:700;font-size:15px;margin-bottom:3px}
+  .term .desc{font-size:13.5px;color:var(--sub);line-height:1.6}
+
+  .legend{display:flex;flex-wrap:wrap;gap:14px;margin:6px 0 2px;font-size:13.5px;color:var(--sub)}
+  .legend span{display:inline-flex;align-items:center;gap:7px}
+  .dot{width:12px;height:12px;border-radius:3px;display:inline-block}
+
+  .fig{background:#0d1117;border:1px solid #222c39;border-radius:16px;
+    padding:22px 20px 18px;margin:10px 0 6px;box-shadow:0 8px 30px rgba(6,10,18,.18)}
+  .fig .cap{color:#e6edf3;font-weight:700;font-size:15px;margin:0 0 2px}
+  .fig .note{color:#8b97a6;font-size:12.5px;margin:10px 2px 0}
+  .fig svg{width:100%;height:auto;display:block;margin-top:8px}
+  .fig.green-frame{border-color:#1f5c48;box-shadow:0 0 0 1px #1f5c48 inset, 0 8px 30px rgba(6,10,18,.18)}
+
+  .explain{font-size:15px;margin:12px 2px 0}
+
+  table{width:100%;border-collapse:collapse;margin:12px 0;font-size:14px}
+  th,td{border:1px solid var(--line);padding:10px 12px;text-align:left;vertical-align:top}
+  th{background:#f2efe8;font-weight:700}
+  td.axis{background:#f7f5ef;font-weight:600;width:150px}
+  .col-asis{color:#9a3d55} .col-tobe{color:#15803d}
+
+  .callout{background:#fdf6e8;border:1px solid #ecd9a6;border-radius:12px;padding:14px 16px;margin:14px 0;font-size:14.5px}
+  .callout b{color:#8a5a10}
+
+  pre.code{background:#f0eee8;border:1px solid var(--line);border-radius:10px;
+    padding:14px 16px;overflow-x:auto;font-size:12.5px;line-height:1.6;margin:10px 0}
+  pre.code code{background:none;padding:0;font-size:inherit}
+  .filecap{font-size:12.5px;color:var(--sub);margin:0 0 4px;font-weight:600}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Kafka 매칭을 Disruptor RingBuffer가 대체하는 지점</h1>
+  <p class="lede">matching-engine 모듈의 AS-IS 코드와 새로 만든 matching-disruptor 모듈(Unit 1)의 TO-BE 코드를 나란히 놓고, 실제로 무엇이 바뀌고 무엇이 그대로 남는지 클래스·메서드 단위로 확인합니다.</p>
+
+  <h2>1. 맥락</h2>
+  <p>매칭(matching)은 한 종목의 매수·매도 주문 중 체결 가능한 쌍을 찾는 작업입니다. 같은 호가창(OrderBook)을 스레드 두 개가 동시에 건드리면 어느 주문이 먼저 처리됐는지가 뒤섞여 체결 가격·수량이 달라질 수 있습니다. 그래서 한 종목의 주문은 항상 스레드 하나가 순서대로 처리해야 합니다.</p>
+  <p>지금(AS-IS) 이 순서를 보장하는 주체는 Kafka입니다. 종목코드를 파티션 키로 써서 같은 종목의 메시지를 항상 같은 컨슈머 스레드로 보내고, <code>MatchingConsumer</code>가 그 메시지를 받아 <code>OrderBook</code>을 호출합니다.</p>
+  <p>이번에 만든 matching-disruptor 모듈(TO-BE)은 이 역할을 Disruptor 라이브러리의 RingBuffer(고정 크기 원형 배열)로 옮깁니다. 네트워크와 브로커를 거치지 않고, 같은 프로세스 안에서 미리 만들어 둔 배열 슬롯으로 주문을 전달합니다. 아래에서 확인하겠지만 <code>OrderBook</code> 자체는 코드 한 줄도 바뀌지 않았습니다. 바뀐 건 주문을 매칭 스레드로 넘기는 방식과, 그 스레드 하나뿐임을 보장하는 주체입니다.</p>
+
+  <h2>2. 용어</h2>
+  <div class="terms">
+    <div class="term"><div class="name">RingBuffer (링 버퍼)</div><div class="desc">Disruptor가 시작할 때 고정된 크기로 미리 만들어 두는 배열입니다. 이후에는 새 객체를 만들지 않고 같은 슬롯을 계속 돌려씁니다. <code>OrderEvent</code> 클래스 주석에 이 의도가 그대로 적혀 있습니다.</div></div>
+    <div class="term"><div class="name">Sequence (시퀀스)</div><div class="desc">슬롯 하나를 가리키는 번호입니다. <code>MatchingEngine.publishPlace</code>가 호출될 때마다 <code>ringBuffer.next()</code>로 다음 번호를 예약합니다.</div></div>
+    <div class="term"><div class="name">프로듀서 / 컨슈머</div><div class="desc">슬롯에 값을 채우는 쪽(프로듀서)과 채워진 슬롯을 순서대로 읽는 쪽(컨슈머)입니다. 이 프로젝트의 프로듀서는 <code>MatchingEngine.publishPlace·publishCancel</code>, 컨슈머는 <code>MatchingEventHandler</code>입니다.</div></div>
+    <div class="term"><div class="name">EventHandler (이벤트 핸들러)</div><div class="desc">슬롯 하나가 공개(publish)될 때마다 Disruptor가 호출하는 콜백입니다. <code>MatchingEventHandler.onEvent</code>가 이 콜백을 구현합니다.</div></div>
+    <div class="term"><div class="name">WaitStrategy (대기 전략)</div><div class="desc">컨슈머가 새 슬롯이 공개되길 기다리는 방식입니다. <code>MatchingEngine</code>은 인자를 생략하면 <code>BlockingWaitStrategy</code>를 씁니다. 조건 변수로 대기해 CPU를 계속 점유하지 않습니다.</div></div>
+    <div class="term"><div class="name">OrderBook (호가창)</div><div class="desc">한 종목의 매수·매도 주문을 가격순으로 담아 체결 쌍을 찾는 자료구조입니다. AS-IS의 <code>MatchingConsumer</code>와 TO-BE의 <code>MatchingEventHandler</code> 둘 다 이 클래스를 그대로 호출합니다.</div></div>
+  </div>
+
+  <h2>3. 범례</h2>
+  <div class="legend">
+    <span><i class="dot" style="background:#34d399"></i>안 바뀜 (양쪽 동일 코드)</span>
+    <span><i class="dot" style="background:#7cc0ff"></i>AS-IS · Kafka 경로</span>
+    <span><i class="dot" style="background:#5eead4"></i>TO-BE · Disruptor 경로</span>
+    <span><i class="dot" style="background:#f5b13a"></i>공개 대기 / 차이 있음</span>
+    <span><i class="dot" style="background:#7a8593"></i>Unit 1엔 없음 (생략)</span>
+  </div>
+
+  <h2>4. RingBuffer 슬롯의 생애주기</h2>
+  <div class="fig">
+    <p class="cap">슬롯 하나가 예약부터 재사용까지 거치는 다섯 단계</p>
+    <svg viewBox="0 0 1000 260" role="img" aria-label="RingBuffer 슬롯 생애주기">
+      <defs>
+        <marker id="lp" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto">
+          <path d="M0,0 L7,3 L0,6 Z" fill="#8b97a6"/></marker>
+      </defs>
+      <g font-family="inherit">
+        <!-- 5 stage boxes -->
+        <rect x="14"  y="40" width="176" height="86" rx="12" fill="#12202e" stroke="#2f5170"/>
+        <text x="102" y="68" fill="#7cc0ff" font-size="13" font-weight="800" text-anchor="middle">① next() 예약</text>
+        <text x="102" y="90" fill="#aeb6c2" font-size="11" text-anchor="middle">ringBuffer.next()</text>
+        <text x="102" y="106" fill="#aeb6c2" font-size="11" text-anchor="middle">가 시퀀스 번호를 받음</text>
+
+        <rect x="212" y="40" width="176" height="86" rx="12" fill="#12362a" stroke="#1f5c48"/>
+        <text x="300" y="68" fill="#5eead4" font-size="13" font-weight="800" text-anchor="middle">② 슬롯 기록</text>
+        <text x="300" y="90" fill="#aeb6c2" font-size="11" text-anchor="middle">event.setPlace(...)</text>
+        <text x="300" y="106" fill="#aeb6c2" font-size="11" text-anchor="middle">기존 슬롯 필드를 덮어씀</text>
+
+        <rect x="410" y="40" width="176" height="86" rx="12" fill="#12362a" stroke="#1f5c48"/>
+        <text x="498" y="68" fill="#5eead4" font-size="13" font-weight="800" text-anchor="middle">③ publish() 공개</text>
+        <text x="498" y="90" fill="#aeb6c2" font-size="11" text-anchor="middle">ringBuffer.publish(seq)</text>
+        <text x="498" y="106" fill="#aeb6c2" font-size="11" text-anchor="middle">finally 블록에서 호출</text>
+
+        <rect x="608" y="40" width="176" height="86" rx="12" fill="#12362a" stroke="#1f5c48"/>
+        <text x="696" y="68" fill="#5eead4" font-size="13" font-weight="800" text-anchor="middle">④ onEvent() 소비</text>
+        <text x="696" y="90" fill="#aeb6c2" font-size="11" text-anchor="middle">MatchingEventHandler</text>
+        <text x="696" y="106" fill="#aeb6c2" font-size="11" text-anchor="middle">가 공개된 순서대로 읽음</text>
+
+        <rect x="806" y="40" width="176" height="86" rx="12" fill="#1a1f27" stroke="#333c48"/>
+        <text x="894" y="68" fill="#cdd5df" font-size="13" font-weight="800" text-anchor="middle">⑤ clear() 비움</text>
+        <text x="894" y="90" fill="#aeb6c2" font-size="11" text-anchor="middle">finally 블록에서</text>
+        <text x="894" y="106" fill="#aeb6c2" font-size="11" text-anchor="middle">필드를 전부 되돌림</text>
+
+        <line x1="190" y1="83" x2="208" y2="83" stroke="#8b97a6" stroke-width="1.6" marker-end="url(#lp)"/>
+        <line x1="388" y1="83" x2="406" y2="83" stroke="#8b97a6" stroke-width="1.6" marker-end="url(#lp)"/>
+        <line x1="586" y1="83" x2="604" y2="83" stroke="#8b97a6" stroke-width="1.6" marker-end="url(#lp)"/>
+        <line x1="784" y1="83" x2="802" y2="83" stroke="#8b97a6" stroke-width="1.6" marker-end="url(#lp)"/>
+
+        <!-- 재사용 곡선 화살표: 5 -> 1 -->
+        <path d="M894,126 C894,200 102,200 102,126" fill="none" stroke="#f5b13a" stroke-width="1.8" stroke-dasharray="5 4" marker-end="url(#lp)"/>
+        <text x="498" y="216" fill="#f5b13a" font-size="12.5" font-weight="700" text-anchor="middle">⑥ 재사용 — 다음 바퀴에 같은 슬롯 객체가 다시 ①로 예약됨</text>
+        <text x="498" y="236" fill="#8b97a6" font-size="11" text-anchor="middle">새 OrderEvent 객체를 만들지 않고, 배열 안의 같은 자리를 계속 돌려쓴다</text>
+      </g>
+    </svg>
+    <p class="note">코드 근거: <code>MatchingEngine.publishPlace</code>는 <code>long sequence = ringBuffer.next()</code>로 자리를 예약하고, <code>try</code> 블록에서 <code>event.setPlace(...)</code>로 값을 채운 뒤 <code>finally</code>에서 <code>ringBuffer.publish(sequence)</code>를 호출합니다. 값을 채우는 중 예외가 나도 예약한 자리가 막히지 않도록 publish를 finally에 둔 것입니다. 컨슈머 쪽 <code>MatchingEventHandler.onEvent</code>도 <code>finally</code>에서 <code>event.clear()</code>를 호출해 다음 재사용 전까지 이전 주문 데이터를 들고 있지 않게 합니다.</p>
+  </div>
+
+  <h2>5. 원형 배열 안에서 프로듀서·컨슈머의 위치</h2>
+  <div class="fig">
+    <p class="cap">고정 크기 배열이 원형으로 이어져 있고, 프로듀서 커서와 컨슈머 시퀀스가 그 위를 따라 이동한다</p>
+    <svg viewBox="0 0 1000 560" role="img" aria-label="RingBuffer 원형 슬롯 상태">
+      <defs>
+        <marker id="cp" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto">
+          <path d="M0,0 L7,3 L0,6 Z" fill="#8b97a6"/></marker>
+        <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+          <feGaussianBlur stdDeviation="5" result="b"/>
+          <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+      </defs>
+      <g font-family="inherit">
+        <circle cx="500" cy="270" r="170" fill="none" stroke="#222c39" stroke-width="1.4" stroke-dasharray="3 5"/>
+
+        <!-- 12 슬롯: 0~4 gray(비어있음), 5 teal(소비중), 6~7 amber(대기), 8~11 gray(예약전) -->
+        <!-- slot 0 (500,100) -->
+        <rect x="480" y="80" width="40" height="40" rx="8" fill="#1a1f27" stroke="#333c48"/>
+        <text x="500" y="76" fill="#6b7684" font-size="10" text-anchor="middle">0</text>
+        <!-- slot 1 (585,122.6) -->
+        <rect x="565" y="102.6" width="40" height="40" rx="8" fill="#1a1f27" stroke="#333c48"/>
+        <text x="585" y="98.6" fill="#6b7684" font-size="10" text-anchor="middle">1</text>
+        <!-- slot 2 (647.2,185) -->
+        <rect x="627.2" y="165" width="40" height="40" rx="8" fill="#1a1f27" stroke="#333c48"/>
+        <text x="647.2" y="161" fill="#6b7684" font-size="10" text-anchor="middle">2</text>
+        <!-- slot 3 (670,270) -->
+        <rect x="650" y="250" width="40" height="40" rx="8" fill="#1a1f27" stroke="#333c48"/>
+        <text x="670" y="246" fill="#6b7684" font-size="10" text-anchor="middle">3</text>
+        <!-- slot 4 (647.2,355) -->
+        <rect x="627.2" y="335" width="40" height="40" rx="8" fill="#1a1f27" stroke="#333c48"/>
+        <text x="647.2" y="331" fill="#6b7684" font-size="10" text-anchor="middle">4</text>
+        <!-- slot 5 (585,417.4) 소비중 -->
+        <rect x="565" y="397.4" width="40" height="40" rx="8" fill="#12362a" stroke="#5eead4" stroke-width="2" filter="url(#glow)"/>
+        <text x="585" y="393.4" fill="#5eead4" font-size="10" font-weight="800" text-anchor="middle">5</text>
+        <!-- slot 6 (500,440) amber 대기 -->
+        <rect x="480" y="420" width="40" height="40" rx="8" fill="#2a230f" stroke="#f5b13a" stroke-width="1.6"/>
+        <text x="500" y="475" fill="#f5b13a" font-size="10" text-anchor="middle">6</text>
+        <!-- slot 7 (415,417.4) amber 대기 -->
+        <rect x="395" y="397.4" width="40" height="40" rx="8" fill="#2a230f" stroke="#f5b13a" stroke-width="1.6"/>
+        <text x="415" y="452.4" fill="#f5b13a" font-size="10" text-anchor="middle">7</text>
+        <!-- slot 8 (352.8,355) gray 예약전 -->
+        <rect x="332.8" y="335" width="40" height="40" rx="8" fill="#1a1f27" stroke="#333c48"/>
+        <text x="352.8" y="390" fill="#6b7684" font-size="10" text-anchor="middle">8</text>
+        <!-- slot 9 (330,270) -->
+        <rect x="310" y="250" width="40" height="40" rx="8" fill="#1a1f27" stroke="#333c48"/>
+        <text x="330" y="305" fill="#6b7684" font-size="10" text-anchor="middle">9</text>
+        <!-- slot 10 (352.8,185) -->
+        <rect x="332.8" y="165" width="40" height="40" rx="8" fill="#1a1f27" stroke="#333c48"/>
+        <text x="352.8" y="220" fill="#6b7684" font-size="10" text-anchor="middle">10</text>
+        <!-- slot 11 (415,122.6) -->
+        <rect x="395" y="102.6" width="40" height="40" rx="8" fill="#1a1f27" stroke="#333c48"/>
+        <text x="415" y="157.6" fill="#6b7684" font-size="10" text-anchor="middle">11</text>
+
+        <!-- 컨슈머 시퀀스 포인터 -> slot5 -->
+        <line x1="700" y1="470" x2="605" y2="425" stroke="#5eead4" stroke-width="1.8" marker-end="url(#cp)"/>
+        <text x="712" y="468" fill="#5eead4" font-size="12" font-weight="700">컨슈머 시퀀스</text>
+        <text x="712" y="486" fill="#8b97a6" font-size="11">지금 onEvent()가</text>
+        <text x="712" y="502" fill="#8b97a6" font-size="11">읽고 있는 슬롯</text>
+
+        <!-- 프로듀서 커서 -> slot8 -->
+        <line x1="230" y1="460" x2="330" y2="370" stroke="#7cc0ff" stroke-width="1.8" marker-end="url(#cp)"/>
+        <text x="222" y="465" fill="#7cc0ff" font-size="12" font-weight="700" text-anchor="end">프로듀서 커서</text>
+        <text x="222" y="481" fill="#8b97a6" font-size="11" text-anchor="end">다음 next() 가</text>
+        <text x="222" y="497" fill="#8b97a6" font-size="11" text-anchor="end">예약할 자리</text>
+
+        <text x="500" y="270" fill="#4b5563" font-size="11" text-anchor="middle" opacity="0">중심</text>
+
+        <!-- 재사용 안내 -->
+        <path d="M395,122.6 C300,60 260,140 310,250" fill="none" stroke="#f5b13a" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#cp)"/>
+        <text x="500" y="30" fill="#8b97a6" font-size="12" text-anchor="middle">배열 끝(11)까지 예약하면 처음(0) 슬롯으로 되돌아와 같은 객체를 재사용한다</text>
+      </g>
+    </svg>
+    <p class="note">회색 슬롯은 아직 예약되지 않았거나 컨슈머가 이미 처리하고 <code>clear()</code>까지 끝낸 자리입니다. 주황 슬롯(6·7)은 <code>setPlace</code>·<code>publish</code>가 끝나 컨슈머를 기다리는 자리입니다. 청록으로 빛나는 슬롯(5)은 지금 <code>MatchingEventHandler.onEvent</code>가 읽고 있는 자리입니다. 실제 버퍼 크기는 <code>MatchingEngine</code> 생성자의 <code>bufferSize</code> 인자로 정하며, 2의 거듭제곱이어야 하는 Disruptor의 제약이 있습니다(<code>DisruptorSmokeTest</code> 주석에도 명시돼 있습니다).</p>
+  </div>
+
+  <h2>6. 안 바뀌는 부분 — OrderBook</h2>
+  <div class="fig green-frame">
+    <p class="cap">AS-IS와 TO-BE가 같은 파일을 그대로 참조한다</p>
+    <svg viewBox="0 0 1000 220" role="img" aria-label="OrderBook 내부 자료구조">
+      <g font-family="inherit">
+        <rect x="20" y="20" width="290" height="180" rx="12" fill="#0f2419" stroke="#34d399" stroke-width="1.6"/>
+        <text x="165" y="46" fill="#5eead4" font-size="13" font-weight="800" text-anchor="middle">bids</text>
+        <text x="165" y="64" fill="#8b97a6" font-size="11" text-anchor="middle">TreeMap&lt;가격, Deque&gt;</text>
+        <text x="165" y="80" fill="#8b97a6" font-size="11" text-anchor="middle">내림차순 — 높은 가격 우선</text>
+        <rect x="40" y="96" width="250" height="30" rx="6" fill="#12362a" stroke="#1f5c48"/>
+        <text x="165" y="116" fill="#cdd5df" font-size="11" text-anchor="middle">가격 레벨별 Deque — 시간순 FIFO</text>
+        <rect x="40" y="134" width="250" height="30" rx="6" fill="#12362a" stroke="#1f5c48"/>
+        <text x="165" y="154" fill="#cdd5df" font-size="11" text-anchor="middle">addLast / pollFirst</text>
+        <text x="165" y="186" fill="#8b97a6" font-size="10.5" text-anchor="middle">firstEntry() 로 최우선 매수가 조회</text>
+
+        <rect x="355" y="20" width="290" height="180" rx="12" fill="#0f2419" stroke="#34d399" stroke-width="1.6"/>
+        <text x="500" y="46" fill="#5eead4" font-size="13" font-weight="800" text-anchor="middle">asks</text>
+        <text x="500" y="64" fill="#8b97a6" font-size="11" text-anchor="middle">TreeMap&lt;가격, Deque&gt;</text>
+        <text x="500" y="80" fill="#8b97a6" font-size="11" text-anchor="middle">오름차순 — 낮은 가격 우선</text>
+        <rect x="375" y="96" width="250" height="30" rx="6" fill="#12362a" stroke="#1f5c48"/>
+        <text x="500" y="116" fill="#cdd5df" font-size="11" text-anchor="middle">가격 레벨별 Deque — 시간순 FIFO</text>
+        <rect x="375" y="134" width="250" height="30" rx="6" fill="#12362a" stroke="#1f5c48"/>
+        <text x="500" y="154" fill="#cdd5df" font-size="11" text-anchor="middle">addLast / pollFirst</text>
+        <text x="500" y="186" fill="#8b97a6" font-size="10.5" text-anchor="middle">firstEntry() 로 최우선 매도가 조회</text>
+
+        <rect x="690" y="20" width="290" height="180" rx="12" fill="#0f2419" stroke="#34d399" stroke-width="1.6"/>
+        <text x="835" y="46" fill="#5eead4" font-size="13" font-weight="800" text-anchor="middle">orderIndex</text>
+        <text x="835" y="64" fill="#8b97a6" font-size="11" text-anchor="middle">HashMap&lt;orderId, OrderEntry&gt;</text>
+        <rect x="710" y="86" width="250" height="30" rx="6" fill="#12362a" stroke="#1f5c48"/>
+        <text x="835" y="106" fill="#cdd5df" font-size="11" text-anchor="middle">취소·멱등성 체크를 O(1)로</text>
+        <text x="835" y="140" fill="#8b97a6" font-size="10.5" text-anchor="middle">cancelOrder() 는 여기서 꺼내</text>
+        <text x="835" y="156" fill="#8b97a6" font-size="10.5" text-anchor="middle">엔트리를 취소 마킹만 한다</text>
+        <text x="835" y="180" fill="#8b97a6" font-size="10.5" text-anchor="middle">(Lazy Removal, drainInvalid)</text>
+      </g>
+    </svg>
+    <p class="note">세 자료구조 전부 <code>trading</code> 모듈의 <code>OrderBook.java</code> 안에 있습니다. AS-IS의 <code>MatchingConsumer</code>도, TO-BE의 <code>MatchingEventHandler</code>도 이 클래스를 <code>import</code>해서 <code>addOrder()</code>·<code>match()</code>·<code>cancelOrder()</code>를 그대로 호출합니다. 이 파일에는 이번 작업으로 바뀐 줄이 없습니다.</p>
+  </div>
+
+  <h2>7. 메커니즘 단계별 대체 — AS-IS ↔ TO-BE</h2>
+  <div class="fig">
+    <p class="cap">같은 역할끼리 세로로 맞춰 무엇이 교체되고, 무엇이 차이로 남고, 무엇이 생략됐는지</p>
+    <svg viewBox="0 0 1000 520" role="img" aria-label="메커니즘 단계별 AS-IS TO-BE 대체">
+      <defs>
+        <marker id="mp2" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto">
+          <path d="M0,0 L7,3 L0,6 Z" fill="#8b97a6"/></marker>
+      </defs>
+      <g font-family="inherit">
+        <text x="90"  y="36" fill="#8b97a6" font-size="12" font-weight="700" text-anchor="middle">단계</text>
+        <text x="311" y="36" fill="#f5a3b8" font-size="13" font-weight="800" text-anchor="middle">AS-IS · MatchingConsumer</text>
+        <text x="656" y="36" fill="#5eead4" font-size="13" font-weight="800" text-anchor="middle">TO-BE · MatchingEventHandler</text>
+        <text x="903" y="36" fill="#8b97a6" font-size="12" font-weight="700" text-anchor="middle">상태</text>
+        <line x1="16" y1="46" x2="986" y2="46" stroke="#222c39" stroke-width="1"/>
+
+        <!-- Row1 전달 매체 -->
+        <text x="90" y="89" fill="#cdd5df" font-size="12" font-weight="700" text-anchor="middle">전달 매체</text>
+        <rect x="168" y="62" width="286" height="46" rx="10" fill="#12202e" stroke="#2f5170"/>
+        <text x="311" y="90" fill="#7cc0ff" font-size="12" text-anchor="middle">Kafka 브로커 (orders 토픽)</text>
+        <line x1="460" y1="85" x2="500" y2="85" stroke="#8b97a6" stroke-width="1.6" marker-end="url(#mp2)"/>
+        <rect x="506" y="62" width="300" height="46" rx="10" fill="#12362a" stroke="#1f5c48"/>
+        <text x="656" y="90" fill="#5eead4" font-size="12" font-weight="700" text-anchor="middle">RingBuffer (프로세스 내부 배열)</text>
+        <rect x="820" y="66" width="166" height="38" rx="19" fill="#12362a" stroke="#1f5c48"/>
+        <text x="903" y="90" fill="#5eead4" font-size="11.5" font-weight="700" text-anchor="middle">지금 교체</text>
+
+        <!-- Row2 프로듀서 동작 -->
+        <text x="90" y="151" fill="#cdd5df" font-size="12" font-weight="700" text-anchor="middle">프로듀서 동작</text>
+        <rect x="168" y="124" width="286" height="46" rx="10" fill="#12202e" stroke="#2f5170"/>
+        <text x="311" y="147" fill="#7cc0ff" font-size="11.5" text-anchor="middle">이벤트 직렬화 후</text>
+        <text x="311" y="163" fill="#7cc0ff" font-size="11.5" text-anchor="middle">KafkaTemplate.send</text>
+        <line x1="460" y1="147" x2="500" y2="147" stroke="#8b97a6" stroke-width="1.6" marker-end="url(#mp2)"/>
+        <rect x="506" y="124" width="300" height="46" rx="10" fill="#12362a" stroke="#1f5c48"/>
+        <text x="656" y="147" fill="#5eead4" font-size="11.5" font-weight="700" text-anchor="middle">ringBuffer.next()+값 기록+publish()</text>
+        <text x="656" y="163" fill="#9fb6c9" font-size="10.5" text-anchor="middle">직렬화 없음 · 객체 재사용</text>
+        <rect x="820" y="128" width="166" height="38" rx="19" fill="#12362a" stroke="#1f5c48"/>
+        <text x="903" y="152" fill="#5eead4" font-size="11.5" font-weight="700" text-anchor="middle">지금 교체</text>
+
+        <!-- Row3 단일 스레드 보장 -->
+        <text x="90" y="205" fill="#cdd5df" font-size="12" font-weight="700" text-anchor="middle">단일 스레드</text>
+        <text x="90" y="221" fill="#cdd5df" font-size="12" font-weight="700" text-anchor="middle">보장 주체</text>
+        <rect x="168" y="186" width="286" height="46" rx="10" fill="#12202e" stroke="#2f5170"/>
+        <text x="311" y="209" fill="#7cc0ff" font-size="11.5" text-anchor="middle">Kafka 파티션 키(종목코드)</text>
+        <text x="311" y="225" fill="#7cc0ff" font-size="11.5" text-anchor="middle">→ 컨슈머 스레드 고정</text>
+        <line x1="460" y1="209" x2="500" y2="209" stroke="#8b97a6" stroke-width="1.6" marker-end="url(#mp2)"/>
+        <rect x="506" y="186" width="300" height="46" rx="10" fill="#12362a" stroke="#1f5c48"/>
+        <text x="656" y="209" fill="#5eead4" font-size="11.5" font-weight="700" text-anchor="middle">disruptor.handleEventsWith()</text>
+        <text x="656" y="225" fill="#9fb6c9" font-size="10.5" text-anchor="middle">→ 핸들러를 스레드 1개에 배정</text>
+        <rect x="820" y="190" width="166" height="38" rx="19" fill="#12362a" stroke="#1f5c48"/>
+        <text x="903" y="214" fill="#5eead4" font-size="11.5" font-weight="700" text-anchor="middle">지금 교체</text>
+
+        <!-- Row4 이벤트 수신 -->
+        <text x="90" y="267" fill="#cdd5df" font-size="12" font-weight="700" text-anchor="middle">이벤트 수신</text>
+        <rect x="168" y="248" width="286" height="46" rx="10" fill="#12202e" stroke="#2f5170"/>
+        <text x="311" y="271" fill="#7cc0ff" font-size="11.5" text-anchor="middle">consume(record, ack)</text>
+        <text x="311" y="287" fill="#7cc0ff" font-size="11.5" text-anchor="middle">poll + 역직렬화</text>
+        <line x1="460" y1="271" x2="500" y2="271" stroke="#8b97a6" stroke-width="1.6" marker-end="url(#mp2)"/>
+        <rect x="506" y="248" width="300" height="46" rx="10" fill="#12362a" stroke="#1f5c48"/>
+        <text x="656" y="271" fill="#5eead4" font-size="11.5" font-weight="700" text-anchor="middle">onEvent(event, sequence, endOfBatch)</text>
+        <text x="656" y="287" fill="#9fb6c9" font-size="10.5" text-anchor="middle">슬롯 객체를 직접 읽음</text>
+        <rect x="820" y="252" width="166" height="38" rx="19" fill="#12362a" stroke="#1f5c48"/>
+        <text x="903" y="276" fill="#5eead4" font-size="11.5" font-weight="700" text-anchor="middle">지금 교체</text>
+
+        <!-- Row5 종목별 호가창 보관 -->
+        <text x="90" y="329" fill="#cdd5df" font-size="12" font-weight="700" text-anchor="middle">호가창 보관</text>
+        <text x="90" y="345" fill="#9aa4b1" font-size="10.5" text-anchor="middle">(종목별)</text>
+        <rect x="168" y="310" width="286" height="46" rx="10" fill="#12202e" stroke="#2f5170"/>
+        <text x="311" y="333" fill="#7cc0ff" font-size="11.5" text-anchor="middle">OrderBookRegistry</text>
+        <text x="311" y="349" fill="#7cc0ff" font-size="11.5" text-anchor="middle">ConcurrentHashMap · Spring 빈</text>
+        <line x1="460" y1="333" x2="500" y2="333" stroke="#8b97a6" stroke-width="1.6" marker-end="url(#mp2)"/>
+        <rect x="506" y="310" width="300" height="46" rx="10" fill="#12362a" stroke="#1f5c48"/>
+        <text x="656" y="333" fill="#5eead4" font-size="11.5" font-weight="700" text-anchor="middle">핸들러 내부 books 필드</text>
+        <text x="656" y="349" fill="#9fb6c9" font-size="10.5" text-anchor="middle">일반 HashMap · 핸들러 전용</text>
+        <rect x="820" y="314" width="166" height="38" rx="19" fill="#12362a" stroke="#1f5c48"/>
+        <text x="903" y="338" fill="#5eead4" font-size="11" font-weight="700" text-anchor="middle">지금 교체(단순화)</text>
+
+        <!-- Row6 예외 처리 -->
+        <text x="90" y="391" fill="#cdd5df" font-size="12" font-weight="700" text-anchor="middle">예외 처리</text>
+        <rect x="168" y="368" width="286" height="58" rx="10" fill="#12202e" stroke="#2f5170"/>
+        <text x="311" y="388" fill="#7cc0ff" font-size="11" text-anchor="middle">BusinessException·IAE·ISE</text>
+        <text x="311" y="402" fill="#7cc0ff" font-size="11" text-anchor="middle">→ ack 후 폐기</text>
+        <text x="311" y="416" fill="#f5b13a" font-size="10.5" text-anchor="middle">그 외 → ack 미호출 → Kafka 재전달</text>
+        <line x1="460" y1="397" x2="500" y2="397" stroke="#8b97a6" stroke-width="1.6" marker-end="url(#mp2)"/>
+        <rect x="506" y="368" width="300" height="58" rx="10" fill="#2a230f" stroke="#5c4a1f"/>
+        <text x="656" y="388" fill="#f5b13a" font-size="11" text-anchor="middle">IAE·ISE만 잡아 해당 슬롯 폐기</text>
+        <text x="656" y="402" fill="#f5b13a" font-size="11" text-anchor="middle">(event.clear())</text>
+        <text x="656" y="416" fill="#f5b13a" font-size="10.5" text-anchor="middle">그 외 → 시퀀스 처리 자체가 멈춤</text>
+        <rect x="820" y="378" width="166" height="38" rx="19" fill="#2a230f" stroke="#5c4a1f"/>
+        <text x="903" y="402" fill="#f5b13a" font-size="11.5" font-weight="700" text-anchor="middle">차이 있음</text>
+
+        <!-- Row7 체결 출력 -->
+        <text x="90" y="465" fill="#cdd5df" font-size="12" font-weight="700" text-anchor="middle">체결 출력</text>
+        <text x="90" y="481" fill="#9aa4b1" font-size="10.5" text-anchor="middle">→ 정산</text>
+        <rect x="168" y="446" width="286" height="58" rx="10" fill="#12202e" stroke="#2f5170"/>
+        <text x="311" y="466" fill="#7cc0ff" font-size="11" text-anchor="middle">TradeFilledEvent → Kafka fills</text>
+        <text x="311" y="480" fill="#7cc0ff" font-size="11" text-anchor="middle">+ LTP·호가창 스냅샷 Redis 저장</text>
+        <line x1="460" y1="475" x2="500" y2="475" stroke="#8b97a6" stroke-width="1.6" marker-end="url(#mp2)"/>
+        <rect x="506" y="446" width="300" height="58" rx="10" fill="#1a1f27" stroke="#333c48" stroke-dasharray="5 4"/>
+        <text x="656" y="470" fill="#7a8593" font-size="11.5" text-anchor="middle">MatchListener.onFill() 호출만</text>
+        <text x="656" y="486" fill="#7a8593" font-size="10.5" text-anchor="middle">Unit 1에선 테스트가 결과 수집</text>
+        <rect x="820" y="456" width="166" height="38" rx="19" fill="#1a1f27" stroke="#333c48"/>
+        <text x="903" y="480" fill="#7a8593" font-size="11.5" font-weight="700" text-anchor="middle">Unit 1엔 없음</text>
+      </g>
+    </svg>
+    <p class="note">매칭 실행 자체의 순서 — <code>computeIfAbsent</code>로 종목별 호가창을 얻고, <code>containsOrder</code>로 중복 주문을 걸러내고, <code>addOrder</code> 후 <code>match()</code>를 빈 결과가 나올 때까지 반복하는 흐름 — 는 <code>MatchingConsumer.handlePlaced</code>와 <code>MatchingEventHandler.handlePlace</code>가 거의 그대로 같습니다. 표에 올린 차이는 그 흐름을 감싸는 조건들(호가창을 어디에 두는지, 예외를 어디까지 잡는지, 체결을 어디로 내보내는지)입니다.</p>
+  </div>
+
+  <h2>8. 비교표</h2>
+  <table>
+    <tr><th>항목</th><th class="col-asis">AS-IS · Kafka</th><th class="col-tobe">TO-BE · Disruptor (Unit 1)</th></tr>
+    <tr><td class="axis">전달</td><td class="col-asis">네트워크 + 브로커 디스크 로그</td><td class="col-tobe">같은 프로세스 안의 고정 배열</td></tr>
+    <tr><td class="axis">직렬화</td><td class="col-asis">발행·수신마다 직렬화·역직렬화</td><td class="col-tobe">없음 (슬롯 객체를 그대로 읽고 씀)</td></tr>
+    <tr><td class="axis">재시작 후 복구</td><td class="col-asis">Kafka 로그가 근거 — <code>onPartitionsAssigned</code>에서 PENDING 주문 재적재</td><td class="col-tobe">근거 없음 — 프로세스가 죽으면 링버퍼 내용은 사라짐 (저널러는 Unit 2 몫)</td></tr>
+    <tr><td class="axis">예외 발생 시</td><td class="col-asis">비즈니스 예외는 폐기, 그 외는 Kafka가 재전달</td><td class="col-tobe">도메인 예외만 해당 슬롯 폐기, 그 외는 시퀀스 처리가 멈춤(별도 처리기 없음)</td></tr>
+    <tr><td class="axis">체결 출력</td><td class="col-asis">Kafka fills 발행 + Redis 갱신</td><td class="col-tobe">MatchListener 콜백만 (Unit 1은 테스트 전용)</td></tr>
+    <tr><td class="axis">매칭 알고리즘</td><td colspan="2" style="color:#15803d;font-weight:700">OrderBook.java — 양쪽이 같은 클래스를 그대로 참조. 변경 없음.</td></tr>
+  </table>
+
+  <div class="callout">
+    <b>대체가 아닌 것</b> — 체결 출력(Kafka fills 발행)과 Redis 스냅샷은 이번에 Disruptor로 옮겨진 게 아니라 Unit 1 범위 밖입니다. <code>MatchingConsumer.writeOrderbookSnapshot()</code>은 메시지 하나를 처리할 때마다(체결 여부와 무관하게) 호가창을 Redis에 저장하는데, <code>MatchingEventHandler</code>에는 이 호출이 없습니다. 정산으로 이어지는 체결 발행은 v2 전체 계획에서도 계속 Kafka를 씁니다.
+  </div>
+
+  <h2>9. 코드로 확인</h2>
+
+  <h3>슬롯 생애주기 — 프로듀서 쪽 (MatchingEngine.java)</h3>
+  <p class="filecap">matching-disruptor/src/main/java/.../MatchingEngine.java</p>
+  <pre class="code"><code>public void publishPlace(long orderId, long accountId, String stockCode,
+                         OrderSide side, BigDecimal price, int quantity, Instant orderAt) {
+    long sequence = ringBuffer.next();
+    try {
+        OrderEvent event = ringBuffer.get(sequence);
+        event.setPlace(orderId, accountId, stockCode, side, price, quantity, orderAt);
+    } finally {
+        ringBuffer.publish(sequence);
+    }
+}</code></pre>
+
+  <h3>슬롯 생애주기 — 컨슈머 쪽 (MatchingEventHandler.java)</h3>
+  <p class="filecap">matching-disruptor/src/main/java/.../MatchingEventHandler.java</p>
+  <pre class="code"><code>@Override
+public void onEvent(OrderEvent event, long sequence, boolean endOfBatch) {
+    try {
+        if (event.getType() == EventType.PLACE) {
+            handlePlace(event);
+        } else if (event.getType() == EventType.CANCEL) {
+            handleCancel(event);
+        }
+    } catch (IllegalArgumentException | IllegalStateException e) {
+        // 도메인 불변식 위반(수량 초과·잘못된 상태 전이 등)은 재시도해도 같으므로 이 이벤트만 폐기한다.
+        // 핸들러에서 예외를 밖으로 던지면 Disruptor 기본 처리기가 시퀀스를 멈추므로 여기서 잡아 넘긴다.
+        log.log(Level.WARNING, "[매칭] 이벤트 폐기: ...");
+    } finally {
+        // 슬롯 재사용 대비: 이 핸들러가 마지막 소비자이므로 처리 후 비운다.
+        event.clear();
+    }
+}</code></pre>
+
+  <h3>종목별 호가창 보관 — AS-IS는 동시성 맵, TO-BE는 일반 맵</h3>
+  <p class="filecap">matching-disruptor/src/main/java/.../MatchingEventHandler.java</p>
+  <pre class="code"><code>// 단일 스레드만 접근하므로 일반 HashMap 으로 충분하다.
+private final Map&lt;String, OrderBook&gt; books = new HashMap&lt;&gt;();
+
+private void handlePlace(OrderEvent event) {
+    OrderBook book = books.computeIfAbsent(event.getStockCode(), k -&gt; new OrderBook());
+    if (book.containsOrder(event.getOrderId())) {
+        return; // 멱등성: 같은 주문이 중복 도착하면 무시한다.
+    }
+    OrderEntry entry = toEntry(event);
+    book.addOrder(entry);
+    runMatch(event.getStockCode(), book);
+}</code></pre>
+  <p class="explain">AS-IS의 <code>OrderBookRegistry</code>가 <code>ConcurrentHashMap</code>을 쓰는 이유는 여러 파티션(종목)을 같은 Spring 빈 인스턴스가 동시에 다룰 수 있어서입니다. <code>MatchingEventHandler</code>는 Disruptor가 스레드 하나에만 배정하는 객체이므로, 이 인스턴스의 <code>books</code> 필드에는 애초에 다른 스레드가 접근하지 않습니다. 그래서 락이 있는 동시성 맵 대신 일반 <code>HashMap</code>으로 충분합니다.</p>
+
+</div>
+</body>
+</html>

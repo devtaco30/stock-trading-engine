@@ -10,7 +10,7 @@
 |---|---|
 | 결정 32건과 근거 | [adr/README.md](adr/README.md) — ★ 여섯이 v1·v2의 뼈대입니다 |
 | v1과 v2 속도 비교 | [ADR-036](adr/ADR-036-v1-v2-measurement-design.md) · 원본 데이터 [loadtest/evidence/](loadtest/evidence/) |
-| 도메인 규칙 | [시나리오](docs/2_시나리오.md) — 100주 매수를 증거금 계산까지 숫자로 따라갑니다 |
+| 도메인 규칙 | [시나리오](https://devtaco30.github.io/stock-trading-engine/_scenario_walkthrough.html) — 100주 매수를 증거금 계산까지 숫자로 따라갑니다 |
 | 작업 중 남긴 기록 | [decision_records/README.md](decision_records/README.md) |
 
 ## 핵심 시나리오
@@ -114,10 +114,14 @@ docker compose up -d   # kafka · redis · postgres
 
 ## 문서
 
-- [1. 주식 거래 기본 개념](docs/1_주식거래_기본개념.md)
-- [2. 시나리오](docs/2_시나리오.md)
-- [3. API 명세](docs/3_API_명세.md)
-- [4. PostgreSQL 선정 근거](docs/4_PostgreSQL_선정_근거.md)
+구조와 측정 문서는 GitHub Pages에 올려 두었습니다 → **https://devtaco30.github.io/stock-trading-engine/**
+
+- 먼저 읽을 것 — 도메인 기본 개념 · 시나리오
+- v1 — 구조 정본 · 주문에서 체결, 정산까지 · Kafka 내부 동작 · 병목 분석
+- v2 — 구조 정본 · 링버퍼 매칭 · 체결 전달 분리 · 스냅샷과 tradeId 삭제 · 정산 왕복
+- v1과 v2 비교 — 전환 내용 · 두 구현 비교 · 처리량 측정 · 부하 측정 리포트
+
+레포 안에 있는 것: [API 명세](docs/3_API_명세.md) · [PostgreSQL 선정 근거](docs/4_PostgreSQL_선정_근거.md) · [인증 로그인 정리](docs/5_인증_로그인_정리.md)
 
 ---
 

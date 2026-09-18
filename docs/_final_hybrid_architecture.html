@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>v1 → v2 전환 — DB 락 분산에서 LMAX 하이브리드로</title>
+<style>
+  :root{
+    --bg:#f7f6f3; --card:#fff; --ink:#1f2430; --muted:#5b6472; --line:#e4e1da;
+    --acc:#1f8a58; --acc-bg:#e7f5ee;      /* 계좌축 = 초록 */
+    --stk:#2f6db3; --stk-bg:#eaf2fb;      /* 종목축 / LMAX = 파랑 */
+    --kfk:#b7791f; --kfk-bg:#fbf3e1;      /* Kafka = 앰버 */
+    --aer:#8845c9; --aer-bg:#f2ebfa;      /* Aeron = 보라 */
+    --red:#c0392b; --red-bg:#fbecea;      /* AS-IS·제거 = 빨강 */
+    --shadow:0 1px 2px rgba(20,25,35,.06),0 4px 16px rgba(20,25,35,.06);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Pretendard","Noto Sans KR",sans-serif;
+    line-height:1.62;-webkit-font-smoothing:antialiased;word-break:keep-all;overflow-wrap:anywhere}
+  h1,h2,h3,h4{text-wrap:balance} p,li,td{text-wrap:pretty}
+  .wrap{max-width:1220px;margin:0 auto;padding:40px 24px 90px}
+  .kicker{font-size:13px;font-weight:700;letter-spacing:.04em;color:var(--stk);text-transform:uppercase}
+  h1{font-size:31px;line-height:1.2;margin:6px 0 10px;font-weight:800;letter-spacing:-.01em}
+  .sub{font-size:16px;color:var(--muted);max-width:840px}
+  section{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px 24px;margin:18px 0;box-shadow:var(--shadow)}
+  h2{font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 16px;padding-bottom:10px;border-bottom:1px solid var(--line)}
+  h3{font-size:17px;font-weight:800;margin:0 0 6px}
+  p{margin:8px 0} .lead{font-size:16px} .muted{color:var(--muted)}
+  code{background:#f0efe9;border:1px solid var(--line);border-radius:5px;padding:1px 6px;font-family:"SF Mono",ui-monospace,Menlo,monospace;font-size:12px}
+  .legend{display:flex;flex-wrap:wrap;gap:16px;font-size:13.5px}
+  .legend .it{display:flex;align-items:center;gap:7px}
+  .dot{width:14px;height:14px;border-radius:4px;display:inline-block;border:1px solid rgba(0,0,0,.08)}
+  table{width:100%;border-collapse:collapse;font-size:13px;margin-top:4px}
+  th,td{text-align:left;padding:9px 11px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font-size:11.5px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted)}
+  td.asis{color:var(--red)} td.tobe{color:var(--acc);font-weight:600}
+  .pill{display:inline-block;font-size:11px;font-weight:700;border-radius:999px;padding:1px 9px}
+  .pill.aer{background:var(--aer-bg);color:var(--aer)} .pill.kfk{background:var(--kfk-bg);color:var(--kfk)}
+  .pill.stk{background:var(--stk-bg);color:var(--stk)} .pill.acc{background:var(--acc-bg);color:var(--acc)}
+  .callout{border-left:4px solid var(--stk);background:var(--stk-bg);border-radius:0 10px 10px 0;padding:12px 16px;margin:10px 0;font-size:14px}
+  .callout.acc{border-color:#7bc0a0;background:var(--acc-bg)}
+  .callout.red{border-color:#e0a49b;background:var(--red-bg)}
+  .concl{font-size:16px;font-weight:600}
+
+  .fig{margin:14px 0}
+  .fig.dark{background:#0d1117;border:1px solid #222b38;border-radius:14px;padding:18px 16px;
+    box-shadow:0 10px 34px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.03)}
+  .fig .cap{font-size:12px;font-weight:700;color:#aeb6c2;text-transform:uppercase;letter-spacing:.04em;margin-bottom:12px}
+  .fig svg{width:100%;height:auto;display:block}
+  .fignote{font-size:12.5px;color:#aeb6c2;margin-top:10px}
+  .fignote b{color:#e8edf3}
+
+  .pipe{display:flex;flex-direction:column;gap:0}
+  .lane{display:grid;grid-template-columns:200px 1fr 200px;gap:12px;align-items:center;padding:5px 0}
+  @media(max-width:900px){.lane{grid-template-columns:1fr}}
+  .node{border-radius:11px;padding:10px 12px;border:1.5px solid;font-size:12.5px;color:#d3d9e2}
+  .node .role{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px}
+  .node b{font-size:13.5px}
+  .node.acc{background:#0d1a14;border-color:#2f8f5f} .node.acc .role{color:#5eead4}
+  .node.stk{background:#101a26;border-color:#2b5f9e} .node.stk .role{color:#7cc0ff}
+  .node.set{background:#141b25;border-color:#3d4855} .node.set .role{color:#aab3c2}
+  .node.db{background:#1e1416;border-color:#7a3b3b} .node.db .role{color:#e2a0a0}
+  .chan{border-radius:11px;padding:8px 11px;border:1.5px solid}
+  .chan .tn{font-family:ui-monospace,monospace;font-size:12px;font-weight:700}
+  .chan .meta{font-size:10.5px;margin:2px 0 0}
+  .chan.kfk{background:#241a10;border-color:#9a6a1f} .chan.kfk .tn{color:#f5c46b} .chan.kfk .meta{color:#d9b876}
+  .chan.aer{background:#160f24;border-color:#5a3d8a} .chan.aer .tn{color:#c9a9f0} .chan.aer .meta{color:#a98fd0}
+  .lat{display:inline-block;font-size:9.5px;font-weight:800;border-radius:5px;padding:0 5px}
+  .lat.us{background:#160f24;border:1px solid #5a3d8a;color:#c9a9f0}
+  .lat.ms{background:#241a10;border:1px solid #9a6a1f;color:#f5c46b}
+  .arrow{text-align:center;color:#aab3c2;font-weight:800;font-size:13px;padding:2px 0}
+  .badge{display:inline-block;font-size:10px;font-weight:800;border-radius:5px;padding:1px 7px;margin-left:6px}
+  .badge.asis{background:var(--red-bg);color:var(--red)} .badge.tobe{background:var(--acc-bg);color:var(--acc)}
+</style>
+</head>
+<body>
+<div style="background:#7a1f1f;color:#ffecec;padding:14px 20px;font-family:-apple-system,system-ui,sans-serif;font-size:13.5px;line-height:1.6;border-bottom:3px solid #c0392b">⚠ <b>LEGACY — 옛 설계 기록</b> · 이 문서는 <b>2026-09-08 전송 전략 반전</b>(핫패스 전부 Aeron+Archive, Kafka는 정산·프로젝션 off-path)과 <b>계좌 상태 영속</b>(잔고=DB 조회모델) 결정 <b>이전</b>의 그림입니다. 당시 내린 선택(체결=Kafka fan-out 등)의 기록으로 남깁니다. <b>참조는 정본으로</b>: <code>_v2_architecture_implementation.html</code>(구조·전송) · <code>_v2_account_state_persistence.html</code>(영속).</div>
+
+<div class="wrap">
+
+  <header>
+    <div class="kicker">v1 → v2 전환 · stock-trading-engine</div>
+    <h1>DB 락 분산에서 LMAX 하이브리드로 — 컴포넌트별 전환</h1>
+    <p class="sub">v1은 DB 비관적 락으로 정합성을 지키고 세 모듈을 Kafka로 이었습니다.
+      v2는 계좌를 인메모리 소유권으로, 매칭을 종목별 LMAX 단일 스레드로 바꾸고, 통신을 성격에 따라 Aeron(속도)과 Kafka(내구성)로 나눕니다.
+      아래는 무엇을 무엇으로 바꾸는지의 상세입니다.</p>
+  </header>
+
+  <!-- 범례 -->
+  <section>
+    <h2>범례</h2>
+    <div class="legend">
+      <span class="it"><span class="dot" style="background:var(--red-bg);border-color:#e0a49b"></span> AS-IS (v1) · 제거·변경 대상</span>
+      <span class="it"><span class="dot" style="background:var(--acc-bg);border-color:#aed9c2"></span> 계좌축 · 계좌 워커</span>
+      <span class="it"><span class="dot" style="background:var(--stk-bg);border-color:#bcd6f0"></span> 종목축 · LMAX 매칭</span>
+      <span class="it"><span class="dot" style="background:var(--aer-bg);border-color:#d3bdec"></span> Aeron (µs)</span>
+      <span class="it"><span class="dot" style="background:var(--kfk-bg);border-color:#e6cf9a"></span> Kafka (ms)</span>
+    </div>
+  </section>
+
+  <!-- 컴포넌트별 전환 (핵심) -->
+  <section>
+    <h2>컴포넌트별 전환 — 무엇을 무엇으로</h2>
+    <table>
+      <thead><tr><th>부분</th><th>v1 (AS-IS)</th><th>v2 (TO-BE)</th><th>학습 포인트</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>계좌 검증</td>
+          <td class="asis"><code>order-engine</code> + <b>DB 비관적 락</b>(SELECT FOR UPDATE)</td>
+          <td class="tobe">인메모리 <b>계좌 워커</b>(accountId 소유, single writer). 락 제거</td>
+          <td class="muted">소유권으로 락 제거</td>
+        </tr>
+        <tr>
+          <td>매칭</td>
+          <td class="asis"><code>matching-engine</code> 인메모리 호가창 (Kafka 컨슈머 스레드)</td>
+          <td class="tobe">종목별 <b>LMAX</b> 단일 스레드 (Disruptor ring buffer, lock-free, 저널)</td>
+          <td class="muted">ring buffer·CAS·barrier·cache</td>
+        </tr>
+        <tr>
+          <td>정산·잔고</td>
+          <td class="asis"><code>settlement</code>가 <b>DB 잔고·보유 직접 차감</b></td>
+          <td class="tobe">계좌 워커가 반영. settlement는 <b>미수금·T+2만</b></td>
+          <td class="muted">계좌 쓰기 소유권 분리</td>
+        </tr>
+        <tr>
+          <td>주문 전송</td>
+          <td class="asis">Kafka <code>order-requests</code> (전송+저장 한 몸, ms)</td>
+          <td class="tobe"><span class="pill aer">Aeron</span> 전송(µs) + <b>Journaler</b>(디스크 저널) 분리</td>
+          <td class="muted">전송/저장 분리, UDP·공유메모리</td>
+        </tr>
+        <tr>
+          <td>체결 전송·반영</td>
+          <td class="asis">Kafka <code>fills</code> → settlement DB</td>
+          <td class="tobe"><span class="pill kfk">Kafka</span> <code>account-fills</code> fan-out + <b>tradeId 멱등</b></td>
+          <td class="muted">fan-out·멱등·eventual</td>
+        </tr>
+        <tr>
+          <td>복구</td>
+          <td class="asis">재시작 시 <b>DB 조회</b>로 상태 복원</td>
+          <td class="tobe"><b>입력 저널 replay</b> + 스냅샷 + 대기 노드 복제</td>
+          <td class="muted">event sourcing·replication</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="callout">한 줄: <b>계좌는 DB 락 → 인메모리 소유권, 매칭은 인메모리 → LMAX, 통신은 Kafka 단일 → Aeron+Kafka 분리, 복구는 DB → 저널 replay.</b></div>
+  </section>
+
+  <!-- AS-IS 흐름 -->
+  <section>
+    <h2>흐름 AS-IS (v1) — DB 락 + Kafka 파이프</h2>
+    <p>세 모듈이 Kafka로 이어지고, 계좌 정합성은 <code>order-engine</code>의 DB 비관적 락이, 체결 반영은 <code>settlement</code>의 DB 쓰기가 맡습니다. 매칭 코어 앞뒤에 Kafka가 끼어 있습니다.</p>
+    <div class="fig dark">
+      <div class="cap">v1 · api → Kafka → order-engine(DB락) → Kafka → matching → Kafka → settlement(DB)</div>
+      <div class="pipe">
+        <div class="lane">
+          <div class="node stk"><div class="role">입구</div><b>api</b></div>
+          <div class="chan kfk"><div class="tn">order-requests <span class="lat ms">ms</span></div><div class="meta">Kafka · accountId</div></div>
+          <div class="node db"><div class="role">order-engine</div><b>DB 비관적 락</b><br><span class="muted">SELECT FOR UPDATE 검증·저장</span></div>
+        </div>
+        <div class="arrow">▼</div>
+        <div class="lane">
+          <div class="node db"><div class="role">order-engine</div><b>DB 저장</b></div>
+          <div class="chan kfk"><div class="tn">orders <span class="lat ms">ms</span></div><div class="meta">Kafka · stockCode</div></div>
+          <div class="node stk"><div class="role">matching</div><b>인메모리 호가창</b></div>
+        </div>
+        <div class="arrow">▼</div>
+        <div class="lane">
+          <div class="node stk"><div class="role">matching</div><b>체결</b></div>
+          <div class="chan kfk"><div class="tn">fills <span class="lat ms">ms</span></div><div class="meta">Kafka · stockCode</div></div>
+          <div class="node db"><div class="role">settlement</div><b>DB 잔고·보유 차감</b></div>
+        </div>
+      </div>
+      <div class="fignote"><b>v1의 특징:</b> 정합성을 <b>DB 락</b>이 지킵니다(계좌 행 FOR UPDATE). 모든 홉이 Kafka라 <b>ms</b>. 매칭은 이미 인메모리지만, 그 앞뒤 경로가 Kafka·DB라 코어가 못 빨라집니다.</div>
+    </div>
+  </section>
+
+  <!-- TO-BE 흐름 -->
+  <section>
+    <h2>흐름 TO-BE (v2) — LMAX + Aeron/Kafka + 저널</h2>
+    <p>계좌 검증·예약은 인메모리 계좌 워커가(락 없음), 매칭은 종목별 LMAX가 합니다. 주문 경로는 Aeron(µs), 체결 경로는 Kafka(ms). 입력은 처리 전에 Journaler가 디스크에 남깁니다.</p>
+    <div class="fig dark">
+      <div class="cap">v2 · Aeron(주문·µs) → LMAX 매칭 → Kafka(체결·ms) → 계좌 반영 · 저널로 복구</div>
+      <div class="pipe">
+        <div class="lane">
+          <div class="node stk"><div class="role">입구</div><b>api</b></div>
+          <div class="chan aer"><div class="tn">order-commands <span class="lat us">µs</span></div><div class="meta">Aeron · accountId</div></div>
+          <div class="node acc"><div class="role">계좌 워커</div><b>인메모리 검증·예약</b><br><span class="muted">single writer · 락 없음</span></div>
+        </div>
+        <div class="arrow">▼ 통과분만</div>
+        <div class="lane">
+          <div class="node acc"><div class="role">계좌 워커</div><b>account 소유</b></div>
+          <div class="chan aer"><div class="tn">orders <span class="lat us">µs</span></div><div class="meta">Aeron · stockCode</div></div>
+          <div class="node stk"><div class="role">종목 LMAX</div><b>단일 스레드 매칭</b><br><span class="muted">Disruptor · 계좌 무관 · +Journaler</span></div>
+        </div>
+        <div class="arrow">▼ 체결</div>
+        <div class="lane">
+          <div class="node stk"><div class="role">종목 LMAX</div><b>체결</b></div>
+          <div class="chan kfk"><div class="tn">fills <span class="lat ms">ms</span></div><div class="meta">Kafka · 소비 settlement + fan-out</div></div>
+          <div class="node set"><div class="role">소비 2</div><b>settlement</b> · <b>fan-out</b></div>
+        </div>
+        <div class="arrow">▼ fan-out</div>
+        <div class="lane">
+          <div class="node set"><div class="role">Producer</div><b>fan-out</b></div>
+          <div class="chan kfk"><div class="tn">account-fills <span class="lat ms">ms</span></div><div class="meta">Kafka · accountId · tradeId 멱등</div></div>
+          <div class="node acc"><div class="role">계좌 워커</div><b>잔고·보유 반영</b></div>
+        </div>
+      </div>
+      <div class="fignote"><b>바뀐 지점:</b> DB 락이 사라지고(계좌 워커 single writer), 주문 경로가 Kafka→Aeron으로 <b>µs</b>가 됐고, settlement가 잔고 쓰기를 잃고, 체결 반영이 fan-out+멱등으로 옮겨졌습니다. 위 두 줄(주문→매칭)은 µs, 아래 두 줄(체결→반영)은 ms입니다.</div>
+    </div>
+  </section>
+
+  <!-- 저널·복제 레이어 (신규) -->
+  <section>
+    <h2>저널·복제 — 전송(Aeron)과 저장을 분리한다</h2>
+    <p>Aeron은 전송만 빠르게 하고 메모리에 남지 않습니다. 그래서 복구 근거인 저널은 <b>따로</b> 만듭니다. 입력이 도착하면 매칭(BLP)이 처리하기 <b>전에</b>, Journaler가 디스크에 append하고 Replicator가 대기 노드에 복제합니다. 셋이 같은 ring buffer를 fan-out으로 나눠 읽습니다.</p>
+    <div class="fig dark">
+      <div class="cap">입력 1건 → Journaler(디스크) · Replicator(복제) · BLP(매칭) 셋이 ring buffer fan-out</div>
+      <svg viewBox="0 0 720 210" role="img" aria-label="입력 하나가 저널 복제 매칭 세 소비자로 나뉘는 그림">
+        <defs>
+          <filter id="gJ" x="-70%" y="-70%" width="240%" height="240%"><feGaussianBlur stdDeviation="2.6" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+        </defs>
+        <!-- 입력 (Aeron, 보라) -->
+        <text x="16" y="24" font-size="11" fill="#c9a9f0">입력 (Aeron 전송)</text>
+        <rect x="16" y="86" width="150" height="46" rx="11" fill="#160f24" stroke="#5a3d8a"/>
+        <text x="91" y="108" text-anchor="middle" font-size="12.5" font-weight="800" fill="#c9a9f0">주문 이벤트</text>
+        <text x="91" y="124" text-anchor="middle" font-size="10" fill="#a98fd0">메모리 전송 · 휘발</text>
+        <!-- ring buffer -->
+        <rect x="206" y="88" width="88" height="44" rx="11" fill="#241a10" stroke="#d99a2b" filter="url(#gJ)"/>
+        <text x="250" y="106" text-anchor="middle" font-size="10.5" font-weight="800" fill="#f5c46b">ring</text>
+        <text x="250" y="121" text-anchor="middle" font-size="10.5" font-weight="800" fill="#f5c46b">buffer</text>
+        <path d="M166 109 L206 109" stroke="#8845c9" stroke-width="2.2" fill="none"/>
+        <!-- fan-out 세 갈래 -->
+        <g stroke-width="2.2" fill="none" opacity=".9">
+          <path d="M294 100 C 370 100, 380 44, 460 44" stroke="#f5b13a"/>
+          <path d="M294 110 C 370 110, 380 110, 460 110" stroke="#f5b13a"/>
+          <path d="M294 120 C 370 120, 380 176, 460 176" stroke="#f5b13a"/>
+        </g>
+        <circle cx="460" cy="44"  r="4.5" fill="#f5b13a" filter="url(#gJ)"/>
+        <circle cx="460" cy="110" r="4.5" fill="#f5b13a" filter="url(#gJ)"/>
+        <circle cx="460" cy="176" r="4.5" fill="#f5b13a" filter="url(#gJ)"/>
+        <!-- 세 소비자 -->
+        <rect x="460" y="24" width="244" height="40" rx="10" fill="#1e1416" stroke="#7a3b3b"/>
+        <text x="582" y="42" text-anchor="middle" font-size="12.5" font-weight="800" fill="#e2a0a0">Journaler → 디스크 저널</text>
+        <text x="582" y="57" text-anchor="middle" font-size="10" fill="#c99">복구 근거 (처리 전에 먼저)</text>
+        <rect x="460" y="90" width="244" height="40" rx="10" fill="#141b25" stroke="#3d4855"/>
+        <text x="582" y="108" text-anchor="middle" font-size="12.5" font-weight="800" fill="#aab3c2">Replicator → 대기 노드</text>
+        <text x="582" y="123" text-anchor="middle" font-size="10" fill="#8b95a4">HA (같은 입력 따라 돎)</text>
+        <rect x="460" y="156" width="244" height="40" rx="10" fill="#101a26" stroke="#2b5f9e"/>
+        <text x="582" y="174" text-anchor="middle" font-size="12.5" font-weight="800" fill="#7cc0ff">BLP → 매칭 처리</text>
+        <text x="582" y="189" text-anchor="middle" font-size="10" fill="#8b95a4">인메모리 호가창</text>
+      </svg>
+      <div class="fignote"><b>Aeron이 휘발이어도 복구는 됩니다.</b> 전송(Aeron)과 저장(Journaler)은 다른 층이니까요. Kafka는 이 둘을 한 몸으로 묶어 ms인데, v2는 전송을 Aeron으로 빼서 µs로 만들고 저장 책임을 <b>Journaler로 직접</b> 집니다. 복구 = 이 저널 replay.</div>
+    </div>
+  </section>
+
+  <!-- 통신 도구 결정 -->
+  <section>
+    <h2>통신 도구 — 왜 Aeron과 Kafka 둘인가</h2>
+    <table>
+      <thead><tr><th>구간</th><th>비즈니스 가치</th><th>도구</th><th>이유</th></tr></thead>
+      <tbody>
+        <tr><td>주문 → 매칭</td><td>속도 (체결 기회)</td><td><span class="pill aer">Aeron</span></td><td>공유메모리·UDP·zero-copy µs. 저널은 별도</td></tr>
+        <tr><td>체결 → 계좌·정산</td><td>정합성 (돈 무결)</td><td><span class="pill kfk">Kafka</span></td><td>디스크 로그·복제·리플레이. 유실=돈 어긋남</td></tr>
+      </tbody>
+    </table>
+    <div class="callout acc"><b>속도와 내구성은 같은 저울의 양끝.</b> Aeron이 빠른 건 디스크·내구성을 뺐기 때문이라, 체결 정산엔 못 씁니다. 그래서 속도 경로=Aeron, 돈 경로=Kafka로 나눕니다.</div>
+  </section>
+
+  <!-- 나눔/못나눔 -->
+  <section>
+    <h2>왜 이 구조인가 — 나눌 수 있는 것과 없는 것</h2>
+    <table>
+      <thead><tr><th>단위</th><th>나눌 수 있나</th><th>그래서</th></tr></thead>
+      <tbody>
+        <tr><td>종목 <b>간</b></td><td>가능 (독립)</td><td>종목 샤딩 — 여러 LMAX 노드, 노드 간 통신 없음</td></tr>
+        <tr><td>한 종목 <b>안</b> (호가창)</td><td>불가 (single writer)</td><td class="tobe">LMAX 단일 스레드로 빠르게 — 못 나누니 짜낸다</td></tr>
+        <tr><td>계좌</td><td>복제 불가 (교차)</td><td>accountId 소유권 하나 + 체결 fan-out</td></tr>
+      </tbody>
+    </table>
+    <div class="callout"><b>LMAX가 필요한 이유.</b> 나눌 수 있으면 샤딩이면 됩니다. 못 나누는 단위(한 종목 호가창, 한 계좌)를 단일 스레드로 둘 수밖에 없으니, 그 스레드를 극한으로 빠르게 만드는 것 — 그게 LMAX입니다.</div>
+  </section>
+
+  <section>
+    <h2>정리 — v1에서 v2로</h2>
+    <p class="concl">계좌를 DB 락에서 인메모리 소유권으로, 매칭을 인메모리에서 종목별 LMAX로, 통신을 Kafka 단일에서 Aeron(속도)·Kafka(내구성)로, 복구를 DB 조회에서 입력 저널 replay로 바꿉니다.</p>
+    <p class="muted">전송(Aeron)과 저장(Journaler)을 분리해 속도와 복구를 동시에 얻고, 계좌는 복제 없이 소유권으로 정합성을 지키며, 체결 교차는 fan-out+멱등으로 잇습니다. 학습으로는 이 전환이 분산 정합성과 하드웨어 최적화를 한 번에 담습니다.</p>
+  </section>
+
+</div>
+</body>
+</html>

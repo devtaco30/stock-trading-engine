@@ -1,0 +1,934 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>주문 접수부터 체결 반영까지</title>
+<style>
+  :root{
+    --bg:#faf9f6; --ink:#1c1d21; --muted:#5b6068; --line:#e4dfd6; --card:#ffffff;
+    --good:#12855a; --pick:#1f6fb2; --no:#b42318; --warn:#c2740a;
+    color-scheme:light;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+    line-height:1.72;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1060px;margin:0 auto;padding:44px 20px 96px}
+  h1{font-size:clamp(26px,6vw,36px);font-weight:800;letter-spacing:-.02em;margin:0 0 10px;text-wrap:balance}
+  h1 .sub{display:block;font-size:.46em;font-weight:700;color:var(--muted);margin-top:10px;letter-spacing:0}
+  h2{font-size:clamp(19px,5vw,24px);font-weight:800;margin:50px 0 12px;padding-top:20px;border-top:2px solid var(--line);text-wrap:balance}
+  h3{font-size:16px;font-weight:800;margin:26px 0 8px}
+  p{margin:11px 0;word-break:keep-all;text-wrap:pretty}
+  .lead{font-size:clamp(16px,4vw,18px);color:#2f333a}
+  .note{font-size:13.5px;color:var(--muted)}
+  code{background:#efece6;padding:1px 6px;border-radius:5px;font-size:.9em;font-family:"SF Mono",ui-monospace,Menlo,monospace}
+
+  .terms{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:11px;margin:16px 0}
+  .term{background:var(--card);border:1px solid var(--line);border-radius:11px;padding:13px 15px}
+  .term > b{display:block;font-size:14.5px;margin-bottom:4px}
+  .term span{font-size:13.5px;color:#3a3e45}
+
+  /* ── 도식 패널: 라이트 본문 안의 다크 카드 ─────────────────── */
+  .fig{background:#0d1117;border:1px solid #2a3442;border-radius:16px;padding:18px 16px 16px;margin:16px 0;
+    box-shadow:0 8px 30px rgba(0,0,0,.28);overflow-x:auto;
+    --grid:#161d27; --text:#e6edf3; --text-muted:#aeb6c2; --text-dim:#9aa4b2; --mask:#0d1117;
+    --lane-fill:rgba(20,27,37,.55); --lane-stroke:#2a3442;
+    --arrow:#637082; --arrow-emphasis:#34d399;
+    --frontend-fill:rgba(59,130,246,.18);  --frontend-stroke:#3b82f6;
+    --backend-fill:rgba(52,211,153,.14);   --backend-stroke:#34d399;
+    --database-fill:rgba(124,192,255,.13); --database-stroke:#7cc0ff;
+    --cloud-fill:rgba(245,158,11,.14);     --cloud-stroke:#f59e0b;
+    --security-fill:rgba(245,177,58,.15);  --security-stroke:#f5b13a;
+    --messagebus-fill:rgba(245,196,107,.14); --messagebus-stroke:#f5c46b;
+    --external-fill:rgba(30,38,50,.7);     --external-stroke:#94a3b8;
+  }
+  .fig .cap{color:#8b93a1;font-size:12px;font-weight:800;letter-spacing:.05em;margin:0 0 3px;text-transform:uppercase}
+  .fig .capsub{color:#c9d1da;font-size:14px;font-weight:700;margin:0 0 12px}
+  .fig svg{width:100%;min-width:960px;height:auto;display:block}
+  .fignote{color:#8b93a1;font-size:12.5px;margin:12px 2px 0;line-height:1.6}
+
+  .fig .c-grid{stroke:var(--grid);fill:none}
+  .fig .c-mask{fill:var(--mask);stroke:none}
+  .fig .c-lane{fill:var(--lane-fill);stroke:var(--lane-stroke);stroke-dasharray:6,6}
+  .fig .c-security-group{fill:transparent;stroke:var(--security-stroke);stroke-dasharray:4,4}
+  .fig .c-frontend{fill:var(--frontend-fill);stroke:var(--frontend-stroke)}
+  .fig .c-backend{fill:var(--backend-fill);stroke:var(--backend-stroke)}
+  .fig .c-database{fill:var(--database-fill);stroke:var(--database-stroke)}
+  .fig .c-cloud{fill:var(--cloud-fill);stroke:var(--cloud-stroke)}
+  .fig .c-security{fill:var(--security-fill);stroke:var(--security-stroke)}
+  .fig .c-messagebus{fill:var(--messagebus-fill);stroke:var(--messagebus-stroke)}
+  .fig .c-external{fill:var(--external-fill);stroke:var(--external-stroke)}
+  .fig .t-primary{fill:var(--text)}
+  .fig .t-muted{fill:var(--text-muted)}
+  .fig .t-dim{fill:var(--text-dim)}
+  .fig .t-frontend{fill:var(--frontend-stroke)}
+  .fig .t-backend{fill:var(--backend-stroke)}
+  .fig .t-database{fill:var(--database-stroke)}
+  .fig .t-security{fill:var(--security-stroke)}
+  .fig .t-messagebus{fill:var(--messagebus-stroke)}
+  .fig .t-external{fill:var(--external-stroke)}
+  .fig .a-default{stroke:var(--arrow);fill:none}
+  .fig .a-emphasis{stroke:var(--arrow-emphasis);fill:none}
+  .fig .a-security{stroke:var(--security-stroke);fill:none;stroke-dasharray:5,5}
+  .fig .a-dashed{stroke:var(--database-stroke);fill:none;stroke-dasharray:4,4}
+  .fig .m-default{fill:var(--arrow)}
+  .fig .m-emphasis{fill:var(--arrow-emphasis)}
+  .fig .m-security{fill:var(--security-stroke)}
+  .fig .m-dashed{fill:var(--database-stroke)}
+  .fig svg .semantic-sigil{fill:none;stroke:currentColor;stroke-width:1.35;stroke-linecap:round;stroke-linejoin:round;opacity:.78;pointer-events:none}
+  .fig svg .semantic-sigil>*{vector-effect:non-scaling-stroke}
+  .fig svg .semantic-sigil .sigil-fill{fill:currentColor;stroke:none}
+  .fig svg .s-frontend{color:var(--frontend-stroke)}
+  .fig svg .s-backend{color:var(--backend-stroke)}
+  .fig svg .s-database{color:var(--database-stroke)}
+  .fig svg .s-cloud{color:var(--cloud-stroke)}
+  .fig svg .s-security{color:var(--security-stroke)}
+  .fig svg .s-messagebus{color:var(--messagebus-stroke)}
+  .fig svg .s-external{color:var(--external-stroke)}
+
+  .leg{display:flex;flex-wrap:wrap;gap:7px 20px;margin:13px 2px 0;font-size:12.5px;color:#aeb6c2;
+    border-top:1px solid #1e2734;padding-top:11px}
+  .leg span{white-space:nowrap}
+  .leg i{display:inline-block;width:15px;height:10px;border-radius:3px;border:1px solid;margin-right:7px;vertical-align:0}
+  .leg u{display:inline-block;width:24px;height:0;border-top:2px solid;margin-right:7px;vertical-align:4px;text-decoration:none}
+
+  .notes{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;margin:18px 0 6px}
+  .nc{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+  .nc > b{display:block;font-size:14.5px;margin-bottom:7px;padding-left:15px;position:relative}
+  .nc > b::before{content:"";position:absolute;left:0;top:7px;width:8px;height:8px;border-radius:50%}
+  .nc.blue > b::before{background:#1f6fb2} .nc.green > b::before{background:#12855a} .nc.amber > b::before{background:#c2740a} .nc.red > b::before{background:#b42318}
+  .nc li{font-size:13.5px;color:#3a3e45;margin-bottom:6px}
+  .nc ul{margin:0;padding-left:18px}
+
+  table{width:100%;border-collapse:collapse;font-size:14px;margin:14px 0;background:var(--card);
+    border:1px solid var(--line);border-radius:11px;overflow:hidden}
+  th,td{padding:10px 13px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+  th{background:#f3f0e9;font-weight:800;font-size:13px;color:#3a3e45}
+  tr:last-child td{border-bottom:none}
+
+  .pickbox{background:#eef4fb;border:1px solid #cddff2;border-left:4px solid var(--pick);border-radius:10px;padding:11px 15px;margin:12px 0;font-size:14px}
+  .pickbox b{color:var(--pick)}
+  .pickbox.warn{background:#fdf3e3;border-color:#f0dcb4;border-left-color:var(--warn)}
+  .pickbox.warn b{color:#8a5610}
+
+  pre{background:#0d1117;color:#e6edf3;border:1px solid #2a3442;border-radius:12px;padding:14px 16px;
+    overflow-x:auto;font-size:12.5px;line-height:1.62;font-family:"SF Mono",ui-monospace,Menlo,monospace}
+  pre .c{color:#8b93a1} pre .r{color:#f5a0a0} pre .g{color:#7fd6b0} pre .b{color:#8fb0da}
+  ul{margin:10px 0;padding-left:20px}
+  li{margin-bottom:9px}
+  .footer{margin-top:44px;padding-top:16px;border-top:1px solid var(--line);font-size:13px;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>주문 접수부터 체결 반영까지
+    <span class="sub">v1에서 프로세스 넷과 Kafka 토픽 셋이 주문 한 건을 나눠 처리하는 순서, 그리고 같은 메시지가 두 번 전달돼도 결과가 같게 만든 장치</span></h1>
+
+  <p class="lead">사용자가 주식을 사겠다고 요청해도 그 자리에서 거래가 끝나지는 않는다. 사려는 가격과 팔려는 가격이 맞아야 체결되고, 체결된 뒤에도 대금이 한 번에 빠져나가지 않는다. 한국 주식시장은 체결일에서 이틀 뒤에 대금을 결제하고(T+2), 그 사이 금액은 계좌의 빚으로 남는다. v1은 이 과정을 <b>프로세스 넷</b>에 나눠 맡겼다. 주문을 받는 <code>api</code>, 잔고를 검증하고 주문 행을 저장하는 <code>order-engine</code>, 호가창에서 짝을 찾는 <code>matching-engine</code>, 체결을 DB에 반영하는 <code>settlement-engine</code>이다. 넷은 서로를 직접 호출하지 않고 Kafka 토픽으로만 연결된다. 이 문서는 주문 한 건이 그 넷을 지나는 동안 <b>어디에서 무엇이 저장되고 무엇이 발행되는지</b>를 순서대로 적은 것이다.</p>
+
+  <div class="pickbox warn">
+    <b>이 문서가 다루는 것은 v1이다.</b> 잔고는 PostgreSQL 행에 두고 비관적 락으로 지키며, 프로세스 사이 전달은 Kafka가 맡는 구성이다. 같은 도메인을 메모리 단일 스레드와 Aeron으로 다시 만든 v2 엔진은 여기서 다루지 않는다.
+  </div>
+
+  <h2>먼저 용어</h2>
+  <div class="terms">
+    <div class="term"><b>증거금률과 예약 증거금</b><span>매수 주문을 받을 때 주문 금액 전부를 차감하지 않고, 주문 금액에 증거금률을 곱한 만큼만 <b>예약 증거금</b>으로 잡아 둔다. 그만큼 출금 가능 금액이 줄어들고, 남은 금액은 결제일에 낸다.</span></div>
+    <div class="term"><b>미수금 (Unpaid)</b><span>매수가 체결됐지만 아직 내지 않은 대금. 체결 금액에서 증거금으로 낸 몫을 뺀 값이다. 정산 예정일을 이틀 뒤(T+2)로 적어 두고, 변제하면 <code>SETTLED</code>로 바뀐다.</span></div>
+    <div class="term"><b>호가창 (order book)</b><span>아직 체결되지 않은 매수·매도 주문을 가격별로 모아 둔 자료구조. 매수 호가는 높은 가격부터, 매도 호가는 낮은 가격부터 꺼낸다. 같은 가격 안에서는 먼저 들어온 주문이 먼저 체결된다.</span></div>
+    <div class="term"><b>파티션 키 (partition key)</b><span>Kafka 토픽은 파티션 여러 개로 나뉘고, 메시지를 보낼 때 함께 주는 키의 해시로 어느 파티션에 들어갈지가 정해진다. 같은 키의 메시지는 항상 같은 파티션에 들어가 순서가 유지된다.</span></div>
+    <div class="term"><b>at-least-once</b><span>Kafka 컨슈머가 메시지를 처리한 뒤에 처리 완료 위치를 기록(ack)하는 방식. 처리는 끝났는데 기록 전에 프로세스가 죽으면 같은 메시지가 다시 전달된다. 중복 전달을 전제로 소비하는 코드를 짜야 한다.</span></div>
+    <div class="term"><b>멱등 (idempotent)</b><span>같은 요청을 여러 번 처리해도 결과가 한 번 처리한 것과 같은 성질. 여기서는 요청마다 붙는 <b>멱등키</b>를 저장해 두고, 같은 키가 다시 오면 처리를 건너뛰는 방식으로 만든다.</span></div>
+    <div class="term"><b>비관적 락 (pessimistic lock)</b><span><code>SELECT ... FOR UPDATE</code>로 행을 잠가, 트랜잭션이 끝날 때까지 다른 트랜잭션이 그 행을 건드리지 못하게 하는 방식. 확실한 대신 잠근 동안 다른 요청은 기다린다.</span></div>
+    <div class="term"><b>202 Accepted</b><span>요청을 접수했고 처리는 아직 끝나지 않았다는 뜻의 HTTP 응답 코드. 이 응답을 받은 시점에는 주문 행이 아직 DB에 없다. 결과는 주문 내역 조회로 확인한다.</span></div>
+  </div>
+
+  <h2>주문 한 건이 지나는 길</h2>
+  <p>아래 그림이 전체 경로다. 세로로 놓인 네 칸이 단계이고, 칸 안에서 위에서 아래로 내려가며 Kafka 토픽에서 프로세스로, 프로세스에서 저장소로 이어진다. 다음 단계로 넘어가는 화살표는 오른쪽 칸의 토픽으로 올라간다.</p>
+
+  <div class="fig">
+    <div class="cap">접수부터 체결 반영까지</div>
+    <div class="capsub">프로세스마다 무엇을 읽고 무엇을 저장하는지, 다음 단계로 무엇을 어떤 키로 발행하는지</div>
+<svg viewBox="0 0 940 800" role="img" aria-labelledby="f1-archify-diagram-title f1-archify-diagram-description" data-preset="classic" data-quality-profile="showcase">
+        <title id="f1-archify-diagram-title">주문 한 건이 접수부터 체결 반영까지 지나는 길</title>
+        <desc id="f1-archify-diagram-description">A data-flow diagram generated by Archify.</desc>
+        <!-- Definitions -->
+        <defs>
+          <marker id="f1-arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" class="m-default" />
+          </marker>
+          <marker id="f1-arrowhead-emphasis" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" class="m-emphasis" />
+          </marker>
+          <marker id="f1-arrowhead-security" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" class="m-security" />
+          </marker>
+          <marker id="f1-arrowhead-dashed" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" class="m-dashed" />
+          </marker>
+          <pattern id="f1-grid" width="40" height="40" patternUnits="userSpaceOnUse">
+            <path d="M 40 0 L 0 0 0 40" class="c-grid" stroke-width="0.5"/>
+          </pattern>
+        </defs>
+        <!-- Background Grid -->
+        <rect width="100%" height="100%" fill="url(#f1-grid)" />
+        <!-- Data Stages -->
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="stage" data-composition-frame-id="0" x="16" y="46" width="168" height="680" rx="10" class="c-lane" stroke-width="1"/>
+        <text x="100" y="68" class="t-dim" font-size="9" font-weight="600" text-anchor="middle">01 / 요청 접수</text>
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="stage" data-composition-frame-id="1" x="231" y="46" width="168" height="680" rx="10" class="c-lane" stroke-width="1"/>
+        <text x="315" y="68" class="t-dim" font-size="9" font-weight="600" text-anchor="middle">02 / 잔고 검증과 주문 저장</text>
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="stage" data-composition-frame-id="2" x="446" y="46" width="168" height="680" rx="10" class="c-lane" stroke-width="1"/>
+        <text x="530" y="68" class="t-dim" font-size="9" font-weight="600" text-anchor="middle">03 / 호가창 매칭</text>
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="stage" data-composition-frame-id="3" x="661" y="46" width="168" height="680" rx="10" class="c-lane" stroke-width="1"/>
+        <text x="745" y="68" class="t-dim" font-size="9" font-weight="600" text-anchor="middle">04 / 체결 DB 반영</text>
+        <!-- Flow paths -->
+        <path data-edge-from="user" data-edge-to="api" data-edge-label="매수 주문을 보낸다" data-edge-key="0" data-composition-points="100,204;100,356" d="M 100 204 L 100 356" class="a-emphasis" stroke-width="1.8" marker-end="url(#f1-arrowhead-emphasis)"/>
+        <path data-edge-from="api" data-edge-to="reqtopic" data-edge-label="확인을 마친 요청을 발행한다" data-edge-key="1" data-composition-points="175,394;207.5,394;207.5,166;240,166" d="M 175 394 L 207.5 394 L 207.5 166 L 240 166" class="a-emphasis" stroke-width="1.8" marker-end="url(#f1-arrowhead-emphasis)"/>
+        <path data-edge-from="reqtopic" data-edge-to="orderengine" data-edge-label="같은 계좌의 요청이 차례로 온다" data-edge-key="2" data-composition-points="315,204;315,356" d="M 315 204 L 315 356" class="a-emphasis" stroke-width="1.8" marker-end="url(#f1-arrowhead-emphasis)"/>
+        <path data-edge-from="orderengine" data-edge-to="orderdb" data-edge-label="주문을 PENDING으로 저장한다" data-edge-key="3" data-composition-points="315,432;315,584" d="M 315 432 L 315 584" class="a-default" stroke-width="1.4" marker-end="url(#f1-arrowhead)"/>
+        <path data-edge-from="orderengine" data-edge-to="orderstopic" data-edge-label="저장한 주문을 발행한다" data-edge-key="4" data-composition-points="390,394;422.5,394;422.5,166;455,166" d="M 390 394 L 422.5 394 L 422.5 166 L 455 166" class="a-emphasis" stroke-width="1.8" marker-end="url(#f1-arrowhead-emphasis)"/>
+        <path data-edge-from="orderstopic" data-edge-to="matching" data-edge-label="같은 종목의 주문이 차례로 온다" data-edge-key="5" data-composition-points="530,204;530,356" d="M 530 204 L 530 356" class="a-emphasis" stroke-width="1.8" marker-end="url(#f1-arrowhead-emphasis)"/>
+        <path data-edge-from="matching" data-edge-to="redis" data-edge-label="체결가와 호가를 저장한다" data-edge-key="6" data-composition-points="530,432;530,584" d="M 530 432 L 530 584" class="a-default" stroke-width="1.4" marker-end="url(#f1-arrowhead)"/>
+        <path data-edge-from="matching" data-edge-to="fillstopic" data-edge-label="체결이 나면 발행한다" data-edge-key="7" data-composition-points="605,394;637.5,394;637.5,166;670,166" d="M 605 394 L 637.5 394 L 637.5 166 L 670 166" class="a-emphasis" stroke-width="1.8" marker-end="url(#f1-arrowhead-emphasis)"/>
+        <path data-edge-from="fillstopic" data-edge-to="settlement" data-edge-label="체결 한 건이 온다" data-edge-key="8" data-composition-points="745,204;745,356" d="M 745 204 L 745 356" class="a-emphasis" stroke-width="1.8" marker-end="url(#f1-arrowhead-emphasis)"/>
+        <path data-edge-from="settlement" data-edge-to="settledb" data-edge-label="세 테이블을 함께 바꾼다" data-edge-key="9" data-composition-points="745,432;745,584" d="M 745 432 L 745 584" class="a-default" stroke-width="1.4" marker-end="url(#f1-arrowhead)"/>
+        <!-- Nodes -->
+        <g id="f1-node-user" data-node-id="user" data-node-label="사용자" tabindex="0" role="button" aria-label="Focus 사용자, 매수 주문을 보낸다, 01 / 요청 접수" aria-pressed="false" data-node-kind="external" data-node-sublabel="매수 주문을 보낸다" data-node-context="01 / 요청 접수">
+          <title>사용자 · 매수 주문을 보낸다 · 01 / 요청 접수</title>
+          <rect x="25" y="128" width="150" height="76" rx="6" class="c-mask"/>
+          <rect x="25" y="128" width="150" height="76" rx="6" class="c-external" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(31 134) scale(0.6875)">
+            <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
+            <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="100" y="149" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">사용자</text>
+          <text data-detail="context" x="100" y="165" class="t-muted" font-size="7" text-anchor="middle">매수 주문을 보낸다</text>
+        </g>
+        <g id="f1-node-api" data-node-id="api" data-node-label="api" tabindex="0" role="button" aria-label="Focus api, 계좌와 가격만 본다, 01 / 요청 접수" aria-pressed="false" data-node-kind="frontend" data-node-sublabel="계좌와 가격만 본다" data-node-tag="202로 답한다" data-node-context="01 / 요청 접수">
+          <title>api · 계좌와 가격만 본다 · 01 / 요청 접수 · 202로 답한다</title>
+          <rect x="25" y="356" width="150" height="76" rx="6" class="c-mask"/>
+          <rect x="25" y="356" width="150" height="76" rx="6" class="c-frontend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="frontend" class="semantic-sigil s-frontend" transform="translate(31 362) scale(0.6875)">
+            <rect x="2" y="3" width="12" height="10" rx="2"/>
+            <path d="M2 6.5h12"/>
+            <circle cx="4.1" cy="4.8" r=".7" class="sigil-fill"/>
+            <circle cx="6.3" cy="4.8" r=".7" class="sigil-fill"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="100" y="377" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">api</text>
+          <text data-detail="context" x="100" y="393" class="t-muted" font-size="7" text-anchor="middle">계좌와 가격만 본다</text>
+        <text data-detail="fine" x="100" y="421" class="t-frontend" font-size="7" text-anchor="middle">202로 답한다</text>
+        </g>
+        <g id="f1-node-reqtopic" data-node-id="reqtopic" data-node-label="order-requests" tabindex="0" role="button" aria-label="Focus order-requests, 파티션 3개, 02 / 잔고 검증과 주문 저장" aria-pressed="false" data-node-kind="messagebus" data-node-sublabel="파티션 3개" data-node-tag="키는 계좌 번호다" data-node-context="02 / 잔고 검증과 주문 저장">
+          <title>order-requests · 파티션 3개 · 02 / 잔고 검증과 주문 저장 · 키는 계좌 번호다</title>
+          <rect x="240" y="128" width="150" height="76" rx="6" class="c-mask"/>
+          <rect x="240" y="128" width="150" height="76" rx="6" class="c-messagebus" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="messagebus" class="semantic-sigil s-messagebus" transform="translate(246 134) scale(0.6875)">
+            <path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/>
+            <circle cx="5" cy="4.5" r="1" class="sigil-fill"/>
+            <circle cx="10.5" cy="8" r="1" class="sigil-fill"/>
+            <circle cx="7" cy="11.5" r="1" class="sigil-fill"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="315" y="149" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">order-requests</text>
+          <text data-detail="context" x="315" y="165" class="t-muted" font-size="7" text-anchor="middle">파티션 3개</text>
+        <text data-detail="fine" x="315" y="193" class="t-messagebus" font-size="7" text-anchor="middle">키는 계좌 번호다</text>
+        </g>
+        <g id="f1-node-orderengine" data-node-id="orderengine" data-node-label="order-engine" tabindex="0" role="button" aria-label="Focus order-engine, 잔고를 검증한다, 02 / 잔고 검증과 주문 저장" aria-pressed="false" data-node-kind="backend" data-node-sublabel="잔고를 검증한다" data-node-tag="계좌 행을 잠근다" data-node-context="02 / 잔고 검증과 주문 저장">
+          <title>order-engine · 잔고를 검증한다 · 02 / 잔고 검증과 주문 저장 · 계좌 행을 잠근다</title>
+          <rect x="240" y="356" width="150" height="76" rx="6" class="c-mask"/>
+          <rect x="240" y="356" width="150" height="76" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(246 362) scale(0.6875)">
+            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="315" y="377" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">order-engine</text>
+          <text data-detail="context" x="315" y="393" class="t-muted" font-size="7" text-anchor="middle">잔고를 검증한다</text>
+        <text data-detail="fine" x="315" y="421" class="t-backend" font-size="7" text-anchor="middle">계좌 행을 잠근다</text>
+        </g>
+        <g id="f1-node-orderdb" data-node-id="orderdb" data-node-label="orders 테이블" tabindex="0" role="button" aria-label="Focus orders 테이블, 주문 행이 생긴다, 02 / 잔고 검증과 주문 저장" aria-pressed="false" data-node-kind="database" data-node-sublabel="주문 행이 생긴다" data-node-context="02 / 잔고 검증과 주문 저장">
+          <title>orders 테이블 · 주문 행이 생긴다 · 02 / 잔고 검증과 주문 저장</title>
+          <rect x="240" y="584" width="150" height="76" rx="6" class="c-mask"/>
+          <rect x="240" y="584" width="150" height="76" rx="6" class="c-database" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(246 590) scale(0.6875)">
+            <ellipse cx="8" cy="4" rx="5" ry="2"/>
+            <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="315" y="605" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">orders 테이블</text>
+          <text data-detail="context" x="315" y="621" class="t-muted" font-size="7" text-anchor="middle">주문 행이 생긴다</text>
+        </g>
+        <g id="f1-node-orderstopic" data-node-id="orderstopic" data-node-label="orders" tabindex="0" role="button" aria-label="Focus orders, 파티션 50개, 03 / 호가창 매칭" aria-pressed="false" data-node-kind="messagebus" data-node-sublabel="파티션 50개" data-node-tag="키는 종목 코드다" data-node-context="03 / 호가창 매칭">
+          <title>orders · 파티션 50개 · 03 / 호가창 매칭 · 키는 종목 코드다</title>
+          <rect x="455" y="128" width="150" height="76" rx="6" class="c-mask"/>
+          <rect x="455" y="128" width="150" height="76" rx="6" class="c-messagebus" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="messagebus" class="semantic-sigil s-messagebus" transform="translate(461 134) scale(0.6875)">
+            <path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/>
+            <circle cx="5" cy="4.5" r="1" class="sigil-fill"/>
+            <circle cx="10.5" cy="8" r="1" class="sigil-fill"/>
+            <circle cx="7" cy="11.5" r="1" class="sigil-fill"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="530" y="149" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">orders</text>
+          <text data-detail="context" x="530" y="165" class="t-muted" font-size="7" text-anchor="middle">파티션 50개</text>
+        <text data-detail="fine" x="530" y="193" class="t-messagebus" font-size="7" text-anchor="middle">키는 종목 코드다</text>
+        </g>
+        <g id="f1-node-matching" data-node-id="matching" data-node-label="matching-engine" tabindex="0" role="button" aria-label="Focus matching-engine, 짝을 찾는다, 03 / 호가창 매칭" aria-pressed="false" data-node-kind="backend" data-node-sublabel="짝을 찾는다" data-node-tag="메모리에서 한다" data-node-context="03 / 호가창 매칭">
+          <title>matching-engine · 짝을 찾는다 · 03 / 호가창 매칭 · 메모리에서 한다</title>
+          <rect x="455" y="356" width="150" height="76" rx="6" class="c-mask"/>
+          <rect x="455" y="356" width="150" height="76" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(461 362) scale(0.6875)">
+            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="530" y="377" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">matching-engine</text>
+          <text data-detail="context" x="530" y="393" class="t-muted" font-size="7" text-anchor="middle">짝을 찾는다</text>
+        <text data-detail="fine" x="530" y="421" class="t-backend" font-size="7" text-anchor="middle">메모리에서 한다</text>
+        </g>
+        <g id="f1-node-redis" data-node-id="redis" data-node-label="Redis" tabindex="0" role="button" aria-label="Focus Redis, 조회 API가 읽는다, 03 / 호가창 매칭" aria-pressed="false" data-node-kind="database" data-node-sublabel="조회 API가 읽는다" data-node-context="03 / 호가창 매칭">
+          <title>Redis · 조회 API가 읽는다 · 03 / 호가창 매칭</title>
+          <rect x="455" y="584" width="150" height="76" rx="6" class="c-mask"/>
+          <rect x="455" y="584" width="150" height="76" rx="6" class="c-database" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(461 590) scale(0.6875)">
+            <ellipse cx="8" cy="4" rx="5" ry="2"/>
+            <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="530" y="605" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">Redis</text>
+          <text data-detail="context" x="530" y="621" class="t-muted" font-size="7" text-anchor="middle">조회 API가 읽는다</text>
+        </g>
+        <g id="f1-node-fillstopic" data-node-id="fillstopic" data-node-label="fills" tabindex="0" role="button" aria-label="Focus fills, 파티션 50개, 04 / 체결 DB 반영" aria-pressed="false" data-node-kind="messagebus" data-node-sublabel="파티션 50개" data-node-tag="키는 종목 코드다" data-node-context="04 / 체결 DB 반영">
+          <title>fills · 파티션 50개 · 04 / 체결 DB 반영 · 키는 종목 코드다</title>
+          <rect x="670" y="128" width="150" height="76" rx="6" class="c-mask"/>
+          <rect x="670" y="128" width="150" height="76" rx="6" class="c-messagebus" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="messagebus" class="semantic-sigil s-messagebus" transform="translate(676 134) scale(0.6875)">
+            <path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/>
+            <circle cx="5" cy="4.5" r="1" class="sigil-fill"/>
+            <circle cx="10.5" cy="8" r="1" class="sigil-fill"/>
+            <circle cx="7" cy="11.5" r="1" class="sigil-fill"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="745" y="149" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">fills</text>
+          <text data-detail="context" x="745" y="165" class="t-muted" font-size="7" text-anchor="middle">파티션 50개</text>
+        <text data-detail="fine" x="745" y="193" class="t-messagebus" font-size="7" text-anchor="middle">키는 종목 코드다</text>
+        </g>
+        <g id="f1-node-settlement" data-node-id="settlement" data-node-label="settlement-engine" tabindex="0" role="button" aria-label="Focus settlement-engine, 체결을 반영한다, 04 / 체결 DB 반영" aria-pressed="false" data-node-kind="backend" data-node-sublabel="체결을 반영한다" data-node-tag="한 트랜잭션이다" data-node-context="04 / 체결 DB 반영">
+          <title>settlement-engine · 체결을 반영한다 · 04 / 체결 DB 반영 · 한 트랜잭션이다</title>
+          <rect x="670" y="356" width="150" height="76" rx="6" class="c-mask"/>
+          <rect x="670" y="356" width="150" height="76" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(676 362) scale(0.6875)">
+            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="745" y="377" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">settlement-engine</text>
+          <text data-detail="context" x="745" y="393" class="t-muted" font-size="7" text-anchor="middle">체결을 반영한다</text>
+        <text data-detail="fine" x="745" y="421" class="t-backend" font-size="7" text-anchor="middle">한 트랜잭션이다</text>
+        </g>
+        <g id="f1-node-settledb" data-node-id="settledb" data-node-label="PostgreSQL" tabindex="0" role="button" aria-label="Focus PostgreSQL, 주문·보유·미수금, 04 / 체결 DB 반영" aria-pressed="false" data-node-kind="database" data-node-sublabel="주문·보유·미수금" data-node-context="04 / 체결 DB 반영">
+          <title>PostgreSQL · 주문·보유·미수금 · 04 / 체결 DB 반영</title>
+          <rect x="670" y="584" width="150" height="76" rx="6" class="c-mask"/>
+          <rect x="670" y="584" width="150" height="76" rx="6" class="c-database" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(676 590) scale(0.6875)">
+            <ellipse cx="8" cy="4" rx="5" ry="2"/>
+            <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="745" y="605" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">PostgreSQL</text>
+          <text data-detail="context" x="745" y="621" class="t-muted" font-size="7" text-anchor="middle">주문·보유·미수금</text>
+        </g>
+        <!-- Flow labels -->
+        <g data-detail="context" data-edge-from="user" data-edge-to="api" data-edge-label="매수 주문을 보낸다" data-edge-key="0">
+          <rect x="49.9" y="320" width="100.2" height="16" rx="4" class="c-mask"/>
+          <text x="100" y="331" class="t-backend" font-size="8" text-anchor="middle">매수 주문을 보낸다</text>
+        </g>
+        <g data-detail="context" data-edge-from="api" data-edge-to="reqtopic" data-edge-label="확인을 마친 요청을 발행한다" data-edge-key="1">
+          <rect x="135.35" y="259" width="144.3" height="16" rx="4" class="c-mask"/>
+          <text x="207.5" y="270" class="t-backend" font-size="8" text-anchor="middle">확인을 마친 요청을 발행한다</text>
+        </g>
+        <g data-detail="context" data-edge-from="reqtopic" data-edge-to="orderengine" data-edge-label="같은 계좌의 요청이 차례로 온다" data-edge-key="2">
+          <rect x="235.5" y="320" width="159" height="16" rx="4" class="c-mask"/>
+          <text x="315" y="331" class="t-backend" font-size="8" text-anchor="middle">같은 계좌의 요청이 차례로 온다</text>
+        </g>
+        <g data-detail="context" data-edge-from="orderengine" data-edge-to="orderdb" data-edge-label="주문을 PENDING으로 저장한다" data-edge-key="3">
+          <rect x="242.85" y="481" width="144.3" height="16" rx="4" class="c-mask"/>
+          <text x="315" y="492" class="t-muted" font-size="8" text-anchor="middle">주문을 PENDING으로 저장한다</text>
+        </g>
+        <g data-detail="context" data-edge-from="orderengine" data-edge-to="orderstopic" data-edge-label="저장한 주문을 발행한다" data-edge-key="4">
+          <rect x="362.6" y="259" width="119.8" height="16" rx="4" class="c-mask"/>
+          <text x="422.5" y="270" class="t-backend" font-size="8" text-anchor="middle">저장한 주문을 발행한다</text>
+        </g>
+        <g data-detail="context" data-edge-from="orderstopic" data-edge-to="matching" data-edge-label="같은 종목의 주문이 차례로 온다" data-edge-key="5">
+          <rect x="450.5" y="320" width="159" height="16" rx="4" class="c-mask"/>
+          <text x="530" y="331" class="t-backend" font-size="8" text-anchor="middle">같은 종목의 주문이 차례로 온다</text>
+        </g>
+        <g data-detail="context" data-edge-from="matching" data-edge-to="redis" data-edge-label="체결가와 호가를 저장한다" data-edge-key="6">
+          <rect x="465.2" y="481" width="129.6" height="16" rx="4" class="c-mask"/>
+          <text x="530" y="492" class="t-muted" font-size="8" text-anchor="middle">체결가와 호가를 저장한다</text>
+        </g>
+        <g data-detail="context" data-edge-from="matching" data-edge-to="fillstopic" data-edge-label="체결이 나면 발행한다" data-edge-key="7">
+          <rect x="582.5" y="259" width="110" height="16" rx="4" class="c-mask"/>
+          <text x="637.5" y="270" class="t-backend" font-size="8" text-anchor="middle">체결이 나면 발행한다</text>
+        </g>
+        <g data-detail="context" data-edge-from="fillstopic" data-edge-to="settlement" data-edge-label="체결 한 건이 온다" data-edge-key="8">
+          <rect x="697.35" y="320" width="95.3" height="16" rx="4" class="c-mask"/>
+          <text x="745" y="331" class="t-backend" font-size="8" text-anchor="middle">체결 한 건이 온다</text>
+        </g>
+        <g data-detail="context" data-edge-from="settlement" data-edge-to="settledb" data-edge-label="세 테이블을 함께 바꾼다" data-edge-key="9">
+          <rect x="682.65" y="481" width="124.7" height="16" rx="4" class="c-mask"/>
+          <text x="745" y="492" class="t-muted" font-size="8" text-anchor="middle">세 테이블을 함께 바꾼다</text>
+        </g>
+        <!-- Legend -->
+      </svg>
+    <div class="leg">
+      <span><i style="background:rgba(59,130,246,.18);border-color:#3b82f6"></i>API 서버</span>
+      <span><i style="background:rgba(52,211,153,.14);border-color:#34d399"></i>주문을 처리하는 프로세스</span>
+      <span><i style="background:rgba(245,196,107,.14);border-color:#f5c46b"></i>Kafka 토픽</span>
+      <span><i style="background:rgba(124,192,255,.13);border-color:#7cc0ff"></i>저장소</span>
+      <span><i style="background:rgba(30,38,50,.7);border-color:#94a3b8"></i>시스템 밖</span>
+      <span><u style="border-color:#34d399"></u>주문이 지나는 주 경로</span>
+      <span><u style="border-color:#637082"></u>저장소로 나가는 쓰기</span>
+    </div>
+    <p class="fignote">토픽 이름은 <code>order-requests</code>·<code>orders</code>·<code>fills</code> 셋이고, 종목마다 토픽을 따로 만들지 않는다. 종목 구분은 파티션 키가 맡는다.</p>
+  </div>
+
+  <div class="notes">
+    <div class="nc blue"><b>api가 하는 일은 여기까지다</b><ul>
+      <li>계좌가 요청한 사용자의 것이고 ACTIVE 상태인지 잠금 없이 읽어 확인한다.</li>
+      <li>주문 가격이 기준가의 ±30% 안인지 본다. 기준가는 Redis의 최근 체결가이고, 없으면 전일 종가를 사용한다.</li>
+      <li>잔고 검증은 하지 않고 넘긴다. 그래서 202로 답한 시점에는 주문 행이 아직 없다.</li>
+    </ul></div>
+    <div class="nc green"><b>잔고를 지키는 자리와 속도를 내는 자리</b><ul>
+      <li>order-engine은 계좌 행을 잠근 뒤에 미수금과 예약 증거금 합계를 읽는다. 잠그기 전에 읽으면 낡은 값으로 검증이 통과한다.</li>
+      <li>matching-engine은 DB를 쓰지 않는다. 호가창이 메모리에 있고 그 종목을 고치는 스레드가 하나뿐이라 자료구조에 잠금이 없다.</li>
+      <li>주문 상태와 보유 수량은 settlement-engine에서만 바뀐다.</li>
+    </ul></div>
+    <div class="nc amber"><b>파티션 키가 중간에 바뀐다</b><ul>
+      <li>order-requests의 키는 계좌 번호여서 같은 계좌의 요청이 한 스레드에 모인다.</li>
+      <li>orders부터는 키가 종목 코드다. 한 종목의 매수와 매도가 같은 스레드로 들어와야 서로 체결될 수 있다.</li>
+      <li>파티션 수는 order-requests가 3개, orders와 fills가 각각 50개다.</li>
+    </ul></div>
+  </div>
+
+  <h2>각 단계가 하는 일</h2>
+
+  <h3>1. api — 검증을 둘로 나눈 기준</h3>
+  <p>API 서버가 하는 검증은 두 가지다. 계좌가 요청한 사용자의 것이면서 ACTIVE 상태인지 보고, 주문 가격이 기준가의 ±30% 안인지 본다. 기준가는 Redis에 저장된 최근 체결가를 먼저 사용하고, 그 종목에 아직 체결이 없으면 전일 종가를 사용한다. 둘 다 없는 종목이면 존재하지 않는 종목으로 보고 거절한다.</p>
+  <p>잔고가 충분한지는 여기서 보지 않는다. 잔고를 제대로 보려면 계좌 행을 잠가야 하고, 그러면 API 서버가 DB 락을 들고 있게 된다. v1에서는 그 검증을 <code>order-engine</code>으로 미뤘고, API 서버는 상태를 들고 있지 않은 채 요청을 받아 넘기는 일만 한다(ADR-004 「API를 상태 없이 두고 주문 처리를 Kafka 파이프라인으로 옮긴다」). 그래서 응답이 <code>202 Accepted</code>다. 사용자는 이 응답만으로 주문이 성립했는지 알 수 없고, 주문 내역 조회로 확인해야 한다.</p>
+  <p>멱등키도 이 단계에서 정해진다. 클라이언트가 <code>requestId</code>를 보내면 그 값을 그대로 쓰고, 비어 있으면 서버가 UUID를 만들어 붙인다. 이 값이 주문 행의 <code>request_id</code> 컬럼까지 그대로 따라간다.</p>
+
+  <h3>2. order-engine — 잠근 뒤에 읽는 순서</h3>
+  <p>여기서 주문 행이 처음 DB에 생긴다. 매수 주문의 처리 순서는 이렇다.</p>
+<pre><span class="c">// OrderWriter.writeBuyOrder — 트랜잭션 하나</span>
+1. 계좌 행 잠금        SELECT ... FOR UPDATE
+2. 미수금 합계 조회    <span class="c">(잠근 뒤에 읽는다)</span>
+3. 예약 증거금 합계     SELECT SUM(reserved_margin) ...  <span class="c">주문을 하나씩 세지 않고 DB가 더한다</span>
+4. 출금 가능 금액 = 잔고 - 예약 증거금 합계 - 미수금 합계
+5. 매수 한도 = 출금 가능 금액 / 증거금률
+6. 주문 금액 &gt; 매수 한도 이면 <span class="r">거절</span>
+7. Order INSERT (PENDING, reservedMargin)</pre>
+  <p>2번이 1번보다 뒤에 있는 것이 중요하다. 잠그기 전에 미수금을 읽으면, 읽은 시점과 그 값을 사용하는 시점 사이에 다른 트랜잭션이 미수금을 바꿔도 검증은 바뀌기 전 값으로 통과한다. 3번을 <code>SUM</code> 쿼리로 둔 것은 락을 잡고 있는 시간을 줄이기 위해서다. 미체결 매수 주문을 전부 읽어 애플리케이션에서 더하면 그동안 계좌 행이 계속 잠겨 있다.</p>
+  <p>매도 주문에서는 보유 종목 행을 잠근다. 보유 수량만 보면 100주를 가진 계좌가 100주 매도 주문을 여러 건 넣을 수 있으므로, 보유 수량에서 이미 접수된 미체결 매도 잔량을 뺀 값을 가용 수량으로 삼는다(ADR-009 「매도 주문도 매수의 증거금 예약처럼 가용 수량을 따로 계산한다」). 매수의 예약 증거금과 같은 역할을 매도에서 하는 값이다.</p>
+  <p>취소 요청은 주문 상태를 <code>CANCELLED</code>로 바꾸고 예약 증거금을 <code>null</code>로 되돌린다. 잡아 두었던 금액이 풀리면서 출금 가능 금액이 그만큼 늘어난다.</p>
+
+  <h3>3. matching-engine — 호가창에서 체결을 판정한다</h3>
+  <p>주문을 받으면 가격별 큐의 뒤에 넣고, 체결이 나오지 않을 때까지 판정을 반복한다. 판정은 가장 높은 매수 호가와 가장 낮은 매도 호가를 꺼내 비교하는 것이다.</p>
+<pre><span class="c">// OrderBook.match() — 한 번 호출에 한 건</span>
+bestBid = bids.firstEntry()   <span class="c">// TreeMap 역순 정렬 → 높은 가격이 앞</span>
+bestAsk = asks.firstEntry()   <span class="c">// TreeMap 정순 정렬 → 낮은 가격이 앞</span>
+
+if (bestBid &lt; bestAsk) <span class="c">체결 없음</span>
+
+체결가 = bestAsk                                <span class="c">매도 호가를 사용한다</span>
+체결량 = min(매수 남은 수량, 매도 남은 수량)     <span class="c">부분 체결이 된다</span>
+전량 체결된 주문은 큐와 orderIndex 에서 바로 제거</pre>
+  <p>취소된 주문은 큐 중간에서 즉시 빼지 않는다. <code>ArrayDeque</code> 중간을 삭제하려면 앞에서부터 훑어야 해서 O(n)이 든다. 취소 요청은 <code>orderIndex</code>에서 O(1)에 찾아 취소 표시만 남기고, 체결 판정 직전에 큐 앞쪽에 쌓인 취소분을 한꺼번에 걷어낸다. 자료구조를 이렇게 고른 근거는 ADR-006 「호가창을 TreeMap·Deque·HashMap 조합으로 구성한다」에 적혀 있다.</p>
+  <p>체결이 나면 최근 체결가를 Redis에 쓰고, 호가 10단계 스냅샷도 함께 저장한다. 조회 API가 호가창을 보려고 매칭 프로세스에 묻지 않고 Redis를 읽게 하기 위한 것이다. 주문 상태와 보유 수량은 여기서 바꾸지 않는다.</p>
+
+  <h3>4. settlement-engine — 체결 한 건이 바꾸는 것</h3>
+  <p>체결 이벤트 하나가 한 트랜잭션에서 세 가지를 바꾼다.</p>
+  <table>
+    <tr><th>바뀌는 것</th><th>내용</th></tr>
+    <tr><td>주문</td><td>매수·매도 양쪽 주문의 누적 체결 수량을 올린다. 주문 수량을 다 채우면 상태가 <code>FILLED</code>로 바뀌고 체결 시각이 기록된다.</td></tr>
+    <tr><td>보유 종목</td><td>매수자의 보유 행을 잠그고 수량을 더하면서 평균 단가를 다시 계산하며, 매도자의 보유 수량은 그만큼 줄인다.</td></tr>
+    <tr><td>미수금</td><td>체결 금액 × (1 − 증거금률)을 미수금으로 만들고, 정산 예정일을 체결일에서 이틀 뒤로 적는다. 상태는 <code>PENDING</code>이다.</td></tr>
+  </table>
+  <p>매수 반영과 매도 반영이 같은 트랜잭션 안에 있다. 매수자의 보유만 늘고 매도자의 보유는 그대로인 상태가 DB에 남지 않는다.</p>
+
+  <h2>파티션 키가 중간에 바뀌는 이유</h2>
+  <p>같은 주문이 <code>order-requests</code>와 <code>orders</code> 두 토픽을 지나는데, 두 토픽의 파티션 키가 다르다. 계좌 번호로 시작해서 종목 코드로 바뀐다. 아래 그림은 주문 세 건이 그 두 토픽을 지나며 어느 스레드로 들어가는지를 따라간 것이다.</p>
+
+  <div class="fig">
+    <div class="cap">두 토픽의 파티션 키</div>
+    <div class="capsub">단계마다 동시에 갱신되면 곤란한 대상이 달라지므로, 키도 그에 맞춰 달라진다</div>
+<svg viewBox="0 0 1080 690" role="img" aria-labelledby="f2-archify-diagram-title f2-archify-diagram-description" data-preset="classic" data-quality-profile="showcase">
+        <title id="f2-archify-diagram-title">주문 세 건이 파티션 키에 따라 어느 스레드로 들어가는지</title>
+        <desc id="f2-archify-diagram-description">A data-flow diagram generated by Archify.</desc>
+        <!-- Definitions -->
+        <defs>
+          <marker id="f2-arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" class="m-default" />
+          </marker>
+          <marker id="f2-arrowhead-emphasis" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" class="m-emphasis" />
+          </marker>
+          <marker id="f2-arrowhead-security" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" class="m-security" />
+          </marker>
+          <marker id="f2-arrowhead-dashed" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" class="m-dashed" />
+          </marker>
+          <pattern id="f2-grid" width="40" height="40" patternUnits="userSpaceOnUse">
+            <path d="M 40 0 L 0 0 0 40" class="c-grid" stroke-width="0.5"/>
+          </pattern>
+        </defs>
+        <!-- Background Grid -->
+        <rect width="100%" height="100%" fill="url(#f2-grid)" />
+        <!-- Data Stages -->
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="stage" data-composition-frame-id="0" x="16" y="46" width="168" height="570" rx="10" class="c-lane" stroke-width="1"/>
+        <text x="100" y="68" class="t-dim" font-size="9" font-weight="600" text-anchor="middle">01 / 접수된 주문 세 건</text>
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="stage" data-composition-frame-id="1" x="231" y="46" width="168" height="570" rx="10" class="c-lane" stroke-width="1"/>
+        <text x="315" y="68" class="t-dim" font-size="9" font-weight="600" text-anchor="middle">02 / order-requests 파티션</text>
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="stage" data-composition-frame-id="2" x="446" y="46" width="168" height="570" rx="10" class="c-lane" stroke-width="1"/>
+        <text x="530" y="68" class="t-dim" font-size="9" font-weight="600" text-anchor="middle">03 / order-engine 컨슈머</text>
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="stage" data-composition-frame-id="3" x="661" y="46" width="168" height="570" rx="10" class="c-lane" stroke-width="1"/>
+        <text x="745" y="68" class="t-dim" font-size="9" font-weight="600" text-anchor="middle">04 / orders 파티션</text>
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="stage" data-composition-frame-id="4" x="876" y="46" width="168" height="570" rx="10" class="c-lane" stroke-width="1"/>
+        <text x="960" y="68" class="t-dim" font-size="9" font-weight="600" text-anchor="middle">05 / matching-engine 컨슈머</text>
+        <!-- Flow paths -->
+        <path data-edge-from="o1" data-edge-to="pa" data-edge-label="계좌 번호로 파티션이 정해진다" data-edge-key="0" data-composition-points="175,166;207.5,166;207.5,273;240,273" d="M 175 166 L 207.5 166 L 207.5 273 L 240 273" class="a-emphasis" stroke-width="1.8" marker-end="url(#f2-arrowhead-emphasis)"/>
+        <path data-edge-from="o2" data-edge-to="pa" data-edge-label="같은 계좌라 같은 곳으로 간다" data-edge-key="1" data-composition-points="175,394;207.5,394;207.5,287;240,287" d="M 175 394 L 207.5 394 L 207.5 287 L 240 287" class="a-emphasis" stroke-width="1.8" marker-end="url(#f2-arrowhead-emphasis)"/>
+        <path data-edge-from="o3" data-edge-to="pb" data-edge-label="계좌가 다르면 다른 파티션이다" data-edge-key="2" data-composition-points="175,508;240,508" d="M 175 508 L 240 508" class="a-default" stroke-width="1.4" marker-end="url(#f2-arrowhead)"/>
+        <path data-edge-from="pa" data-edge-to="t1" data-edge-label="한 파티션은 한 스레드가 맡는다" data-edge-key="3" data-composition-points="390,280;455,280" d="M 390 280 L 455 280" class="a-emphasis" stroke-width="1.8" marker-end="url(#f2-arrowhead-emphasis)"/>
+        <path data-edge-from="pb" data-edge-to="t2" data-edge-label="파티션마다 스레드가 따로 붙는다" data-edge-key="4" data-composition-points="390,508;455,508" d="M 390 508 L 455 508" class="a-default" stroke-width="1.4" marker-end="url(#f2-arrowhead)"/>
+        <path data-edge-from="t1" data-edge-to="qa" data-edge-label="저장한 주문을 종목 코드로 다시 발행한다" data-edge-key="5" data-composition-points="605,280;670,280" d="M 605 280 L 670 280" class="a-emphasis" stroke-width="1.8" marker-end="url(#f2-arrowhead-emphasis)"/>
+        <path data-edge-from="t2" data-edge-to="qb" data-edge-label="이 주문도 종목 코드로 발행된다" data-edge-key="6" data-composition-points="605,508;670,508" d="M 605 508 L 670 508" class="a-default" stroke-width="1.4" marker-end="url(#f2-arrowhead)"/>
+        <path data-edge-from="qa" data-edge-to="m1" data-edge-label="매수와 매도가 한 스레드로 들어와야 체결된다" data-edge-key="7" data-composition-points="820,280;885,280" d="M 820 280 L 885 280" class="a-emphasis" stroke-width="1.8" marker-end="url(#f2-arrowhead-emphasis)"/>
+        <path data-edge-from="qb" data-edge-to="m2" data-edge-label="다른 종목은 다른 스레드가 맡는다" data-edge-key="8" data-composition-points="820,508;885,508" d="M 820 508 L 885 508" class="a-default" stroke-width="1.4" marker-end="url(#f2-arrowhead)"/>
+        <!-- Nodes -->
+        <g id="f2-node-o1" data-node-id="o1" data-node-label="주문 A" tabindex="0" role="button" aria-label="Focus 주문 A, 계좌 7번의 005930 매수, 01 / 접수된 주문 세 건" aria-pressed="false" data-node-kind="external" data-node-sublabel="계좌 7번의 005930 매수" data-node-context="01 / 접수된 주문 세 건">
+          <title>주문 A · 계좌 7번의 005930 매수 · 01 / 접수된 주문 세 건</title>
+          <rect x="25" y="128" width="150" height="76" rx="6" class="c-mask"/>
+          <rect x="25" y="128" width="150" height="76" rx="6" class="c-external" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(31 134) scale(0.6875)">
+            <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
+            <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="100" y="149" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">주문 A</text>
+          <text data-detail="context" x="100" y="165" class="t-muted" font-size="7" text-anchor="middle">계좌 7번의 005930 매수</text>
+        </g>
+        <g id="f2-node-o2" data-node-id="o2" data-node-label="주문 B" tabindex="0" role="button" aria-label="Focus 주문 B, 계좌 7번의 005930 매도, 01 / 접수된 주문 세 건" aria-pressed="false" data-node-kind="external" data-node-sublabel="계좌 7번의 005930 매도" data-node-context="01 / 접수된 주문 세 건">
+          <title>주문 B · 계좌 7번의 005930 매도 · 01 / 접수된 주문 세 건</title>
+          <rect x="25" y="356" width="150" height="76" rx="6" class="c-mask"/>
+          <rect x="25" y="356" width="150" height="76" rx="6" class="c-external" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(31 362) scale(0.6875)">
+            <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
+            <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="100" y="377" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">주문 B</text>
+          <text data-detail="context" x="100" y="393" class="t-muted" font-size="7" text-anchor="middle">계좌 7번의 005930 매도</text>
+        </g>
+        <g id="f2-node-o3" data-node-id="o3" data-node-label="주문 C" tabindex="0" role="button" aria-label="Focus 주문 C, 계좌 9번의 000660 매수, 01 / 접수된 주문 세 건" aria-pressed="false" data-node-kind="external" data-node-sublabel="계좌 9번의 000660 매수" data-node-context="01 / 접수된 주문 세 건">
+          <title>주문 C · 계좌 9번의 000660 매수 · 01 / 접수된 주문 세 건</title>
+          <rect x="25" y="470" width="150" height="76" rx="6" class="c-mask"/>
+          <rect x="25" y="470" width="150" height="76" rx="6" class="c-external" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(31 476) scale(0.6875)">
+            <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
+            <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="100" y="491" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">주문 C</text>
+          <text data-detail="context" x="100" y="507" class="t-muted" font-size="7" text-anchor="middle">계좌 9번의 000660 매수</text>
+        </g>
+        <g id="f2-node-pa" data-node-id="pa" data-node-label="파티션 1" tabindex="0" role="button" aria-label="Focus 파티션 1, 계좌 7번 요청이 모인다, 02 / order-requests 파티션" aria-pressed="false" data-node-kind="messagebus" data-node-sublabel="계좌 7번 요청이 모인다" data-node-tag="키는 계좌 번호다" data-node-context="02 / order-requests 파티션">
+          <title>파티션 1 · 계좌 7번 요청이 모인다 · 02 / order-requests 파티션 · 키는 계좌 번호다</title>
+          <rect x="240" y="242" width="150" height="76" rx="6" class="c-mask"/>
+          <rect x="240" y="242" width="150" height="76" rx="6" class="c-messagebus" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="messagebus" class="semantic-sigil s-messagebus" transform="translate(246 248) scale(0.6875)">
+            <path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/>
+            <circle cx="5" cy="4.5" r="1" class="sigil-fill"/>
+            <circle cx="10.5" cy="8" r="1" class="sigil-fill"/>
+            <circle cx="7" cy="11.5" r="1" class="sigil-fill"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="315" y="263" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">파티션 1</text>
+          <text data-detail="context" x="315" y="279" class="t-muted" font-size="7" text-anchor="middle">계좌 7번 요청이 모인다</text>
+        <text data-detail="fine" x="315" y="307" class="t-messagebus" font-size="7" text-anchor="middle">키는 계좌 번호다</text>
+        </g>
+        <g id="f2-node-pb" data-node-id="pb" data-node-label="파티션 2" tabindex="0" role="button" aria-label="Focus 파티션 2, 계좌 9번 요청이 들어온다, 02 / order-requests 파티션" aria-pressed="false" data-node-kind="messagebus" data-node-sublabel="계좌 9번 요청이 들어온다" data-node-tag="키는 계좌 번호다" data-node-context="02 / order-requests 파티션">
+          <title>파티션 2 · 계좌 9번 요청이 들어온다 · 02 / order-requests 파티션 · 키는 계좌 번호다</title>
+          <rect x="240" y="470" width="150" height="76" rx="6" class="c-mask"/>
+          <rect x="240" y="470" width="150" height="76" rx="6" class="c-messagebus" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="messagebus" class="semantic-sigil s-messagebus" transform="translate(246 476) scale(0.6875)">
+            <path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/>
+            <circle cx="5" cy="4.5" r="1" class="sigil-fill"/>
+            <circle cx="10.5" cy="8" r="1" class="sigil-fill"/>
+            <circle cx="7" cy="11.5" r="1" class="sigil-fill"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="315" y="491" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">파티션 2</text>
+          <text data-detail="context" x="315" y="507" class="t-muted" font-size="7" text-anchor="middle">계좌 9번 요청이 들어온다</text>
+        <text data-detail="fine" x="315" y="535" class="t-messagebus" font-size="7" text-anchor="middle">키는 계좌 번호다</text>
+        </g>
+        <g id="f2-node-t1" data-node-id="t1" data-node-label="스레드 1" tabindex="0" role="button" aria-label="Focus 스레드 1, 계좌 7번 요청을 하나씩 처리한다, 03 / order-engine 컨슈머" aria-pressed="false" data-node-kind="backend" data-node-sublabel="계좌 7번 요청을 하나씩 처리한다" data-node-tag="계좌 행 락 경합이 없다" data-node-context="03 / order-engine 컨슈머">
+          <title>스레드 1 · 계좌 7번 요청을 하나씩 처리한다 · 03 / order-engine 컨슈머 · 계좌 행 락 경합이 없다</title>
+          <rect x="455" y="242" width="150" height="76" rx="6" class="c-mask"/>
+          <rect x="455" y="242" width="150" height="76" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(461 248) scale(0.6875)">
+            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="530" y="263" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">스레드 1</text>
+          <text data-detail="context" x="530" y="279" class="t-muted" font-size="7" text-anchor="middle">계좌 7번 요청을 하나씩 처리한다</text>
+        <text data-detail="fine" x="530" y="307" class="t-backend" font-size="7" text-anchor="middle">계좌 행 락 경합이 없다</text>
+        </g>
+        <g id="f2-node-t2" data-node-id="t2" data-node-label="스레드 2" tabindex="0" role="button" aria-label="Focus 스레드 2, 계좌 9번 요청을 처리한다, 03 / order-engine 컨슈머" aria-pressed="false" data-node-kind="backend" data-node-sublabel="계좌 9번 요청을 처리한다" data-node-context="03 / order-engine 컨슈머">
+          <title>스레드 2 · 계좌 9번 요청을 처리한다 · 03 / order-engine 컨슈머</title>
+          <rect x="455" y="470" width="150" height="76" rx="6" class="c-mask"/>
+          <rect x="455" y="470" width="150" height="76" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(461 476) scale(0.6875)">
+            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="530" y="491" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">스레드 2</text>
+          <text data-detail="context" x="530" y="507" class="t-muted" font-size="7" text-anchor="middle">계좌 9번 요청을 처리한다</text>
+        </g>
+        <g id="f2-node-qa" data-node-id="qa" data-node-label="파티션 17" tabindex="0" role="button" aria-label="Focus 파티션 17, 005930 주문이 모인다, 04 / orders 파티션" aria-pressed="false" data-node-kind="messagebus" data-node-sublabel="005930 주문이 모인다" data-node-tag="키는 종목 코드다" data-node-context="04 / orders 파티션">
+          <title>파티션 17 · 005930 주문이 모인다 · 04 / orders 파티션 · 키는 종목 코드다</title>
+          <rect x="670" y="242" width="150" height="76" rx="6" class="c-mask"/>
+          <rect x="670" y="242" width="150" height="76" rx="6" class="c-messagebus" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="messagebus" class="semantic-sigil s-messagebus" transform="translate(676 248) scale(0.6875)">
+            <path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/>
+            <circle cx="5" cy="4.5" r="1" class="sigil-fill"/>
+            <circle cx="10.5" cy="8" r="1" class="sigil-fill"/>
+            <circle cx="7" cy="11.5" r="1" class="sigil-fill"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="745" y="263" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">파티션 17</text>
+          <text data-detail="context" x="745" y="279" class="t-muted" font-size="7" text-anchor="middle">005930 주문이 모인다</text>
+        <text data-detail="fine" x="745" y="307" class="t-messagebus" font-size="7" text-anchor="middle">키는 종목 코드다</text>
+        </g>
+        <g id="f2-node-qb" data-node-id="qb" data-node-label="파티션 32" tabindex="0" role="button" aria-label="Focus 파티션 32, 000660 주문이 들어온다, 04 / orders 파티션" aria-pressed="false" data-node-kind="messagebus" data-node-sublabel="000660 주문이 들어온다" data-node-tag="키는 종목 코드다" data-node-context="04 / orders 파티션">
+          <title>파티션 32 · 000660 주문이 들어온다 · 04 / orders 파티션 · 키는 종목 코드다</title>
+          <rect x="670" y="470" width="150" height="76" rx="6" class="c-mask"/>
+          <rect x="670" y="470" width="150" height="76" rx="6" class="c-messagebus" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="messagebus" class="semantic-sigil s-messagebus" transform="translate(676 476) scale(0.6875)">
+            <path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/>
+            <circle cx="5" cy="4.5" r="1" class="sigil-fill"/>
+            <circle cx="10.5" cy="8" r="1" class="sigil-fill"/>
+            <circle cx="7" cy="11.5" r="1" class="sigil-fill"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="745" y="491" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">파티션 32</text>
+          <text data-detail="context" x="745" y="507" class="t-muted" font-size="7" text-anchor="middle">000660 주문이 들어온다</text>
+        <text data-detail="fine" x="745" y="535" class="t-messagebus" font-size="7" text-anchor="middle">키는 종목 코드다</text>
+        </g>
+        <g id="f2-node-m1" data-node-id="m1" data-node-label="스레드 1" tabindex="0" role="button" aria-label="Focus 스레드 1, 005930 호가창을 혼자 고친다, 05 / matching-engine 컨슈머" aria-pressed="false" data-node-kind="backend" data-node-sublabel="005930 호가창을 혼자 고친다" data-node-tag="자료구조에 잠금이 없다" data-node-context="05 / matching-engine 컨슈머">
+          <title>스레드 1 · 005930 호가창을 혼자 고친다 · 05 / matching-engine 컨슈머 · 자료구조에 잠금이 없다</title>
+          <rect x="885" y="242" width="150" height="76" rx="6" class="c-mask"/>
+          <rect x="885" y="242" width="150" height="76" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(891 248) scale(0.6875)">
+            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="960" y="263" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">스레드 1</text>
+          <text data-detail="context" x="960" y="279" class="t-muted" font-size="7" text-anchor="middle">005930 호가창을 혼자 고친다</text>
+        <text data-detail="fine" x="960" y="307" class="t-backend" font-size="7" text-anchor="middle">자료구조에 잠금이 없다</text>
+        </g>
+        <g id="f2-node-m2" data-node-id="m2" data-node-label="스레드 2" tabindex="0" role="button" aria-label="Focus 스레드 2, 000660 호가창을 맡는다, 05 / matching-engine 컨슈머" aria-pressed="false" data-node-kind="backend" data-node-sublabel="000660 호가창을 맡는다" data-node-context="05 / matching-engine 컨슈머">
+          <title>스레드 2 · 000660 호가창을 맡는다 · 05 / matching-engine 컨슈머</title>
+          <rect x="885" y="470" width="150" height="76" rx="6" class="c-mask"/>
+          <rect x="885" y="470" width="150" height="76" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(891 476) scale(0.6875)">
+            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="960" y="491" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">스레드 2</text>
+          <text data-detail="context" x="960" y="507" class="t-muted" font-size="7" text-anchor="middle">000660 호가창을 맡는다</text>
+        </g>
+        <!-- Flow labels -->
+        <g data-detail="context" data-edge-from="o1" data-edge-to="pa" data-edge-label="계좌 번호로 파티션이 정해진다" data-edge-key="0">
+          <rect x="130.45" y="216.5" width="154.1" height="16" rx="4" class="c-mask"/>
+          <text x="207.5" y="227.5" class="t-backend" font-size="8" text-anchor="middle">계좌 번호로 파티션이 정해진다</text>
+        </g>
+        <g data-detail="context" data-edge-from="o2" data-edge-to="pa" data-edge-label="같은 계좌라 같은 곳으로 간다" data-edge-key="1">
+          <rect x="132.9" y="319.5" width="149.2" height="16" rx="4" class="c-mask"/>
+          <text x="207.5" y="330.5" class="t-backend" font-size="8" text-anchor="middle">같은 계좌라 같은 곳으로 간다</text>
+        </g>
+        <g data-detail="context" data-edge-from="o3" data-edge-to="pb" data-edge-label="계좌가 다르면 다른 파티션이다" data-edge-key="2">
+          <rect x="130.45" y="577" width="154.1" height="16" rx="4" class="c-mask"/>
+          <text x="207.5" y="588" class="t-muted" font-size="8" text-anchor="middle">계좌가 다르면 다른 파티션이다</text>
+        </g>
+        <g data-detail="context" data-edge-from="pa" data-edge-to="t1" data-edge-label="한 파티션은 한 스레드가 맡는다" data-edge-key="3">
+          <rect x="343" y="354" width="159" height="16" rx="4" class="c-mask"/>
+          <text x="422.5" y="365" class="t-backend" font-size="8" text-anchor="middle">한 파티션은 한 스레드가 맡는다</text>
+        </g>
+        <g data-detail="context" data-edge-from="pb" data-edge-to="t2" data-edge-label="파티션마다 스레드가 따로 붙는다" data-edge-key="4">
+          <rect x="340.55" y="577" width="163.9" height="16" rx="4" class="c-mask"/>
+          <text x="422.5" y="588" class="t-muted" font-size="8" text-anchor="middle">파티션마다 스레드가 따로 붙는다</text>
+        </g>
+        <g data-detail="context" data-edge-from="t1" data-edge-to="qa" data-edge-label="저장한 주문을 종목 코드로 다시 발행한다" data-edge-key="5">
+          <rect x="535.95" y="354" width="203.1" height="16" rx="4" class="c-mask"/>
+          <text x="637.5" y="365" class="t-backend" font-size="8" text-anchor="middle">저장한 주문을 종목 코드로 다시 발행한다</text>
+        </g>
+        <g data-detail="context" data-edge-from="t2" data-edge-to="qb" data-edge-label="이 주문도 종목 코드로 발행된다" data-edge-key="6">
+          <rect x="558" y="577" width="159" height="16" rx="4" class="c-mask"/>
+          <text x="637.5" y="588" class="t-muted" font-size="8" text-anchor="middle">이 주문도 종목 코드로 발행된다</text>
+        </g>
+        <g data-detail="context" data-edge-from="qa" data-edge-to="m1" data-edge-label="매수와 매도가 한 스레드로 들어와야 체결된다" data-edge-key="7">
+          <rect x="741.15" y="354" width="222.7" height="16" rx="4" class="c-mask"/>
+          <text x="852.5" y="365" class="t-backend" font-size="8" text-anchor="middle">매수와 매도가 한 스레드로 들어와야 체결된다</text>
+        </g>
+        <g data-detail="context" data-edge-from="qb" data-edge-to="m2" data-edge-label="다른 종목은 다른 스레드가 맡는다" data-edge-key="8">
+          <rect x="768.1" y="577" width="168.8" height="16" rx="4" class="c-mask"/>
+          <text x="852.5" y="588" class="t-muted" font-size="8" text-anchor="middle">다른 종목은 다른 스레드가 맡는다</text>
+        </g>
+        <!-- Legend -->
+      </svg>
+    <div class="leg">
+      <span><i style="background:rgba(30,38,50,.7);border-color:#94a3b8"></i>접수된 주문</span>
+      <span><i style="background:rgba(245,196,107,.14);border-color:#f5c46b"></i>Kafka 파티션</span>
+      <span><i style="background:rgba(52,211,153,.14);border-color:#34d399"></i>컨슈머 스레드</span>
+      <span><u style="border-color:#34d399"></u>주문 A와 B가 지나는 경로</span>
+      <span><u style="border-color:#637082"></u>주문 C가 지나는 경로</span>
+    </div>
+    <p class="fignote">주문 A와 주문 B는 계좌가 같아서 앞 구간에서 한 파티션에 모이고, 종목도 같아서 뒤 구간에서도 한 파티션에 모인다. 주문 C는 계좌와 종목이 모두 달라 두 구간 모두 다른 파티션으로 들어간다.</p>
+  </div>
+
+  <div class="notes">
+    <div class="nc blue"><b>계좌 번호를 키로 삼는 구간</b><ul>
+      <li>같은 계좌의 요청이 한 파티션에 모이고, 한 파티션은 컨슈머 한 스레드가 맡는다.</li>
+      <li>그래서 계좌 7번의 두 요청은 앞의 것이 끝난 뒤에 뒤의 것이 처리된다.</li>
+      <li>DB 락을 없앤 것은 아니다. 같은 계좌 행을 두 스레드가 동시에 잠그려는 상황을 줄인 것이다.</li>
+    </ul></div>
+    <div class="nc green"><b>종목 코드로 키를 다시 정하는 이유</b><ul>
+      <li>매칭에서 동시에 갱신되면 곤란한 것은 종목마다 하나씩 있는 호가창이다.</li>
+      <li>계좌 번호를 그대로 사용하면 같은 종목의 매수와 매도가 서로 다른 스레드로 가서 체결될 수 없다.</li>
+      <li>그래서 order-engine이 다음 토픽에 발행할 때 키를 종목 코드로 바꿔 붙인다.</li>
+    </ul></div>
+    <div class="nc red"><b>이 방식이 치르는 대가</b><ul>
+      <li>토픽 하나를 파티션 50개로 나눠 쓰므로 종목 여럿이 같은 파티션을 공유한다.</li>
+      <li>한 종목의 처리가 느려지면 같은 파티션에 실린 다른 종목의 주문도 뒤에서 기다린다.</li>
+      <li>종목마다 토픽을 만들면 이 간섭이 없지만 토픽이 수천 개가 되어 운영이 어려워진다. 그래서 단일 토픽 파티션 분할을 택했다(ADR-011 「종목별 토픽을 토픽 하나와 파티션 50개로 바꾼다」).</li>
+    </ul></div>
+  </div>
+
+  <h2>같은 메시지가 두 번 전달돼도 결과가 같게 만든 세 자리</h2>
+  <p>세 컨슈머는 모두 처리를 끝낸 뒤에 위치를 기록하는 방식(at-least-once)으로 돈다. 처리는 됐는데 기록 직전에 프로세스가 죽으면 같은 메시지가 다시 전달된다. 그래서 단계마다 중복을 판정할 근거를 따로 저장해 둔다.</p>
+
+  <div class="fig">
+    <div class="cap">중복 전달을 거르는 지점</div>
+    <div class="capsub">단계마다 무엇을 근거로 이미 처리했다고 판정하고, 판정이 맞으면 무엇을 하지 않는지</div>
+<svg viewBox="0 0 1224 652" role="img" aria-labelledby="f3-archify-diagram-title f3-archify-diagram-description" data-preset="classic" data-quality-profile="showcase">
+        <title id="f3-archify-diagram-title">같은 메시지가 두 번 전달돼도 결과가 같게 만든 세 자리</title>
+        <desc id="f3-archify-diagram-description">A workflow diagram generated by Archify.</desc>
+        <!-- Definitions -->
+        <defs>
+          <marker id="f3-arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" class="m-default" />
+          </marker>
+          <marker id="f3-arrowhead-emphasis" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" class="m-emphasis" />
+          </marker>
+          <marker id="f3-arrowhead-security" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" class="m-security" />
+          </marker>
+          <marker id="f3-arrowhead-dashed" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" class="m-dashed" />
+          </marker>
+          <pattern id="f3-grid" width="40" height="40" patternUnits="userSpaceOnUse">
+            <path d="M 40 0 L 0 0 0 40" class="c-grid" stroke-width="0.5"/>
+          </pattern>
+        </defs>
+        <!-- Background Grid -->
+        <rect width="100%" height="100%" fill="url(#f3-grid)" />
+        <!-- Swimlanes -->
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="lane" data-composition-frame-id="lane-0" x="40" y="52" width="1168" height="104" rx="10" class="c-lane" stroke-width="1"/>
+        <text x="54" y="74" class="t-dim" font-size="10" font-weight="600">01 / order-engine</text>
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="lane" data-composition-frame-id="lane-1" x="40" y="176" width="1168" height="104" rx="10" class="c-lane" stroke-width="1"/>
+        <text x="54" y="198" class="t-dim" font-size="10" font-weight="600">02 / matching-engine</text>
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="lane" data-composition-frame-id="lane-2" x="40" y="300" width="1168" height="104" rx="10" class="c-lane" stroke-width="1"/>
+        <text x="54" y="322" class="t-dim" font-size="10" font-weight="600">03 / settlement-engine</text>
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="lane" data-composition-frame-id="lane-3" x="40" y="424" width="1168" height="104" rx="10" class="c-lane" stroke-width="1"/>
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="exception-lane" data-composition-frame-id="lane-3-exception" x="46" y="430" width="1156" height="92" rx="8" class="c-security-group" stroke-width="1"/>
+        <text x="54" y="446" class="t-security" font-size="10" font-weight="600">EX / 중복으로 판정</text>
+        <!-- Phase headers -->
+        <line x1="72" y1="35" x2="422.8" y2="35" class="a-default" stroke-width="1.1"/>
+        <rect x="72" y="27" width="350.8" height="16" rx="4" class="c-mask"/>
+        <text x="247.4" y="39" class="t-muted" font-size="8" font-weight="600" text-anchor="middle">주문 접수</text>
+        <line x1="450.79999999999995" y1="35" x2="806.4000000000001" y2="35" class="a-emphasis" stroke-width="1.1"/>
+        <rect x="450.79999999999995" y="27" width="355.6000000000001" height="16" rx="4" class="c-mask"/>
+        <text x="628.6" y="39" class="t-backend" font-size="8" font-weight="600" text-anchor="middle">호가창 매칭</text>
+        <line x1="834.4000000000001" y1="35" x2="1175.6000000000001" y2="35" class="a-default" stroke-width="1.1"/>
+        <rect x="834.4000000000001" y="27" width="341.20000000000005" height="16" rx="4" class="c-mask"/>
+        <text x="1005.0000000000001" y="39" class="t-muted" font-size="8" font-weight="600" text-anchor="middle">체결 반영</text>
+        <!-- Workflow groups -->
+        <!-- Edge paths -->
+        <path data-edge-from="g1" data-edge-to="save" data-edge-label="같은 requestId가 없다" data-edge-key="0" data-edge-id="e1" data-composition-points="188,119;306.8,119" d="M 188 119 L 306.8 119" class="a-emphasis" stroke-width="1.8" marker-end="url(#f3-arrowhead-emphasis)"/>
+        <path data-edge-from="g1" data-edge-to="skip1" data-edge-label="이미 있다" data-edge-key="1" data-edge-id="e2" data-composition-points="48,119;20,119;20,491;306.8,491" d="M 48 119 L 20 119 L 20 491 L 306.8 491" class="a-security" stroke-width="1.4" marker-end="url(#f3-arrowhead-security)"/>
+        <path data-edge-from="save" data-edge-to="g2" data-edge-label="orders 토픽으로 넘어간다" data-edge-key="2" data-edge-id="e3" data-composition-points="376.8,145;376.8,166;496.8,166;496.8,217" d="M 376.8 145 L 376.8 166 L 496.8 166 L 496.8 217" class="a-emphasis" stroke-width="1.8" marker-end="url(#f3-arrowhead-emphasis)"/>
+        <path data-edge-from="g2" data-edge-to="match" data-edge-label="호가창에 없는 주문이다" data-edge-key="3" data-edge-id="e4" data-composition-points="566.8,243;690.4000000000001,243" d="M 566.8 243 L 690.4000000000001 243" class="a-emphasis" stroke-width="1.8" marker-end="url(#f3-arrowhead-emphasis)"/>
+        <path data-edge-from="g2" data-edge-to="skip2" data-edge-label="이미 들어 있다" data-edge-key="4" data-edge-id="e5" data-composition-points="496.8,269;496.8,491;690.4000000000001,491" d="M 496.8 269 L 496.8 491 L 690.4000000000001 491" class="a-security" stroke-width="1.4" marker-end="url(#f3-arrowhead-security)"/>
+        <path data-edge-from="match" data-edge-to="g3" data-edge-label="fills 토픽으로 넘어간다" data-edge-key="5" data-edge-id="e6" data-composition-points="760.4000000000001,269;760.4000000000001,290;880.4000000000001,290;880.4000000000001,341" d="M 760.4000000000001 269 L 760.4000000000001 290 L 880.4000000000001 290 L 880.4000000000001 341" class="a-emphasis" stroke-width="1.8" marker-end="url(#f3-arrowhead-emphasis)"/>
+        <path data-edge-from="g3" data-edge-to="settle" data-edge-label="처음 보는 tradeId다" data-edge-key="6" data-edge-id="e7" data-composition-points="950.4000000000001,367;1059.6000000000001,367" d="M 950.4000000000001 367 L 1059.6000000000001 367" class="a-emphasis" stroke-width="1.8" marker-end="url(#f3-arrowhead-emphasis)"/>
+        <path data-edge-from="g3" data-edge-to="skip3" data-edge-label="이미 반영했다" data-edge-key="7" data-edge-id="e8" data-composition-points="880.4000000000001,393;880.4000000000001,491;1059.6000000000001,491" d="M 880.4000000000001 393 L 880.4000000000001 491 L 1059.6000000000001 491" class="a-security" stroke-width="1.4" marker-end="url(#f3-arrowhead-security)"/>
+        <!-- Nodes -->
+        <g id="f3-node-g1" data-node-id="g1" data-node-label="requestId 조회" tabindex="0" role="button" aria-label="Focus requestId 조회, 같은 키의 주문이 있나, order-engine › 주문 접수" aria-pressed="false" data-node-kind="security" data-node-sublabel="같은 키의 주문이 있나" data-node-context="order-engine › 주문 접수">
+          <title>requestId 조회 · 같은 키의 주문이 있나 · order-engine › 주문 접수</title>
+          <rect x="48" y="93" width="140" height="52" rx="6" class="c-mask"/>
+          <rect x="48" y="93" width="140" height="52" rx="6" class="c-security" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-security" transform="translate(54 99) scale(0.6875)">
+            <path d="M8 2.2 13 4v3.5c0 3.1-1.8 5.4-5 6.5-3.2-1.1-5-3.4-5-6.5V4Z"/>
+            <path d="m5.8 8 1.5 1.5 3-3"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="118" y="114" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">requestId 조회</text>
+          <text data-detail="context" x="118" y="131" class="t-muted" font-size="8" text-anchor="middle">같은 키의 주문이 있나</text>
+        </g>
+        <g id="f3-node-save" data-node-id="save" data-node-label="주문 저장" tabindex="0" role="button" aria-label="Focus 주문 저장, 계좌를 잠그고 저장한다, order-engine › 주문 접수" aria-pressed="false" data-node-kind="backend" data-node-sublabel="계좌를 잠그고 저장한다" data-node-context="order-engine › 주문 접수">
+          <title>주문 저장 · 계좌를 잠그고 저장한다 · order-engine › 주문 접수</title>
+          <rect x="306.8" y="93" width="140" height="52" rx="6" class="c-mask"/>
+          <rect x="306.8" y="93" width="140" height="52" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(312.8 99) scale(0.6875)">
+            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="376.8" y="114" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">주문 저장</text>
+          <text data-detail="context" x="376.8" y="131" class="t-muted" font-size="8" text-anchor="middle">계좌를 잠그고 저장한다</text>
+        </g>
+        <g id="f3-node-g2" data-node-id="g2" data-node-label="호가창 확인" tabindex="0" role="button" aria-label="Focus 호가창 확인, 이미 있는 주문인가, matching-engine › 호가창 매칭" aria-pressed="false" data-node-kind="security" data-node-sublabel="이미 있는 주문인가" data-node-context="matching-engine › 호가창 매칭">
+          <title>호가창 확인 · 이미 있는 주문인가 · matching-engine › 호가창 매칭</title>
+          <rect x="426.8" y="217" width="140" height="52" rx="6" class="c-mask"/>
+          <rect x="426.8" y="217" width="140" height="52" rx="6" class="c-security" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-security" transform="translate(432.8 223) scale(0.6875)">
+            <path d="M8 2.2 13 4v3.5c0 3.1-1.8 5.4-5 6.5-3.2-1.1-5-3.4-5-6.5V4Z"/>
+            <path d="m5.8 8 1.5 1.5 3-3"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="496.8" y="238" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">호가창 확인</text>
+          <text data-detail="context" x="496.8" y="255" class="t-muted" font-size="8" text-anchor="middle">이미 있는 주문인가</text>
+        </g>
+        <g id="f3-node-match" data-node-id="match" data-node-label="호가창 매칭" tabindex="0" role="button" aria-label="Focus 호가창 매칭, 넣고 체결을 반복한다, matching-engine › 호가창 매칭" aria-pressed="false" data-node-kind="backend" data-node-sublabel="넣고 체결을 반복한다" data-node-context="matching-engine › 호가창 매칭">
+          <title>호가창 매칭 · 넣고 체결을 반복한다 · matching-engine › 호가창 매칭</title>
+          <rect x="690.4000000000001" y="217" width="140" height="52" rx="6" class="c-mask"/>
+          <rect x="690.4000000000001" y="217" width="140" height="52" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(696.4000000000001 223) scale(0.6875)">
+            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="760.4000000000001" y="238" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">호가창 매칭</text>
+          <text data-detail="context" x="760.4000000000001" y="255" class="t-muted" font-size="8" text-anchor="middle">넣고 체결을 반복한다</text>
+        </g>
+        <g id="f3-node-g3" data-node-id="g3" data-node-label="tradeId 조회" tabindex="0" role="button" aria-label="Focus tradeId 조회, 이미 반영한 체결인가, settlement-engine › 체결 반영" aria-pressed="false" data-node-kind="security" data-node-sublabel="이미 반영한 체결인가" data-node-context="settlement-engine › 체결 반영">
+          <title>tradeId 조회 · 이미 반영한 체결인가 · settlement-engine › 체결 반영</title>
+          <rect x="810.4000000000001" y="341" width="140" height="52" rx="6" class="c-mask"/>
+          <rect x="810.4000000000001" y="341" width="140" height="52" rx="6" class="c-security" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-security" transform="translate(816.4000000000001 347) scale(0.6875)">
+            <path d="M8 2.2 13 4v3.5c0 3.1-1.8 5.4-5 6.5-3.2-1.1-5-3.4-5-6.5V4Z"/>
+            <path d="m5.8 8 1.5 1.5 3-3"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="880.4000000000001" y="362" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">tradeId 조회</text>
+          <text data-detail="context" x="880.4000000000001" y="379" class="t-muted" font-size="8" text-anchor="middle">이미 반영한 체결인가</text>
+        </g>
+        <g id="f3-node-settle" data-node-id="settle" data-node-label="체결 DB 반영" tabindex="0" role="button" aria-label="Focus 체결 DB 반영, 반영하고 기록을 남긴다, settlement-engine › 체결 반영" aria-pressed="false" data-node-kind="backend" data-node-sublabel="반영하고 기록을 남긴다" data-node-context="settlement-engine › 체결 반영">
+          <title>체결 DB 반영 · 반영하고 기록을 남긴다 · settlement-engine › 체결 반영</title>
+          <rect x="1059.6000000000001" y="341" width="140" height="52" rx="6" class="c-mask"/>
+          <rect x="1059.6000000000001" y="341" width="140" height="52" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(1065.6000000000001 347) scale(0.6875)">
+            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="1129.6000000000001" y="362" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">체결 DB 반영</text>
+          <text data-detail="context" x="1129.6000000000001" y="379" class="t-muted" font-size="8" text-anchor="middle">반영하고 기록을 남긴다</text>
+        </g>
+        <g id="f3-node-skip1" data-node-id="skip1" data-node-label="기존 주문 반환" tabindex="0" role="button" aria-label="Focus 기존 주문 반환, 저장하지 않는다, 중복으로 판정 › 주문 접수" aria-pressed="false" data-node-kind="external" data-node-sublabel="저장하지 않는다" data-node-context="중복으로 판정 › 주문 접수">
+          <title>기존 주문 반환 · 저장하지 않는다 · 중복으로 판정 › 주문 접수</title>
+          <rect x="306.8" y="465" width="140" height="52" rx="6" class="c-mask"/>
+          <rect x="306.8" y="465" width="140" height="52" rx="6" class="c-external" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(312.8 471) scale(0.6875)">
+            <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
+            <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="376.8" y="486" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">기존 주문 반환</text>
+          <text data-detail="context" x="376.8" y="503" class="t-muted" font-size="8" text-anchor="middle">저장하지 않는다</text>
+        </g>
+        <g id="f3-node-skip2" data-node-id="skip2" data-node-label="이벤트 무시" tabindex="0" role="button" aria-label="Focus 이벤트 무시, 호가창이 그대로다, 중복으로 판정 › 호가창 매칭" aria-pressed="false" data-node-kind="external" data-node-sublabel="호가창이 그대로다" data-node-context="중복으로 판정 › 호가창 매칭">
+          <title>이벤트 무시 · 호가창이 그대로다 · 중복으로 판정 › 호가창 매칭</title>
+          <rect x="690.4000000000001" y="465" width="140" height="52" rx="6" class="c-mask"/>
+          <rect x="690.4000000000001" y="465" width="140" height="52" rx="6" class="c-external" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(696.4000000000001 471) scale(0.6875)">
+            <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
+            <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="760.4000000000001" y="486" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">이벤트 무시</text>
+          <text data-detail="context" x="760.4000000000001" y="503" class="t-muted" font-size="8" text-anchor="middle">호가창이 그대로다</text>
+        </g>
+        <g id="f3-node-skip3" data-node-id="skip3" data-node-label="반영 건너뜀" tabindex="0" role="button" aria-label="Focus 반영 건너뜀, DB가 그대로다, 중복으로 판정 › 체결 반영" aria-pressed="false" data-node-kind="external" data-node-sublabel="DB가 그대로다" data-node-context="중복으로 판정 › 체결 반영">
+          <title>반영 건너뜀 · DB가 그대로다 · 중복으로 판정 › 체결 반영</title>
+          <rect x="1059.6000000000001" y="465" width="140" height="52" rx="6" class="c-mask"/>
+          <rect x="1059.6000000000001" y="465" width="140" height="52" rx="6" class="c-external" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(1065.6000000000001 471) scale(0.6875)">
+            <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
+            <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="1129.6000000000001" y="486" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">반영 건너뜀</text>
+          <text data-detail="context" x="1129.6000000000001" y="503" class="t-muted" font-size="8" text-anchor="middle">DB가 그대로다</text>
+        </g>
+        <!-- Edge labels -->
+        <g data-detail="context" data-edge-from="g1" data-edge-to="save" data-edge-label="같은 requestId가 없다" data-edge-key="0" data-edge-id="e1">
+          <rect x="192" y="99" width="110.8" height="14" rx="3" class="c-mask"/>
+          <text x="247.4" y="109" class="t-backend" font-size="8" text-anchor="middle">같은 requestId가 없다</text>
+        </g>
+        <g data-detail="context" data-edge-from="g1" data-edge-to="skip1" data-edge-label="이미 있다" data-edge-key="1" data-edge-id="e2">
+          <rect x="136.8" y="471" width="53.199999999999996" height="14" rx="3" class="c-mask"/>
+          <text x="163.4" y="481" class="t-security" font-size="8" text-anchor="middle">이미 있다</text>
+        </g>
+        <g data-detail="context" data-edge-from="save" data-edge-to="g2" data-edge-label="orders 토픽으로 넘어간다" data-edge-key="2" data-edge-id="e3">
+          <rect x="374.20000000000005" y="146" width="125.19999999999999" height="14" rx="3" class="c-mask"/>
+          <text x="436.8" y="156" class="t-backend" font-size="8" text-anchor="middle">orders 토픽으로 넘어간다</text>
+        </g>
+        <g data-detail="context" data-edge-from="g2" data-edge-to="match" data-edge-label="호가창에 없는 주문이다" data-edge-key="3" data-edge-id="e4">
+          <rect x="570.8000000000001" y="223" width="115.6" height="14" rx="3" class="c-mask"/>
+          <text x="628.6" y="233" class="t-backend" font-size="8" text-anchor="middle">호가창에 없는 주문이다</text>
+        </g>
+        <g data-detail="context" data-edge-from="g2" data-edge-to="skip2" data-edge-label="이미 들어 있다" data-edge-key="4" data-edge-id="e5">
+          <rect x="555" y="471" width="77.2" height="14" rx="3" class="c-mask"/>
+          <text x="593.6" y="481" class="t-security" font-size="8" text-anchor="middle">이미 들어 있다</text>
+        </g>
+        <g data-detail="context" data-edge-from="match" data-edge-to="g3" data-edge-label="fills 토픽으로 넘어간다" data-edge-key="5" data-edge-id="e6">
+          <rect x="760.2" y="270" width="120.39999999999999" height="14" rx="3" class="c-mask"/>
+          <text x="820.4000000000001" y="280" class="t-backend" font-size="8" text-anchor="middle">fills 토픽으로 넘어간다</text>
+        </g>
+        <g data-detail="context" data-edge-from="g3" data-edge-to="settle" data-edge-label="처음 보는 tradeId다" data-edge-key="6" data-edge-id="e7">
+          <rect x="954.4000000000001" y="347" width="101.2" height="14" rx="3" class="c-mask"/>
+          <text x="1005.0000000000001" y="357" class="t-backend" font-size="8" text-anchor="middle">처음 보는 tradeId다</text>
+        </g>
+        <g data-detail="context" data-edge-from="g3" data-edge-to="skip3" data-edge-label="이미 반영했다" data-edge-key="7" data-edge-id="e8">
+          <rect x="933.8000000000001" y="471" width="72.4" height="14" rx="3" class="c-mask"/>
+          <text x="970.0000000000001" y="481" class="t-security" font-size="8" text-anchor="middle">이미 반영했다</text>
+        </g>
+        <!-- Legend -->
+      </svg>
+    <div class="leg">
+      <span><i style="background:rgba(245,177,58,.15);border-color:#f5b13a"></i>중복인지 판정하는 지점</span>
+      <span><i style="background:rgba(52,211,153,.14);border-color:#34d399"></i>실제로 상태를 바꾸는 처리</span>
+      <span><i style="background:rgba(30,38,50,.7);border-color:#94a3b8"></i>아무것도 바꾸지 않고 끝나는 경우</span>
+      <span><u style="border-color:#34d399"></u>처음 보는 메시지일 때</span>
+      <span><u style="border-color:#f5b13a;border-top-style:dashed"></u>이미 처리한 메시지일 때</span>
+    </div>
+  </div>
+
+  <div class="notes">
+    <div class="nc blue"><b>판정 근거를 어디에 두었나</b><ul>
+      <li>order-engine은 <code>orders</code> 테이블의 <code>request_id</code> 컬럼에 UNIQUE를 걸어 두고 그 값을 본다.</li>
+      <li>matching-engine은 호가창의 <code>orderIndex</code>와, 전량 체결된 주문의 체결 시각 기록을 본다. 둘 다 메모리에 있다.</li>
+      <li>settlement-engine은 <code>processed_fills</code> 테이블에 남긴 tradeId를 본다.</li>
+    </ul></div>
+    <div class="nc red"><b>주문 상태만 보고는 거를 수 없다</b><ul>
+      <li>부분 체결된 주문은 상태가 여전히 <code>PENDING</code>이다.</li>
+      <li>그래서 상태만 검사하면 이미 반영한 부분 체결 이벤트가 다시 들어왔을 때 그 검사를 통과한다.</li>
+      <li>그러면 누적 체결 수량과 보유 수량, 미수금이 한 번 더 더해진다. 체결 단위로 tradeId를 발급해 따로 기록해 두는 이유가 이것이다(ADR-007 「체결마다 tradeId를 발급해 반영 여부를 기록한다」).</li>
+    </ul></div>
+    <div class="nc green"><b>저장 위치가 서로 다르다</b><ul>
+      <li>주문 접수의 근거는 DB 컬럼에 있어 프로세스가 재시작해도 남는다.</li>
+      <li>매칭의 근거는 메모리에 있어 재시작하면 사라진다. 호가창 자체가 메모리에 있기 때문이다.</li>
+      <li>메모리에 둔 체결 기록에는 5,000건과 5분이라는 상한을 걸어 두어, 오래된 것부터 버려지게 했다.</li>
+    </ul></div>
+  </div>
+  <p>주문 저장 단계에서는 조회로 먼저 거르고, 그 조회를 두 요청이 동시에 통과하는 경우에만 <code>request_id</code> UNIQUE가 뒤의 INSERT를 막는다. 이때는 먼저 저장된 주문을 새 트랜잭션으로 다시 읽어 반환한다. 롤백된 트랜잭션을 그대로 재사용하면 조회가 되지 않기 때문에 저장과 복구 조회를 다른 빈으로 나눠 두었다(ADR-008 「주문 접수 멱등키를 requestId로 바꾼다」).</p>
+
+  <h2>이 구성에서 열려 있는 것</h2>
+  <ul>
+    <li><b>주문 저장 단계에서 미수금 합계를 0으로 놓고 계산한다.</b> <code>order-engine</code>은 모듈 의존 방향 때문에 <code>settlement</code> 모듈을 참조할 수 없어, 미수금 공급자가 항상 0을 돌려준다. 미수금이 남아 있는 계좌에서는 매수 한도가 실제보다 크게 나온다. 코드에는 이 자리를 서비스 사이 트랜잭션 설계와 함께 다룰 대상으로 표시해 두었다.</li>
+    <li><b>미수금 변제는 사용자가 상환 API를 호출해야 이뤄진다.</b> 체결 시점에 정산 예정일을 이틀 뒤로 적어 두지만, 그 날짜가 지났다고 잔고에서 자동으로 차감하는 경로는 v1에 없다. 예정일을 스캔해 처리하는 스케줄러는 v2 구성인 <code>settlement-worker</code>에 있다.</li>
+    <li><b>호가창은 <code>matching-engine</code> 프로세스의 메모리에만 있다.</b> 프로세스가 재시작하면 비어 있고, 되채울 재료는 DB에 <code>PENDING</code>으로 남은 주문과 각 주문의 누적 체결 수량이다.</li>
+    <li><b>거절된 주문은 사용자에게 따로 알리지 않는다.</b> 잔고 부족처럼 다시 시도해도 결과가 같은 실패는 로그를 남기고 폐기한다. 이미 202로 답한 뒤라 응답으로 알릴 수 없고, 사용자는 주문 내역에 그 주문이 없는 것으로 확인하게 된다.</li>
+  </ul>
+
+  <div class="pickbox">
+    <b>이 구성이 v2로 이어지는 지점.</b> v1에서 잔고를 지키는 수단은 계좌 행의 비관적 락이다. Kafka 파티션 키를 계좌 번호로 둬서 같은 계좌의 요청을 한 스레드에 모았지만, 잔고 검증은 여전히 DB를 왕복하면서 행을 잠근다. v2 엔진은 계좌 상태를 메모리에 올리고 계좌마다 스레드 하나가 전담하게 해서, 이 왕복과 행 잠금을 두지 않는다.
+  </div>
+
+  <div class="footer">
+    이 문서의 서술은 레포의 v1 경로 코드를 열어 확인한 것이다. 메모리 단일 스레드와 Aeron으로 다시 만든 v2 엔진 경로는 다루지 않는다. 도식은 Archify로 만들어 레이아웃 검사(showcase)를 통과시킨 뒤 이 문서의 색으로 맞춘 것이다.
+  </div>
+
+</div>
+</body>
+</html>

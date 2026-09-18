@@ -1,0 +1,511 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kafka 내부 데이터 흐름 — 이 매매 엔진 기준</title>
+<style>
+  :root{
+    --bg:#f7f6f3; --card:#fff; --ink:#1f2430; --muted:#5b6472; --line:#e4e1da;
+    --prod:#2f6db3; --prod-bg:#eaf2fb;
+    --broker:#556074; --broker-bg:#eef0f4;
+    --cons:#1f8a58; --cons-bg:#e7f5ee;
+    --hidden:#b7791f; --hidden-bg:#fbf3e1;
+    --red:#c0392b; --red-bg:#fbecea;
+    --shadow:0 1px 2px rgba(20,25,35,.06),0 4px 16px rgba(20,25,35,.06);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Pretendard","Noto Sans KR",sans-serif;
+    line-height:1.6;-webkit-font-smoothing:antialiased;word-break:keep-all;overflow-wrap:anywhere}
+  h1,h2,h3,h4{text-wrap:balance} p,li,td{text-wrap:pretty}
+  .wrap{max-width:1200px;margin:0 auto;padding:40px 24px 90px}
+  .kicker{font-size:13px;font-weight:700;letter-spacing:.04em;color:var(--prod);text-transform:uppercase}
+  h1{font-size:32px;line-height:1.2;margin:6px 0 10px;font-weight:800;letter-spacing:-.01em}
+  .sub{font-size:16px;color:var(--muted);max-width:800px}
+  section{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px 24px;margin:18px 0;box-shadow:var(--shadow)}
+  h2{font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 16px;padding-bottom:10px;border-bottom:1px solid var(--line)}
+  h3{font-size:18px;font-weight:800;margin:0 0 6px}
+  code{background:#f0efe9;border:1px solid var(--line);border-radius:5px;padding:1px 6px;font-family:"SF Mono",ui-monospace,Menlo,monospace;font-size:12.5px}
+  .muted{color:var(--muted)} p{margin:8px 0}
+  .legend{display:flex;flex-wrap:wrap;gap:16px;font-size:13.5px}
+  .legend .it{display:flex;align-items:center;gap:7px}
+  .dot{width:14px;height:14px;border-radius:4px;display:inline-block}
+
+  /* 파이프라인 */
+  .pipe{display:flex;flex-direction:column;gap:0}
+  .hop{display:grid;grid-template-columns:1fr;gap:0}
+  .lane{display:grid;grid-template-columns:200px 1fr 200px;gap:14px;align-items:center;padding:6px 0}
+  @media(max-width:880px){.lane{grid-template-columns:1fr}}
+  .node{border-radius:11px;padding:12px 14px;border:1.5px solid;font-size:13.5px}
+  .prod{background:var(--prod-bg);border-color:#bcd6f0}
+  .cons{background:var(--cons-bg);border-color:#aed9c2}
+  .node .role{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px}
+  .prod .role{color:var(--prod)} .cons .role{color:var(--cons)}
+  .node b{font-size:14.5px}
+  .topic{background:var(--broker-bg);border:1.5px solid #c3c9d4;border-radius:11px;padding:10px 12px}
+  .topic .tn{font-family:"SF Mono",ui-monospace,Menlo,monospace;font-size:13px;font-weight:700;color:var(--broker)}
+  .topic .meta{font-size:11.5px;color:var(--muted);margin:2px 0 8px}
+  .parts{display:flex;flex-wrap:wrap;gap:5px}
+  .part{background:#fff;border:1px solid #c3c9d4;border-radius:6px;padding:3px 7px;font-size:10.5px;font-weight:700;color:var(--broker);font-family:ui-monospace,monospace}
+  .part .lead2{color:var(--red);font-weight:800}
+  .arrow{text-align:center;color:var(--muted);font-weight:800;font-size:18px;padding:2px 0}
+  .keytag{display:inline-block;font-size:10.5px;font-weight:700;background:#fff;border:1px solid var(--line);border-radius:5px;padding:0 6px;color:var(--prod)}
+
+  /* 내부 확대 카드 */
+  .zoom{border-left:4px solid var(--hidden);background:var(--hidden-bg);border-radius:0 12px 12px 0;padding:16px 18px;margin:14px 0}
+  .zoom h3{color:var(--hidden)}
+  .zoom .why{font-size:12.5px;color:var(--muted);font-style:italic;margin-top:2px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:760px){.grid2{grid-template-columns:1fr}}
+  .box{background:#fff;border:1px solid var(--line);border-radius:9px;padding:12px 14px}
+  .box b{display:block;font-size:14px;margin-bottom:3px}
+  .box span,.box li{font-size:13px;color:#333}
+  ul.tight{margin:6px 0;padding-left:18px} ul.tight li{margin:4px 0}
+  .seg{display:flex;gap:3px;margin-top:6px;flex-wrap:wrap}
+  .seg .rec{background:var(--broker-bg);border:1px solid #c3c9d4;border-radius:4px;padding:2px 6px;font-size:10.5px;font-family:ui-monospace,monospace;color:var(--broker)}
+  .seg .rec.hw{background:var(--cons-bg);border-color:#aed9c2;color:var(--cons)}
+  .repl{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+  .rnode{border-radius:8px;padding:6px 10px;font-size:11.5px;font-weight:700;border:1px solid}
+  .leader{background:var(--prod-bg);border-color:#bcd6f0;color:var(--prod)}
+  .follower{background:#fff;border-color:var(--line);color:var(--muted)}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;margin-top:4px}
+  th,td{text-align:left;padding:9px 11px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font-size:11.5px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted)}
+  td .k{font-family:ui-monospace,monospace;font-size:12px;color:var(--prod)}
+  .pill{display:inline-block;font-size:11px;font-weight:700;border-radius:999px;padding:1px 9px}
+  .pill.a{background:var(--red-bg);color:var(--red)} .pill.g{background:var(--cons-bg);color:var(--cons)}
+  .concl{font-size:16px;font-weight:600}
+  .fig{background:#fbfaf7;border:1px solid var(--line);border-radius:11px;padding:16px;margin:14px 0}
+  .fig .cap{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px}
+  .fig svg{width:100%;height:auto;display:block}
+  .fig text{font-family:-apple-system,"Apple SD Gothic Neo","Pretendard",sans-serif}
+  /* 다크 네온 도식 패널 (레퍼런스 스타일) — 라이트 문서 안의 다크 카드 */
+  .fig.dark{background:#0d1117;border:1px solid #222b38;border-radius:14px;padding:18px 16px;
+    box-shadow:0 10px 34px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.03)}
+  .fig.dark .cap{color:#aeb6c2}
+  .fig.dark .fignote{color:#aeb6c2}
+  /* 다크 패널 안의 파이프라인 박스 오버라이드 */
+  .fig.dark .muted{color:#aab3c2}
+  .fig.dark .node{color:#d3d9e2}
+  .fig.dark .node.prod{background:#101a26;border-color:#2b5f9e}
+  .fig.dark .node.cons{background:#0d1a14;border-color:#2f8f5f}
+  .fig.dark .prod .role{color:#7cc0ff}
+  .fig.dark .cons .role{color:#5eead4}
+  .fig.dark .topic{background:#141b25;border-color:#2a3442}
+  .fig.dark .topic .tn{color:#cfd6e0}
+  .fig.dark .topic .meta{color:#aab3c2}
+  .fig.dark .part{background:#1b232f;border-color:#3d4855;color:#aab3c2}
+  .fig.dark .arrow{color:#aab3c2}
+  .fig.dark .keytag{background:#101a26;border-color:#2b5f9e;color:#7cc0ff}
+  .fig.dark code{background:#1b232f;border-color:#3d4855;color:#cfd6e0}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="kicker">Kafka 내부 데이터 흐름 · stock-trading-engine</div>
+    <h1>주문 데이터가 Kafka를 통과하는 전 경로 + 안 보이는 내부</h1>
+    <p class="sub">겉으로는 "발행 → 소비"지만, 그 사이에 파티션·복제·배치·오프셋·리밸런싱이 숨어 있습니다.
+      이 도식은 이 매매 엔진의 세 토픽을 따라가며, 프로듀서·브로커·컨슈머가 각각 무엇을 하는지 내부까지 펼칩니다.</p>
+  </header>
+
+  <section>
+    <h2>범례</h2>
+    <div class="legend">
+      <span class="it"><span class="dot" style="background:var(--prod-bg);border:1px solid #bcd6f0"></span> 프로듀서(발행)</span>
+      <span class="it"><span class="dot" style="background:var(--broker-bg);border:1px solid #c3c9d4"></span> 브로커·토픽·파티션</span>
+      <span class="it"><span class="dot" style="background:var(--cons-bg);border:1px solid #aed9c2"></span> 컨슈머(소비)</span>
+      <span class="it"><span class="dot" style="background:var(--hidden-bg);border:1px solid #e6cf9a"></span> 숨은 내부(안 보이는 부분)</span>
+    </div>
+  </section>
+
+  <!-- 용어 -->
+  <section>
+    <h2>먼저 — Kafka 핵심 용어 (백엔드 1년차 눈높이)</h2>
+    <div class="grid2">
+      <div class="box"><b>브로커 (broker)</b><span>Kafka 서버 한 대. 여러 대가 모여 클러스터. 파티션을 나눠 저장·서빙한다.</span></div>
+      <div class="box"><b>토픽 / 파티션</b><span>토픽 = 이름 붙은 로그. 파티션 = 그 토픽을 쪼갠 <b>순서 보장 단위</b>(각자 append-only 파일).</span></div>
+      <div class="box"><b>오프셋 (offset)</b><span>파티션 안에서 각 레코드의 순번(0,1,2…). 컨슈머는 "어디까지 읽었나"를 오프셋으로 기억.</span></div>
+      <div class="box"><b>프로듀서 / 컨슈머</b><span>발행하는 쪽 / 소비하는 쪽. 이 시스템의 앱들은 대부분 <b>둘 다</b>(소비하고 다시 발행).</span></div>
+      <div class="box"><b>컨슈머 그룹</b><span>같은 groupId 컨슈머들이 <b>파티션을 나눠 갖고</b> 병렬 소비. 한 파티션 = 그룹 내 한 컨슈머.</span></div>
+      <div class="box"><b>리더 / 팔로워 / ISR</b><span>파티션마다 리더 1 + 팔로워 N 복제본. ISR = 리더를 따라잡은 복제본 집합(내구성 근거).</span></div>
+    </div>
+  </section>
+
+  <!-- 메인 파이프라인 -->
+  <section>
+    <h2>① 전체 파이프라인 — 이 시스템의 세 토픽</h2>
+    <div class="fig dark">
+      <div class="cap">데이터 파이프라인 · 발행 → 토픽(파티션) → 소비</div>
+    <div class="pipe">
+
+      <div class="lane">
+        <div class="node prod"><div class="role">Producer</div><b>api</b><br><span class="muted">HTTP 수신·검증 후 발행, 202 응답</span></div>
+        <div class="topic">
+          <div class="tn">order-requests</div>
+          <div class="meta">key = <span class="keytag">accountId</span> · 발행: api · 소비: order-engine</div>
+          <div class="parts"><span class="part">P0</span><span class="part">P1</span><span class="part">P2</span></div>
+          <div class="muted" style="font-size:11px;margin-top:6px">같은 계좌 → 같은 파티션 → 직렬 처리(DB 락 불필요)</div>
+        </div>
+        <div class="node cons"><div class="role">Consumer group: order-engine</div><b>order-engine</b><br><span class="muted">잔고·보유 검증 → 저장 → 재발행</span></div>
+      </div>
+      <div class="arrow">▼ order-engine 이 소비하고 <b>다시 발행</b></div>
+
+      <div class="lane">
+        <div class="node prod"><div class="role">Producer</div><b>order-engine</b></div>
+        <div class="topic">
+          <div class="tn">orders <span class="muted" style="font-weight:400">(전환 후 단일 토픽)</span></div>
+          <div class="meta">key = <span class="keytag">stockCode</span> · 발행: order-engine · 소비: matching-engine</div>
+          <div class="parts"><span class="part">P0</span><span class="part">P1</span><span class="part">…</span><span class="part">P49</span></div>
+          <div class="muted" style="font-size:11px;margin-top:6px">같은 종목 → 같은 파티션 → single-writer(호가창 순서 보장)</div>
+        </div>
+        <div class="node cons"><div class="role">Consumer group: matching-engine</div><b>matching-engine</b><br><span class="muted">인메모리 호가창 매칭</span></div>
+      </div>
+      <div class="arrow">▼ 체결되면 발행</div>
+
+      <div class="lane">
+        <div class="node prod"><div class="role">Producer</div><b>matching-engine</b></div>
+        <div class="topic">
+          <div class="tn">fills</div>
+          <div class="meta">key = <span class="keytag">stockCode</span> · 발행: matching-engine · 소비: settlement + DB적재</div>
+          <div class="parts"><span class="part">P0</span><span class="part">P1</span><span class="part">…</span></div>
+        </div>
+        <div class="node cons"><div class="role">Consumer groups (2개)</div><b>settlement-engine</b> · <b>db-writer</b><br><span class="muted">정산 / (전환 후) DB 비동기 적재</span></div>
+      </div>
+
+    </div>
+    </div>
+    <p class="muted" style="margin-top:14px">핵심: 앱들은 <b>소비→처리→재발행</b>을 잇는 사슬입니다. 그리고 fills 는 <b>두 컨슈머 그룹</b>이 각자 읽습니다(정산 + DB 적재) — 같은 로그를 여러 소비자가 독립적으로 읽는 게 로그의 힘이에요.</p>
+  </section>
+
+  <!-- 숨은 내부 1: 프로듀서 -->
+  <section>
+    <h2>② 안 보이는 부분 — 프로듀서 내부</h2>
+    <div class="zoom">
+      <h3>발행 한 번에 실제로 일어나는 일</h3>
+      <p class="why">우리 앱은 <code>send(토픽, key, 메시지)</code> 한 줄만 부릅니다. 그런데 프로듀서 라이브러리가 그 안에서 네 가지 일을 대신 해줍니다. 각각이 <b>왜</b> 있는지부터 봅니다.</p>
+      <div class="grid2">
+        <div class="box"><b>1. 파티셔너 — 어느 파티션에 넣을지 정하기</b>
+          <span>프로듀서는 이 메시지를 여러 파티션 중 어디에 넣을지 먼저 정해야 합니다. key(예: 종목코드)가 있으면, 그 key를 숫자로 바꾸는 <b>해시 함수</b>(<code>murmur2</code>)를 돌려 <code>해시값 % 파티션수</code>로 파티션 번호를 고릅니다. 그래서 <b>같은 종목은 늘 같은 파티션</b>으로 가 순서가 지켜집니다. key가 없으면 아무 파티션에나 묶어 넣습니다.
+          <br><br><b>murmur2가 뭐냐:</b> 아무 입력(문자열)을 고정 크기 숫자로 바꾸는 해시 함수의 한 종류입니다. 세 성질이 필요해요 — ① <b>결정적</b>(같은 입력→늘 같은 숫자, 그래서 같은 종목→같은 파티션), ② <b>고른 분포</b>(파티션 쏠림 방지), ③ <b>빠름</b>(메시지마다 계산). SHA-256 같은 보안용 해시와 달리 murmur2는 <b>비암호(속도·분포용)</b>라 이 용도에 맞습니다.</span></div>
+        <div class="box"><b>2. 배치 — 모아서 한 번에 보내기(단, 항상 기다리진 않음)</b>
+          <span>프로듀서는 모든 레코드를 accumulator라는 곳에 모으긴 하지만, "기다렸다 보내느냐"는 <code>linger.ms</code>가 정합니다. <b>기본값 <code>linger.ms=0</code>이면 일부러 안 기다리고 되는 대로 즉시 보냅니다</b> — 그래서 평소엔 "보내면 바로 옴". 다만 <b>부하가 높으면</b> 앞 요청이 나가있는 동안 뒤 레코드가 쌓여 <b>자연히 묶입니다</b>(지연을 추가하는 게 아니라 어차피 대기하던 게 모이는 것). <code>linger.ms</code>를 올리면 <b>일부러 더 모아</b> 큰 배치로 보냅니다 — 네트워크 왕복이 줄어 처리량↑, 대신 지연↑. 즉 대량 처리로 갈 때 켜는 노브입니다.</span></div>
+        <div class="box"><b>3. acks — 브로커가 "받았다"고 언제 답하나</b>
+          <span>발행이 성공했다고 언제 인정할지를 정하는 설정입니다. <code>acks=0</code>은 답을 안 기다리고 던지고 잊습니다(빠르지만 유실 위험). <code>acks=1</code>은 리더 브로커가 받으면 성공. <code>acks=all</code>은 복제본(ISR)까지 다 받아야 성공 — 가장 안전하지만 느립니다. 로그를 진실의 원천으로 쓰면 유실이 치명적이라 <b>all</b>을 씁니다.</span></div>
+        <div class="box"><b>4. 멱등 프로듀서 — 재시도 중복 막기</b>
+          <span>네트워크가 끊겨 프로듀서가 재시도하면 같은 메시지가 로그에 두 번 저장될 수 있습니다. <code>enable.idempotence</code>를 켜면 프로듀서가 각 메시지에 고유 순번(시퀀스)을 붙이고, 브로커가 그 순번으로 <b>중복을 걸러냅니다.</b> 그래서 재시도해도 로그엔 한 번만 남습니다.</span></div>
+      </div>
+      <div class="fig dark">
+        <div class="cap">도식 · key → 파티션 (해시로 결정)</div>
+        <svg viewBox="0 0 720 208" role="img" aria-label="key를 해시해 파티션을 고르는 과정">
+          <defs><filter id="gK" x="-70%" y="-70%" width="240%" height="240%"><feGaussianBlur stdDeviation="2.6" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+          <text x="70" y="16" text-anchor="middle" font-size="11" fill="#aeb6c2">key (종목코드)</text>
+          <!-- keys (색 카드) -->
+          <g font-size="13" font-weight="800" text-anchor="middle">
+            <rect x="8" y="24" width="124" height="40" rx="10" fill="#10231a" stroke="#1f7a4d"/><text x="70" y="49" fill="#5eead4">"005930"</text>
+            <rect x="8" y="84" width="124" height="40" rx="10" fill="#101d2e" stroke="#2b5f9e"/><text x="70" y="109" fill="#7cc0ff">"000660"</text>
+            <rect x="8" y="144" width="124" height="40" rx="10" fill="#241a10" stroke="#9a6a1f"/><text x="70" y="169" fill="#f5c46b">"A900110"</text>
+          </g>
+          <!-- key → hash -->
+          <g stroke-width="2" fill="none" opacity=".8">
+            <path d="M132 44 C 172 44, 172 96, 208 100" stroke="#22c55e"/>
+            <path d="M132 104 L208 104" stroke="#3b82f6"/>
+            <path d="M132 164 C 172 164, 172 112, 208 108" stroke="#f59e0b"/>
+          </g>
+          <!-- hash box -->
+          <rect x="208" y="78" width="180" height="54" rx="11" fill="#141b25" stroke="#2a3442"/>
+          <text x="298" y="102" text-anchor="middle" font-size="13" font-weight="800" fill="#cfd6e0">murmur2(key)</text>
+          <text x="298" y="121" text-anchor="middle" font-size="12.5" fill="#aeb6c2">% 파티션수</text>
+          <!-- hash → partition -->
+          <g stroke-width="2" fill="none" opacity=".85">
+            <path d="M388 98  C 470 98,  470 44,  556 44"  stroke="#22c55e"/>
+            <path d="M388 112 C 470 112, 470 138, 556 138" stroke="#3b82f6"/>
+            <path d="M388 106 C 470 106, 470 91,  556 91"  stroke="#f59e0b"/>
+          </g>
+          <circle cx="556" cy="44"  r="4.5" fill="#22c55e" filter="url(#gK)"/>
+          <circle cx="556" cy="91"  r="4.5" fill="#f59e0b" filter="url(#gK)"/>
+          <circle cx="556" cy="138" r="4.5" fill="#3b82f6" filter="url(#gK)"/>
+          <!-- partitions (색 매칭 카드) -->
+          <text x="634" y="16" text-anchor="middle" font-size="11" fill="#aeb6c2">파티션 (같은 토픽 안)</text>
+          <g font-size="12.5" font-weight="800" text-anchor="middle">
+            <rect x="560" y="26" width="148" height="36" rx="9" fill="#10231a" stroke="#1f7a4d"/><text x="634" y="49" fill="#5eead4">P3 · 005930</text>
+            <rect x="560" y="73" width="148" height="36" rx="9" fill="#241a10" stroke="#9a6a1f"/><text x="634" y="96" fill="#f5c46b">P7 · A900110</text>
+            <rect x="560" y="120" width="148" height="36" rx="9" fill="#101d2e" stroke="#2b5f9e"/><text x="634" y="143" fill="#7cc0ff">P12 · 000660</text>
+            <rect x="560" y="164" width="148" height="26" rx="9" fill="#141b25" stroke="#2a3442" opacity=".6"/><text x="634" y="182" fill="#8b95a4">…</text>
+          </g>
+        </svg>
+        <div style="font-size:12.5px;color:#aeb6c2;margin-top:8px">같은 key는 늘 같은 숫자가 나와 <b>같은 파티션</b>으로 갑니다. "005930"은 언제나 P3 — 그래서 종목별 순서가 지켜집니다.</div>
+      </div>
+      <p class="why" style="margin-top:10px">숨은 함정: 배치와 재시도가 겹치면 메시지 순서가 꼬일 수 있습니다. 그래서 "동시에 응답 대기 중인 요청 수"(<code>max.in.flight.requests</code>)를 제한하는데, 멱등 프로듀서를 켜면 이걸 자동으로 안전하게 맞춰줍니다.</p>
+    </div>
+  </section>
+
+  <!-- 숨은 내부 2: 브로커/저장 -->
+  <section>
+    <h2>③ 안 보이는 부분 — 브로커·저장·복제</h2>
+    <div class="zoom">
+      <h3>파티션은 실제 "파일"이고, 복제 덕에 서버가 죽어도 안 날아간다</h3>
+      <p class="why">브로커(Kafka 서버)가 파티션을 디스크에 어떻게 저장하고, 왜 서버 한 대가 죽어도 데이터가 살아남는지 봅니다.</p>
+      <div class="grid2">
+        <div class="box"><b>파티션은 디스크 위의 파일이다</b>
+          <span>파티션은 추상적인 개념이 아니라 <b>디스크에 있는 실제 파일</b>입니다. 메시지가 오면 파일 <b>끝에 계속 이어 붙입니다</b>(append). 파일이 커지면 여러 조각(세그먼트, <code>.log</code>+<code>.index</code>)으로 나눕니다. 끝에만 쓰는 <b>순차 쓰기</b>라, 여기저기 쓰는 랜덤 쓰기보다 훨씬 빠릅니다.</span>
+          <div class="seg"><span class="rec">off 0</span><span class="rec">1</span><span class="rec">2</span><span class="rec">3</span><span class="rec hw">HW=4</span><span class="rec" style="opacity:.5">5(미확정)</span></div>
+        </div>
+        <div class="box"><b>리더·팔로워·ISR·High Watermark</b>
+          <span>파티션 하나는 여러 브로커에 복제됩니다. 그중 <b>리더</b> 한 대가 읽기·쓰기를 맡고, <b>팔로워</b>들이 리더를 따라 복사합니다. 리더를 제대로 따라잡은 복제본 집합을 <b>ISR</b>(In-Sync Replicas, 동기화된 복제본)이라 합니다. ISR 모두에 복제가 끝난 지점을 <b>High Watermark</b>라 부르고, <b>컨슈머는 딱 그 지점까지만 읽습니다</b> — 아직 복제 안 끝난 메시지는 유실될 수 있어 안 보여주는 겁니다. 그래서 리더 브로커가 죽어도 팔로워가 새 리더가 돼 데이터가 안 날아갑니다.</span>
+          <div class="repl"><span class="rnode leader">Leader (broker1)</span><span class="rnode follower">Follower (broker2)</span><span class="rnode follower">Follower (broker3)</span></div>
+        </div>
+        <div class="box"><b>page cache + zero-copy — Kafka가 빠른 진짜 이유</b>
+          <span>브로커는 메시지를 자바 메모리(JVM 힙)에 담지 않고, <b>운영체제가 관리하는 디스크 캐시</b>(page cache)에 둡니다. 컨슈머에게 보낼 때도 데이터를 앱으로 한 번 복사했다 다시 보내지 않고, <b>커널이 디스크에서 네트워크로 곧장 보냅니다</b>(zero-copy, <code>sendfile</code> 시스템콜). 복사 단계를 없애 처리량이 확 오릅니다.</span></div>
+        <div class="box"><b>retention·compaction — 로그를 어떻게 정리하나</b>
+          <span>로그를 영원히 쌓을 순 없으니 정리 정책이 있습니다. <b>retention</b>은 "며칠 지나거나 몇 GB 넘으면 오래된 것부터 삭제". <b>compaction</b>(압축 정리)은 삭제 대신 "같은 key는 최신 값 하나만 남김" — 계좌 잔고처럼 최종 상태만 필요한 데 적합합니다. 로그를 진실의 원천으로 쓰면, 이 정책이 <b>얼마나 옛날까지 복원할 수 있나</b>를 결정합니다.</span></div>
+      </div>
+      <div class="fig dark">
+        <div class="cap">도식 · 파티션 = 오프셋 로그 · 리더가 쓰고 팔로워가 복제 · HW까지만 읽힘</div>
+        <svg viewBox="0 0 720 300" role="img" aria-label="파티션 로그와 복제, High Watermark">
+          <defs>
+            <filter id="glowG" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="2.4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+            <marker id="ar" markerWidth="8" markerHeight="8" refX="5" refY="3" orient="auto"><path d="M0 0 L6 3 L0 6 z" fill="#3a4658"/></marker>
+          </defs>
+          <!-- leader -->
+          <circle cx="14" cy="30" r="4" fill="#60a5fa" filter="url(#glowG)"/>
+          <text x="26" y="34" font-size="12.5" font-weight="700" fill="#60a5fa">Leader (broker1) · 읽기·쓰기</text>
+          <g font-size="12.5" font-weight="700" text-anchor="middle">
+            <rect x="150" y="46" width="46" height="36" rx="7" fill="#161c26" stroke="#2b3542"/><text x="173" y="69" fill="#9aa4b2">0</text>
+            <rect x="200" y="46" width="46" height="36" rx="7" fill="#161c26" stroke="#2b3542"/><text x="223" y="69" fill="#9aa4b2">1</text>
+            <rect x="250" y="46" width="46" height="36" rx="7" fill="#161c26" stroke="#2b3542"/><text x="273" y="69" fill="#9aa4b2">2</text>
+            <rect x="300" y="46" width="46" height="36" rx="7" fill="#161c26" stroke="#2b3542"/><text x="323" y="69" fill="#9aa4b2">3</text>
+            <rect x="350" y="46" width="46" height="36" rx="7" fill="#0f2a1f" stroke="#34d399" filter="url(#glowG)"/><text x="373" y="69" fill="#34d399">4</text>
+            <rect x="400" y="46" width="46" height="36" rx="7" fill="#1b232f" stroke="#2b3542" stroke-dasharray="4 3"/><text x="423" y="69" fill="#8b95a4">5</text>
+            <rect x="450" y="46" width="46" height="36" rx="7" fill="#1b232f" stroke="#2b3542" stroke-dasharray="4 3"/><text x="473" y="69" fill="#8b95a4">6</text>
+          </g>
+          <text x="512" y="69" font-size="12" fill="#aeb6c2">← append</text>
+          <!-- HW marker -->
+          <line x1="398" y1="40" x2="398" y2="96" stroke="#34d399" stroke-width="2" filter="url(#glowG)"/>
+          <text x="398" y="112" text-anchor="middle" font-size="11.5" font-weight="700" fill="#34d399">High Watermark — 여기까지만 컨슈머가 읽음</text>
+          <!-- replication arrows -->
+          <g stroke="#3a4658" stroke-width="1.6" fill="none" marker-end="url(#ar)">
+            <path d="M223 88 L223 150"/><path d="M323 88 L323 150"/>
+          </g>
+          <!-- followers -->
+          <circle cx="14" cy="132" r="3.5" fill="#60a5fa" opacity=".6"/>
+          <text x="26" y="136" font-size="12" font-weight="700" fill="#aeb6c2">Follower (broker2) · 복제</text>
+          <g font-size="12" text-anchor="middle" fill="#aab3c2">
+            <rect x="150" y="150" width="46" height="30" rx="6" fill="#1b232f" stroke="#3d4855"/><text x="173" y="170">0</text>
+            <rect x="200" y="150" width="46" height="30" rx="6" fill="#1b232f" stroke="#3d4855"/><text x="223" y="170">1</text>
+            <rect x="250" y="150" width="46" height="30" rx="6" fill="#1b232f" stroke="#3d4855"/><text x="273" y="170">2</text>
+            <rect x="300" y="150" width="46" height="30" rx="6" fill="#1b232f" stroke="#3d4855"/><text x="323" y="170">3</text>
+            <rect x="350" y="150" width="46" height="30" rx="6" fill="#1b232f" stroke="#3d4855"/><text x="373" y="170">4</text>
+          </g>
+          <circle cx="14" cy="204" r="3.5" fill="#60a5fa" opacity=".6"/>
+          <text x="26" y="208" font-size="12" font-weight="700" fill="#aeb6c2">Follower (broker3) · 복제</text>
+          <g font-size="12" text-anchor="middle" fill="#aab3c2">
+            <rect x="150" y="222" width="46" height="30" rx="6" fill="#1b232f" stroke="#3d4855"/><text x="173" y="242">0</text>
+            <rect x="200" y="222" width="46" height="30" rx="6" fill="#1b232f" stroke="#3d4855"/><text x="223" y="242">1</text>
+            <rect x="250" y="222" width="46" height="30" rx="6" fill="#1b232f" stroke="#3d4855"/><text x="273" y="242">2</text>
+            <rect x="300" y="222" width="46" height="30" rx="6" fill="#1b232f" stroke="#3d4855"/><text x="323" y="242">3</text>
+            <rect x="350" y="222" width="46" height="30" rx="6" fill="#1b232f" stroke="#3d4855"/><text x="373" y="242">4</text>
+          </g>
+          <text x="14" y="288" font-size="11.5" fill="#aeb6c2">ISR(리더를 따라잡은 복제본)에 다 복제된 지점 = HW. 리더가 죽어도 팔로워가 새 리더가 됩니다.</text>
+        </svg>
+      </div>
+      <p class="why" style="margin-top:10px">우리와 연결: 지금은 브로커가 한 대라 복제본이 없습니다(replication-factor=1). 그래서 로컬 테스트는 됐지만, 운영이라면 브로커가 죽는 순간 데이터가 날아갑니다. 로그를 진실의 원천으로 삼으려면 복제본 수를 반드시 올려야 합니다.</p>
+    </div>
+  </section>
+
+  <!-- 숨은 내부 3: 컨슈머 -->
+  <section>
+    <h2>④ 안 보이는 부분 — 컨슈머·그룹·오프셋·리밸런싱</h2>
+    <div class="zoom">
+      <h3>컨슈머는 메시지를 "받는" 게 아니라, 직접 "당겨오고" 위치를 스스로 기억한다</h3>
+      <p class="why">여러 컨슈머가 파티션을 어떻게 나눠 갖고, 어디까지 읽었는지를 어떻게 기억하는지 봅니다.</p>
+      <div class="grid2">
+        <div class="box"><b>그룹 코디네이터가 파티션을 나눠준다</b>
+          <span>같은 groupId 컨슈머 여러 대가 파티션을 나눠 가집니다. 이 나눔을 브로커 중 한 대(<b>그룹 코디네이터</b>)가 중재하고, <b>assignor</b>라는 규칙(어느 컨슈머가 어느 파티션을 맡을지)을 적용합니다. 그 결과가 우리 코드의 <code>onPartitionsAssigned</code> 콜백으로 들어옵니다.</span></div>
+        <div class="box"><b>poll — 밀어주는 게 아니라 당겨온다</b>
+          <span>컨슈머는 브로커가 밀어주길(push) 기다리지 않습니다. 자기가 <code>poll()</code>을 호출해 <b>메시지 묶음을 당겨옵니다</b>(pull). 미리 조금 받아 버퍼에 쟁여두고, 처리한 뒤 다음 <code>poll()</code>을 부릅니다. 그래서 컨슈머가 자기 속도로 소비할 수 있습니다.</span></div>
+        <div class="box"><b>오프셋 커밋 — "여기까지 처리했다" 체크포인트</b>
+          <span>컨슈머는 "이 파티션을 몇 번 오프셋까지 처리했다"를 <b><code>__consumer_offsets</code>라는 Kafka 내부 토픽</b>에 기록합니다(커밋). 재시작하면 여기서 위치를 읽어 이어서 소비합니다. <b>이게 컨슈머 쪽 체크포인트</b>예요.
+          <br><br><b>언제 커밋하냐가 배달 시맨틱을 가릅니다:</b> ① <b>auto-commit</b>(기본, 5초 주기 자동) — 편하지만 처리 전에 커밋되면 크래시 시 <b>유실</b> 위험. ② <b>manual commit</b>(권장) — 처리를 끝낸 뒤 명시적으로 커밋(우리 코드: <code>ack-mode manual_immediate</code> + <code>ack.acknowledge()</code>). 처리 후 커밋이라 "처리했는데 커밋 직전 크래시"면 그 메시지를 다시 받습니다 → <b>at-least-once</b>(중복) → 그래서 requestId·tradeId로 <b>멱등 처리</b>한 겁니다.</span></div>
+        <div class="box"><b>heartbeat와 리밸런싱 — 죽으면 다시 나눈다</b>
+          <span>컨슈머는 백그라운드로 "나 살아있다"는 신호(heartbeat)를 보냅니다. 일정 시간(<code>session.timeout</code>) 신호가 없거나 한 번의 처리가 너무 오래 걸리면(<code>max.poll.interval</code> 초과), 코디네이터가 죽은 걸로 보고 그 파티션을 <b>다른 컨슈머에게 다시 나눠줍니다</b>(리밸런싱). 우리가 다룬 호가창 복원이 바로 이때 필요해집니다.</span></div>
+      </div>
+      <div class="fig dark">
+        <div class="cap">도식 · 파티션을 컨슈머들이 나눠 갖는다 (한 파티션 = 그룹 내 한 컨슈머)</div>
+        <svg viewBox="0 0 720 236" role="img" aria-label="컨슈머 그룹 파티션 배정">
+          <defs>
+            <filter id="gG" x="-70%" y="-70%" width="240%" height="240%"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+          </defs>
+          <text x="14" y="20" font-size="11.5" fill="#aeb6c2">토픽 orders 의 파티션 6개 (색 = 담당 컨슈머)</text>
+          <!-- partitions: 색으로 그룹 구분한 카드 -->
+          <g font-size="13" font-weight="800" text-anchor="middle">
+            <rect x="30"  y="32" width="96" height="44" rx="10" fill="#10231a" stroke="#1f7a4d"/><text x="78"  y="60" fill="#5eead4">P0</text>
+            <rect x="142" y="32" width="96" height="44" rx="10" fill="#10231a" stroke="#1f7a4d"/><text x="190" y="60" fill="#5eead4">P1</text>
+            <rect x="254" y="32" width="96" height="44" rx="10" fill="#10231a" stroke="#1f7a4d"/><text x="302" y="60" fill="#5eead4">P2</text>
+            <rect x="366" y="32" width="96" height="44" rx="10" fill="#101d2e" stroke="#2b5f9e"/><text x="414" y="60" fill="#7cc0ff">P3</text>
+            <rect x="478" y="32" width="96" height="44" rx="10" fill="#101d2e" stroke="#2b5f9e"/><text x="526" y="60" fill="#7cc0ff">P4</text>
+            <rect x="590" y="32" width="96" height="44" rx="10" fill="#101d2e" stroke="#2b5f9e"/><text x="638" y="60" fill="#7cc0ff">P5</text>
+          </g>
+          <!-- 커넥터 -->
+          <g stroke-width="2" fill="none" opacity=".85">
+            <path d="M78 76 C 78 120, 230 120, 230 158"  stroke="#22c55e"/>
+            <path d="M190 76 C 190 120, 230 120, 230 158" stroke="#22c55e"/>
+            <path d="M302 76 C 302 120, 230 120, 230 158" stroke="#22c55e"/>
+            <path d="M414 76 C 414 120, 530 120, 530 158" stroke="#3b82f6"/>
+            <path d="M526 76 C 526 120, 530 120, 530 158" stroke="#3b82f6"/>
+            <path d="M638 76 C 638 120, 530 120, 530 158" stroke="#3b82f6"/>
+          </g>
+          <!-- 발광 점 (커넥터가 컨슈머로 들어가는 지점) -->
+          <circle cx="230" cy="158" r="5" fill="#22c55e" filter="url(#gG)"/>
+          <circle cx="530" cy="158" r="5" fill="#3b82f6" filter="url(#gG)"/>
+          <!-- 컨슈머: 발광 카드 (칩 느낌) -->
+          <g text-anchor="middle">
+            <rect x="126" y="162" width="208" height="56" rx="12" fill="#0d1a14" stroke="#22c55e" filter="url(#gG)"/>
+            <text x="230" y="188" font-size="14" font-weight="800" fill="#5eead4">컨슈머 C1</text>
+            <text x="230" y="207" font-size="11.5" font-weight="600" fill="#aeb6c2">P0 · P1 · P2 담당</text>
+            <rect x="426" y="162" width="208" height="56" rx="12" fill="#0d1622" stroke="#3b82f6" filter="url(#gG)"/>
+            <text x="530" y="188" font-size="14" font-weight="800" fill="#7cc0ff">컨슈머 C2</text>
+            <text x="530" y="207" font-size="11.5" font-weight="600" fill="#aeb6c2">P3 · P4 · P5 담당</text>
+          </g>
+        </svg>
+        <div style="font-size:12.5px;color:#aeb6c2;margin-top:8px">groupId "matching-engine". 인스턴스를 늘리면 파티션이 더 잘게 나뉩니다 — <b>최대 6명까지(파티션 수), 그 이상은 놀음.</b></div>
+      </div>
+      <p class="why" style="margin-top:10px">우리가 겪은 콜드스타트의 정체: 컨슈머는 붙었는데 소비할 토픽이 아직 클러스터 메타데이터에 없어서 <b>배정이 비어 있던 것</b>입니다. 특히 패턴 구독(<code>orders\..*</code>)은 새 토픽을 늦게 발견합니다.</p>
+    </div>
+  </section>
+
+  <!-- 숨은 내부 4: 메타데이터 -->
+  <section>
+    <h2>⑤ 안 보이는 부분 — 클러스터 메타데이터 (KRaft)</h2>
+    <div class="zoom">
+      <h3>"어느 브로커가 어느 파티션의 리더인가"를 관리하는 층</h3>
+      <p>토픽이 몇 개고, 각 파티션의 리더가 어느 브로커고, ISR에 누가 들었는지 — 이런 <b>메타데이터</b>는 누군가 한 곳에서 관리해야 클러스터가 일관되게 돕니다. 예전에는 <b>ZooKeeper</b>라는 별도 시스템이 그 역할을 했지만, 이 프로젝트는 <b>KRaft</b>로 관리합니다. KRaft는 Kafka가 <b>Raft</b>(여러 서버가 하나의 값에 합의하는 알고리즘)를 자체 내장한 것으로, 별도 ZooKeeper 없이 <b>컨트롤러 쿼럼</b>(합의를 맡는 브로커 몇 대)이 <code>__cluster_metadata</code>라는 로그로 메타데이터를 합의합니다. 그래서 파티션이 수십만 개가 돼도 견딥니다.</p>
+      <p class="why">프로듀서와 컨슈머는 이 메타데이터를 주기적으로 받아 "이 파티션의 리더가 지금 어느 브로커인지"를 압니다. 리더 브로커가 죽으면 컨트롤러가 ISR 중에서 새 리더를 뽑고, 클라이언트는 갱신된 메타데이터를 보고 새 리더에게 다시 붙습니다.</p>
+    </div>
+  </section>
+
+  <!-- 배달 시맨틱 -->
+  <section>
+    <h2>⑥ 배달 시맨틱 — 우리 멱등성과 직결</h2>
+    <table>
+      <thead><tr><th>모드</th><th>뜻</th><th>이 시스템</th></tr></thead>
+      <tbody>
+        <tr><td><span class="pill a">at-least-once</span></td><td>처리 후 오프셋 커밋 → 크래시 시 재전달(중복 가능)</td><td class="muted">기본. 그래서 <b>멱등 처리 필수</b>(requestId·tradeId — 우리가 고친 그거)</td></tr>
+        <tr><td><span class="pill">at-most-once</span></td><td>먼저 커밋 후 처리 → 유실 가능</td><td class="muted">주문엔 부적합(유실 안 됨)</td></tr>
+        <tr><td><span class="pill g">exactly-once</span></td><td>트랜잭션(read-process-write 원자) + 멱등 프로듀서</td><td class="muted">로그-원천 리플레이엔 이상적이나 처리량·복잡도 비용</td></tr>
+      </tbody>
+    </table>
+    <p class="muted" style="margin-top:10px">즉 우리가 겪은 "중복 주문·중복 체결"은 Kafka가 <b>at-least-once가 기본</b>이라 생긴 자연스러운 문제였고, requestId/tradeId 멱등키가 정답이었습니다.</p>
+  </section>
+
+  <!-- 이 시스템 대입 -->
+  <section>
+    <h2>⑦ 이 시스템에 대입 — 토픽별 요약</h2>
+    <table>
+      <thead><tr><th>토픽</th><th>key</th><th>파티션</th><th>순서 보장 단위</th><th>발행 → 소비</th></tr></thead>
+      <tbody>
+        <tr><td class="k">order-requests</td><td>accountId</td><td>N(예:3~)</td><td>계좌별</td><td>api → order-engine</td></tr>
+        <tr><td class="k">orders</td><td>stockCode</td><td>N(예:50~300)</td><td>종목별</td><td>order-engine → matching-engine</td></tr>
+        <tr><td class="k">fills</td><td>stockCode</td><td>N</td><td>종목별</td><td>matching → settlement + db-writer</td></tr>
+        <tr><td class="k">(전환 후) snapshots</td><td>partition</td><td>—</td><td>—</td><td>compaction 토픽/스토어 · 복원 시작점</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- 복구 흐름 -->
+  <section>
+    <h2>⑧ 그래서 복구는 어떻게 — 로그 + 스냅샷으로 인메모리 상태 되살리기</h2>
+    <p class="muted">앞의 내부들(오프셋·seek·High Watermark·컨슈머 배정)을 조합하면, 재시작·리밸런스로 날아간 인메모리 상태(호가창·잔고·보유)를 <b>로그를 진실의 원천으로</b> 되살릴 수 있습니다. 그 흐름을 단계로 봅니다.</p>
+    <div class="callout blue" style="border-left:4px solid #7ba7d0;background:var(--prod-bg);border-radius:0 10px 10px 0;padding:12px 16px;margin:10px 0">
+      <b style="color:var(--prod)">먼저 — 로그 ≠ 체크포인트.</b> 헷갈리기 쉬운데 둘은 층위가 다릅니다.
+      <b>로그</b>는 일어난 이벤트를 전부·순서대로 쌓은 <b>사건 전체 기록</b>(Kafka의 본질)이고,
+      <b>체크포인트</b>는 그 로그의 <b>특정 위치나 시점 상태를 가리키는 북마크</b>입니다(오프셋 커밋, 스냅샷).
+      복구는 <b>체크포인트로 점프한 뒤 로그를 재생</b>하는 것 — 로그는 체크포인트가 아니라 <b>재생하는 재료</b>입니다.
+    </div>
+
+    <div class="zoom">
+      <h3>정상 운영 중 — 미리 스냅샷을 떠 둔다</h3>
+      <p class="why">복구를 빠르게 하려면, 평소에 밑작업을 해둬야 합니다.</p>
+      <div class="grid2">
+        <div class="box"><b>1. 이벤트마다 인메모리 상태 갱신</b>
+          <span>주문·체결 이벤트를 처리할 때마다 메모리 안의 호가창·잔고·보유를 바꿉니다. 이 상태가 곧 "현재 진실"이고, 그 상태를 만든 이벤트들은 <b>Kafka 로그에 그대로 남아</b> 있습니다.</span></div>
+        <div class="box"><b>2. 주기적으로 스냅샷 저장</b>
+          <span>일정 주기(예: N건마다 또는 M초마다)로, 그 순간의 인메모리 상태를 통째로 직렬화해 저장합니다. 이때 <b>"이 스냅샷은 오프셋 X까지 반영한 상태"</b>라는 표시를 반드시 함께 적습니다. 이 표시가 나중에 "어디서부터 다시 읽을지"의 기준이 됩니다.</span>
+          <div class="seg"><span class="rec">off …</span><span class="rec hw">스냅샷 = off X</span><span class="rec">X+1</span><span class="rec">X+2</span><span class="rec" style="opacity:.5">…끝(HW)</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="zoom">
+      <h3>크래시·리밸런스 후 — 스냅샷 로드 + 이후만 리플레이</h3>
+      <p class="why">인메모리 상태가 텅 빈 채로 이 파티션을 (다시) 맡게 됐을 때, 다음 순서로 되살립니다.</p>
+      <div class="grid2">
+        <div class="box"><b>1. 파티션 할당받음</b>
+          <span>컨슈머 그룹이 이 인스턴스에 파티션 P를 배정합니다(<code>onPartitionsAssigned</code>). 이제 P에 담긴 종목·계좌의 상태를 책임져야 합니다.</span></div>
+        <div class="box"><b>2. 최신 스냅샷 로드</b>
+          <span>P의 가장 최근 스냅샷을 읽어 인메모리 상태를 그 시점으로 세팅합니다. 스냅샷에 적힌 오프셋이 <b>X</b>라면, "지금 내 상태는 X까지 반영된 것"입니다. 하지만 X 이후로 새 이벤트가 더 쌓였을 수 있죠.</span></div>
+        <div class="box"><b>3. 로그를 X+1로 되감기 (seek)</b>
+          <span>컨슈머에게 <code>seek(P, X+1)</code>을 호출해 <b>읽기 위치를 X 다음으로</b> 옮깁니다. 스냅샷이 이미 X까지 반영했으니, 그 다음부터만 읽으면 됩니다.</span></div>
+        <div class="box"><b>4. X+1 ~ 끝까지 리플레이</b>
+          <span>X+1부터 현재 로그 끝(High Watermark)까지 이벤트를 하나씩 읽어 인메모리 상태에 적용합니다. 이때는 <b>"리플레이 모드"</b> — 상태만 재구성하고, <b>체결 이벤트를 다시 발행하거나 DB에 다시 쓰지 않습니다</b>(이미 예전에 했으니까). 끝에 도달하면 상태가 크래시 직전과 같아집니다.</span></div>
+      </div>
+      <div class="fig dark">
+        <div class="cap">도식 · 복구 = 스냅샷 시점으로 점프 → 그 이후만 리플레이</div>
+        <svg viewBox="0 0 720 206" role="img" aria-label="스냅샷과 리플레이로 복구하는 타임라인">
+          <defs>
+            <filter id="gR" x="-70%" y="-70%" width="240%" height="240%"><feGaussianBlur stdDeviation="2.4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+            <marker id="ar2" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0 0 L6 3 L0 6 z" fill="#aeb6c2"/></marker>
+          </defs>
+          <text x="40" y="28" font-size="11.5" fill="#aeb6c2">파티션 로그 (오프셋)</text>
+          <g font-size="12.5" font-weight="800" text-anchor="middle">
+            <rect x="40"  y="40" width="60" height="36" rx="7" fill="#161c26" stroke="#2b3542"/><text x="70"  y="63" fill="#9aa4b2">0</text>
+            <rect x="104" y="40" width="60" height="36" rx="7" fill="#161c26" stroke="#2b3542"/><text x="134" y="63" fill="#9aa4b2">1</text>
+            <rect x="168" y="40" width="60" height="36" rx="7" fill="#161c26" stroke="#2b3542"/><text x="198" y="63" fill="#9aa4b2">2</text>
+            <rect x="232" y="40" width="60" height="36" rx="7" fill="#161c26" stroke="#2b3542"/><text x="262" y="63" fill="#9aa4b2">3</text>
+            <rect x="296" y="40" width="60" height="36" rx="7" fill="#0f2a1f" stroke="#34d399" filter="url(#gR)"/><text x="326" y="63" fill="#34d399">4</text>
+            <rect x="360" y="40" width="60" height="36" rx="7" fill="#2a1f10" stroke="#d99a2b"/><text x="390" y="63" fill="#f5c46b">5</text>
+            <rect x="424" y="40" width="60" height="36" rx="7" fill="#2a1f10" stroke="#d99a2b"/><text x="454" y="63" fill="#f5c46b">6</text>
+            <rect x="488" y="40" width="60" height="36" rx="7" fill="#2a1f10" stroke="#d99a2b"/><text x="518" y="63" fill="#f5c46b">7</text>
+            <rect x="552" y="40" width="60" height="36" rx="7" fill="#2a1f10" stroke="#d99a2b"/><text x="582" y="63" fill="#f5c46b">8</text>
+          </g>
+          <!-- 스냅샷 -->
+          <path d="M40 90 L356 90" stroke="#34d399" stroke-width="2.5" filter="url(#gR)"/>
+          <text x="198" y="108" text-anchor="middle" font-size="12" font-weight="800" fill="#34d399">② 스냅샷 로드 = 상태@offset4 (이미 반영)</text>
+          <!-- seek -->
+          <path d="M326 120 L392 120" stroke="#aeb6c2" stroke-width="2" fill="none" marker-end="url(#ar2)"/>
+          <text x="360" y="138" text-anchor="middle" font-size="12" font-weight="800" fill="#cfd6e0">③ seek(offset 5)</text>
+          <!-- 리플레이 -->
+          <path d="M360 154 L612 154" stroke="#f5b13a" stroke-width="2.5" filter="url(#gR)"/>
+          <text x="486" y="172" text-anchor="middle" font-size="12" font-weight="800" fill="#f5b13a">④ 5~끝(HW) 리플레이 (상태만 재구성, side-effect 없음)</text>
+          <text x="486" y="192" text-anchor="middle" font-size="11.5" fill="#aeb6c2">→ 도달하면 크래시 직전 상태 복원 → 정상 소비 재개</text>
+        </svg>
+      </div>
+      <p class="why" style="margin-top:10px">복구 완료 후 정상 소비를 재개합니다. 핵심은 <b>스냅샷이 리플레이 양을 줄인다</b>는 것 — 스냅샷이 없으면 로그 처음부터 다 읽어야 하고, retention 때문에 그것도 불가능합니다.</p>
+    </div>
+
+    <div class="zoom">
+      <h3>스냅샷을 어디에 두나 · 손수 vs 프레임워크</h3>
+      <div class="grid2">
+        <div class="box"><b>스냅샷 저장 위치</b>
+          <ul class="tight">
+            <li><b>compacted Kafka 토픽</b> — key별 최신값만 남기는(compaction) 별도 토픽에 상태를 기록. Kafka 안에서 끝남.</li>
+            <li><b>오브젝트 스토어/디스크</b> — 상태 파일 + 오프셋을 따로 저장.</li>
+          </ul></div>
+        <div class="box"><b>Kafka Streams면 이걸 자동으로</b>
+          <span>Kafka Streams의 <b>state store</b>(로컬 RocksDB)를 쓰면, 상태 변경이 <b>changelog 토픽</b>에 자동 기록됩니다(스냅샷 역할). 재시작·리밸런스 때 프레임워크가 <b>changelog를 재생해 state store를 복원</b>합니다 — 위의 seek·리플레이를 직접 안 짜도 됩니다. 그래서 "손수 구현(제어·학습 최대) vs Kafka Streams(복잡도↓)"의 갈림이 여기서 생깁니다.</span></div>
+      </div>
+      <div class="callout"><b>주의 — 리플레이 멱등성.</b> 스냅샷 이후만 재생하니 이론상 중복이 없지만, Kafka가 at-least-once라 재생 중 같은 이벤트를 두 번 적용할 여지가 있습니다. 그래서 각 이벤트를 고유 id로 <b>한 번만 적용</b>하도록 멱등하게 만드는 게 안전합니다(우리가 고친 requestId·tradeId가 그 역할).</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>정리</h2>
+    <p class="concl">겉의 "발행→소비" 아래에는 — 프로듀서의 파티셔너·배치·acks·멱등, 브로커의 로그세그먼트·리더/팔로워/ISR·HW·zero-copy·retention, 컨슈머의 그룹배정·pull·오프셋커밋(__consumer_offsets)·리밸런싱, 그리고 KRaft 메타데이터가 숨어 있습니다.</p>
+    <p class="muted">이 내부가 곧 우리가 겪은 것들의 정체입니다 — 콜드스타트(메타데이터/배정), 중복(at-least-once), 순서(파티션당 보장), 파티션 수동생성(auto-create). 로그-원천으로 가면 여기에 <b>replication↑·compaction·스냅샷</b>이 더 중요해집니다.</p>
+  </section>
+
+</div>
+</body>
+</html>
