@@ -197,7 +197,7 @@ class AccountFillPublisherTest {
         // 아니라 MatchingEventHandler의 "이벤트만 폐기" catch를 피해 진짜 fail-fast로 간다.
         SnowflakeIdGenerator snowflakeIdGenerator = mock(SnowflakeIdGenerator.class);
         when(snowflakeIdGenerator.nextId()).thenReturn(9001L);
-        AccountDestinationResolver unknownPoolResolver = accountId -> java.util.Optional.of("aeron:udp?endpoint=localhost:9999");
+        AccountDestinationResolver unknownPoolResolver = resolverReturning(java.util.Optional.of("aeron:udp?endpoint=localhost:9999"));
         AccountFillPublisher publisher = new AccountFillPublisher(
             unknownPoolResolver, Map.of(ENDPOINT_A, mock(ExclusivePublication.class)), snowflakeIdGenerator);
         publisher.start();
@@ -225,5 +225,24 @@ class AccountFillPublisherTest {
             }
         }
         throw new IllegalStateException("탐색 범위 내에 슬롯 " + targetSlot + "에 해당하는 accountId가 없다");
+    }
+
+    /**
+     * 주문·체결 목적지로 같은 값을 돌려주는 조회 창구. {@link AccountDestinationResolver}가 메서드
+     * 둘(주문용·체결용)을 가지게 되어 람다로 못 만든다.
+     */
+    private static AccountDestinationResolver resolverReturning(java.util.Optional<String> endpoint) {
+        return new AccountDestinationResolver() {
+
+            @Override
+            public java.util.Optional<String> orderEndpointFor(long accountId) {
+                return endpoint;
+            }
+
+            @Override
+            public java.util.Optional<String> fillEndpointFor(long accountId) {
+                return endpoint;
+            }
+        };
     }
 }

@@ -22,6 +22,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 import com.flab.stocktradingengine.account.worker.coordination.KafkaShardAssignment;
+import com.flab.stocktradingengine.aeron.WorkerEndpoints;
 import com.flab.stocktradingengine.account.worker.lifecycle.KafkaShardAssignmentLifecycle;
 
 import lombok.extern.slf4j.Slf4j;
@@ -49,6 +50,11 @@ public class AccountShardOwnershipConfig {
     }
 
     /**
+     * 이 빈이 담당 슬롯 판정({@link IntPredicate})을 겸한다 — {@link KafkaShardAssignment}가
+     * {@link IntPredicate}를 직접 구현하므로 {@link AccountEngineConfig}의 주입 자리에 타입으로
+     * 그대로 맞는다. 판정용 빈을 따로 한 겹 더 두면 {@link IntPredicate} 후보가 둘이 되어
+     * (이 빈 + 그 빈) Spring이 어느 것을 넣을지 정하지 못하고 기동이 멈춘다.
+     *
      * @param sessionTimeoutMs 기본값 120000(2분)은 잠정값이다 — LLD U7이 "워커 재시작 시간(프로세스
      *     시작부터 저널 재생을 마치고 주문을 받기까지)"을 실측한 뒤 그 값으로 다시 정한다. 그
      *     전까지는 기본 45000보다 넉넉히 길게 잡아, 정상 재시작 중에 슬롯이 남에게 넘어가는(L1 위반)
@@ -60,24 +66,20 @@ public class AccountShardOwnershipConfig {
             ShardRoutingProperties shardRoutingProperties,
             @Value("${spring.kafka.bootstrap-servers}") String bootstrapServers,
             @Value("${account-worker.instance-id:}") String instanceIdConfig,
-            @Value("${transport.account-intake.channel:" + AccountOrderIntakeConfig.DEFAULT_INTAKE_CHANNEL + "}") String fallbackEndpoint,
+            @Value("${transport.account-intake.channel:" + AccountOrderIntakeConfig.DEFAULT_INTAKE_CHANNEL + "}") String orderEndpoint,
+            @Value("${transport.fill.channel:" + AccountFillIntakeConfig.DEFAULT_FILL_CHANNEL + "}") String fillEndpoint,
             @Value("${account-shard.coordination.session-timeout-ms:120000}") long sessionTimeoutMs) {
-        String instanceId = resolveInstanceId(instanceIdConfig, fallbackEndpoint);
-        log.info("[계좌] 담당 슬롯 소스: Kafka 컨슈머 그룹 배정({}) — 워커 신원={} 내 endpoint={} session.timeout.ms={}",
-            KafkaShardAssignment.GROUP_ID, instanceId, fallbackEndpoint, sessionTimeoutMs);
+        String instanceId = resolveInstanceId(instanceIdConfig, orderEndpoint);
+        log.info("[계좌] 담당 슬롯 소스: Kafka 컨슈머 그룹 배정({}) — 워커 신원={} 주문 수신={} 체결 수신={} session.timeout.ms={}",
+            KafkaShardAssignment.GROUP_ID, instanceId, orderEndpoint, fillEndpoint, sessionTimeoutMs);
         Consumer<String, String> consumer = buildConsumer(bootstrapServers, instanceId, sessionTimeoutMs);
         Producer<Integer, String> mapProducer = buildMapProducer(bootstrapServers);
         Admin adminClient = Admin.create(adminProps(bootstrapServers));
-        // 배정 대상 endpoint는 항상 이 워커 자신의 인테이크 채널이다 — group.instance.id(워커
-        // 신원, k8s pod 이름 등 임의 문자열일 수 있음)와는 다른 값이다. account-shard-map에
-        // 발행하는 값은 실제 Aeron 주소여야 하므로 fallbackEndpoint(=transport.account-intake.channel)를 쓴다.
-        return new KafkaShardAssignment(consumer, mapProducer, adminClient, shardRoutingProperties.slotCount(), fallbackEndpoint);
-    }
-
-    @Bean
-    @ConditionalOnProperty(prefix = "account-shard.coordination", name = "enabled", havingValue = "true")
-    public IntPredicate kafkaOwnedSlots(KafkaShardAssignment kafkaShardAssignment) {
-        return kafkaShardAssignment;
+        // account-shard-map에 싣는 값은 이 워커가 실제로 듣고 있는 Aeron 주소 둘이다 — 주문을
+        // 받는 채널과 체결을 받는 채널이 다르기 때문에 둘 다 싣는다. group.instance.id(워커 신원,
+        // k8s pod 이름 등 임의 문자열일 수 있음)와는 다른 값이다.
+        return new KafkaShardAssignment(consumer, mapProducer, adminClient, shardRoutingProperties.slotCount(),
+            new WorkerEndpoints(orderEndpoint, fillEndpoint));
     }
 
     @Bean

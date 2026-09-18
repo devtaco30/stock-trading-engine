@@ -21,6 +21,8 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import com.flab.stocktradingengine.aeron.WorkerEndpoints;
+
 /**
  * 계좌 샤딩 U4 — 로컬 실제 브로커(docker-compose)에 붙어 {@link KafkaShardAssignment}가 실제
  * 컨슈머 그룹 배정을 슬롯 판정으로 바꾸는지 확인한다. LLD가 정한 실제 토픽·그룹 이름을 그대로
@@ -122,7 +124,8 @@ class KafkaShardAssignmentIntegrationTest {
 
     private KafkaShardAssignment newAssignment(String instanceId) {
         return new KafkaShardAssignment(
-            buildConsumer(instanceId), buildMapProducer(), Admin.create(adminProps()), SLOT_COUNT, "endpoint-of-" + instanceId);
+            buildConsumer(instanceId), buildMapProducer(), Admin.create(adminProps()), SLOT_COUNT,
+            new WorkerEndpoints("order-endpoint-of-" + instanceId, "fill-endpoint-of-" + instanceId));
     }
 
     private Producer<Integer, String> buildMapProducer() {

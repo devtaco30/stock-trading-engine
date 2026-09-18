@@ -1,0 +1,14 @@
+# 계좌 샤딩 조정 모드 — 매칭 워커. udp 프로파일 위에 얹어 켠다.
+#   ./gradlew :matching-worker:bootRun --args='--spring.profiles.active=udp,shard'
+# 체결 목적지도 api와 같은 account-shard-map 구독으로 정한다. 맵에는 워커마다 주문 주소와 체결
+# 주소가 같이 실리고, 매칭 워커는 그중 체결 주소를 골라 쓴다. 아래 endpoints는 그 체결 주소로
+# Publication을 미리 열어 두기 위한 목록이다(이 앱에서는 "체결을 보낼 주소 목록"이라는 뜻이다).
+account-shard:
+  coordination:
+    enabled: true
+
+shard-routing:
+  slot-count: 256
+  endpoints:
+    - aeron:udp?endpoint=localhost:20060
+    - aeron:udp?endpoint=localhost:20061

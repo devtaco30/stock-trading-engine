@@ -104,7 +104,7 @@ public class AccountFillPublisher implements MatchListener {
     }
 
     private String requireEndpoint(long accountId) {
-        return destinationResolver.endpointFor(accountId)
+        return destinationResolver.fillEndpointFor(accountId)
             .orElseThrow(() -> new IllegalStateException(
                 "계좌 " + accountId + "의 체결 fan-out 목적지를 아직 찾을 수 없습니다(배정 대기 중일 수 있음)"));
     }

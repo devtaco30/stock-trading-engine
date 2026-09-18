@@ -1,0 +1,23 @@
+# 계좌 샤딩 조정 모드 — api. udp 프로파일 위에 얹어 켠다.
+#   ./gradlew :api:bootRun --args='--spring.profiles.active=udp,shard'
+# 이 프로파일을 켜면 api는 목적지를 account-shard-map(계좌 워커들이 배정받은 슬롯마다 자기
+# 주소를 발행하는 compacted 토픽) 구독으로 정한다. 정적 표(shard-routing.shards)는 안 쓴다.
+account-shard:
+  coordination:
+    enabled: true
+
+shard-routing:
+  slot-count: 256
+  # "존재하는 계좌 워커 주소 목록"만 적는다 — 누가 어느 슬롯인지는 안 적는다(그건 Kafka가 정한다).
+  # api는 이 주소마다 Aeron Publication을 미리 열어 두고, 맵이 고른 주소로 주문을 보낸다.
+  endpoints:
+    - aeron:udp?endpoint=localhost:20040
+    - aeron:udp?endpoint=localhost:20041
+
+spring:
+  sql:
+    init:
+      mode: always
+      # udp 프로파일의 시드(90001 매수·90002 매도)는 두 계좌가 같은 절반(슬롯 109·34)에 있어
+      # 워커 하나에 다 실린다. 크로스샤드를 보려면 매도 계좌가 뒤 절반이어야 해서 90005(슬롯 150)로 바꾼다.
+      data-locations: classpath:shard-demo-seed.sql

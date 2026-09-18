@@ -37,7 +37,7 @@ import io.aeron.Publication;
  * 같은 requestId로 재전송하면 계좌 엔진의 멱등이 중복 예약을 막아준다.</p>
  *
  * <h3>계좌번호로 목적지를 고른다 (I8 U1, 계좌 샤딩 U2)</h3>
- * <p>{@link AccountDestinationResolver#endpointFor}로 accountId가 속한 계좌 샤드 endpoint를 찾아,
+ * <p>{@link AccountDestinationResolver#orderEndpointFor}로 accountId가 속한 계좌 샤드 endpoint를 찾아,
  * 그 endpoint의 {@link Publication}으로만 보낸다. 조회 방식(지금은 설정 파일의 슬롯 표, 나중엔
  * Kafka 배정 결과)을 이 인터페이스 뒤로 숨겨서, 조회 방식이 바뀌어도 이 클래스는 고치지 않는다.
  * 계좌 워커가 하나뿐이던 예전에는 {@code shard-routing.shards}가 비어 있어
@@ -45,7 +45,7 @@ import io.aeron.Publication;
  * 이 경우 모든 계좌가 같은 endpoint로 간다(예전과 동일한 동작).</p>
  *
  * <h3>목적지가 없으면 조용히 버리지 않고 503</h3>
- * <p>{@code endpointFor}가 {@link java.util.Optional#empty()}를 주면(아직 배정을 못 받은 계좌
+ * <p>{@code orderEndpointFor}가 {@link java.util.Optional#empty()}를 주면(아직 배정을 못 받은 계좌
  * 샤드) {@link OrderPublishException}을 바로 던진다 — offer 자체를 시도하지 않는다.</p>
  */
 public class AeronAccountOrderSender {
@@ -112,7 +112,7 @@ public class AeronAccountOrderSender {
     }
 
     private Publication publicationFor(long accountId) {
-        String endpoint = destinationResolver.endpointFor(accountId)
+        String endpoint = destinationResolver.orderEndpointFor(accountId)
             .orElseThrow(() -> new OrderPublishException(
                 "계좌 인테이크 fan-out 목적지를 아직 찾을 수 없습니다(배정 대기 중일 수 있음): accountId=" + accountId));
         Publication publication = publicationsByEndpoint.get(endpoint);

@@ -1,0 +1,46 @@
+# 계좌 샤딩 조정 모드 — 계좌 워커 A. udp 프로파일 위에 얹어 켠다.
+#   ./gradlew :account-worker:bootRun --args='--spring.profiles.active=udp,shard-a'
+# 워커 둘이 Kafka 컨슈머 그룹(account-shard-owners)에서 슬롯 256개를 나눠 갖는다. 사람이 적는
+# 것은 슬롯 개수와 이 워커의 신원·주소뿐이고, 누가 어느 슬롯을 맡는지는 안 적는다.
+account-shard:
+  coordination:
+    enabled: true
+    # 로컬 검증용으로 짧게 잡는다. 기본값 120000(2분)은 워커 재시작 시간을 실측하기 전의
+    # 잠정값이라(AccountShardOwnershipConfig 주석), 이 값으로 운영을 판단하지 않는다.
+    session-timeout-ms: 30000
+
+shard-routing:
+  slot-count: 256
+
+account-worker:
+  # static membership 신원. 이 값이 같으면 재시작해도 session.timeout.ms 안에 같은 슬롯으로
+  # 돌아온다. 안 주면 자기 인테이크 주소로 폴백한다.
+  instance-id: account-worker-a
+  # 조정 모드 검증용 데모 계좌. 매수 90001(슬롯 109), 매도 90005(슬롯 150) — 슬롯 256개를
+  # 워커 둘이 0~127·128~255로 나눠 가지므로 이 둘은 서로 다른 워커에 실린다(크로스샤드).
+  # 담당 여부와 무관하게 두 워커가 같은 목록을 시드한다(배정이 비동기라 걸러 시드하면 그
+  # 계좌가 영영 안 실린다) — 담당이 아니면 런타임 isOwned()가 거부한다.
+  seed-accounts:
+    - account-id: 90001
+      balance: 100000000
+      margin-rate: 0.40
+    - account-id: 90005
+      balance: 100000000
+      margin-rate: 0.40
+      holdings:
+        A900110: 100
+
+transport:
+  account-intake:
+    channel: aeron:udp?endpoint=localhost:20040
+  # ⓐ — 매칭은 account-shard-map에 실린 주소(=위 account-intake)로 체결을 보낸다. 그래서 체결
+  # 수신 주소를 주문 수신 주소와 같게 둔다. 한 채널에 스트림 ID로 주문·체결이 구분돼 실린다.
+  fill:
+    channel: aeron:udp?endpoint=localhost:20060
+
+account:
+  worker:
+    # 재시작해도 저널·스냅샷이 남아야 워커 A가 자기 상태로 복귀한다(5번 확인 항목).
+    archive-dir: /tmp/stock-trading-shard/account-worker-a
+    archive:
+      control-channel: aeron:udp?endpoint=localhost:8010

@@ -15,9 +15,11 @@ import java.util.List;
 public final class ShardRoutingTable {
 
     private final String[] slotToEndpoint;
+    private final SlotHasher slotHasher;
 
     public ShardRoutingTable(int slotCount, List<ShardRange> shards) {
         this.slotToEndpoint = buildSlotToEndpoint(slotCount, shards);
+        this.slotHasher = new SlotHasher(slotCount);
     }
 
     /**
@@ -26,7 +28,7 @@ public final class ShardRoutingTable {
      * hashCode나 accountId 자체를 나누면 특정 슬롯에 쏠릴 수 있다.
      */
     public int slotFor(long accountId) {
-        return Math.floorMod(fmix64(accountId), slotToEndpoint.length);
+        return slotHasher.slotFor(accountId);
     }
 
     /**
@@ -80,18 +82,6 @@ public final class ShardRoutingTable {
         }
     }
 
-    /**
-     * murmur3 64비트 finalizer. 입력 비트를 고르게 섞는 게 목적이라 역연산 가능성·암호학적
-     * 강도는 필요 없다.
-     */
-    private static long fmix64(long k) {
-        k ^= k >>> 33;
-        k *= 0xff51afd7ed558ccdL;
-        k ^= k >>> 33;
-        k *= 0xc4ceb9fe1a85ec53L;
-        k ^= k >>> 33;
-        return k;
-    }
 
     public record ShardRange(String endpoint, int slotFrom, int slotTo) {
     }

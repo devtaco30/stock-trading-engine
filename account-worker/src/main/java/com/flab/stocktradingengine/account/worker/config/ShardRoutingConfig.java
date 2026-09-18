@@ -11,6 +11,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 import com.flab.stocktradingengine.aeron.ShardRoutingTable;
+import com.flab.stocktradingengine.aeron.SlotHasher;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -31,6 +32,30 @@ import lombok.extern.slf4j.Slf4j;
 @Configuration
 @EnableConfigurationProperties(ShardRoutingProperties.class)
 public class ShardRoutingConfig {
+
+    /**
+     * 계좌번호를 칸 번호로 바꾸는 계산기. 조정 모드에서는 칸 개수를 {@code shard-routing.slot-count}로
+     * 잡는다 — 조정 토픽을 이 개수로 만드는 것이 계좌 워커이고({@code KafkaShardAssignment}가 기동할
+     * 때 만들고, 이미 있으면 파티션 개수가 이 값과 같은지 검사한다), api·매칭 워커는 그렇게 만들어진
+     * 토픽의 파티션 개수를 읽어 같은 값을 쓴다.
+     *
+     * <p>정적 모드에서 담당 범위 표가 없으면 칸 1개짜리로 둔다 — 샤딩을 안 쓰던 예전 동작이다.</p>
+     */
+    @Bean
+    public SlotHasher slotHasher(
+            ShardRoutingProperties properties,
+            @Value("${account-shard.coordination.enabled:false}") boolean coordinationEnabled) {
+        if (coordinationEnabled) {
+            log.info("[계좌] 칸 계산: 칸 {}개(shard-routing.slot-count, 조정 토픽도 이 개수로 만든다)", properties.slotCount());
+            return new SlotHasher(properties.slotCount());
+        }
+        if (properties.shards().isEmpty()) {
+            log.info("[계좌] 칸 계산: 칸 1개(샤딩 미설정) — 모든 계좌를 이 워커가 담당한다");
+            return new SlotHasher(1);
+        }
+        log.info("[계좌] 칸 계산: 칸 {}개(shard-routing.slot-count)", properties.slotCount());
+        return new SlotHasher(properties.slotCount());
+    }
 
     @Bean
     public ShardRoutingTable shardRoutingTable(

@@ -28,7 +28,7 @@ import org.apache.kafka.common.errors.WakeupException;
  * 처음부터({@code seekToBeginning}) 계속 읽는다.</p>
  *
  * <h3>핫패스 — 락 없는 배열 통째 교체</h3>
- * <p>{@link #endpointFor}는 api의 매 주문·매칭의 매 체결마다 불린다. {@code KafkaShardAssignment}와
+ * <p>{@link #orderEndpointFor}·{@link #fillEndpointFor}는 api의 매 주문·매칭의 매 체결마다 불린다. {@code KafkaShardAssignment}와
  * 같은 이유로 {@code Map<Integer, String>}(오토박싱) 대신 슬롯 번호로 바로 인덱싱하는
  * {@code volatile String[]}을 쓴다 — 갱신할 때 배열을 통째로 복사해 갈아끼우고, 읽는 쪽은
  * volatile 참조 한 번 읽고 인덱스 조회 하나로 끝난다.</p>
@@ -40,23 +40,36 @@ public final class AssignmentDestinationResolver implements AccountDestinationRe
     public static final String MAP_TOPIC = "account-shard-map";
 
     private final Consumer<Integer, String> consumer;
-    private final ShardRoutingTable shardRoutingTable;
+    private final SlotHasher slotHasher;
 
-    private volatile String[] slotToEndpoint;
+    private volatile WorkerEndpoints[] slotToEndpoints;
     private volatile boolean running;
     private Thread pollThread;
     private final CountDownLatch initialCatchUpLatch = new CountDownLatch(1);
 
-    public AssignmentDestinationResolver(Consumer<Integer, String> consumer, ShardRoutingTable shardRoutingTable, int slotCount) {
+    /**
+     * 칸 개수는 {@link SlotHasher}가 들고 있는 값 하나만 쓴다 — 계산에 쓰는 칸 개수와 목적지를
+     * 담아 두는 칸 개수가 따로 주어지면 서로 어긋날 수 있다.
+     */
+    public AssignmentDestinationResolver(Consumer<Integer, String> consumer, SlotHasher slotHasher) {
         this.consumer = consumer;
-        this.shardRoutingTable = shardRoutingTable;
-        this.slotToEndpoint = new String[slotCount];
+        this.slotHasher = slotHasher;
+        this.slotToEndpoints = new WorkerEndpoints[slotHasher.slotCount()];
     }
 
     @Override
-    public Optional<String> endpointFor(long accountId) {
-        int slot = shardRoutingTable.slotFor(accountId);
-        String[] snapshot = slotToEndpoint;
+    public Optional<String> orderEndpointFor(long accountId) {
+        return endpointsFor(accountId).map(WorkerEndpoints::orderEndpoint);
+    }
+
+    @Override
+    public Optional<String> fillEndpointFor(long accountId) {
+        return endpointsFor(accountId).map(WorkerEndpoints::fillEndpoint);
+    }
+
+    private Optional<WorkerEndpoints> endpointsFor(long accountId) {
+        int slot = slotHasher.slotFor(accountId);
+        WorkerEndpoints[] snapshot = slotToEndpoints;
         if (slot < 0 || slot >= snapshot.length) {
             return Optional.empty();
         }
@@ -146,7 +159,7 @@ public final class AssignmentDestinationResolver implements AccountDestinationRe
     }
 
     private void applyRecords(ConsumerRecords<Integer, String> records) {
-        String[] updated = slotToEndpoint.clone();
+        WorkerEndpoints[] updated = slotToEndpoints.clone();
         for (ConsumerRecord<Integer, String> record : records) {
             int slot = record.key();
             if (slot < 0 || slot >= updated.length) {
@@ -154,9 +167,21 @@ public final class AssignmentDestinationResolver implements AccountDestinationRe
                 continue;
             }
             // value가 null이면 tombstone(그 워커가 슬롯을 회수당함) — 목적지 없음으로 되돌린다.
-            updated[slot] = record.value();
+            if (record.value() == null) {
+                updated[slot] = null;
+                continue;
+            }
+            try {
+                updated[slot] = WorkerEndpoints.parse(record.value());
+            } catch (IllegalArgumentException e) {
+                // 형식이 깨진 값 하나 때문에 나머지 배정까지 잃지 않는다. 그 슬롯만 목적지 없음으로
+                // 두면 보내는 쪽이 503으로 되돌려 재시도한다.
+                log.log(Level.WARNING, "[목적지] " + MAP_TOPIC + "에서 읽을 수 없는 값: slot=" + slot
+                    + " value=" + record.value() + " — 이 슬롯은 목적지 없음으로 둔다");
+                updated[slot] = null;
+            }
         }
-        slotToEndpoint = updated;
+        slotToEndpoints = updated;
         log.log(Level.INFO, "[목적지] " + MAP_TOPIC + " " + records.count() + "건 반영");
     }
 }

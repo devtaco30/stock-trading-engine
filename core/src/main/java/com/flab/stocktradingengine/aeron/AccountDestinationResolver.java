@@ -13,8 +13,14 @@ import java.util.Optional;
 public interface AccountDestinationResolver {
 
     /**
-     * accountId를 맡은 워커의 Aeron endpoint 채널. 맡은 워커가 없으면(아직 배정을 못 받았거나
-     * 설정이 어긋난 상태) {@link Optional#empty()}.
+     * accountId를 맡은 워커가 <b>주문</b>을 받는 Aeron 채널. 맡은 워커가 없으면(아직 배정을 못
+     * 받았거나 설정이 어긋난 상태) {@link Optional#empty()}.
      */
-    Optional<String> endpointFor(long accountId);
+    Optional<String> orderEndpointFor(long accountId);
+
+    /**
+     * accountId를 맡은 워커가 <b>체결</b>을 받는 Aeron 채널. 워커는 주문과 체결을 서로 다른
+     * 주소에서 받으므로 주문 채널과 다를 수 있다.
+     */
+    Optional<String> fillEndpointFor(long accountId);
 }

@@ -26,6 +26,7 @@ import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.WakeupException;
 
 import com.flab.stocktradingengine.aeron.AssignmentDestinationResolver;
+import com.flab.stocktradingengine.aeron.WorkerEndpoints;
 
 /**
  * 계좌 샤딩 U4 — 담당 슬롯을 사람이 적은 정적 설정({@code shard-routing.shards})이 아니라 Kafka
@@ -59,7 +60,7 @@ public final class KafkaShardAssignment implements IntPredicate {
     private final Producer<Integer, String> mapProducer;
     private final Admin adminClient;
     private final int slotCount;
-    private final String ownEndpoint;
+    private final WorkerEndpoints ownEndpoints;
 
     // 핫패스(test)가 매 주문마다 부른다 — Set<Integer>였을 때는 Integer 오토박싱이 캐시 범위
     // (-128~127)를 넘는 슬롯마다 새 객체를 만들었다(slotCount=256이면 절반이 매번 할당). 배열
@@ -75,12 +76,12 @@ public final class KafkaShardAssignment implements IntPredicate {
     private Set<Integer> initialSlots = Set.of();
 
     public KafkaShardAssignment(Consumer<String, String> consumer, Producer<Integer, String> mapProducer,
-                                Admin adminClient, int slotCount, String ownEndpoint) {
+                                Admin adminClient, int slotCount, WorkerEndpoints ownEndpoints) {
         this.consumer = consumer;
         this.mapProducer = mapProducer;
         this.adminClient = adminClient;
         this.slotCount = slotCount;
-        this.ownEndpoint = ownEndpoint;
+        this.ownEndpoints = ownEndpoints;
         this.ownedSlotFlags = new boolean[slotCount];
     }
 
@@ -184,7 +185,7 @@ public final class KafkaShardAssignment implements IntPredicate {
                 accepted.forEach(p -> updated[p.partition()] = true);
                 ownedSlotFlags = updated;
                 if (!accepted.isEmpty()) {
-                    publishMapEntries(accepted, ownEndpoint);
+                    publishMapEntries(accepted, ownEndpoints.encode());
                 }
                 if (!rejected.isEmpty()) {
                     // 거부한 슬롯은 account-shard-map에 아무것도 발행하지 않는다 — 이 워커가 담당인
