@@ -33,6 +33,7 @@
 
   /* 도식 패널: 라이트 본문 안의 다크 카드 */
   .fig{background:#0d1117;border:1px solid #2a3442;border-radius:16px;padding:18px 16px 16px;margin:16px 0;
+    width:min(1320px, calc(100vw - 24px));margin-left:50%;transform:translateX(-50%);
     box-shadow:0 8px 30px rgba(0,0,0,.28);overflow-x:auto;
     --grid:#161d27; --text:#e6edf3; --text-muted:#aeb6c2; --text-dim:#9aa4b2; --mask:#0d1117;
     --lane-fill:rgba(20,27,37,.55); --lane-stroke:#2a3442;
@@ -209,7 +210,7 @@
     <div class="cap">체결일부터 결제일까지</div>
     <div class="capsub">매수 주문 한 건에서 증거금·미수금·T+2 결제가 각각 언제 일어나는지, 그리고 그중 무엇이 이 레포에 있는지</div>
     <a class="fig-open" href="_domain_basics_figs/fig1.html" target="_blank" rel="noopener">이 도식 열기</a>
-<iframe class="fig-viewer" src="_domain_basics_figs/fig1.html?theme=dark" title="매수 주문 한 건의 대금이 결제일까지 지나는 상태" loading="lazy"></iframe>
+<iframe class="fig-viewer" src="_domain_basics_figs/fig1.html?theme=dark&article=1" title="매수 주문 한 건의 대금이 결제일까지 지나는 상태" loading="lazy"></iframe>
     <div class="leg">
       <span><i style="background:rgba(96,165,250,.18);border-color:#60a5fa"></i>주문이 들어오는 자리</span>
       <span><i style="background:rgba(52,211,153,.14);border-color:#34d399"></i>이 레포가 코드로 만든 상태</span>
@@ -247,7 +248,7 @@
     <div class="cap">매수 가능 금액</div>
     <div class="capsub">계좌 잔고에서 무엇을 빼고 무엇으로 나눠서 주문 한 건을 받을지 정하는지</div>
     <a class="fig-open" href="_domain_basics_figs/fig2.html" target="_blank" rel="noopener">이 도식 열기</a>
-<iframe class="fig-viewer" src="_domain_basics_figs/fig2.html?theme=dark" title="매수 주문을 얼마까지 받아 줄지 계산하는 순서" loading="lazy"></iframe>
+<iframe class="fig-viewer" src="_domain_basics_figs/fig2.html?theme=dark&article=1" title="매수 주문을 얼마까지 받아 줄지 계산하는 순서" loading="lazy"></iframe>
     <div class="leg">
       <span><i style="background:rgba(96,165,250,.16);border-color:#60a5fa"></i>계좌에서 읽어 오는 값</span>
       <span><i style="background:rgba(52,211,153,.14);border-color:#34d399"></i>계산해서 나오는 값</span>
