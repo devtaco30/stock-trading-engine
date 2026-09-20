@@ -5186,9 +5186,9 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         <path d="M 72 112 L 968 112" class="a-default" stroke-width="0.8" stroke-dasharray="3,8"/>
         <text x="72" y="100" class="t-dim" font-size="10" font-weight="600">01 / 체결일(T)부터 결제일(T+2)까지</text>
         <path d="M 72 264 L 968 264" class="a-default" stroke-width="0.8" stroke-dasharray="3,8"/>
-        <text x="72" y="252" class="t-dim" font-size="10" font-weight="600">02 / 결제일 전에 갚는 경우</text>
+        <text x="72" y="252" class="t-dim" font-size="10" font-weight="600">02 / 사전 상환</text>
         <path d="M 72 436 L 968 436" class="a-default" stroke-width="0.8" stroke-dasharray="3,8"/>
-        <text x="72" y="424" class="t-dim" font-size="10" font-weight="600">03 / 결제일에 현금이 모자란 경우</text>
+        <text x="72" y="424" class="t-dim" font-size="10" font-weight="600">03 / 잔고 부족 / 반대매매</text>
 
         <!-- Primary lifecycle rail -->
         <path d="M 154 157 L 748 157" class="a-emphasis" stroke-width="2.2" marker-end="url(#arrowhead-emphasis)"/>
@@ -5204,8 +5204,8 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         <path data-edge-from="arrear" data-edge-to="liquidation" data-edge-label="상환기일이 지나도 갚지 않는다" data-edge-key="7" data-edge-id="t-arrear-liq" data-composition-points="615,479;651,479" d="M 615 479 L 651 479" class="a-security" data-animate="edge" style="--step:7" stroke-width="1.1" marker-end="url(#arrowhead-security)"/>
 
         <!-- States -->
-        <g id="node-accepted" data-node-id="accepted" data-node-label="주문을 접수한다" tabindex="0" role="button" aria-label="Focus 주문을 접수한다, T일에 증거금을 묶는다, 체결일(T)부터 결제일(T+2)까지" aria-pressed="false" data-node-kind="start" data-node-sublabel="T일에 증거금을 묶는다" data-node-tag="구현됨" data-node-context="체결일(T)부터 결제일(T+2)까지">
-          <title>주문을 접수한다 · T일에 증거금을 묶는다 · 체결일(T)부터 결제일(T+2)까지 · 구현됨</title>
+        <g id="node-accepted" data-node-id="accepted" data-node-label="주문 접수" tabindex="0" role="button" aria-label="Focus 주문 접수, T일 증거금 예약, 체결일(T)부터 결제일(T+2)까지" aria-pressed="false" data-node-kind="start" data-node-sublabel="T일 증거금 예약" data-node-context="체결일(T)부터 결제일(T+2)까지">
+          <title>주문 접수 · T일 증거금 예약 · 체결일(T)부터 결제일(T+2)까지</title>
           <rect x="35" y="126" width="118" height="62" rx="7" class="c-mask"/>
           <rect x="35" y="126" width="118" height="62" rx="7" class="c-frontend" data-animate="node" style="--step:0" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="start" class="semantic-sigil s-frontend" transform="translate(136 132) scale(0.6875)">
@@ -5213,39 +5213,36 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
             <path d="m7 5.4 3.6 2.6L7 10.6Z" class="sigil-fill"/>
           </g>
         <text data-detail="fine" x="45" y="140" class="t-frontend" font-size="7" font-weight="700">01</text>
-          <text data-node-label="" data-detail-anchor="" x="94" y="147" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">주문을 접수한다</text>
-          <text data-detail="context" x="94" y="163" class="t-muted" font-size="7" text-anchor="middle">T일에 증거금을 묶는다</text>
-        <text data-detail="fine" x="94" y="177" class="t-frontend" font-size="7" text-anchor="middle">구현됨</text>
+          <text data-node-label="" data-detail-anchor="" x="94" y="147" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">주문 접수</text>
+          <text data-detail="context" x="94" y="163" class="t-muted" font-size="7" text-anchor="middle">T일 증거금 예약</text>
         </g>
 
-        <g id="node-filled" data-node-id="filled" data-node-label="체결된다" tabindex="0" role="button" aria-label="Focus 체결된다, T일에 미수금을 적는다, 체결일(T)부터 결제일(T+2)까지" aria-pressed="false" data-node-kind="active" data-node-sublabel="T일에 미수금을 적는다" data-node-tag="구현됨" data-node-context="체결일(T)부터 결제일(T+2)까지">
-          <title>체결된다 · T일에 미수금을 적는다 · 체결일(T)부터 결제일(T+2)까지 · 구현됨</title>
+        <g id="node-filled" data-node-id="filled" data-node-label="체결" tabindex="0" role="button" aria-label="Focus 체결, T일 미수금 발생, 체결일(T)부터 결제일(T+2)까지" aria-pressed="false" data-node-kind="active" data-node-sublabel="T일 미수금 발생" data-node-context="체결일(T)부터 결제일(T+2)까지">
+          <title>체결 · T일 미수금 발생 · 체결일(T)부터 결제일(T+2)까지</title>
           <rect x="189" y="126" width="118" height="62" rx="7" class="c-mask"/>
           <rect x="189" y="126" width="118" height="62" rx="7" class="c-backend" data-animate="node" style="--step:1" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="active" class="semantic-sigil s-backend" transform="translate(290 132) scale(0.6875)">
             <path d="M2 8h3l1.5-3.5L9 12l1.6-4H14"/>
           </g>
         <text data-detail="fine" x="199" y="140" class="t-backend" font-size="7" font-weight="700">02</text>
-          <text data-node-label="" data-detail-anchor="" x="248" y="147" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">체결된다</text>
-          <text data-detail="context" x="248" y="163" class="t-muted" font-size="7" text-anchor="middle">T일에 미수금을 적는다</text>
-        <text data-detail="fine" x="248" y="177" class="t-backend" font-size="7" text-anchor="middle">구현됨</text>
+          <text data-node-label="" data-detail-anchor="" x="248" y="147" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">체결</text>
+          <text data-detail="context" x="248" y="163" class="t-muted" font-size="7" text-anchor="middle">T일 미수금 발생</text>
         </g>
 
-        <g id="node-waitday" data-node-id="waitday" data-node-label="결제일을 기다린다" tabindex="0" role="button" aria-label="Focus 결제일을 기다린다, T+1일에는 그대로다, 체결일(T)부터 결제일(T+2)까지" aria-pressed="false" data-node-kind="waiting" data-node-sublabel="T+1일에는 그대로다" data-node-tag="구현됨" data-node-context="체결일(T)부터 결제일(T+2)까지">
-          <title>결제일을 기다린다 · T+1일에는 그대로다 · 체결일(T)부터 결제일(T+2)까지 · 구현됨</title>
+        <g id="node-waitday" data-node-id="waitday" data-node-label="T+1 대기" tabindex="0" role="button" aria-label="Focus T+1 대기, 변동 없음, 체결일(T)부터 결제일(T+2)까지" aria-pressed="false" data-node-kind="waiting" data-node-sublabel="변동 없음" data-node-context="체결일(T)부터 결제일(T+2)까지">
+          <title>T+1 대기 · 변동 없음 · 체결일(T)부터 결제일(T+2)까지</title>
           <rect x="343" y="126" width="118" height="62" rx="7" class="c-mask"/>
           <rect x="343" y="126" width="118" height="62" rx="7" class="c-cloud" data-animate="node" style="--step:2" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="waiting" class="semantic-sigil s-cloud" transform="translate(444 132) scale(0.6875)">
             <path d="M4 2.5h8M4 13.5h8M5 3c0 2.8 2 3.2 3 5-1 1.8-3 2.2-3 5M11 3c0 2.8-2 3.2-3 5 1 1.8 3 2.2 3 5"/>
           </g>
         <text data-detail="fine" x="353" y="140" class="t-cloud" font-size="7" font-weight="700">03</text>
-          <text data-node-label="" data-detail-anchor="" x="402" y="147" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">결제일을 기다린다</text>
-          <text data-detail="context" x="402" y="163" class="t-muted" font-size="7" text-anchor="middle">T+1일에는 그대로다</text>
-        <text data-detail="fine" x="402" y="177" class="t-cloud" font-size="7" text-anchor="middle">구현됨</text>
+          <text data-node-label="" data-detail-anchor="" x="402" y="147" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">T+1 대기</text>
+          <text data-detail="context" x="402" y="163" class="t-muted" font-size="7" text-anchor="middle">변동 없음</text>
         </g>
 
-        <g id="node-dueday" data-node-id="dueday" data-node-label="결제일에 잔고를 본다" tabindex="0" role="button" aria-label="Focus 결제일에 잔고를 본다, T+2일에 현금을 확인한다, 체결일(T)부터 결제일(T+2)까지" aria-pressed="false" data-node-kind="decision" data-node-sublabel="T+2일에 현금을 확인한다" data-node-tag="분기는 미구현" data-node-context="체결일(T)부터 결제일(T+2)까지">
-          <title>결제일에 잔고를 본다 · T+2일에 현금을 확인한다 · 체결일(T)부터 결제일(T+2)까지 · 분기는 미구현</title>
+        <g id="node-dueday" data-node-id="dueday" data-node-label="T+2 결제" tabindex="0" role="button" aria-label="Focus T+2 결제, 미수금 정산, 체결일(T)부터 결제일(T+2)까지" aria-pressed="false" data-node-kind="decision" data-node-sublabel="미수금 정산" data-node-context="체결일(T)부터 결제일(T+2)까지">
+          <title>T+2 결제 · 미수금 정산 · 체결일(T)부터 결제일(T+2)까지</title>
           <rect x="497" y="126" width="118" height="62" rx="7" class="c-mask"/>
           <rect x="497" y="126" width="118" height="62" rx="7" class="c-security" data-animate="node" style="--step:3" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="neutral" class="semantic-sigil s-external" transform="translate(598 132) scale(0.6875)">
@@ -5253,13 +5250,12 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
             <circle cx="8" cy="8" r="1.2" class="sigil-fill"/>
           </g>
         <text data-detail="fine" x="507" y="140" class="t-security" font-size="7" font-weight="700">04</text>
-          <text data-node-label="" data-detail-anchor="" x="556" y="147" class="t-primary" font-size="9.1" font-weight="600" text-anchor="middle">결제일에 잔고를 본다</text>
-          <text data-detail="context" x="556" y="163" class="t-muted" font-size="7" text-anchor="middle">T+2일에 현금을 확인한다</text>
-        <text data-detail="fine" x="556" y="177" class="t-security" font-size="7" text-anchor="middle">분기는 미구현</text>
+          <text data-node-label="" data-detail-anchor="" x="556" y="147" class="t-primary" font-size="9.1" font-weight="600" text-anchor="middle">T+2 결제</text>
+          <text data-detail="context" x="556" y="163" class="t-muted" font-size="7" text-anchor="middle">미수금 정산</text>
         </g>
 
-        <g id="node-settled" data-node-id="settled" data-node-label="대금을 전부 낸다" tabindex="0" role="button" aria-label="Focus 대금을 전부 낸다, 잔고에서 미수금을 뺀다, 체결일(T)부터 결제일(T+2)까지" aria-pressed="false" data-node-kind="success" data-node-sublabel="잔고에서 미수금을 뺀다" data-node-tag="구현됨" data-node-context="체결일(T)부터 결제일(T+2)까지">
-          <title>대금을 전부 낸다 · 잔고에서 미수금을 뺀다 · 체결일(T)부터 결제일(T+2)까지 · 구현됨</title>
+        <g id="node-settled" data-node-id="settled" data-node-label="결제 완료" tabindex="0" role="button" aria-label="Focus 결제 완료, 미수금 차감, 체결일(T)부터 결제일(T+2)까지" aria-pressed="false" data-node-kind="success" data-node-sublabel="미수금 차감" data-node-context="체결일(T)부터 결제일(T+2)까지">
+          <title>결제 완료 · 미수금 차감 · 체결일(T)부터 결제일(T+2)까지</title>
           <rect x="651" y="126" width="118" height="62" rx="7" class="c-mask"/>
           <rect x="651" y="126" width="118" height="62" rx="7" class="c-database" data-animate="node" style="--step:4" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="success" class="semantic-sigil s-database" transform="translate(752 132) scale(0.6875)">
@@ -5267,38 +5263,36 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
             <path d="m5.2 8 1.8 1.8 3.8-4"/>
           </g>
         <text data-detail="fine" x="661" y="140" class="t-database" font-size="7" font-weight="700">05</text>
-          <text data-node-label="" data-detail-anchor="" x="710" y="147" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">대금을 전부 낸다</text>
-          <text data-detail="context" x="710" y="163" class="t-muted" font-size="7" text-anchor="middle">잔고에서 미수금을 뺀다</text>
-        <text data-detail="fine" x="710" y="177" class="t-database" font-size="7" text-anchor="middle">구현됨</text>
+          <text data-node-label="" data-detail-anchor="" x="710" y="147" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">결제 완료</text>
+          <text data-detail="context" x="710" y="163" class="t-muted" font-size="7" text-anchor="middle">미수금 차감</text>
         </g>
 
-        <g id="node-prepay" data-node-id="prepay" data-node-label="미리 갚는다" tabindex="0" role="button" aria-label="Focus 미리 갚는다, 이자가 붙지 않는다, 결제일 전에 갚는 경우" aria-pressed="false" data-node-kind="active" data-node-sublabel="이자가 붙지 않는다" data-node-tag="상환 API로 구현" data-node-context="결제일 전에 갚는 경우">
-          <title>미리 갚는다 · 이자가 붙지 않는다 · 결제일 전에 갚는 경우 · 상환 API로 구현</title>
+        <g id="node-prepay" data-node-id="prepay" data-node-label="사전 상환" tabindex="0" role="button" aria-label="Focus 사전 상환, 이자 없음, 사전 상환" aria-pressed="false" data-node-kind="active" data-node-sublabel="이자 없음" data-node-context="사전 상환">
+          <title>사전 상환 · 이자 없음 · 사전 상환</title>
           <rect x="339" y="278" width="126" height="58" rx="7" class="c-mask"/>
           <rect x="339" y="278" width="126" height="58" rx="7" class="c-backend" data-animate="node" style="--step:5" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="active" class="semantic-sigil s-backend" transform="translate(448 284) scale(0.6875)">
             <path d="M2 8h3l1.5-3.5L9 12l1.6-4H14"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="402" y="299" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">미리 갚는다</text>
-          <text data-detail="context" x="402" y="315" class="t-muted" font-size="7" text-anchor="middle">이자가 붙지 않는다</text>
-        <text data-detail="fine" x="402" y="325" class="t-backend" font-size="7" text-anchor="middle">상환 API로 구현</text>
+          <text data-node-label="" data-detail-anchor="" x="402" y="299" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">사전 상환</text>
+          <text data-detail="context" x="402" y="315" class="t-muted" font-size="7" text-anchor="middle">이자 없음</text>
         </g>
 
-        <g id="node-arrear" data-node-id="arrear" data-node-label="미수금이 남는다" tabindex="0" role="button" aria-label="Focus 미수금이 남는다, 계좌가 매수를 못 한다, 결제일에 현금이 모자란 경우" aria-pressed="false" data-node-kind="failure" data-node-sublabel="계좌가 매수를 못 한다" data-node-tag="이 레포에 없다" data-node-context="결제일에 현금이 모자란 경우">
-          <title>미수금이 남는다 · 계좌가 매수를 못 한다 · 결제일에 현금이 모자란 경우 · 이 레포에 없다</title>
+        <g id="node-arrear" data-node-id="arrear" data-node-label="잔고 부족" tabindex="0" role="button" aria-label="Focus 잔고 부족, 신규 매수 제한, 잔고 부족 / 반대매매" aria-pressed="false" data-node-kind="failure" data-node-sublabel="신규 매수 제한" data-node-tag="미구현" data-node-context="잔고 부족 / 반대매매">
+          <title>잔고 부족 · 신규 매수 제한 · 잔고 부족 / 반대매매 · 미구현</title>
           <rect x="497" y="450" width="118" height="58" rx="7" class="c-mask"/>
           <rect x="497" y="450" width="118" height="58" rx="7" class="c-security" data-animate="node" style="--step:7" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="failure" class="semantic-sigil s-security" transform="translate(598 456) scale(0.6875)">
             <circle cx="8" cy="8" r="5.3"/>
             <path d="m5.7 5.7 4.6 4.6m0-4.6-4.6 4.6"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="556" y="471" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">미수금이 남는다</text>
-          <text data-detail="context" x="556" y="487" class="t-muted" font-size="7" text-anchor="middle">계좌가 매수를 못 한다</text>
-        <text data-detail="fine" x="556" y="497" class="t-security" font-size="7" text-anchor="middle">이 레포에 없다</text>
+          <text data-node-label="" data-detail-anchor="" x="556" y="471" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">잔고 부족</text>
+          <text data-detail="context" x="556" y="487" class="t-muted" font-size="7" text-anchor="middle">신규 매수 제한</text>
+        <text data-detail="fine" x="556" y="497" class="t-security" font-size="7" text-anchor="middle">미구현</text>
         </g>
 
-        <g id="node-liquidation" data-node-id="liquidation" data-node-label="반대매매" tabindex="0" role="button" aria-label="Focus 반대매매, 증권사가 강제로 판다, 결제일에 현금이 모자란 경우" aria-pressed="false" data-node-kind="failure" data-node-sublabel="증권사가 강제로 판다" data-node-tag="이 레포에 없다" data-node-context="결제일에 현금이 모자란 경우">
-          <title>반대매매 · 증권사가 강제로 판다 · 결제일에 현금이 모자란 경우 · 이 레포에 없다</title>
+        <g id="node-liquidation" data-node-id="liquidation" data-node-label="반대매매" tabindex="0" role="button" aria-label="Focus 반대매매, 강제 매도, 잔고 부족 / 반대매매" aria-pressed="false" data-node-kind="failure" data-node-sublabel="강제 매도" data-node-tag="미구현" data-node-context="잔고 부족 / 반대매매">
+          <title>반대매매 · 강제 매도 · 잔고 부족 / 반대매매 · 미구현</title>
           <rect x="651" y="450" width="118" height="58" rx="7" class="c-mask"/>
           <rect x="651" y="450" width="118" height="58" rx="7" class="c-security" data-animate="node" style="--step:8" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="failure" class="semantic-sigil s-security" transform="translate(752 456) scale(0.6875)">
@@ -5306,8 +5300,8 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
             <path d="m5.7 5.7 4.6 4.6m0-4.6-4.6 4.6"/>
           </g>
           <text data-node-label="" data-detail-anchor="" x="710" y="471" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">반대매매</text>
-          <text data-detail="context" x="710" y="487" class="t-muted" font-size="7" text-anchor="middle">증권사가 강제로 판다</text>
-        <text data-detail="fine" x="710" y="497" class="t-security" font-size="7" text-anchor="middle">이 레포에 없다</text>
+          <text data-detail="context" x="710" y="487" class="t-muted" font-size="7" text-anchor="middle">강제 매도</text>
+        <text data-detail="fine" x="710" y="497" class="t-security" font-size="7" text-anchor="middle">미구현</text>
         </g>
 
         <!-- Transition labels -->
