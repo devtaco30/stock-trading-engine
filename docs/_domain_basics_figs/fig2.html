@@ -20,6 +20,9 @@
           if (new URLSearchParams(window.location.search).get('present') === '1') {
             document.documentElement.setAttribute('data-present', 'true');
           }
+          if (new URLSearchParams(window.location.search).get('article') === '1') {
+            document.documentElement.setAttribute('data-article-embed', 'true');
+          }
         } catch (_) {}
         if (!theme) {
           try { theme = localStorage.getItem('archify-theme'); } catch (_) {}
@@ -539,6 +542,30 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       box-shadow: none;
     }
     html[data-embed="true"] .diagram-container svg { min-width: 0; }
+
+    /* Article iframe: Live motion and node camera stay. Passport overlay goes away. */
+    html[data-article-embed="true"] .focus-chip,
+    html[data-article-embed="true"] .toolbar,
+    html[data-article-embed="true"] .header,
+    html[data-article-embed="true"] .cards,
+    html[data-article-embed="true"] .overview-map,
+    html[data-article-embed="true"] .route-probe,
+    html[data-article-embed="true"] .semantic-lens,
+    html[data-article-embed="true"] .diagram-guide,
+    html[data-article-embed="true"] .node-finder,
+    html[data-article-embed="true"] .guided-views { display: none !important; }
+    html[data-article-embed="true"] body {
+      min-height: 0;
+      padding: 0;
+      overflow: hidden;
+      background-image: none;
+    }
+    html[data-article-embed="true"] .container { max-width: none; }
+    html[data-article-embed="true"] .diagram-container {
+      padding: 0.4rem;
+      border: 0;
+      box-shadow: none;
+    }
 
     /* Share Chapter Cue lives in the HTML viewer layer, not inside the SVG.
        It gives one-shot embeds a title, authored note, truthful stop order,
