@@ -36,11 +36,16 @@
   .legend div{display:flex;align-items:center;gap:8px;font-size:.9rem;color:var(--ink2)}
   .sw{width:14px;height:14px;border-radius:4px;flex:none}
   .fig{background:#0d1117;border:1px solid #222c3a;border-radius:16px;padding:22px;margin:22px 0;box-shadow:0 8px 30px rgba(10,14,20,.18);
-    width:min(1280px,calc(100vw - 48px));margin-left:calc(50% - min(640px, calc(50vw - 24px)))}
+    width:min(1320px, calc(100vw - 24px));margin-left:50%;transform:translateX(-50%);overflow-x:auto}
+  .fig iframe.fig-viewer{width:100%;border:0;display:block;background:#0d1117;border-radius:8px}
+  .fig.fig-topic iframe.fig-viewer{height:396px}
+  .fig.fig-state iframe.fig-viewer{height:460px}
+  .fig.fig-workflow iframe.fig-viewer{height:606px}
   .fig .cap{color:#7a8494;font-size:.82rem;margin:0 0 4px;text-transform:uppercase;letter-spacing:.08em}
-  .fig .ttl{color:#e8edf3;font-size:1.05rem;font-weight:700;margin:0 0 14px}
+  .fig .ttl{color:#e8edf3;font-size:1.05rem;font-weight:700;margin:0 0 8px}
+  .fig .fig-open{display:inline-block;margin:0 0 14px;font-size:12px;font-weight:700;color:#7cc0ff;text-decoration:none;border-bottom:1px solid rgba(124,192,255,.35);word-break:keep-all}
+  .fig .fig-open:hover{border-bottom-color:#7cc0ff}
   .fig .fignote{color:#8f99a8;font-size:.85rem;margin:12px 0 0;line-height:1.6}
-  .fig svg{width:100%;height:auto;display:block}
   .note{background:#fbfaf7;border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:0 10px 10px 0;padding:12px 18px;margin:16px 0}
   .note.warn{border-left-color:#c2410c;background:#fdf5f0}
   .note b{font-size:.95rem}
@@ -66,50 +71,6 @@
   .figcard b i{width:9px;height:9px;border-radius:50%;flex:none;display:block}
   .figcard ul{margin:0;padding-left:16px}
   .figcard li{color:#aeb6c2;font-size:.85rem;line-height:1.6;margin:4px 0}
-  /* archify가 낸 SVG는 의미 클래스로만 칠해져 있어서, 변수만 우리 팔레트로 바꾼다 */
-  .fig svg{
-    --grid:#161d27; --mask:#0d1117;
-    --text:#e8edf3; --text-muted:#aeb6c2; --text-dim:#8f99a8;
-    --arrow:#5b6675; --arrow-emphasis:#cbd5e1;
-    --lane-fill:rgba(20,27,37,.45); --lane-stroke:#2a3442;
-    --frontend-fill:rgba(20,27,37,.92);   --frontend-stroke:#60a5fa;
-    --backend-fill:rgba(26,19,10,.92);    --backend-stroke:#f5c46b;
-    --database-fill:rgba(12,27,24,.92);   --database-stroke:#5eead4;
-    --cloud-fill:rgba(21,20,38,.92);      --cloud-stroke:#a78bfa;
-    --security-fill:rgba(30,22,20,.92);   --security-stroke:#f0a980;
-    --messagebus-fill:rgba(13,28,22,.9);  --messagebus-stroke:#34d399;
-    --external-fill:rgba(20,27,37,.9);    --external-stroke:#8f99a8;
-  }
-  .fig svg .c-grid{stroke:var(--grid);fill:none}
-  .fig svg .c-mask{fill:var(--mask);stroke:none}
-  .fig svg .c-frontend{fill:var(--frontend-fill);stroke:var(--frontend-stroke)}
-  .fig svg .c-backend{fill:var(--backend-fill);stroke:var(--backend-stroke)}
-  .fig svg .c-database{fill:var(--database-fill);stroke:var(--database-stroke)}
-  .fig svg .c-cloud{fill:var(--cloud-fill);stroke:var(--cloud-stroke)}
-  .fig svg .c-security{fill:var(--security-fill);stroke:var(--security-stroke)}
-  .fig svg .c-messagebus{fill:var(--messagebus-fill);stroke:var(--messagebus-stroke)}
-  .fig svg .c-external{fill:var(--external-fill);stroke:var(--external-stroke)}
-  .fig svg .c-security-group{fill:transparent;stroke:var(--security-stroke);stroke-dasharray:4,4}
-  .fig svg .c-region{fill:rgba(167,139,250,.05);stroke:var(--cloud-stroke);stroke-dasharray:8,4}
-  .fig svg .c-lane{fill:var(--lane-fill);stroke:var(--lane-stroke);stroke-dasharray:6,6}
-  .fig svg .t-primary{fill:var(--text)} .fig svg .t-muted{fill:var(--text-muted)} .fig svg .t-dim{fill:var(--text-dim)}
-  .fig svg .t-frontend{fill:var(--frontend-stroke)} .fig svg .t-backend{fill:var(--backend-stroke)}
-  .fig svg .t-database{fill:var(--database-stroke)} .fig svg .t-cloud{fill:var(--cloud-stroke)}
-  .fig svg .t-security{fill:var(--security-stroke)} .fig svg .t-messagebus{fill:var(--messagebus-stroke)}
-  .fig svg .t-external{fill:var(--external-stroke)}
-  .fig svg .semantic-sigil{fill:none;stroke:currentColor;stroke-width:1.35;stroke-linecap:round;stroke-linejoin:round;opacity:.78;pointer-events:none}
-  .fig svg .semantic-sigil > *{vector-effect:non-scaling-stroke}
-  .fig svg .semantic-sigil .sigil-fill{fill:currentColor;stroke:none}
-  .fig svg .s-frontend{color:var(--frontend-stroke)} .fig svg .s-backend{color:var(--backend-stroke)}
-  .fig svg .s-database{color:var(--database-stroke)} .fig svg .s-cloud{color:var(--cloud-stroke)}
-  .fig svg .s-security{color:var(--security-stroke)} .fig svg .s-messagebus{color:var(--messagebus-stroke)}
-  .fig svg .s-external{color:var(--external-stroke)}
-  .fig svg .a-default{stroke:var(--arrow);fill:none}
-  .fig svg .a-emphasis{stroke:var(--arrow-emphasis);fill:none}
-  .fig svg .a-security{stroke:var(--security-stroke);fill:none;stroke-dasharray:5,5}
-  .fig svg .a-dashed{stroke:#8f99a8;fill:none;stroke-dasharray:4,4}
-  .fig svg .m-default{fill:var(--arrow)} .fig svg .m-emphasis{fill:var(--arrow-emphasis)}
-  .fig svg .m-security{fill:var(--security-stroke)} .fig svg .m-dashed{fill:#8f99a8}
 </style>
 </head>
 <body>
@@ -119,588 +80,119 @@
 <p class="sub">네 프로세스가 Kafka 세 토픽으로 이어지는 구조 · PostgreSQL 행 락으로 잔고를 지키는 방법 · 그 대가로 남는 처리량과 지연</p>
 
 <!-- ========== 1. 맥락 ========== -->
-<h2><span class="n">1</span>이게 무슨 얘기인가</h2>
-<p class="lead">v1은 잔고를 PostgreSQL 행에 두고 그 행을 잠가서 지키는 주식 매매 엔진입니다. 프로세스 사이의 전달은 Kafka가 맡습니다.</p>
+<h2><span class="n">1</span>이 문서의 범위</h2>
+<p class="lead">v1은 잔고를 PostgreSQL 행에 두고 그 행을 잠가서 지키는 주식 매매 엔진이다. 프로세스 사이의 전달은 Kafka가 맡는다.</p>
 
-<p>주문 한 건이 접수돼 체결되고 계좌에 반영되기까지 지나는 순서는 <a href="_v1_order_fill_settlement_flow.html">주문 접수부터 체결 반영까지</a>에 이미 있습니다. 여기서는 그 순서를 만드는 틀을 다룹니다. 프로세스가 몇 개이고 무엇을 나눠 맡는지, 잔고와 호가창은 각각 어디에 있는지, 같은 계좌·같은 종목에 동시에 손대는 것을 무엇이 막는지, 그리고 그 방법을 고른 대가로 처리량과 지연이 어떻게 나오는지를 다룹니다.</p>
+<p>주문 한 건이 접수돼 체결되고 계좌에 반영되기까지 지나는 순서는 <a href="_v1_order_fill_settlement_flow.html">주문 접수부터 체결 반영까지</a>에 이미 있다. 여기서는 그 순서를 만드는 틀을 다룬다. 프로세스가 몇 개이고 무엇을 나눠 맡는지, 잔고와 호가창은 각각 어디에 있는지, 같은 계좌·같은 종목에 동시에 손대는 것을 무엇이 막는지, 그리고 그 방법을 고른 대가로 처리량과 지연이 어떻게 나오는지를 다룬다.</p>
 
 <!-- ========== 2. 용어 ========== -->
-<h2><span class="n">2</span>먼저 용어부터</h2>
+<h2><span class="n">2</span>먼저 용어</h2>
 <div class="cards">
-  <div class="term"><b class="k-green">Kafka</b><span>브로커가 메시지를 디스크에 저장해 두는 메시지 큐. v1의 네 프로세스는 서로를 직접 부르지 않고 전부 이걸 거쳐 전달합니다.</span></div>
-  <div class="term"><b>토픽</b><span>메시지가 쌓이는 이름 있는 통로. v1에는 <code>order-requests</code>·<code>orders</code>·<code>fills</code> 세 개가 있습니다.</span></div>
-  <div class="term"><b>파티션</b><span>토픽을 나눈 하위 통로. 같은 파티션에 들어간 메시지는 들어간 순서 그대로 나옵니다.</span></div>
-  <div class="term"><b>파티션 키</b><span>메시지를 어느 파티션에 넣을지 정하는 값. 같은 키는 항상 같은 파티션으로 갑니다.</span></div>
-  <div class="term"><b>컨슈머 그룹</b><span>토픽을 나눠서 읽는 컨슈머들의 묶음. 파티션 하나는 그룹 안에서 스레드 하나만 읽습니다.</span></div>
-  <div class="term"><b>오프셋 커밋</b><span>컨슈머가 "여기까지 읽었다"고 기록하는 것. v1은 처리를 끝낸 뒤에 커밋합니다(<code>manual_immediate</code>).</span></div>
-  <div class="term k-amber"><b class="k-amber">비관적 락</b><span>PostgreSQL의 <code>SELECT ... FOR UPDATE</code>. 행을 읽는 순간부터 잠가서, 그 트랜잭션이 끝날 때까지 다른 트랜잭션이 같은 행을 건드리지 못하게 합니다.</span></div>
-  <div class="term"><b>멱등키</b><span>같은 메시지가 두 번 와도 한 번만 반영되게 판정하는 근거 값. order-engine은 requestId, matching-engine은 주문ID, settlement-engine은 tradeId로 판정 기준이 지점마다 다릅니다.</span></div>
-  <div class="term k-blue"><b class="k-blue">호가창(OrderBook)</b><span>한 종목의 매수·매도 대기 주문을 가격별로 모아 둔 자료구조. matching-engine 프로세스의 메모리에만 있습니다.</span></div>
-  <div class="term"><b>T+2 정산</b><span>체결 2영업일 뒤에 실제 현금이 오가는 것. 그 전까지 미수금(unpaid)은 계좌 장부에만 있습니다.</span></div>
+  <div class="term"><b class="k-green">Kafka</b><span>브로커가 메시지를 디스크에 저장해 두는 메시지 큐. v1의 네 프로세스는 서로를 직접 부르지 않고 전부 이걸 거쳐 전달한다.</span></div>
+  <div class="term"><b>토픽</b><span>메시지가 쌓이는 이름 있는 통로. v1에는 <code>order-requests</code>·<code>orders</code>·<code>fills</code> 세 개가 있다.</span></div>
+  <div class="term"><b>파티션</b><span>토픽을 나눈 하위 통로. 같은 파티션에 들어간 메시지는 들어간 순서 그대로 나온다.</span></div>
+  <div class="term"><b>파티션 키</b><span>메시지를 어느 파티션에 넣을지 정하는 값. 같은 키는 항상 같은 파티션으로 간다.</span></div>
+  <div class="term"><b>컨슈머 그룹</b><span>토픽을 나눠서 읽는 컨슈머들의 묶음. 파티션 하나는 그룹 안에서 스레드 하나만 읽는다.</span></div>
+  <div class="term"><b>오프셋 커밋</b><span>컨슈머가 "여기까지 읽었다"고 기록하는 것. v1은 처리를 끝낸 뒤에 커밋한다(<code>manual_immediate</code>).</span></div>
+  <div class="term k-amber"><b class="k-amber">비관적 락</b><span>PostgreSQL의 <code>SELECT ... FOR UPDATE</code>. 행을 읽는 순간부터 잠가서, 그 트랜잭션이 끝날 때까지 다른 트랜잭션이 같은 행을 건드리지 못하게 한다.</span></div>
+  <div class="term"><b>멱등키</b><span>같은 메시지가 두 번 와도 한 번만 반영되게 판정하는 근거 값. order-engine은 requestId, matching-engine은 주문ID, settlement-engine은 tradeId로 판정 기준이 지점마다 다르다.</span></div>
+  <div class="term k-blue"><b class="k-blue">호가창(OrderBook)</b><span>한 종목의 매수·매도 대기 주문을 가격별로 모아 둔 자료구조. matching-engine 프로세스의 메모리에만 있다.</span></div>
+  <div class="term"><b>T+2 정산</b><span>체결 2영업일 뒤에 실제 현금이 오가는 것. 그 전까지 미수금(unpaid)은 계좌 장부에만 있다.</span></div>
 </div>
 
 <div class="legend">
   <div><span class="sw" style="background:#60a5fa"></span> 게이트웨이 — 요청을 받아 Kafka로 넘기는 api</div>
   <div><span class="sw" style="background:#f5c46b"></span> 엔진 프로세스 — order-engine·matching-engine·settlement-engine</div>
   <div><span class="sw" style="background:#34d399"></span> Kafka 토픽</div>
-  <div><span class="sw" style="background:#5eead4"></span> PostgreSQL — 잔고·보유의 유일한 주인</div>
+  <div><span class="sw" style="background:#5eead4"></span> PostgreSQL — 잔고·보유의 원본</div>
   <div><span class="sw" style="background:#a78bfa"></span> Redis — 조회용 캐시(잔고·보유의 원본이 아니다)</div>
   <div><span class="sw" style="background:#f0a980"></span> 락이 걸리거나 중복을 판정하는 지점</div>
 </div>
 
 <!-- ========== 3. 프로세스와 토픽 ========== -->
 <h2><span class="n">3</span>프로세스 4개, 토픽 3개</h2>
-<p>v1은 <strong>api·order-engine·matching-engine·settlement-engine</strong> 네 개의 독립된 Spring Boot 앱으로 나뉘어 있습니다. 각각 자기 진입점(<code>@SpringBootApplication</code>)을 가진 별도 JVM이고, <code>./gradlew :api:bootRun</code>처럼 모듈 이름을 바꿔 가며 따로 띄웁니다. 서로를 직접 호출하지 않고, 프로세스 사이의 유일한 연결은 Kafka 토픽입니다.</p>
+<p>v1은 <strong>api·order-engine·matching-engine·settlement-engine</strong> 네 개의 독립된 Spring Boot 앱으로 나뉘어 있다. 각각 자기 진입점(<code>@SpringBootApplication</code>)을 가진 별도 JVM이고, <code>./gradlew :api:bootRun</code>처럼 모듈 이름을 바꿔 가며 따로 띄운다. 서로를 직접 호출하지 않고, 프로세스 사이의 유일한 연결은 Kafka 토픽이다.</p>
 
-<p><code>core</code>·<code>user</code>·<code>market</code>·<code>account</code>·<code>trading</code>·<code>settlement</code>는 프로세스로 뜨지 않는 <strong>공유 라이브러리</strong>입니다. 계좌 도메인 로직(잔고 검증·보유 갱신)은 <code>account</code> 모듈 하나에 있고, order-engine과 settlement-engine이 각자 필요한 부분만 가져다 재사용합니다.</p>
+<p><code>core</code>·<code>user</code>·<code>market</code>·<code>account</code>·<code>trading</code>·<code>settlement</code>는 프로세스로 뜨지 않는 <strong>공유 라이브러리</strong>다. 계좌 도메인 로직(잔고 검증·보유 갱신)은 <code>account</code> 모듈 하나에 있고, order-engine과 settlement-engine이 각자 필요한 부분만 가져다 재사용한다.</p>
 
-<div class="fig">
+<div class="fig fig-topic">
 <p class="cap">Figure 1</p>
 <p class="ttl">네 프로세스가 세 토픽으로 이어지는 구조</p>
-<svg viewBox="0 0 1320 340" role="img" aria-labelledby="f1-archify-diagram-title f1-archify-diagram-description" data-preset="classic" data-quality-profile="showcase">
-        <title id="f1-archify-diagram-title">네 프로세스가 세 토픽으로 이어지는 구조</title>
-        <desc id="f1-archify-diagram-description">An architecture diagram generated by Archify.</desc>
-        <!-- Definitions -->
-        <defs>
-          <marker id="f1-arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-            <polygon points="0 0, 10 3.5, 0 7" class="m-default" />
-          </marker>
-          <marker id="f1-arrowhead-emphasis" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-            <polygon points="0 0, 10 3.5, 0 7" class="m-emphasis" />
-          </marker>
-          <marker id="f1-arrowhead-security" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-            <polygon points="0 0, 10 3.5, 0 7" class="m-security" />
-          </marker>
-          <marker id="f1-arrowhead-dashed" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-            <polygon points="0 0, 10 3.5, 0 7" class="m-dashed" />
-          </marker>
-          <pattern id="f1-grid" width="40" height="40" patternUnits="userSpaceOnUse">
-            <path d="M 40 0 L 0 0 0 40" class="c-grid" stroke-width="0.5"/>
-          </pattern>
-        </defs>
-
-        <!-- Background Grid -->
-        <rect width="100%" height="100%" fill="url(#f1-grid)" />
-
-        <!-- Boundaries (behind everything) -->
-
-
-        <!-- Connection paths (before components for correct z-order) -->
-        <path data-edge-from="api" data-edge-to="orderRequests" data-edge-label="주문 요청 발행" data-edge-key="0" data-edge-id="f1-api-to-orderRequests" data-composition-points="140,78;172,78" d="M 140 78 L 172 78" class="a-emphasis" stroke-width="1.8" marker-end="url(#f1-arrowhead-emphasis)"/>
-        <path data-edge-from="orderRequests" data-edge-to="orderEngine" data-edge-label="구독" data-edge-key="1" data-edge-id="f1-orderRequests-to-orderEngine" data-composition-points="332,78;364,78" d="M 332 78 L 364 78" class="a-default" stroke-width="1.5" marker-end="url(#f1-arrowhead)"/>
-        <path data-edge-from="orderEngine" data-edge-to="orders" data-edge-label="주문 저장 후 발행" data-edge-key="2" data-edge-id="f1-orderEngine-to-orders" data-composition-points="514,78;546,78" d="M 514 78 L 546 78" class="a-emphasis" stroke-width="1.8" marker-end="url(#f1-arrowhead-emphasis)"/>
-        <path data-edge-from="orders" data-edge-to="matchingEngine" data-edge-label="구독" data-edge-key="3" data-edge-id="f1-orders-to-matchingEngine" data-composition-points="706,78;738,78" d="M 706 78 L 738 78" class="a-default" stroke-width="1.5" marker-end="url(#f1-arrowhead)"/>
-        <path data-edge-from="matchingEngine" data-edge-to="fills" data-edge-label="체결 발행" data-edge-key="4" data-edge-id="f1-matchingEngine-to-fills" data-composition-points="888,78;920,78" d="M 888 78 L 920 78" class="a-emphasis" stroke-width="1.8" marker-end="url(#f1-arrowhead-emphasis)"/>
-        <path data-edge-from="fills" data-edge-to="settlementEngine" data-edge-label="구독" data-edge-key="5" data-edge-id="f1-fills-to-settlementEngine" data-composition-points="1080,78;1112,78" d="M 1080 78 L 1112 78" class="a-default" stroke-width="1.5" marker-end="url(#f1-arrowhead)"/>
-        <path data-edge-from="orderEngine" data-edge-to="postgres" data-edge-label="accounts 행 잠금" data-edge-key="6" data-edge-id="f1-orderEngine-to-postgres" data-composition-points="439,112;439,166;635,166;635,220" d="M 439 112 L 439 158 Q 439 166 447 166 L 627 166 Q 635 166 635 174 L 635 220" class="a-security" stroke-width="1.5" marker-end="url(#f1-arrowhead-security)"/>
-        <path data-edge-from="settlementEngine" data-edge-to="postgres" data-edge-label="holdings 행 잠금" data-edge-key="7" data-edge-id="f1-settlementEngine-to-postgres" data-composition-points="1197,112;1197,166;649,166;649,220" d="M 1197 112 L 1197 158 Q 1197 166 1189 166 L 657 166 Q 649 166 649 174 L 649 220" class="a-security" stroke-width="1.5" marker-end="url(#f1-arrowhead-security)"/>
-
-        <!-- Components -->
-        <g id="f1-node-api" data-node-id="f1-api" data-node-label="api" tabindex="0" role="button" aria-label="Focus api, 주문 접수 진입점, Architecture component" aria-pressed="false" data-node-kind="frontend" data-node-sublabel="주문 접수 진입점" data-node-context="Architecture component">
-          <title>api · 주문 접수 진입점 · Architecture component</title>
-          <rect x="20" y="44" width="120" height="68" rx="6" class="c-mask"/>
-          <rect x="20" y="44" width="120" height="68" rx="6" class="c-frontend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="frontend" class="semantic-sigil s-frontend" transform="translate(26 50) scale(0.6875)">
-            <rect x="2" y="3" width="12" height="10" rx="2"/>
-            <path d="M2 6.5h12"/>
-            <circle cx="4.1" cy="4.8" r=".7" class="sigil-fill"/>
-            <circle cx="6.3" cy="4.8" r=".7" class="sigil-fill"/>
-          </g>
-          <text data-node-label="" data-detail-anchor="" x="80" y="76" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">api</text>
-        <text data-detail="context" x="80" y="92" class="t-muted" font-size="9" text-anchor="middle">주문 접수 진입점</text>
-        </g>
-
-        <g id="f1-node-orderRequests" data-node-id="f1-orderRequests" data-node-label="order-requests" tabindex="0" role="button" aria-label="Focus order-requests, 파티션 3 · key=accountId, Architecture component" aria-pressed="false" data-node-kind="messagebus" data-node-sublabel="파티션 3 · key=accountId" data-node-context="Architecture component">
-          <title>order-requests · 파티션 3 · key=accountId · Architecture component</title>
-          <rect x="172" y="44" width="160" height="68" rx="6" class="c-mask"/>
-          <rect x="172" y="44" width="160" height="68" rx="6" class="c-messagebus" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="messagebus" class="semantic-sigil s-messagebus" transform="translate(178 50) scale(0.6875)">
-            <path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/>
-            <circle cx="5" cy="4.5" r="1" class="sigil-fill"/>
-            <circle cx="10.5" cy="8" r="1" class="sigil-fill"/>
-            <circle cx="7" cy="11.5" r="1" class="sigil-fill"/>
-          </g>
-          <text data-node-label="" data-detail-anchor="" x="252" y="76" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">order-requests</text>
-        <text data-detail="context" x="252" y="92" class="t-muted" font-size="9" text-anchor="middle">파티션 3 · key=accountId</text>
-        </g>
-
-        <g id="f1-node-orderEngine" data-node-id="f1-orderEngine" data-node-label="order-engine" tabindex="0" role="button" aria-label="Focus order-engine, accounts 행을 잠가 검증, Architecture component" aria-pressed="false" data-node-kind="backend" data-node-sublabel="accounts 행을 잠가 검증" data-node-context="Architecture component">
-          <title>order-engine · accounts 행을 잠가 검증 · Architecture component (컨슈머 그룹, 인스턴스 수평 확장 가능)</title>
-          <rect x="352" y="32" width="150" height="68" rx="6" class="c-mask" opacity="0.35" aria-hidden="true" pointer-events="none"/>
-          <rect x="352" y="32" width="150" height="68" rx="6" class="c-backend" stroke-width="1.5" opacity="0.35" aria-hidden="true" pointer-events="none"/>
-          <rect x="358" y="38" width="150" height="68" rx="6" class="c-mask" opacity="0.6" aria-hidden="true" pointer-events="none"/>
-          <rect x="358" y="38" width="150" height="68" rx="6" class="c-backend" stroke-width="1.5" opacity="0.6" aria-hidden="true" pointer-events="none"/>
-          <rect x="364" y="44" width="150" height="68" rx="6" class="c-mask"/>
-          <rect x="364" y="44" width="150" height="68" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(370 50) scale(0.6875)">
-            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
-          </g>
-          <text data-node-label="" data-detail-anchor="" x="439" y="76" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">order-engine</text>
-        <text data-detail="context" x="439" y="92" class="t-muted" font-size="9" text-anchor="middle">accounts 행을 잠가 검증</text>
-        </g>
-
-        <g id="f1-node-orders" data-node-id="f1-orders" data-node-label="orders" tabindex="0" role="button" aria-label="Focus orders, 파티션 50 · key=stockCode, Architecture component" aria-pressed="false" data-node-kind="messagebus" data-node-sublabel="파티션 50 · key=stockCode" data-node-context="Architecture component">
-          <title>orders · 파티션 50 · key=stockCode · Architecture component</title>
-          <rect x="546" y="44" width="160" height="68" rx="6" class="c-mask"/>
-          <rect x="546" y="44" width="160" height="68" rx="6" class="c-messagebus" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="messagebus" class="semantic-sigil s-messagebus" transform="translate(552 50) scale(0.6875)">
-            <path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/>
-            <circle cx="5" cy="4.5" r="1" class="sigil-fill"/>
-            <circle cx="10.5" cy="8" r="1" class="sigil-fill"/>
-            <circle cx="7" cy="11.5" r="1" class="sigil-fill"/>
-          </g>
-          <text data-node-label="" data-detail-anchor="" x="626" y="76" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">orders</text>
-        <text data-detail="context" x="626" y="92" class="t-muted" font-size="9" text-anchor="middle">파티션 50 · key=stockCode</text>
-        </g>
-
-        <g id="f1-node-matchingEngine" data-node-id="f1-matchingEngine" data-node-label="matching-engine" tabindex="0" role="button" aria-label="Focus matching-engine, 메모리 호가창에서 매칭, Architecture component" aria-pressed="false" data-node-kind="backend" data-node-sublabel="메모리 호가창에서 매칭" data-node-context="Architecture component">
-          <title>matching-engine · 메모리 호가창에서 매칭 · Architecture component (컨슈머 그룹, 인스턴스 수평 확장 가능)</title>
-          <rect x="726" y="32" width="150" height="68" rx="6" class="c-mask" opacity="0.35" aria-hidden="true" pointer-events="none"/>
-          <rect x="726" y="32" width="150" height="68" rx="6" class="c-backend" stroke-width="1.5" opacity="0.35" aria-hidden="true" pointer-events="none"/>
-          <rect x="732" y="38" width="150" height="68" rx="6" class="c-mask" opacity="0.6" aria-hidden="true" pointer-events="none"/>
-          <rect x="732" y="38" width="150" height="68" rx="6" class="c-backend" stroke-width="1.5" opacity="0.6" aria-hidden="true" pointer-events="none"/>
-          <rect x="738" y="44" width="150" height="68" rx="6" class="c-mask"/>
-          <rect x="738" y="44" width="150" height="68" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(744 50) scale(0.6875)">
-            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
-          </g>
-          <text data-node-label="" data-detail-anchor="" x="813" y="76" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">matching-engine</text>
-        <text data-detail="context" x="813" y="92" class="t-muted" font-size="9" text-anchor="middle">메모리 호가창에서 매칭</text>
-        </g>
-
-        <g id="f1-node-fills" data-node-id="f1-fills" data-node-label="fills" tabindex="0" role="button" aria-label="Focus fills, 파티션 50 · key=stockCode, Architecture component" aria-pressed="false" data-node-kind="messagebus" data-node-sublabel="파티션 50 · key=stockCode" data-node-context="Architecture component">
-          <title>fills · 파티션 50 · key=stockCode · Architecture component</title>
-          <rect x="920" y="44" width="160" height="68" rx="6" class="c-mask"/>
-          <rect x="920" y="44" width="160" height="68" rx="6" class="c-messagebus" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="messagebus" class="semantic-sigil s-messagebus" transform="translate(926 50) scale(0.6875)">
-            <path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/>
-            <circle cx="5" cy="4.5" r="1" class="sigil-fill"/>
-            <circle cx="10.5" cy="8" r="1" class="sigil-fill"/>
-            <circle cx="7" cy="11.5" r="1" class="sigil-fill"/>
-          </g>
-          <text data-node-label="" data-detail-anchor="" x="1000" y="76" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">fills</text>
-        <text data-detail="context" x="1000" y="92" class="t-muted" font-size="9" text-anchor="middle">파티션 50 · key=stockCode</text>
-        </g>
-
-        <g id="f1-node-settlementEngine" data-node-id="f1-settlementEngine" data-node-label="settlement-engine" tabindex="0" role="button" aria-label="Focus settlement-engine, holdings 행을 잠가 반영, Architecture component" aria-pressed="false" data-node-kind="backend" data-node-sublabel="holdings 행을 잠가 반영" data-node-context="Architecture component">
-          <title>settlement-engine · holdings 행을 잠가 반영 · Architecture component (컨슈머 그룹, 인스턴스 수평 확장 가능)</title>
-          <rect x="1100" y="32" width="170" height="68" rx="6" class="c-mask" opacity="0.35" aria-hidden="true" pointer-events="none"/>
-          <rect x="1100" y="32" width="170" height="68" rx="6" class="c-backend" stroke-width="1.5" opacity="0.35" aria-hidden="true" pointer-events="none"/>
-          <rect x="1106" y="38" width="170" height="68" rx="6" class="c-mask" opacity="0.6" aria-hidden="true" pointer-events="none"/>
-          <rect x="1106" y="38" width="170" height="68" rx="6" class="c-backend" stroke-width="1.5" opacity="0.6" aria-hidden="true" pointer-events="none"/>
-          <rect x="1112" y="44" width="170" height="68" rx="6" class="c-mask"/>
-          <rect x="1112" y="44" width="170" height="68" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(1118 50) scale(0.6875)">
-            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
-          </g>
-          <text data-node-label="" data-detail-anchor="" x="1197" y="76" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">settlement-engine</text>
-        <text data-detail="context" x="1197" y="92" class="t-muted" font-size="9" text-anchor="middle">holdings 행을 잠가 반영</text>
-        </g>
-
-        <g id="f1-node-postgres" data-node-id="f1-postgres" data-node-label="PostgreSQL" tabindex="0" role="button" aria-label="Focus PostgreSQL, accounts · holdings · orders, Architecture component" aria-pressed="false" data-node-kind="database" data-node-sublabel="accounts · holdings · orders" data-node-context="Architecture component">
-          <title>PostgreSQL · accounts · holdings · orders · Architecture component</title>
-          <rect x="542" y="220" width="200" height="70" rx="6" class="c-mask"/>
-          <rect x="542" y="220" width="200" height="70" rx="6" class="c-database" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(548 226) scale(0.6875)">
-            <ellipse cx="8" cy="4" rx="5" ry="2"/>
-            <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
-          </g>
-          <text data-node-label="" data-detail-anchor="" x="642" y="253" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">PostgreSQL</text>
-        <text data-detail="context" x="642" y="269" class="t-muted" font-size="9" text-anchor="middle">accounts · holdings · orders</text>
-        </g>
-
-        <!-- Connection labels -->
-        <g data-detail="context" data-edge-from="api" data-edge-to="orderRequests" data-edge-label="주문 요청 발행" data-edge-key="0" data-edge-id="f1-api-to-orderRequests">
-          <rect x="117.4" y="28" width="77.2" height="14" rx="3" class="c-mask"/>
-          <text x="156" y="38" class="t-backend" font-size="8" text-anchor="middle">주문 요청 발행</text>
-        </g>
-        <g data-detail="context" data-edge-from="orderRequests" data-edge-to="orderEngine" data-edge-label="구독" data-edge-key="1" data-edge-id="f1-orderRequests-to-orderEngine">
-          <rect x="333" y="28" width="30" height="14" rx="3" class="c-mask"/>
-          <text x="348" y="38" class="t-muted" font-size="8" text-anchor="middle">구독</text>
-        </g>
-        <g data-detail="context" data-edge-from="orderEngine" data-edge-to="orders" data-edge-label="주문 저장 후 발행" data-edge-key="2" data-edge-id="f1-orderEngine-to-orders">
-          <rect x="484.2" y="28" width="91.6" height="14" rx="3" class="c-mask"/>
-          <text x="530" y="38" class="t-backend" font-size="8" text-anchor="middle">주문 저장 후 발행</text>
-        </g>
-        <g data-detail="context" data-edge-from="orders" data-edge-to="matchingEngine" data-edge-label="구독" data-edge-key="3" data-edge-id="f1-orders-to-matchingEngine">
-          <rect x="707" y="28" width="30" height="14" rx="3" class="c-mask"/>
-          <text x="722" y="38" class="t-muted" font-size="8" text-anchor="middle">구독</text>
-        </g>
-        <g data-detail="context" data-edge-from="matchingEngine" data-edge-to="fills" data-edge-label="체결 발행" data-edge-key="4" data-edge-id="f1-matchingEngine-to-fills">
-          <rect x="877.4" y="28" width="53.199999999999996" height="14" rx="3" class="c-mask"/>
-          <text x="904" y="38" class="t-backend" font-size="8" text-anchor="middle">체결 발행</text>
-        </g>
-        <g data-detail="context" data-edge-from="fills" data-edge-to="settlementEngine" data-edge-label="구독" data-edge-key="5" data-edge-id="f1-fills-to-settlementEngine">
-          <rect x="1081" y="28" width="30" height="14" rx="3" class="c-mask"/>
-          <text x="1096" y="38" class="t-muted" font-size="8" text-anchor="middle">구독</text>
-        </g>
-        <g data-detail="context" data-edge-from="orderEngine" data-edge-to="postgres" data-edge-label="accounts 행 잠금" data-edge-key="6" data-edge-id="f1-orderEngine-to-postgres">
-          <rect x="493.6" y="146" width="86.8" height="14" rx="3" class="c-mask"/>
-          <text x="537" y="156" class="t-security" font-size="8" text-anchor="middle">accounts 행 잠금</text>
-        </g>
-        <g data-detail="context" data-edge-from="settlementEngine" data-edge-to="postgres" data-edge-label="holdings 행 잠금" data-edge-key="7" data-edge-id="f1-settlementEngine-to-postgres">
-          <rect x="879.6" y="146" width="86.8" height="14" rx="3" class="c-mask"/>
-          <text x="923" y="156" class="t-security" font-size="8" text-anchor="middle">holdings 행 잠금</text>
-        </g>
-
-        <!-- Boundary labels (foreground masks keep routes out of titles) -->
-
-
-        <!-- Legend -->
-
-      </svg>
-<p class="fignote">api가 order-requests를 발행하면 order-engine이 accounts 행을 잠가 검증하고, orders로 넘기면 matching-engine이 메모리 호가창에서 짝을 찾고, fills로 넘기면 settlement-engine이 holdings 행을 잠가 반영합니다. 세 엔진이 겹친 카드로 그려진 건 Kafka 컨슈머 그룹이라 인스턴스를 여러 개 띄울 수 있다는 뜻입니다 — 지금 로컬 실행은 인스턴스 하나씩입니다.</p>
+<a class="fig-open" href="_v1_arch_figs/fig1-process-topic.html" target="_blank" rel="noopener">이 도식 열기</a>
+<iframe class="fig-viewer" src="_v1_arch_figs/fig1-process-topic.html?theme=dark&amp;article=1" title="네 프로세스가 세 토픽으로 이어지는 구조" loading="lazy"></iframe>
+<p class="fignote">api가 order-requests를 발행하면 order-engine이 accounts 행을 잠가 검증하고, orders로 넘기면 matching-engine이 메모리 호가창에서 짝을 찾고, fills로 넘기면 settlement-engine이 holdings 행을 잠가 반영한다. 세 엔진이 겹친 카드로 그려진 건 Kafka 컨슈머 그룹이라 인스턴스를 여러 개 띄울 수 있다는 뜻이다 — 지금 로컬 실행은 인스턴스 하나씩이다.</p>
 </div>
 
-<p>토픽마다 발행자가 하나로 고정돼 있습니다(코드 주석의 표현으로 "발행자가 토픽 소유"). 한 토픽에 여러 프로세스가 동시에 쓰는 경로가 없어서, 어느 이벤트가 어디서 왔는지 추적할 때 발행자를 찾아 헤맬 일이 없습니다.</p>
+<p>토픽마다 발행자가 하나로 고정돼 있다(코드 주석의 표현으로 "발행자가 토픽 소유"). 한 토픽에 여러 프로세스가 동시에 쓰는 경로가 없어서, 어느 이벤트가 어디서 왔는지 추적할 때 발행자를 찾아 헤맬 일이 없다.</p>
 <ul class="tight">
   <li><code>order-requests</code> — api만 발행, order-engine만 구독</li>
   <li><code>orders</code> — order-engine만 발행, matching-engine만 구독</li>
   <li><code>fills</code> — matching-engine만 발행, settlement-engine만 구독</li>
 </ul>
 
-<p>세 토픽의 파티션 키가 서로 다릅니다. <code>order-requests</code>는 계좌 번호(accountId)로 나뉘고, <code>orders</code>와 <code>fills</code>는 종목 코드(stockCode)로 나뉩니다. 접수 단계는 계좌 기준으로 병렬화하고 매칭·체결 반영 단계는 종목 기준으로 병렬화한다는 뜻입니다. 이 파티션 키가 §5의 동시성 통제와 맞물립니다.</p>
+<p>세 토픽의 파티션 키가 서로 다르다. <code>order-requests</code>는 계좌 번호(accountId)로 나뉘고, <code>orders</code>와 <code>fills</code>는 종목 코드(stockCode)로 나뉜다. 접수 단계는 계좌 기준으로 병렬화하고 매칭·체결 반영 단계는 종목 기준으로 병렬화한다는 뜻이다. 이 파티션 키가 §5의 동시성 통제와 맞물린다.</p>
 
-<p>로컬에서 띄울 때 DB는 프로파일로 고를 수 있지만(기본은 H2, <code>local</code> 프로파일은 PostgreSQL) Kafka는 두 경우 모두 필요합니다. 네 프로세스 모두 기동 시 <code>localhost:9092</code>의 Kafka에 연결하고, DB 선택과 무관하게 Kafka가 없으면 뜨지 않습니다.</p>
+<p>로컬에서 띄울 때 DB는 프로파일로 고를 수 있지만(기본은 H2, <code>local</code> 프로파일은 PostgreSQL) Kafka는 두 경우 모두 필요하다. 네 프로세스 모두 기동 시 <code>localhost:9092</code>의 Kafka에 연결하고, DB 선택과 무관하게 Kafka가 없으면 뜨지 않는다.</p>
 
 <!-- ========== 4. 상태 위치 ========== -->
-<h2><span class="n">4</span>상태를 어디에 두나</h2>
-<p>계좌의 잔고와 보유 수량은 PostgreSQL의 <code>accounts</code>·<code>holdings</code> 테이블에만 있습니다. 어느 프로세스도 잔고를 메모리에 따로 들고 있지 않고, account 모듈의 서비스가 매번 그 행을 읽고 잠그고 고칩니다.</p>
+<h2><span class="n">4</span>상태 저장 위치</h2>
+<p>계좌의 잔고와 보유 수량은 PostgreSQL의 <code>accounts</code>·<code>holdings</code> 테이블에만 있다. 어느 프로세스도 잔고를 메모리에 따로 들고 있지 않고, account 모듈의 서비스가 매번 그 행을 읽고 잠그고 고친다.</p>
 
-<p>호가창은 다릅니다. matching-engine 프로세스의 메모리에 종목 코드별로 떠 있습니다 — <code>OrderBookRegistry</code>가 <code>ConcurrentHashMap&lt;String, OrderBook&gt;</code>로 종목 코드마다 하나씩 들고 있고, 그 안에서 매수·매도 호가는 <code>TreeMap</code>에 가격 순으로 쌓여 있습니다. DB에는 호가창 자체를 저장하는 테이블이 없습니다.</p>
+<p>호가창은 다르다. matching-engine 프로세스의 메모리에 종목 코드별로 떠 있다 — <code>OrderBookRegistry</code>가 <code>ConcurrentHashMap&lt;String, OrderBook&gt;</code>로 종목 코드마다 하나씩 들고 있고, 그 안에서 매수·매도 호가는 <code>TreeMap</code>에 가격 순으로 쌓여 있다. DB에는 호가창 자체를 저장하는 테이블이 없다.</p>
 
-<div class="fig">
+<div class="fig fig-state">
 <p class="cap">Figure 2</p>
-<p class="ttl">잔고는 PostgreSQL 행, 호가창은 matching-engine 메모리</p>
-<svg viewBox="0 0 1260 390" role="img" aria-labelledby="f2-archify-diagram-title f2-archify-diagram-description" data-preset="classic" data-quality-profile="showcase">
-        <title id="f2-archify-diagram-title">잔고는 PostgreSQL 행, 호가창은 matching-engine 메모리</title>
-        <desc id="f2-archify-diagram-description">An architecture diagram generated by Archify.</desc>
-        <!-- Definitions -->
-        <defs>
-          <marker id="f2-arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-            <polygon points="0 0, 10 3.5, 0 7" class="m-default" />
-          </marker>
-          <marker id="f2-arrowhead-emphasis" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-            <polygon points="0 0, 10 3.5, 0 7" class="m-emphasis" />
-          </marker>
-          <marker id="f2-arrowhead-security" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-            <polygon points="0 0, 10 3.5, 0 7" class="m-security" />
-          </marker>
-          <marker id="f2-arrowhead-dashed" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-            <polygon points="0 0, 10 3.5, 0 7" class="m-dashed" />
-          </marker>
-          <pattern id="f2-grid" width="40" height="40" patternUnits="userSpaceOnUse">
-            <path d="M 40 0 L 0 0 0 40" class="c-grid" stroke-width="0.5"/>
-          </pattern>
-        </defs>
-
-        <!-- Background Grid -->
-        <rect width="100%" height="100%" fill="url(#f2-grid)" />
-
-        <!-- Boundaries (behind everything) -->
-
-
-        <!-- Connection paths (before components for correct z-order) -->
-        <path data-edge-from="orderEngine" data-edge-to="postgres" data-edge-label="accounts 행 쓰기" data-edge-key="0" data-edge-id="f2-orderEngine-to-postgres" data-composition-points="190,64;230,64;230,158;270,158" d="M 190 64 L 222 64 Q 230 64 230 72 L 230 150 Q 230 158 238 158 L 270 158" class="a-emphasis" stroke-width="1.8" marker-end="url(#f2-arrowhead-emphasis)"/>
-        <path data-edge-from="settlementEngine" data-edge-to="postgres" data-edge-label="holdings 행 쓰기" data-edge-key="1" data-edge-id="f2-settlementEngine-to-postgres" data-composition-points="190,314;230,314;230,172;270,172" d="M 190 314 L 222 314 Q 230 314 230 306 L 230 180 Q 230 172 238 172 L 270 172" class="a-emphasis" stroke-width="1.8" marker-end="url(#f2-arrowhead-emphasis)"/>
-        <path data-edge-from="postgres" data-edge-to="matchingEngine" data-edge-label="복원 경로 · 파티션 할당 시" data-edge-key="2" data-edge-id="f2-postgres-to-matchingEngine" data-composition-points="460,165;550,165" d="M 460 165 L 550 165" class="a-dashed" stroke-width="1.5" marker-end="url(#f2-arrowhead-dashed)"/>
-        <path data-edge-from="matchingEngine" data-edge-to="redis" data-edge-label="체결가·호가창을 복사해 둔다" data-edge-key="3" data-edge-id="f2-matchingEngine-to-redis" data-composition-points="730,165;820,165" d="M 730 165 L 820 165" class="a-dashed" stroke-width="1.5" marker-end="url(#f2-arrowhead-dashed)"/>
-        <path data-edge-from="redis" data-edge-to="api" data-edge-label="조회 API가 읽는다" data-edge-key="4" data-edge-id="f2-redis-to-api" data-composition-points="990,164;1080,164" d="M 990 164 L 1080 164" class="a-dashed" stroke-width="1.5" marker-end="url(#f2-arrowhead-dashed)"/>
-
-        <!-- Components -->
-        <g id="f2-node-orderEngine" data-node-id="f2-orderEngine" data-node-label="order-engine" tabindex="0" role="button" aria-label="Focus order-engine, accounts 행에 쓴다, Architecture component" aria-pressed="false" data-node-kind="backend" data-node-sublabel="accounts 행에 쓴다" data-node-context="Architecture component">
-          <title>order-engine · accounts 행에 쓴다 · Architecture component</title>
-          <rect x="20" y="30" width="170" height="68" rx="6" class="c-mask"/>
-          <rect x="20" y="30" width="170" height="68" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(26 36) scale(0.6875)">
-            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
-          </g>
-          <text data-node-label="" data-detail-anchor="" x="105" y="62" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">order-engine</text>
-        <text data-detail="context" x="105" y="78" class="t-muted" font-size="9" text-anchor="middle">accounts 행에 쓴다</text>
-        </g>
-
-        <g id="f2-node-settlementEngine" data-node-id="f2-settlementEngine" data-node-label="settlement-engine" tabindex="0" role="button" aria-label="Focus settlement-engine, holdings 행에 쓴다, Architecture component" aria-pressed="false" data-node-kind="backend" data-node-sublabel="holdings 행에 쓴다" data-node-context="Architecture component">
-          <title>settlement-engine · holdings 행에 쓴다 · Architecture component</title>
-          <rect x="20" y="280" width="170" height="68" rx="6" class="c-mask"/>
-          <rect x="20" y="280" width="170" height="68" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(26 286) scale(0.6875)">
-            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
-          </g>
-          <text data-node-label="" data-detail-anchor="" x="105" y="312" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">settlement-engine</text>
-        <text data-detail="context" x="105" y="328" class="t-muted" font-size="9" text-anchor="middle">holdings 행에 쓴다</text>
-        </g>
-
-        <g id="f2-node-postgres" data-node-id="f2-postgres" data-node-label="PostgreSQL" tabindex="0" role="button" aria-label="Focus PostgreSQL, 잔고·보유·주문 — 유일한 주인, Architecture component" aria-pressed="false" data-node-kind="database" data-node-sublabel="잔고·보유·주문 — 유일한 주인" data-node-context="Architecture component">
-          <title>PostgreSQL · 잔고·보유·주문 — 유일한 주인 · Architecture component</title>
-          <rect x="270" y="130" width="190" height="70" rx="6" class="c-mask"/>
-          <rect x="270" y="130" width="190" height="70" rx="6" class="c-database" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(276 136) scale(0.6875)">
-            <ellipse cx="8" cy="4" rx="5" ry="2"/>
-            <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
-          </g>
-          <text data-node-label="" data-detail-anchor="" x="365" y="163" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">PostgreSQL</text>
-        <text data-detail="context" x="365" y="179" class="t-muted" font-size="9" text-anchor="middle">잔고·보유·주문 — 유일한 주인</text>
-        </g>
-
-        <g id="f2-node-matchingEngine" data-node-id="f2-matchingEngine" data-node-label="matching-engine" tabindex="0" role="button" aria-label="Focus matching-engine, 종목별 호가창을 메모리에 둔다, Architecture component" aria-pressed="false" data-node-kind="backend" data-node-sublabel="종목별 호가창을 메모리에 둔다" data-node-context="Architecture component">
-          <title>matching-engine · 종목별 호가창을 메모리에 둔다 · Architecture component</title>
-          <rect x="550" y="130" width="180" height="70" rx="6" class="c-mask"/>
-          <rect x="550" y="130" width="180" height="70" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(556 136) scale(0.6875)">
-            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
-          </g>
-          <text data-node-label="" data-detail-anchor="" x="640" y="163" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">matching-engine</text>
-        <text data-detail="context" x="640" y="179" class="t-muted" font-size="9" text-anchor="middle">종목별 호가창을 메모리에 둔다</text>
-        </g>
-
-        <g id="f2-node-redis" data-node-id="f2-redis" data-node-label="Redis" tabindex="0" role="button" aria-label="Focus Redis, 최근 체결가·호가창 캐시, Architecture component" aria-pressed="false" data-node-kind="cloud" data-node-sublabel="최근 체결가·호가창 캐시" data-node-context="Architecture component">
-          <title>Redis · 최근 체결가·호가창 캐시 · Architecture component</title>
-          <rect x="820" y="130" width="170" height="68" rx="6" class="c-mask"/>
-          <rect x="820" y="130" width="170" height="68" rx="6" class="c-cloud" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="cloud" class="semantic-sigil s-cloud" transform="translate(826 136) scale(0.6875)">
-            <path d="M4.3 12.5h7.3a2.4 2.4 0 0 0 .2-4.8 4 4 0 0 0-7.5-1.3A3.1 3.1 0 0 0 4.3 12.5Z"/>
-          </g>
-          <text data-node-label="" data-detail-anchor="" x="905" y="162" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Redis</text>
-        <text data-detail="context" x="905" y="178" class="t-muted" font-size="9" text-anchor="middle">최근 체결가·호가창 캐시</text>
-        </g>
-
-        <g id="f2-node-api" data-node-id="f2-api" data-node-label="api" tabindex="0" role="button" aria-label="Focus api, 조회 API, Architecture component" aria-pressed="false" data-node-kind="frontend" data-node-sublabel="조회 API" data-node-context="Architecture component">
-          <title>api · 조회 API · Architecture component</title>
-          <rect x="1080" y="130" width="150" height="68" rx="6" class="c-mask"/>
-          <rect x="1080" y="130" width="150" height="68" rx="6" class="c-frontend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="frontend" class="semantic-sigil s-frontend" transform="translate(1086 136) scale(0.6875)">
-            <rect x="2" y="3" width="12" height="10" rx="2"/>
-            <path d="M2 6.5h12"/>
-            <circle cx="4.1" cy="4.8" r=".7" class="sigil-fill"/>
-            <circle cx="6.3" cy="4.8" r=".7" class="sigil-fill"/>
-          </g>
-          <text data-node-label="" data-detail-anchor="" x="1155" y="162" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">api</text>
-        <text data-detail="context" x="1155" y="178" class="t-muted" font-size="9" text-anchor="middle">조회 API</text>
-        </g>
-
-        <!-- Connection labels -->
-        <g data-detail="context" data-edge-from="orderEngine" data-edge-to="postgres" data-edge-label="accounts 행 쓰기" data-edge-key="0" data-edge-id="f2-orderEngine-to-postgres">
-          <rect x="186.6" y="102" width="86.8" height="14" rx="3" class="c-mask"/>
-          <text x="230" y="112" class="t-backend" font-size="8" text-anchor="middle">accounts 행 쓰기</text>
-        </g>
-        <g data-detail="context" data-edge-from="settlementEngine" data-edge-to="postgres" data-edge-label="holdings 행 쓰기" data-edge-key="1" data-edge-id="f2-settlementEngine-to-postgres">
-          <rect x="186.6" y="223" width="86.8" height="14" rx="3" class="c-mask"/>
-          <text x="230" y="233" class="t-backend" font-size="8" text-anchor="middle">holdings 행 쓰기</text>
-        </g>
-        <g data-detail="context" data-edge-from="postgres" data-edge-to="matchingEngine" data-edge-label="복원 경로 · 파티션 할당 시" data-edge-key="2" data-edge-id="f2-postgres-to-matchingEngine">
-          <rect x="418.4" y="115" width="173.2" height="14" rx="3" class="c-mask"/>
-          <text x="505" y="125" class="t-messagebus" font-size="8" text-anchor="middle">복원 경로 · 파티션 할당 시</text>
-        </g>
-        <g data-detail="context" data-edge-from="matchingEngine" data-edge-to="redis" data-edge-label="체결가·호가창을 복사해 둔다" data-edge-key="3" data-edge-id="f2-matchingEngine-to-redis">
-          <rect x="705.2" y="115" width="139.6" height="14" rx="3" class="c-mask"/>
-          <text x="775" y="125" class="t-messagebus" font-size="8" text-anchor="middle">체결가·호가창을 복사해 둔다</text>
-        </g>
-        <g data-detail="context" data-edge-from="redis" data-edge-to="api" data-edge-label="조회 API가 읽는다" data-edge-key="4" data-edge-id="f2-redis-to-api">
-          <rect x="989.2" y="114" width="91.6" height="14" rx="3" class="c-mask"/>
-          <text x="1035" y="124" class="t-messagebus" font-size="8" text-anchor="middle">조회 API가 읽는다</text>
-        </g>
-
-        <!-- Boundary labels (foreground masks keep routes out of titles) -->
-
-
-        <!-- Legend -->
-
-      </svg>
-<p class="fignote">Redis는 잔고나 호가창의 원본을 담지 않고, 조회 API가 빠르게 읽도록 최근 체결가와 호가창을 따로 복사해 둔 캐시입니다.</p>
+<p class="ttl">잔고·호가창의 저장 위치</p>
+<a class="fig-open" href="_v1_arch_figs/fig2-state-placement.html" target="_blank" rel="noopener">이 도식 열기</a>
+<iframe class="fig-viewer" src="_v1_arch_figs/fig2-state-placement.html?theme=dark&amp;article=1" title="잔고·호가창의 저장 위치" loading="lazy"></iframe>
+<p class="fignote">Redis는 잔고나 호가창의 원본을 담지 않고, 조회 API가 빠르게 읽도록 최근 체결가와 호가창을 따로 복사해 둔 캐시다.</p>
 </div>
 
-<p>Redis가 비어 있거나 죽어도 돈이 걸린 상태는 그대로 PostgreSQL과 matching-engine 메모리에 남아 있고, 조회 API만 느려지거나 빈 값을 돌려줍니다. 잔고·보유·호가창처럼 되돌릴 수 없는 상태와, 조회를 빠르게 하려고 복사해 둔 상태가 서로 다른 곳에 있습니다.</p>
+<p>Redis가 비어 있거나 죽어도 잔고·보유·호가창은 그대로 PostgreSQL과 matching-engine 메모리에 남아 있고, 조회 API만 느려지거나 빈 값을 돌려준다. 되돌릴 수 없는 상태와 조회용 사본을 서로 다른 곳에 둔 구조다.</p>
 
 <h3>4-1 상태 복원</h3>
-<p>matching-engine이 재시작하거나 Kafka가 파티션을 새로 배정하면(스케일 아웃, 장애로 인한 인스턴스 교체) 그 시점에 메모리는 비어 있습니다. <code>MatchingConsumer</code>의 <code>ConsumerSeekAware.onPartitionsAssigned</code>에 PENDING 상태인 주문을 DB에서 시간순으로 다시 읽어 호가창을 채우는 경로(<code>loadAndMatch</code>)가 있습니다. 같은 주문이 중복으로 들어와도 <code>OrderBook.containsOrder()</code>로 걸러내므로, 설계상으로는 이미 메모리에 있는 주문을 두 번 넣지 않습니다.</p>
+<p>matching-engine이 재시작하거나 Kafka가 파티션을 새로 배정하면(스케일 아웃, 장애로 인한 인스턴스 교체) 그 시점에 메모리는 비어 있다. <code>MatchingConsumer</code>의 <code>ConsumerSeekAware.onPartitionsAssigned</code>에 PENDING 상태인 주문을 DB에서 시간순으로 다시 읽어 호가창을 채우는 경로(<code>loadAndMatch</code>)가 있다. 같은 주문이 중복으로 들어와도 <code>OrderBook.containsOrder()</code>로 걸러내므로, 설계상으로는 이미 메모리에 있는 주문을 두 번 넣지 않는다.</p>
 
 <div class="note">
-  <b>이 <code>onPartitionsAssigned</code>이 어떤 종목을 복원할지는 파티션 번호만으로 알 수 없습니다</b>
-  <p style="margin:6px 0 0">위 문단의 <code>onPartitionsAssigned</code>은 파티션이 할당됐다는 사실만 알려주고, 그 파티션에 어떤 종목이 실리는지는 알려주지 않습니다. Kafka는 발행 시점에는 문제가 없습니다 — order-engine이 종목 코드를 파티션 키로 넘기면 같은 종목은 항상 같은 파티션으로 갑니다. 문제는 반대 방향입니다. matching-engine 쪽은 파티션 번호만 받으므로, 그 번호가 어느 종목의 주문을 담고 있는지를 거꾸로 알아내야 합니다. 예전엔 토픽 이름이 <code>orders.종목코드</code>라 종목을 바로 읽었지만, 지금 <code>orders</code>는 파티션 키로만 나뉜 단일 토픽입니다.</p>
-  <p style="margin:6px 0 0">그래서 복원 대상은 반대로 계산합니다. DB에서 PENDING 주문이 남은 종목 코드를 먼저 받고(<code>OrderQueryService.getPendingStockCodes</code>), 종목마다 발행 시점과 똑같은 계산(<code>murmur2</code> 해시 % 파티션 수)으로 그 종목이 가는 파티션 번호를 구합니다(<code>StockPartitionResolver</code>). 할당받은 파티션 번호와 일치하는 종목만 복원합니다. 파티션을 반납할 때도 같은 계산으로, 반납한 파티션에 속하는 종목의 호가창만 골라 제거합니다. 코드는 <code>MatchingConsumer.onPartitionsAssigned</code>·<code>onPartitionsRevoked</code>와 <code>StockPartitionResolver</code>에 있습니다(ADR-037).</p>
+  <b>복원 대상 종목의 역산</b>
+  <p style="margin:6px 0 0">위 문단의 <code>onPartitionsAssigned</code>은 파티션이 할당됐다는 사실만 알려주고, 그 파티션에 어떤 종목이 실리는지는 알려주지 않는다. Kafka는 발행 시점에는 문제가 없다 — order-engine이 종목 코드를 파티션 키로 넘기면 같은 종목은 항상 같은 파티션으로 간다. 문제는 반대 방향이다. matching-engine 쪽은 파티션 번호만 받으므로, 그 번호가 어느 종목의 주문을 담고 있는지를 거꾸로 알아내야 한다. 예전엔 토픽 이름이 <code>orders.종목코드</code>라 종목을 바로 읽었지만, 지금 <code>orders</code>는 파티션 키로만 나뉜 단일 토픽이다.</p>
+  <p style="margin:6px 0 0">그래서 복원 대상은 반대로 계산한다. DB에서 PENDING 주문이 남은 종목 코드를 먼저 받고(<code>OrderQueryService.getPendingStockCodes</code>), 종목마다 발행 시점과 똑같은 계산(<code>murmur2</code> 해시 % 파티션 수)으로 그 종목이 가는 파티션 번호를 구한다(<code>StockPartitionResolver</code>). 할당받은 파티션 번호와 일치하는 종목만 복원한다. 파티션을 반납할 때도 같은 계산으로, 반납한 파티션에 속하는 종목의 호가창만 골라 제거한다. 코드는 <code>MatchingConsumer.onPartitionsAssigned</code>·<code>onPartitionsRevoked</code>와 <code>StockPartitionResolver</code>에 있다(ADR-037).</p>
 </div>
 
 <!-- ========== 5. 동시성 통제 ========== -->
-<h2><span class="n">5</span>동시 요청을 어떻게 처리하나</h2>
-<p>같은 계좌나 같은 종목에 동시에 손대는 요청이 오면 결과가 어긋날 수 있습니다. v1은 이 문제를 파티션 키가 만드는 직렬화와 PostgreSQL 행 락, 이 둘로 처리합니다.</p>
+<h2><span class="n">5</span>동시 요청 통제</h2>
+<p>같은 계좌나 같은 종목에 동시에 손대는 요청이 겹치면 잔고나 보유 수량이 실제와 다른 값으로 남을 수 있다. v1은 이 문제를 파티션 키가 만드는 직렬화와 PostgreSQL 행 락, 이 둘로 처리한다.</p>
 
-<p>파티션 키가 하는 일부터 보면, <code>order-requests</code>는 accountId로 나뉘어서 같은 계좌의 요청은 항상 같은 파티션에 들어가고 order-engine의 같은 컨슈머 스레드가 순서대로 처리합니다. 그 계좌의 요청끼리는 애초에 동시에 실행되지 않으니 서로 경합할 일이 없습니다. 다만 이건 <strong>같은 계좌 안에서만</strong> 유효합니다. 계좌 A와 계좌 B의 요청은 서로 다른 파티션, 서로 다른 스레드에서 병렬로 돌 수 있고, 두 스레드가 같은 시각에 각자의 행을 건드릴 수 있다는 문제는 파티션 키만으로는 방지되지 않습니다.</p>
+<p>파티션 키가 하는 일부터 보면, <code>order-requests</code>는 accountId로 나뉘어서 같은 계좌의 요청은 항상 같은 파티션에 들어가고 order-engine의 같은 컨슈머 스레드가 순서대로 처리한다. 그 계좌의 요청끼리는 애초에 동시에 실행되지 않으니 서로 경합할 일이 없다. 다만 이건 <strong>같은 계좌 안에서만</strong> 유효하다. 계좌 A와 계좌 B의 요청은 서로 다른 파티션, 서로 다른 스레드에서 병렬로 돌 수 있고, 두 스레드가 같은 시각에 각자의 행을 건드릴 수 있다는 문제는 파티션 키만으로는 방지되지 않는다.</p>
 
-<p>그 나머지를 PostgreSQL의 비관적 락이 처리합니다. 매수 주문을 접수할 때는 <code>accounts</code> 행을 잠그고 잔고와 예약증거금을 확인합니다. 매도 주문을 접수할 때와 체결을 반영할 때는 <code>holdings</code> 행을 잠그고 보유 수량을 확인·갱신합니다. 계좌에서 실제로 돈이 빠지는 유일한 경로인 상환 API도 <code>accounts</code> 행을 잠그고 출금합니다.</p>
+<p>그 나머지를 PostgreSQL의 비관적 락이 처리한다. 매수 주문을 접수할 때는 <code>accounts</code> 행을 잠그고 잔고와 예약 증거금을 확인한다. 매도 주문을 접수할 때와 체결을 반영할 때는 <code>holdings</code> 행을 잠그고 보유 수량을 확인·갱신한다. 계좌 잔고가 실제로 차감되는 유일한 경로인 상환 API도 <code>accounts</code> 행을 잠그고 출금한다.</p>
 
-<div class="fig">
+<div class="fig fig-workflow">
 <p class="cap">Figure 3</p>
-<p class="ttl">accounts 행과 holdings 행에 걸리는 락</p>
-<svg viewBox="0 0 951 404" role="img" aria-labelledby="f3-archify-diagram-title f3-archify-diagram-description" data-preset="classic" data-quality-profile="showcase">
-        <title id="f3-archify-diagram-title">accounts 행과 holdings 행에 걸리는 락</title>
-        <desc id="f3-archify-diagram-description">A workflow diagram generated by Archify.</desc>
-        <!-- Definitions -->
-        <defs>
-          <marker id="f3-arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-            <polygon points="0 0, 10 3.5, 0 7" class="m-default" />
-          </marker>
-          <marker id="f3-arrowhead-emphasis" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-            <polygon points="0 0, 10 3.5, 0 7" class="m-emphasis" />
-          </marker>
-          <marker id="f3-arrowhead-security" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-            <polygon points="0 0, 10 3.5, 0 7" class="m-security" />
-          </marker>
-          <marker id="f3-arrowhead-dashed" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-            <polygon points="0 0, 10 3.5, 0 7" class="m-dashed" />
-          </marker>
-          <pattern id="f3-grid" width="40" height="40" patternUnits="userSpaceOnUse">
-            <path d="M 40 0 L 0 0 0 40" class="c-grid" stroke-width="0.5"/>
-          </pattern>
-        </defs>
-
-        <!-- Background Grid -->
-        <rect width="100%" height="100%" fill="url(#f3-grid)" />
-
-        <!-- Swimlanes -->
-        <rect data-graph-role="structural-frame" data-composition-frame-kind="lane" data-composition-frame-id="f3-lane-0" x="40" y="52" width="895" height="104" rx="10" class="c-lane" stroke-width="1"/>
-        <text x="54" y="74" class="t-dim" font-size="10" font-weight="600">01 / 주문 접수 · order-engine</text>
-
-        <rect data-graph-role="structural-frame" data-composition-frame-kind="lane" data-composition-frame-id="f3-lane-1" x="40" y="176" width="895" height="104" rx="10" class="c-lane" stroke-width="1"/>
-        <text x="54" y="198" class="t-dim" font-size="10" font-weight="600">02 / 체결 반영·상환 · settlement-engine · api</text>
-
-        <!-- Phase headers -->
-
-
-        <!-- Workflow groups -->
-
-
-        <!-- Edge paths -->
-        <path data-edge-from="buyReq" data-edge-to="buyLock" data-edge-key="0" data-composition-points="198,119;226,119" d="M 198 119 L 226 119" class="a-emphasis" stroke-width="1.8" marker-end="url(#f3-arrowhead-emphasis)"/>
-        <path data-edge-from="fillReq" data-edge-to="fillLock" data-edge-key="1" data-composition-points="198,243;226,243" d="M 198 243 L 226 243" class="a-emphasis" stroke-width="1.8" marker-end="url(#f3-arrowhead-emphasis)"/>
-        <path data-edge-from="sellReq" data-edge-to="sellLock" data-edge-key="2" data-composition-points="534,119;562,119" d="M 534 119 L 562 119" class="a-emphasis" stroke-width="1.8" marker-end="url(#f3-arrowhead-emphasis)"/>
-        <path data-edge-from="withdrawReq" data-edge-to="withdrawLock" data-edge-key="3" data-composition-points="534,243;562,243" d="M 534 243 L 562 243" class="a-emphasis" stroke-width="1.8" marker-end="url(#f3-arrowhead-emphasis)"/>
-
-        <!-- Nodes -->
-        <g id="f3-node-buyReq" data-node-id="f3-buyReq" data-node-label="매수 주문 접수" tabindex="0" role="button" aria-label="Focus 매수 주문 접수, 주문 접수 · order-engine" aria-pressed="false" data-node-kind="backend" data-node-context="주문 접수 · order-engine">
-          <title>매수 주문 접수 · 주문 접수 · order-engine</title>
-          <rect x="48" y="93" width="150" height="52" rx="6" class="c-mask"/>
-          <rect x="48" y="93" width="150" height="52" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(54 99) scale(0.6875)">
-            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
-          </g>
-          <text data-node-label="" x="123" y="114" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">매수 주문 접수</text>
-        </g>
-
-        <g id="f3-node-buyLock" data-node-id="f3-buyLock" data-node-label="accounts 행 잠금" tabindex="0" role="button" aria-label="Focus accounts 행 잠금, 잔고·예약증거금 확인 후 저장, 주문 접수 · order-engine" aria-pressed="false" data-node-kind="security" data-node-sublabel="잔고·예약증거금 확인 후 저장" data-node-context="주문 접수 · order-engine">
-          <title>accounts 행 잠금 · 잔고·예약증거금 확인 후 저장 · 주문 접수 · order-engine</title>
-          <rect x="226" y="93" width="150" height="52" rx="6" class="c-mask"/>
-          <rect x="226" y="93" width="150" height="52" rx="6" class="c-security" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-security" transform="translate(232 99) scale(0.6875)">
-            <path d="M8 2.2 13 4v3.5c0 3.1-1.8 5.4-5 6.5-3.2-1.1-5-3.4-5-6.5V4Z"/>
-            <path d="m5.8 8 1.5 1.5 3-3"/>
-          </g>
-          <text data-node-label="" data-detail-anchor="" x="301" y="114" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">accounts 행 잠금</text>
-          <text data-detail="context" x="301" y="131" class="t-muted" font-size="8" text-anchor="middle">잔고·예약증거금 확인 후 저장</text>
-        </g>
-
-        <g id="f3-node-sellReq" data-node-id="f3-sellReq" data-node-label="매도 주문 접수" tabindex="0" role="button" aria-label="Focus 매도 주문 접수, 주문 접수 · order-engine" aria-pressed="false" data-node-kind="backend" data-node-context="주문 접수 · order-engine">
-          <title>매도 주문 접수 · 주문 접수 · order-engine</title>
-          <rect x="384" y="93" width="150" height="52" rx="6" class="c-mask"/>
-          <rect x="384" y="93" width="150" height="52" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(390 99) scale(0.6875)">
-            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
-          </g>
-          <text data-node-label="" x="459" y="114" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">매도 주문 접수</text>
-        </g>
-
-        <g id="f3-node-sellLock" data-node-id="f3-sellLock" data-node-label="holdings 행 잠금" tabindex="0" role="button" aria-label="Focus holdings 행 잠금, 보유 수량 확인 후 저장, 주문 접수 · order-engine" aria-pressed="false" data-node-kind="security" data-node-sublabel="보유 수량 확인 후 저장" data-node-context="주문 접수 · order-engine">
-          <title>holdings 행 잠금 · 보유 수량 확인 후 저장 · 주문 접수 · order-engine</title>
-          <rect x="562" y="93" width="150" height="52" rx="6" class="c-mask"/>
-          <rect x="562" y="93" width="150" height="52" rx="6" class="c-security" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-security" transform="translate(568 99) scale(0.6875)">
-            <path d="M8 2.2 13 4v3.5c0 3.1-1.8 5.4-5 6.5-3.2-1.1-5-3.4-5-6.5V4Z"/>
-            <path d="m5.8 8 1.5 1.5 3-3"/>
-          </g>
-          <text data-node-label="" data-detail-anchor="" x="637" y="114" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">holdings 행 잠금</text>
-          <text data-detail="context" x="637" y="131" class="t-muted" font-size="8" text-anchor="middle">보유 수량 확인 후 저장</text>
-        </g>
-
-        <g id="f3-node-fillReq" data-node-id="f3-fillReq" data-node-label="체결 이벤트 수신" tabindex="0" role="button" aria-label="Focus 체결 이벤트 수신, fills 토픽, 체결 반영·상환 · settlement-engine · api" aria-pressed="false" data-node-kind="messagebus" data-node-sublabel="fills 토픽" data-node-context="체결 반영·상환 · settlement-engine · api">
-          <title>체결 이벤트 수신 · fills 토픽 · 체결 반영·상환 · settlement-engine · api</title>
-          <rect x="48" y="217" width="150" height="52" rx="6" class="c-mask"/>
-          <rect x="48" y="217" width="150" height="52" rx="6" class="c-messagebus" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="messagebus" class="semantic-sigil s-messagebus" transform="translate(54 223) scale(0.6875)">
-            <path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/>
-            <circle cx="5" cy="4.5" r="1" class="sigil-fill"/>
-            <circle cx="10.5" cy="8" r="1" class="sigil-fill"/>
-            <circle cx="7" cy="11.5" r="1" class="sigil-fill"/>
-          </g>
-          <text data-node-label="" data-detail-anchor="" x="123" y="238" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">체결 이벤트 수신</text>
-          <text data-detail="context" x="123" y="255" class="t-muted" font-size="8" text-anchor="middle">fills 토픽</text>
-        </g>
-
-        <g id="f3-node-fillLock" data-node-id="f3-fillLock" data-node-label="holdings 행 잠금" tabindex="0" role="button" aria-label="Focus holdings 행 잠금, 보유 수량 갱신, 체결 반영·상환 · settlement-engine · api" aria-pressed="false" data-node-kind="security" data-node-sublabel="보유 수량 갱신" data-node-context="체결 반영·상환 · settlement-engine · api">
-          <title>holdings 행 잠금 · 보유 수량 갱신 · 체결 반영·상환 · settlement-engine · api</title>
-          <rect x="226" y="217" width="150" height="52" rx="6" class="c-mask"/>
-          <rect x="226" y="217" width="150" height="52" rx="6" class="c-security" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-security" transform="translate(232 223) scale(0.6875)">
-            <path d="M8 2.2 13 4v3.5c0 3.1-1.8 5.4-5 6.5-3.2-1.1-5-3.4-5-6.5V4Z"/>
-            <path d="m5.8 8 1.5 1.5 3-3"/>
-          </g>
-          <text data-node-label="" data-detail-anchor="" x="301" y="238" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">holdings 행 잠금</text>
-          <text data-detail="context" x="301" y="255" class="t-muted" font-size="8" text-anchor="middle">보유 수량 갱신</text>
-        </g>
-
-        <g id="f3-node-withdrawReq" data-node-id="f3-withdrawReq" data-node-label="상환 API 호출" tabindex="0" role="button" aria-label="Focus 상환 API 호출, 체결 반영·상환 · settlement-engine · api" aria-pressed="false" data-node-kind="frontend" data-node-context="체결 반영·상환 · settlement-engine · api">
-          <title>상환 API 호출 · 체결 반영·상환 · settlement-engine · api</title>
-          <rect x="384" y="217" width="150" height="52" rx="6" class="c-mask"/>
-          <rect x="384" y="217" width="150" height="52" rx="6" class="c-frontend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="frontend" class="semantic-sigil s-frontend" transform="translate(390 223) scale(0.6875)">
-            <rect x="2" y="3" width="12" height="10" rx="2"/>
-            <path d="M2 6.5h12"/>
-            <circle cx="4.1" cy="4.8" r=".7" class="sigil-fill"/>
-            <circle cx="6.3" cy="4.8" r=".7" class="sigil-fill"/>
-          </g>
-          <text data-node-label="" x="459" y="238" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">상환 API 호출</text>
-        </g>
-
-        <g id="f3-node-withdrawLock" data-node-id="f3-withdrawLock" data-node-label="accounts 행 잠금" tabindex="0" role="button" aria-label="Focus accounts 행 잠금, 잔고 차감, 체결 반영·상환 · settlement-engine · api" aria-pressed="false" data-node-kind="security" data-node-sublabel="잔고 차감" data-node-context="체결 반영·상환 · settlement-engine · api">
-          <title>accounts 행 잠금 · 잔고 차감 · 체결 반영·상환 · settlement-engine · api</title>
-          <rect x="562" y="217" width="150" height="52" rx="6" class="c-mask"/>
-          <rect x="562" y="217" width="150" height="52" rx="6" class="c-security" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-security" transform="translate(568 223) scale(0.6875)">
-            <path d="M8 2.2 13 4v3.5c0 3.1-1.8 5.4-5 6.5-3.2-1.1-5-3.4-5-6.5V4Z"/>
-            <path d="m5.8 8 1.5 1.5 3-3"/>
-          </g>
-          <text data-node-label="" data-detail-anchor="" x="637" y="238" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">accounts 행 잠금</text>
-          <text data-detail="context" x="637" y="255" class="t-muted" font-size="8" text-anchor="middle">잔고 차감</text>
-        </g>
-
-        <!-- Edge labels -->
-
-
-
-
-
-        <!-- Legend -->
-
-      </svg>
-<p class="fignote">지금 있는 경로 중 accounts와 holdings를 같은 트랜잭션에서 함께 잠그는 경로는 없습니다.</p>
+<p class="ttl">accounts·holdings 행 락 지점</p>
+<a class="fig-open" href="_v1_arch_figs/fig3-lock-points.html" target="_blank" rel="noopener">이 도식 열기</a>
+<iframe class="fig-viewer" src="_v1_arch_figs/fig3-lock-points.html?theme=dark&amp;article=1" title="accounts·holdings 행 락 지점" loading="lazy"></iframe>
+<p class="fignote">지금 있는 경로 중 accounts와 holdings를 같은 트랜잭션에서 함께 잠그는 경로는 없다.</p>
 </div>
 
-<p><code>.claude/architecture.md</code>에는 "Account → Holding 순서로만 락을 잡는다"는 데드락 방지 규칙이 있습니다. 두 자원을 함께 잠그는 경로 자체가 아직 없어서, 이 순서가 실제 트랜잭션에서 시험된 적은 없습니다. 이 규칙은 앞으로 그런 경로가 추가될 때를 대비한 사전 규칙입니다.</p>
+<p><code>.claude/architecture.md</code>에는 "Account → Holding 순서로만 락을 잡는다"는 데드락 방지 규칙이 있다. 두 자원을 함께 잠그는 경로 자체가 아직 없어서, 이 순서가 실제 트랜잭션에서 시험된 적은 없다. 이 규칙은 앞으로 그런 경로가 추가될 때를 대비한 사전 규칙이다.</p>
 
-<p>파티션 키와 행 락은 이 문제는 처리하지 못합니다. Kafka는 at-least-once라서, 처리는 끝났는데 오프셋을 커밋하기 전에 프로세스가 죽으면 같은 메시지가 다시 옵니다. 그래서 각 프로세스가 자기 나름의 방식으로 중복 여부를 판정합니다. order-engine은 requestId가 이미 처리됐는지를 봅니다. matching-engine 쪽은 <code>OrderBook.containsOrder()</code>로 그 주문이 이미 호가창에 있는지 확인합니다. settlement-engine은 tradeId(<code>ProcessedFill</code>)로 그 체결을 이미 반영했는지 확인합니다. 판정 기준과 각 지점의 세부 동작은 <a href="_v1_order_fill_settlement_flow.html">주문 접수부터 체결 반영까지</a>에 있습니다.</p>
+<p>같은 메시지의 중복 전달은 파티션 키도 행 락도 막지 못한다. Kafka는 at-least-once라서, 처리는 끝났는데 오프셋을 커밋하기 전에 프로세스가 죽으면 같은 메시지가 다시 온다. 그래서 각 프로세스가 자기 나름의 방식으로 중복 여부를 판정한다. order-engine은 requestId가 이미 처리됐는지를 본다. matching-engine 쪽은 <code>OrderBook.containsOrder()</code>로 그 주문이 이미 호가창에 있는지 확인한다. settlement-engine은 tradeId(<code>ProcessedFill</code>)로 그 체결을 이미 반영했는지 확인한다. 판정 기준과 각 지점의 세부 동작은 <a href="_v1_order_fill_settlement_flow.html">주문 접수부터 체결 반영까지</a>에 있다.</p>
 
 <!-- ========== 6. 토픽·파티션 키 표 ========== -->
-<h2><span class="n">6</span>프로세스 사이 전달 — 토픽과 파티션 키</h2>
-<p>지금까지 나온 세 토픽을 표로 정리하면 이렇습니다.</p>
+<h2><span class="n">6</span>토픽과 파티션 키</h2>
+<p>지금까지 나온 세 토픽을 표로 정리하면 이렇다.</p>
 <table>
 <tr><th>토픽</th><th>발행자</th><th>구독자</th><th>파티션 수</th><th>파티션 키</th></tr>
 <tr><td><code>order-requests</code></td><td>api</td><td>order-engine</td><td class="col-amber">3</td><td>accountId</td></tr>
 <tr><td><code>orders</code></td><td>order-engine</td><td>matching-engine</td><td class="col-blue">50</td><td>stockCode</td></tr>
 <tr><td><code>fills</code></td><td>matching-engine</td><td>settlement-engine</td><td class="col-blue">50</td><td>stockCode</td></tr>
 </table>
-<p><code>order-requests</code>의 파티션 수 3은 계좌 병렬 처리 목표에 맞춰 정한 값이고, <code>orders</code>·<code>fills</code>의 50은 매칭 병렬 처리 목표에 맞춰 정한 값입니다. 두 숫자가 다른 이유는 나누는 기준(accountId·stockCode)이 다르기 때문입니다. 다만 파티션 수를 나중에 늘리면 같은 키라도 재해시로 다른 파티션에 떨어질 수 있어 순서 보장이 깨집니다. 그래서 코드 주석에 처음부터 넉넉하게 정해야 한다고 적어 뒀습니다.</p>
-<p>세 컨슈머 모두 처리를 끝낸 뒤에 오프셋을 커밋합니다(<code>ack-mode: manual_immediate</code>). 이 설정과 §5의 세 멱등 판정 지점은 한 짝입니다. 커밋을 먼저 하면 처리 중 죽었을 때 그 메시지를 영영 잃고, 멱등 판정이 없으면 다시 온 메시지가 두 번 반영됩니다.</p>
+<p><code>order-requests</code>의 파티션 수 3은 계좌 병렬 처리 목표에 맞춰 정한 값이고, <code>orders</code>·<code>fills</code>의 50은 매칭 병렬 처리 목표에 맞춰 정한 값이다. 두 숫자가 다른 이유는 나누는 기준(accountId·stockCode)이 다르기 때문이다. 다만 파티션 수를 나중에 늘리면 같은 키라도 재해시로 다른 파티션에 배정돼 순서 보장이 깨진다. 그래서 코드 주석에 처음부터 넉넉하게 정해야 한다고 적어 뒀다.</p>
+<p>세 컨슈머 모두 처리를 끝낸 뒤에 오프셋을 커밋한다(<code>ack-mode: manual_immediate</code>). 이 설정과 §5의 세 멱등 판정 지점은 한 짝이다. 커밋을 먼저 하면 처리 중 죽었을 때 그 메시지를 영영 잃고, 멱등 판정이 없으면 다시 온 메시지가 두 번 반영된다.</p>
 
 <!-- ========== 7. 대가 ========== -->
-<h2><span class="n">7</span>무엇을 대가로 치렀나</h2>
+<h2><span class="n">7</span>측정값과 한계</h2>
 <table>
 <tr><th>항목</th><th>값</th></tr>
 <tr><td>도착률</td><td>초당 192건</td></tr>
@@ -709,32 +201,33 @@
 <tr><td>order-requests 컨슈머 스레드·파티션</td><td>3개 → 9개</td></tr>
 <tr><td>처리량</td><td>초당 227.3건 → 384.6건 (1.7배)</td></tr>
 </table>
-<p>스레드와 파티션을 3배로 늘렸는데 처리량은 1.7배에 그칩니다. 그 이유가 §5의 구조에 있습니다. 파티션과 스레드를 늘리면 서로 다른 계좌의 요청을 더 많이 동시에 처리할 수 있지만, 주문 한 건이 PostgreSQL 행을 잠그고 예약증거금 합계를 조회하고 저장하는 비용 자체는 줄지 않습니다. 스레드를 늘려서 줄어드는 건 계좌 간 대기 시간이고, 계좌 한 건당 고정으로 드는 DB 비용은 스레드 수와 무관하게 남습니다.</p>
+<p>스레드와 파티션을 3배로 늘렸는데 처리량은 1.7배에 그친다. 그 이유가 §5의 구조에 있다. 파티션과 스레드를 늘리면 서로 다른 계좌의 요청을 더 많이 동시에 처리할 수 있지만, 주문 한 건이 PostgreSQL 행을 잠그고 예약 증거금 합계를 조회하고 저장하는 비용 자체는 줄지 않는다. 스레드를 늘려서 줄어드는 건 계좌 간 대기 시간이고, 계좌 한 건당 고정으로 드는 DB 비용은 스레드 수와 무관하게 남는다.</p>
 
-<p>측정 조건과 원본 데이터는 <a href="_v1_v2_comparison.html">부하 측정 문서</a> §7과 <code>loadtest/evidence/</code>에 있습니다.</p>
+<p>측정 조건과 원본 데이터는 <a href="_v1_v2_comparison.html">부하 측정 문서</a> §7과 <code>loadtest/evidence/</code>에 있다.</p>
 
 <!-- ========== 8. 정해진 것 / 열린 것 ========== -->
-<h2><span class="n">8</span>지금까지 정해진 것과 아직 못 정한 것</h2>
+<h2><span class="n">8</span>구현 완료 항목과 미결 항목</h2>
 <p style="font-size:.94rem;color:var(--ink2)"><strong>정해지고 구현된 것:</strong></p>
 <ul class="tight">
-  <li><strong>프로세스 분리</strong> — api·order-engine·matching-engine·settlement-engine 네 개가 독립된 Spring Boot 앱이고, Kafka 세 토픽으로만 연결됩니다.</li>
-  <li><strong>토픽 소유</strong> — 토픽마다 발행자가 하나로 고정되고, 파티션 키는 접수 단계에서 accountId, 매칭·체결 반영 단계에서 stockCode로 서로 다릅니다.</li>
-  <li><strong>잔고의 주인</strong> — 잔고·보유는 PostgreSQL 행 하나뿐이고, 매수 접수·출금은 accounts 행을, 매도 접수·체결 반영은 holdings 행을 잠가서 지킵니다.</li>
-  <li><strong>중복 방어</strong> — order-engine은 requestId, matching-engine은 <code>OrderBook.containsOrder()</code>, settlement-engine은 tradeId로 같은 메시지의 재전달 여부를 판정합니다.</li>
-  <li><strong>호가창 복원</strong> — 재시작·리밸런스로 파티션을 새로 할당받으면 DB의 PENDING 주문을 다시 읽어 호가창을 채웁니다. 종목마다 파티션 번호를 계산해 할당받은 파티션에 속하는 것만 복원합니다(§4, ADR-037).</li>
+  <li><strong>프로세스 분리</strong> — api·order-engine·matching-engine·settlement-engine 네 개가 독립된 Spring Boot 앱이고, Kafka 세 토픽으로만 연결된다.</li>
+  <li><strong>토픽 소유</strong> — 토픽마다 발행자가 하나로 고정되고, 파티션 키는 접수 단계에서 accountId, 매칭·체결 반영 단계에서 stockCode로 서로 다르다.</li>
+  <li><strong>잔고의 원본</strong> — 잔고·보유는 PostgreSQL 행 하나뿐이고, 매수 접수·출금은 accounts 행을, 매도 접수·체결 반영은 holdings 행을 잠가서 지킨다.</li>
+  <li><strong>중복 방어</strong> — order-engine은 requestId, matching-engine은 <code>OrderBook.containsOrder()</code>, settlement-engine은 tradeId로 같은 메시지의 재전달 여부를 판정한다.</li>
+  <li><strong>호가창 복원</strong> — 재시작·리밸런스로 파티션을 새로 할당받으면 DB의 PENDING 주문을 다시 읽어 호가창을 채운다. 종목마다 파티션 번호를 계산해 할당받은 파티션에 속하는 것만 복원한다(§4, ADR-037).</li>
 </ul>
 <p style="font-size:.94rem;color:var(--ink2)"><strong>아직 못 정한 것:</strong></p>
 <ul class="tight">
-  <li><strong>Account·Holding 동시 락</strong> — 두 자원을 한 트랜잭션에서 같이 잠그는 경로가 아직 없어서, architecture.md의 락 순서 규칙은 실전에서 검증된 적이 없습니다.</li>
-  <li><strong>order-requests 파티션 수</strong> — 3은 초기값입니다. 늘리려면 재해시로 순서가 깨지는 대가를 감당해야 합니다.</li>
-  <li><strong>잔고 차감</strong> — 사용자가 상환 API를 호출할 때만 줄어듭니다. 체결 시점에 자동으로 차감하는 경로나 T+2가 지나면 강제로 처리하는 경로는 없습니다.</li>
+  <li><strong>Account·Holding 동시 락</strong> — 두 자원을 한 트랜잭션에서 같이 잠그는 경로가 아직 없어서, architecture.md의 락 순서 규칙은 실전에서 검증된 적이 없다.</li>
+  <li><strong>order-requests 파티션 수</strong> — 3은 초기값이다. 늘리려면 재해시로 순서가 깨지는 대가를 감당해야 한다.</li>
+  <li><strong>잔고 차감</strong> — 사용자가 상환 API를 호출할 때만 줄어든다. 체결 시점에 자동으로 차감하는 경로나 T+2가 지나면 강제로 처리하는 경로는 없다.</li>
 </ul>
 
 <div class="concl">
   <b>정리</b>
-  <p style="margin:0">v1은 프로세스 네 개를 Kafka 세 토픽으로 잇습니다. 접수는 accountId로, 매칭·체결 반영은 stockCode로 나눠 병렬화하고, 그 파티션 키가 만드는 직렬화 위에 PostgreSQL 행 락을 더해 동시 접근을 걸러냅니다. 잔고·보유는 DB 행이 유일한 주인이고 호가창만 matching-engine 메모리에 있습니다. 파티션이 바뀔 때는 종목마다 파티션 번호를 계산해 할당받은 파티션의 PENDING 주문만 DB에서 다시 채웁니다(§4). 그 대가는 주문 한 건마다 드는 DB 락·조회 비용이고, 스레드를 늘려도 그 비용은 줄지 않아 처리량이 늘어나는 폭이 제한됩니다.</p>
+  <p style="margin:0">v1은 프로세스 네 개를 Kafka 세 토픽으로 잇는다. 접수는 accountId로, 매칭·체결 반영은 stockCode로 나눠 병렬화하고, 그 파티션 키가 만드는 직렬화 위에 PostgreSQL 행 락을 더해 동시 접근을 걸러낸다. 잔고·보유는 DB 행 하나가 원본이고 호가창만 matching-engine 메모리에 있다. 파티션이 바뀔 때는 종목마다 파티션 번호를 계산해 할당받은 파티션의 PENDING 주문만 DB에서 다시 채운다(§4). 그 대가는 주문 한 건마다 드는 DB 락·조회 비용이고, 스레드를 늘려도 그 비용은 줄지 않아 처리량이 늘어나는 폭이 제한된다.</p>
 </div>
 
 </div>
+
 </body>
 </html>
