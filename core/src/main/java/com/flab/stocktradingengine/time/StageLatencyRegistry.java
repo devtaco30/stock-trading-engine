@@ -45,6 +45,11 @@ public final class StageLatencyRegistry {
         this.enabled = enabled;
     }
 
+    /** 계측이 켜져 있는지. 지점 코드가 시각을 찍기 전에 분기 한 번으로 건너뛰는 데 쓴다. */
+    public boolean isEnabled() {
+        return enabled;
+    }
+
     /** 단계 이름에 해당하는 히스토그램을 돌려준다(없으면 만든다). 이름은 영문·숫자와 {@code _ . @ -}만 허용한다. */
     public LatencyHistogram stage(String name) {
         validateName(name);

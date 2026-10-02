@@ -13,6 +13,7 @@ import com.flab.stocktradingengine.aeron.AccountDestinationResolver;
 import com.flab.stocktradingengine.aeron.AeronStreamIds;
 import com.flab.stocktradingengine.aeron.ShardRoutingTable;
 import com.flab.stocktradingengine.api.messaging.AeronAccountOrderSender;
+import com.flab.stocktradingengine.time.StageLatencyRegistry;
 
 import io.aeron.Aeron;
 import io.aeron.CommonContext;
@@ -96,7 +97,9 @@ public class AccountOrderPublishConfig {
 
     @Bean
     public AeronAccountOrderSender aeronAccountOrderSender(
-            AccountDestinationResolver accountDestinationResolver, AccountOrderPublications accountOrderPublications) {
-        return new AeronAccountOrderSender(accountDestinationResolver, accountOrderPublications.byEndpoint());
+            AccountDestinationResolver accountDestinationResolver, AccountOrderPublications accountOrderPublications,
+            StageLatencyRegistry apiStageLatencyRegistry) {
+        return new AeronAccountOrderSender(
+            accountDestinationResolver, accountOrderPublications.byEndpoint(), apiStageLatencyRegistry);
     }
 }

@@ -22,7 +22,8 @@ import com.flab.stocktradingengine.trading.entity.OrderSide;
  * 뒤따르는 필드의 오프셋 계산이 필요 없게 한다.</p>
  * <pre>
  * PLACE : [type:1][orderId:8][accountId:8][side:1][priceUnscaled:8][priceScale:4]
- *         [quantity:4][orderAtEpochSecond:8][orderAtNano:4][stockCode:4+N]
+ *         [quantity:4][orderAtEpochSecond:8][orderAtNano:4]
+ *         [originNanos:8][receivedAtNanos:8][acceptedAtNanos:8][stockCode:4+N]
  * CANCEL: [type:1][orderId:8][stockCode:4+N]
  * </pre>
  *
@@ -77,6 +78,13 @@ public final class OrderCodec {
         buffer.putInt(position, orderAt.getNano());
         position += Integer.BYTES;
 
+        buffer.putLong(position, order.originNanos());
+        position += Long.BYTES;
+        buffer.putLong(position, order.receivedAtNanos());
+        position += Long.BYTES;
+        buffer.putLong(position, order.acceptedAtNanos());
+        position += Long.BYTES;
+
         position += buffer.putStringAscii(position, order.stockCode());
         return position - offset;
     }
@@ -115,8 +123,17 @@ public final class OrderCodec {
         position += Integer.BYTES;
         Instant orderAt = Instant.ofEpochSecond(epochSecond, nano);
 
+        long originNanos = buffer.getLong(position);
+        position += Long.BYTES;
+        long receivedAtNanos = buffer.getLong(position);
+        position += Long.BYTES;
+        long acceptedAtNanos = buffer.getLong(position);
+        position += Long.BYTES;
+
         String stockCode = buffer.getStringAscii(position);
-        return new JournaledOrder(type, orderId, accountId, stockCode, side, price, quantity, orderAt);
+        return new JournaledOrder(
+            type, orderId, accountId, stockCode, side, price, quantity, orderAt,
+            originNanos, receivedAtNanos, acceptedAtNanos);
     }
 
     /**

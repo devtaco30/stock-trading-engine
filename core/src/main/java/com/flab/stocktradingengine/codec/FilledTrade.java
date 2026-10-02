@@ -19,6 +19,17 @@ public record FilledTrade(
     long sellOrderId,
     long sellAccountId,
     int filledQuantity,
-    BigDecimal matchPrice
+    BigDecimal matchPrice,
+    long emittedAtNanos,
+    long aggressorOriginNanos
 ) {
+
+    /** 구간 측정 시각 필드를 지정하지 않는 기존 호출부용 생성자 — 두 필드는 0이다. */
+    public FilledTrade(
+        long tradeId, String stockCode, long buyOrderId, long buyAccountId,
+        long sellOrderId, long sellAccountId, int filledQuantity, BigDecimal matchPrice
+    ) {
+        this(tradeId, stockCode, buyOrderId, buyAccountId, sellOrderId, sellAccountId,
+            filledQuantity, matchPrice, 0L, 0L);
+    }
 }

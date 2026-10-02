@@ -22,6 +22,17 @@ public record JournaledOrder(
     OrderSide side,
     BigDecimal price,
     int quantity,
-    Instant orderAt
+    Instant orderAt,
+    long originNanos,
+    long receivedAtNanos,
+    long acceptedAtNanos
 ) {
+
+    /** 구간 측정 시각 필드를 지정하지 않는 기존 호출부용 생성자 — 세 필드는 0이다. */
+    public JournaledOrder(
+        EventType type, long orderId, long accountId, String stockCode,
+        OrderSide side, BigDecimal price, int quantity, Instant orderAt
+    ) {
+        this(type, orderId, accountId, stockCode, side, price, quantity, orderAt, 0L, 0L, 0L);
+    }
 }

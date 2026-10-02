@@ -396,4 +396,10 @@ class StageLatencyRegistryTest {
             assertEquals(0L, files.count());
         }
     }
+
+    @Test
+    void isEnabled는_생성자_인자를_그대로_돌려준다() {
+        org.junit.jupiter.api.Assertions.assertTrue(new StageLatencyRegistry(true).isEnabled());
+        org.junit.jupiter.api.Assertions.assertFalse(new StageLatencyRegistry(false).isEnabled());
+    }
 }

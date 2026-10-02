@@ -15,6 +15,8 @@ import com.flab.stocktradingengine.api.exception.OrderPublishException;
 import com.flab.stocktradingengine.codec.AccountOrderCodec;
 import com.flab.stocktradingengine.codec.DecodedAccountOrder;
 import com.flab.stocktradingengine.time.EpochNanos;
+import com.flab.stocktradingengine.time.LatencyHistogram;
+import com.flab.stocktradingengine.time.StageLatencyRegistry;
 import com.flab.stocktradingengine.trading.entity.OrderSide;
 
 import io.aeron.Publication;
@@ -66,9 +68,22 @@ public class AeronAccountOrderSender {
     private final ThreadLocal<UnsafeBuffer> encodeBuffer =
         ThreadLocal.withInitial(() -> new UnsafeBuffer(ByteBuffer.allocateDirect(ENCODE_BUFFER_SIZE)));
 
+    private final boolean stagesEnabled;
+    private final LatencyHistogram sendCostStage;
+
     public AeronAccountOrderSender(AccountDestinationResolver destinationResolver, Map<String, Publication> publicationsByEndpoint) {
+        this(destinationResolver, publicationsByEndpoint, new StageLatencyRegistry(false));
+    }
+
+    /** 구간 분해 측정용 — offer 성공 시점에 보조 단계 {@code api_send_cost}(W-P1 − W-P0)를 기록한다. */
+    public AeronAccountOrderSender(
+        AccountDestinationResolver destinationResolver, Map<String, Publication> publicationsByEndpoint,
+        StageLatencyRegistry stageRegistry
+    ) {
         this.destinationResolver = destinationResolver;
         this.publicationsByEndpoint = publicationsByEndpoint;
+        this.stagesEnabled = stageRegistry.isEnabled();
+        this.sendCostStage = stageRegistry.stage("api_send_cost");
     }
 
     /**
@@ -91,8 +106,9 @@ public class AeronAccountOrderSender {
      *         {@link #MAX_ATTEMPTS}번 재시도해도 offer가 성공하지 못하면
      */
     public void send(OrderSide side, long accountId, String stockCode, BigDecimal price, int quantity, String requestId) {
+        long originNanos = EpochNanos.now();
         DecodedAccountOrder order = new DecodedAccountOrder(
-            side, accountId, stockCode, price, quantity, requestId, EpochNanos.now());
+            side, accountId, stockCode, price, quantity, requestId, originNanos);
         UnsafeBuffer buffer = encodeBuffer.get();
         int length = codec.encode(buffer, 0, order);
         Publication publication = publicationFor(accountId);
@@ -102,6 +118,9 @@ public class AeronAccountOrderSender {
         for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
             result = publication.offer(buffer, 0, length);
             if (result > 0) {
+                if (stagesEnabled) {
+                    sendCostStage.recordNanos(EpochNanos.now() - originNanos);
+                }
                 return;
             }
             idleStrategy.idle();

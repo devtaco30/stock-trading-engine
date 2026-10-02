@@ -73,8 +73,9 @@ class FillCodecTest {
 
         // 고정 필드: long 5개(tradeId·buyOrderId·buyAccountId·sellOrderId·sellAccountId)=40바이트
         //          + filledQuantity(int 4) + priceUnscaled(long 8) + priceScale(int 4) = 16바이트
+        //          + 구간 측정 시각 emittedAtNanos·aggressorOriginNanos(long 2개) = 16바이트
         // 가변 필드: stockCode = 길이 헤더 4 + ASCII N
-        int expectedFixed = 40 + 16;
+        int expectedFixed = 40 + 16 + 16;
         int expectedStockCode = Integer.BYTES + "005930".length();
         assertEquals(expectedFixed + expectedStockCode, length, "반환 길이가 실제 기록 바이트 수와 같아야 한다");
     }

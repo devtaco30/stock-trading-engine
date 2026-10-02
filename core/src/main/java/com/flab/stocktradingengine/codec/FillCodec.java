@@ -19,7 +19,7 @@ import org.agrona.MutableDirectBuffer;
  * 뒤따르는 필드의 오프셋 계산이 필요 없게 한다.</p>
  * <pre>
  * [tradeId:8][buyOrderId:8][buyAccountId:8][sellOrderId:8][sellAccountId:8]
- * [filledQuantity:4][priceUnscaled:8][priceScale:4][stockCode:4+N]
+ * [filledQuantity:4][priceUnscaled:8][priceScale:4][emittedAtNanos:8][aggressorOriginNanos:8][stockCode:4+N]
  * </pre>
  *
  * <h3>가정·한계</h3>
@@ -61,6 +61,11 @@ public final class FillCodec {
         buffer.putInt(position, matchPrice.scale());
         position += Integer.BYTES;
 
+        buffer.putLong(position, fill.emittedAtNanos());
+        position += Long.BYTES;
+        buffer.putLong(position, fill.aggressorOriginNanos());
+        position += Long.BYTES;
+
         position += buffer.putStringAscii(position, fill.stockCode());
         return position - offset;
     }
@@ -89,10 +94,15 @@ public final class FillCodec {
         position += Integer.BYTES;
         BigDecimal matchPrice = BigDecimal.valueOf(unscaledPrice, priceScale);
 
+        long emittedAtNanos = buffer.getLong(position);
+        position += Long.BYTES;
+        long aggressorOriginNanos = buffer.getLong(position);
+        position += Long.BYTES;
+
         String stockCode = buffer.getStringAscii(position);
         return new FilledTrade(
             tradeId, stockCode, buyOrderId, buyAccountId, sellOrderId, sellAccountId,
-            filledQuantity, matchPrice);
+            filledQuantity, matchPrice, emittedAtNanos, aggressorOriginNanos);
     }
 
     /**
