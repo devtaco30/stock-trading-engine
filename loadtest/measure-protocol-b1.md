@@ -26,8 +26,8 @@ b0의 두 세트에서 v1은 유효 회차가 5개로 조건 불성립이었다.
 4. **세트 2의 비움 절차 (회차 사이, k6 구간 밖):**
    1. 히스토그램 스냅샷과 샘플러 정지가 끝난 뒤에 시작한다.
    2. 후속 처리가 끝나기를 기다린다. Kafka 컨슈머 그룹 `matching-engine`(토픽 `orders`)과 `settlement-engine`(토픽 `fills`)의 LAG 합이 0이고 계좌 2001~2100의 FILLED 행 수가 연속 두 번(2초 간격) 같을 때 끝난 것으로 본다. 최대 120초를 기다리고, 넘으면 비우지 않고 세트를 중단한다.
-   3. 계좌 2001~2100의 `status = 'FILLED'`인 `orders` 행과 그 행을 참조하는 `unpaids` 행만 지운다(`unpaids`를 먼저). PENDING 행은 지우지 않는다. 매칭 엔진이 메모리 호가창에 들고 있는 미체결 주문의 DB 행이므로 지우면 이후 체결이 정산에서 폐기된다(`SettlementConsumer`가 없는 주문의 체결을 경고만 남기고 버린다). 다른 계좌의 행과 `accounts`, `holdings`는 건드리지 않는다.
-   4. `VACUUM (ANALYZE)`를 `orders`와 `unpaids`에 실행한다(`VACUUM FULL`은 쓰지 않는다. 배타 락을 잡고 테이블을 다시 쓰기 때문이다).
+   3. 계좌 2001~2100의 `status = 'FILLED'`인 `orders` 행과 그 행을 참조하는 `unpaids` 행만 지운다. 먼저 `ANALYZE`를 하고, `unpaids`를 지워 커밋한 뒤 `VACUUM`으로 죽은 행을 치우고, 그다음에 `orders`를 지운다(`unpaids.order_id`에 인덱스가 없어서 `orders` 행을 지울 때마다 도는 외래키 검사가 `unpaids` 전체를 읽는다). PENDING 행은 지우지 않는다. 매칭 엔진이 메모리 호가창에 들고 있는 미체결 주문의 DB 행이므로 지우면 이후 체결이 정산에서 폐기된다(`SettlementConsumer`가 없는 주문의 체결을 경고만 남기고 버린다). 다른 계좌의 행과 `accounts`, `holdings`는 건드리지 않는다.
+   4. 끝으로 `VACUUM (ANALYZE)`를 `orders`와 `unpaids`에 실행한다(`VACUUM FULL`은 쓰지 않는다. 배타 락을 잡고 테이블을 다시 쓰기 때문이다).
    5. 비움에 걸린 시간과 지운 행 수를 기록하고, 그 뒤에 b0와 같은 30초 대기를 한다.
 5. 세트 1에서는 비움을 하지 않는다. 다만 두 세트 모두 3번의 기록은 같은 방식으로 한다.
 
