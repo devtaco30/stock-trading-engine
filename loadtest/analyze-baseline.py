@@ -38,7 +38,7 @@ MIN_VALID_ROUNDS = 7       # 유효 측정 회차가 이 값 미만이면 조건
 EXPECTED_ROUNDS = 11
 
 # E4 허용 목록. 첫 리허설에서 실제 top 출력을 보고 확정한다(설계서 2-3절).
-DEFAULT_E4_ALLOW = r"^(k6|java|kernel_task)$|[Dd]ocker|Virtualization|vmnet|qemu"
+DEFAULT_E4_ALLOW = r"^(k6|java|kernel_task)$|[Dd]ocker|Virtua|vmnet|qemu"
 
 REASON_ORDER = ["WARMUP", "E1", "E2", "E3", "E4", "E5", "E6", "COUNT"]
 ROUNDS_HEADER = ["round", "k6_start", "k6_end", "k6_exit", "checks_fail", "http_fail", "dropped", "hist_count",
@@ -200,7 +200,7 @@ def judge_reasons(round_, cond):
         reasons.add("E2")
     if any(is_power_or_thermal_problem(s) for s in samples):
         reasons.add("E3")
-    allow = re.compile(os.environ.get("E4_ALLOW", DEFAULT_E4_ALLOW))
+    allow = re.compile(os.environ.get("E4_ALLOW") or DEFAULT_E4_ALLOW)
     if has_consecutive([any(cpu >= EXTERNAL_CPU_LIMIT and not allow.search(name)
                             for name, cpu in parse_top5(s.get("top5")))
                         for s in samples], CONSECUTIVE):

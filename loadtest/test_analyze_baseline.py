@@ -202,6 +202,13 @@ class ExclusionRuleTest(unittest.TestCase):
         result = self.condition_with("r05", cpu=cpu)
         self.assertEqual([], result.reasons)
 
+    def test_E4_top이_잘라낸_Docker_VM_이름도_허용한다(self):
+        cpu = healthy_cpu()
+        cpu[2][8] = "com.apple.Virtua:105.0|com.docker.backe:30.0"
+        cpu[3][8] = "com.apple.Virtua:107.0|com.docker.backe:31.0"
+        result = self.condition_with("r05", cpu=cpu)
+        self.assertEqual([], result.reasons)
+
     def test_E4_허용_목록에_없는_프로세스가_연속이_아니면_제외하지_않는다(self):
         cpu = healthy_cpu()
         cpu[2][8] = "Chrome:30.0|java:50"
