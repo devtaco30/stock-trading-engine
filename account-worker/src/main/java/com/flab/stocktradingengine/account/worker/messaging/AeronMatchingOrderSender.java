@@ -96,9 +96,17 @@ public class AeronMatchingOrderSender implements MatchingOrderSender, AutoClosea
      */
     @Override
     public void forwardPlace(long orderId, long accountId, String stockCode, OrderSide side, BigDecimal price, int quantity) {
+        forwardPlace(orderId, accountId, stockCode, side, price, quantity, 0L, 0L, 0L);
+    }
+
+    /** 구간 분해 측정용 — api 발신 시각·수신 시각·승인 후 전달 직전 시각을 와이어에 싣는다. */
+    @Override
+    public void forwardPlace(long orderId, long accountId, String stockCode, OrderSide side, BigDecimal price, int quantity,
+                             long originNanos, long receivedAtNanos, long acceptedAtNanos) {
         throwIfFatal();
         JournaledOrder order = new JournaledOrder(
-            EventType.PLACE, orderId, accountId, stockCode, side, price, quantity, Instant.now());
+            EventType.PLACE, orderId, accountId, stockCode, side, price, quantity, Instant.now(),
+            originNanos, receivedAtNanos, acceptedAtNanos);
 
         enqueueIdleStrategy.reset();
         while (!outbox.offer(order)) {

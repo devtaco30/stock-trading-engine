@@ -36,4 +36,14 @@ public interface MatchingOrderSender {
      * 테스트 더블({@code NoOpMatchingOrderSender})을 쓴다.</p>
      */
     void forwardPlace(long orderId, long accountId, String stockCode, OrderSide side, BigDecimal price, int quantity);
+
+    /**
+     * 구간 분해 측정용 — 매칭 입력에 api 발신 시각(W-P0), 수신 폴링 스레드가 읽은 시각(W-P2),
+     * 승인 후 전달 직전 시각(W-P8)을 함께 싣는다. 시각을 싣지 않는 구현은 기본 동작(시각을 버리고
+     * 기존 호출)을 그대로 쓴다.
+     */
+    default void forwardPlace(long orderId, long accountId, String stockCode, OrderSide side, BigDecimal price, int quantity,
+                              long originNanos, long receivedAtNanos, long acceptedAtNanos) {
+        forwardPlace(orderId, accountId, stockCode, side, price, quantity);
+    }
 }

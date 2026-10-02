@@ -20,6 +20,8 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.slf4j.LoggerFactory;
 
+import com.flab.stocktradingengine.codec.JournaledOrder;
+import com.flab.stocktradingengine.codec.OrderCodec;
 import com.flab.stocktradingengine.trading.entity.OrderSide;
 
 import io.aeron.Publication;
@@ -63,6 +65,40 @@ class AeronMatchingOrderSenderTest {
 
         List<DirectBuffer> buffers = bufferCaptor.getAllValues();
         assertThat(buffers.get(0)).isSameAs(buffers.get(1));
+    }
+
+    @Test
+    void 시각을_실은_전달은_와이어를_디코딩하면_세_시각이_그대로_나온다() {
+        Publication publication = mock(Publication.class);
+        when(publication.offer(any(DirectBuffer.class), anyInt(), anyInt())).thenReturn(100L);
+        sender = new AeronMatchingOrderSender(publication);
+        sender.start();
+
+        sender.forwardPlace(1L, ACCOUNT_ID, STOCK_CODE, OrderSide.BUY, new BigDecimal("10000"), 10, 111L, 222L, 333L);
+
+        ArgumentCaptor<DirectBuffer> bufferCaptor = ArgumentCaptor.forClass(DirectBuffer.class);
+        ArgumentCaptor<Integer> lengthCaptor = ArgumentCaptor.forClass(Integer.class);
+        verify(publication, timeout(VERIFY_TIMEOUT_MILLIS)).offer(bufferCaptor.capture(), eq(0), lengthCaptor.capture());
+        JournaledOrder decoded = new OrderCodec().decode(bufferCaptor.getValue(), 0);
+        assertThat(decoded.originNanos()).isEqualTo(111L);
+        assertThat(decoded.receivedAtNanos()).isEqualTo(222L);
+        assertThat(decoded.acceptedAtNanos()).isEqualTo(333L);
+    }
+
+    @Test
+    void 시각을_안_싣는_전달은_세_시각이_0이다() {
+        Publication publication = mock(Publication.class);
+        when(publication.offer(any(DirectBuffer.class), anyInt(), anyInt())).thenReturn(100L);
+        sender = new AeronMatchingOrderSender(publication);
+        sender.start();
+
+        sender.forwardPlace(1L, ACCOUNT_ID, STOCK_CODE, OrderSide.BUY, new BigDecimal("10000"), 10);
+
+        ArgumentCaptor<DirectBuffer> bufferCaptor = ArgumentCaptor.forClass(DirectBuffer.class);
+        verify(publication, timeout(VERIFY_TIMEOUT_MILLIS)).offer(bufferCaptor.capture(), eq(0), anyInt());
+        JournaledOrder decoded = new OrderCodec().decode(bufferCaptor.getValue(), 0);
+        assertThat(decoded.originNanos()).isZero();
+        assertThat(decoded.acceptedAtNanos()).isZero();
     }
 
     @Test

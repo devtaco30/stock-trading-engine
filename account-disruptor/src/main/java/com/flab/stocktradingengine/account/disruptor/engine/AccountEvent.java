@@ -25,6 +25,12 @@ public class AccountEvent {
     private int sourceSessionId;
     private long journaledPosition;
     private long publishedAtEpochNanos;
+    // 구간 분해 측정(W-P2~W-P6) 시각. 계측이 꺼져 있으면 0으로 남는다.
+    private long receivedAtNanos;
+    private long ringClaimedAtNanos;
+    private long journalStartedAtNanos;
+    private long journalEndedAtNanos;
+    private long businessStartedAtNanos;
 
     /**
      * 매수 검증·예약 명령으로 슬롯을 채운다. orderId 는 아직 없다(C5-2a) — 핸들러가 첫 접수
@@ -110,6 +116,31 @@ public class AccountEvent {
         this.journaledPosition = journaledPosition;
     }
 
+    /** 수신 폴링 스레드가 읽은 시각(W-P2). */
+    public void setReceivedAtNanos(long receivedAtNanos) {
+        this.receivedAtNanos = receivedAtNanos;
+    }
+
+    /** 링버퍼 슬롯을 확보한 직후 시각(W-P3). */
+    public void setRingClaimedAtNanos(long ringClaimedAtNanos) {
+        this.ringClaimedAtNanos = ringClaimedAtNanos;
+    }
+
+    /** 저널 핸들러가 이벤트를 받은 시각(W-P4). */
+    public void setJournalStartedAtNanos(long journalStartedAtNanos) {
+        this.journalStartedAtNanos = journalStartedAtNanos;
+    }
+
+    /** 저널 기록을 마친 시각(W-P5). */
+    public void setJournalEndedAtNanos(long journalEndedAtNanos) {
+        this.journalEndedAtNanos = journalEndedAtNanos;
+    }
+
+    /** 업무 핸들러가 이벤트를 받은 시각(W-P6). */
+    public void setBusinessStartedAtNanos(long businessStartedAtNanos) {
+        this.businessStartedAtNanos = businessStartedAtNanos;
+    }
+
     /** 소비 직후 참조 필드를 비워 이전 명령을 붙들지 않게 한다. */
     public void clear() {
         this.type = null;
@@ -124,6 +155,11 @@ public class AccountEvent {
         this.sourceSessionId = 0;
         this.journaledPosition = 0L;
         this.publishedAtEpochNanos = 0L;
+        this.receivedAtNanos = 0L;
+        this.ringClaimedAtNanos = 0L;
+        this.journalStartedAtNanos = 0L;
+        this.journalEndedAtNanos = 0L;
+        this.businessStartedAtNanos = 0L;
     }
 
     public AccountEventType getType() {
@@ -172,5 +208,25 @@ public class AccountEvent {
 
     public long getPublishedAtEpochNanos() {
         return publishedAtEpochNanos;
+    }
+
+    public long getReceivedAtNanos() {
+        return receivedAtNanos;
+    }
+
+    public long getRingClaimedAtNanos() {
+        return ringClaimedAtNanos;
+    }
+
+    public long getJournalStartedAtNanos() {
+        return journalStartedAtNanos;
+    }
+
+    public long getJournalEndedAtNanos() {
+        return journalEndedAtNanos;
+    }
+
+    public long getBusinessStartedAtNanos() {
+        return businessStartedAtNanos;
     }
 }

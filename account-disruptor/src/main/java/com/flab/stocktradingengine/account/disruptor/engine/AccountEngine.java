@@ -32,6 +32,7 @@ import com.flab.stocktradingengine.account.disruptor.snapshot.AccountStateSnapsh
 import com.flab.stocktradingengine.codec.AccountJournalEntry;
 import com.flab.stocktradingengine.time.EpochNanos;
 import com.flab.stocktradingengine.time.LatencyHistogram;
+import com.flab.stocktradingengine.time.StageLatencyRegistry;
 
 /**
  * 계좌 축 워커의 진입점.
@@ -95,6 +96,7 @@ public class AccountEngine {
     private final Map<Long, AccountState> accounts = new HashMap<>();
     private final AccountJournal journal;
     private final AccountJournalEventHandler journalHandler;
+    private final AccountSegmentStages stages;
     private final AccountEventHandler businessHandler;
     private final SlotHasher slotHasher;
     private final IntPredicate ownedSlots;
@@ -130,6 +132,16 @@ public class AccountEngine {
                          MatchingOrderSender matchingOrderSender, AccountResultListener listener, AccountJournal journal,
                          AccountSnapshotSink snapshotSink, LatencyHistogram latencyHistogram,
                          SlotHasher slotHasher, IntPredicate ownedSlots) {
+        this(bufferSize, waitStrategy, producerType, nodeId, matchingOrderSender, listener, journal, snapshotSink, latencyHistogram,
+            slotHasher, ownedSlots, new StageLatencyRegistry(false));
+    }
+
+    /** 구간 분해 측정용 — 단계별 지연 등록부를 받는다(꺼진 등록부면 기존 동작과 같다). */
+    public AccountEngine(int bufferSize, WaitStrategy waitStrategy, ProducerType producerType, long nodeId,
+                         MatchingOrderSender matchingOrderSender, AccountResultListener listener, AccountJournal journal,
+                         AccountSnapshotSink snapshotSink, LatencyHistogram latencyHistogram,
+                         SlotHasher slotHasher, IntPredicate ownedSlots, StageLatencyRegistry stageRegistry) {
+        this.stages = new AccountSegmentStages(stageRegistry);
         this.journal = journal;
         this.slotHasher = slotHasher;
         this.ownedSlots = ownedSlots;
@@ -148,10 +160,10 @@ public class AccountEngine {
         // orderIdGenerator를 필드로 공유하는 이유는 recover() 참고 — 복구가 진행시킨 카운터를
         // 라이브가 그대로 이어받아야 발급 충돌이 없다.
         // blockUntilJournaled가 이 핸들러의 시퀀스를 읽어야 하므로 필드로 잡아둔다.
-        this.journalHandler = new AccountJournalEventHandler(journal);
+        this.journalHandler = new AccountJournalEventHandler(journal, stages);
         this.businessHandler = new AccountEventHandler(
             accounts, orderIdGenerator, matchingOrderSender, listener, snapshotSink, true, latencyHistogram,
-            slotHasher, ownedSlots);
+            slotHasher, ownedSlots, stages);
         this.disruptor.handleEventsWith(journalHandler).then(businessHandler);
     }
 
@@ -201,6 +213,14 @@ public class AccountEngine {
         this(bufferSize, new BlockingWaitStrategy(), ProducerType.SINGLE, nodeId, matchingOrderSender, listener);
     }
 
+    /** 단일 노드 테스트·측정용 — 단계별 지연 등록부를 받아 모든 계좌를 담당하는 엔진을 만든다. */
+    public AccountEngine(int bufferSize, long nodeId, MatchingOrderSender matchingOrderSender, AccountResultListener listener,
+                         StageLatencyRegistry stageRegistry) {
+        this(bufferSize, new BlockingWaitStrategy(), ProducerType.MULTI, nodeId, matchingOrderSender, listener,
+            new InMemoryAccountJournal(), NO_OP_SNAPSHOT_SINK, NO_OP_LATENCY_HISTOGRAM, DEFAULT_SLOT_HASHER, DEFAULT_OWNED_SLOTS,
+            stageRegistry);
+    }
+
     /**
      * 위와 같되 계좌 샤딩(I8 U2)을 명시한다 — 담당 슬롯 판정을 검증하는 테스트, 그리고
      * account-worker가 별도 저널·스냅샷·지연측정 배선이 필요 없을 때 쓴다.
@@ -209,6 +229,19 @@ public class AccountEngine {
                          SlotHasher slotHasher, IntPredicate ownedSlots) {
         this(bufferSize, new BlockingWaitStrategy(), ProducerType.SINGLE, nodeId, matchingOrderSender, listener,
             new InMemoryAccountJournal(), NO_OP_SNAPSHOT_SINK, NO_OP_LATENCY_HISTOGRAM, slotHasher, ownedSlots);
+    }
+
+    /** 계측이 켜져 있을 때만 수신 시각(W-P2)과 슬롯 확보 직후 시각(W-P3)을 슬롯에 남긴다. */
+    private void stampReceived(AccountEvent event, long receivedAtNanos) {
+        if (stages.isEnabled()) {
+            event.setReceivedAtNanos(receivedAtNanos);
+            event.setRingClaimedAtNanos(EpochNanos.now());
+        }
+    }
+
+    /** 수신 폴링 스레드가 W-P2를 찍을지 정하는 데 쓴다. */
+    public boolean stagesEnabled() {
+        return stages.isEnabled();
     }
 
     /** 저널을 반환한다. 테스트·복구 검증용. */
@@ -387,10 +420,17 @@ public class AccountEngine {
      * 발행 직전에 찍어 와이어에 실어 보낸 값을 그대로 넘긴다.
      */
     public void publishBuy(long accountId, String stockCode, BigDecimal price, int quantity, String requestId, long publishedAtEpochNanos) {
+        publishBuy(accountId, stockCode, price, quantity, requestId, publishedAtEpochNanos, 0L);
+    }
+
+    /** 구간 분해 측정용 — 수신 폴링 스레드가 읽은 시각(W-P2)을 함께 싣는다. 계측이 꺼져 있으면 무시한다. */
+    public void publishBuy(long accountId, String stockCode, BigDecimal price, int quantity, String requestId,
+                           long publishedAtEpochNanos, long receivedAtNanos) {
         long sequence = ringBuffer.next();
         try {
             AccountEvent event = ringBuffer.get(sequence);
             event.setBuy(accountId, stockCode, price, quantity, requestId, publishedAtEpochNanos);
+            stampReceived(event, receivedAtNanos);
         } finally {
             ringBuffer.publish(sequence);
         }
@@ -407,10 +447,17 @@ public class AccountEngine {
 
     /** 매도 검증·예약을 링버퍼에 발행한다. publishedAtEpochNanos는 {@link #publishBuy(long, String, BigDecimal, int, String, long)}과 같다. */
     public void publishSell(long accountId, String stockCode, BigDecimal price, int quantity, String requestId, long publishedAtEpochNanos) {
+        publishSell(accountId, stockCode, price, quantity, requestId, publishedAtEpochNanos, 0L);
+    }
+
+    /** 구간 분해 측정용 — {@link #publishBuy(long, String, BigDecimal, int, String, long, long)}과 같다. */
+    public void publishSell(long accountId, String stockCode, BigDecimal price, int quantity, String requestId,
+                            long publishedAtEpochNanos, long receivedAtNanos) {
         long sequence = ringBuffer.next();
         try {
             AccountEvent event = ringBuffer.get(sequence);
             event.setSell(accountId, stockCode, price, quantity, requestId, publishedAtEpochNanos);
+            stampReceived(event, receivedAtNanos);
         } finally {
             ringBuffer.publish(sequence);
         }

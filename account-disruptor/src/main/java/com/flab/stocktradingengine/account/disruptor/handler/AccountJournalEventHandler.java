@@ -1,6 +1,8 @@
 package com.flab.stocktradingengine.account.disruptor.handler;
 
 import com.lmax.disruptor.EventHandler;
+import com.flab.stocktradingengine.account.disruptor.engine.AccountSegmentStages;
+import com.flab.stocktradingengine.time.EpochNanos;
 import com.flab.stocktradingengine.account.disruptor.engine.AccountEvent;
 import com.flab.stocktradingengine.account.disruptor.journal.AccountJournal;
 import com.flab.stocktradingengine.codec.AccountJournalEntry;
@@ -29,15 +31,28 @@ public class AccountJournalEventHandler implements EventHandler<AccountEvent> {
 
     private final AccountJournal journal;
 
+    private final AccountSegmentStages stages;
+
     public AccountJournalEventHandler(AccountJournal journal) {
+        this(journal, AccountSegmentStages.DISABLED);
+    }
+
+    public AccountJournalEventHandler(AccountJournal journal, AccountSegmentStages stages) {
         this.journal = journal;
+        this.stages = stages;
     }
 
     @Override
     public void onEvent(AccountEvent event, long sequence, boolean endOfBatch) {
+        if (stages.isEnabled()) {
+            event.setJournalStartedAtNanos(EpochNanos.now());
+        }
         journal.append(new AccountJournalEntry(
             event.getType(), event.getOrderId(), event.getAccountId(), event.getStockCode(),
             event.getPrice(), event.getQuantity(), event.getRequestId(), event.getTradeId()));
         event.setJournaledPosition(journal.position());
+        if (stages.isEnabled()) {
+            event.setJournalEndedAtNanos(EpochNanos.now());
+        }
     }
 }

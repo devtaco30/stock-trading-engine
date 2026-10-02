@@ -8,6 +8,8 @@ import org.springframework.context.annotation.Configuration;
 
 import com.flab.stocktradingengine.account.worker.lifecycle.AccountLatencyDumpLifecycle;
 import com.flab.stocktradingengine.time.LatencyHistogram;
+import com.flab.stocktradingengine.time.StageDumpRunner;
+import com.flab.stocktradingengine.time.StageLatencyRegistry;
 
 /**
  * 끝점①(접수·예약) 접수 지연 측정(decision_records/v1-v2-e2e-measurement.md)의 배선.
@@ -34,5 +36,24 @@ public class AccountLatencyMeasurementConfig {
             @Value("${measure.latency.output-path:loadtest/results/latency-v2-account-worker.json}") String outputPath,
             @Value("${measure.latency.snapshot-trigger-path:}") String snapshotTriggerPath) {
         return new AccountLatencyDumpLifecycle(accountLatencyHistogram, outputPath, snapshotTriggerPath);
+    }
+
+    /**
+     * 구간 분해 측정(measure/segments 브랜치 한정)의 단계별 지연 등록부. {@code measure.stages.enabled}가
+     * 꺼져 있으면(기본값) 어떤 값도 기록하지 않고, {@link StageDumpRunner}도 스레드와 파일을 만들지 않는다.
+     */
+    @Bean
+    public StageLatencyRegistry accountStageLatencyRegistry(@Value("${measure.stages.enabled:false}") boolean enabled) {
+        return new StageLatencyRegistry(enabled);
+    }
+
+    @Bean(initMethod = "start", destroyMethod = "stop")
+    public StageDumpRunner accountStageDumpRunner(
+            StageLatencyRegistry accountStageLatencyRegistry,
+            @Value("${measure.stages.output-path:loadtest/results/stages-v2-account-worker.json}") String outputPath,
+            @Value("${measure.stages.snapshot-trigger-path:}") String snapshotTriggerPath,
+            @Value("${measure.stages.series-stage:B}") String seriesStage,
+            @Value("${measure.stages.series-path:}") String seriesPath) {
+        return new StageDumpRunner(accountStageLatencyRegistry, outputPath, snapshotTriggerPath, seriesStage, seriesPath);
     }
 }

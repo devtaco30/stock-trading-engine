@@ -12,6 +12,7 @@ import io.aeron.Subscription;
 import io.aeron.logbuffer.FragmentHandler;
 import io.aeron.logbuffer.Header;
 
+import com.flab.stocktradingengine.time.EpochNanos;
 import com.flab.stocktradingengine.trading.entity.OrderSide;
 import com.flab.stocktradingengine.account.disruptor.engine.AccountEngine;
 import com.flab.stocktradingengine.codec.AccountOrderCodec;
@@ -65,15 +66,16 @@ public final class AccountOrderReceiver implements AutoCloseable {
     }
 
     private void onFragment(DirectBuffer buffer, int offset, int length, Header header) {
+        long receivedAtNanos = engine.stagesEnabled() ? EpochNanos.now() : 0L;
         DecodedAccountOrder order = codec.decode(buffer, offset);
         if (order.type() == OrderSide.BUY) {
             engine.publishBuy(
                 order.accountId(), order.stockCode(),
-                order.price(), order.quantity(), order.requestId(), order.publishedAtEpochNanos());
+                order.price(), order.quantity(), order.requestId(), order.publishedAtEpochNanos(), receivedAtNanos);
         } else {
             engine.publishSell(
                 order.accountId(), order.stockCode(),
-                order.price(), order.quantity(), order.requestId(), order.publishedAtEpochNanos());
+                order.price(), order.quantity(), order.requestId(), order.publishedAtEpochNanos(), receivedAtNanos);
         }
     }
 

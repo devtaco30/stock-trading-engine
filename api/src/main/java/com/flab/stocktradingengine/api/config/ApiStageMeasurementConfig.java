@@ -4,6 +4,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import com.flab.stocktradingengine.time.StageDumpRunner;
 import com.flab.stocktradingengine.time.StageLatencyRegistry;
 
 /**
@@ -16,5 +17,15 @@ public class ApiStageMeasurementConfig {
     @Bean
     public StageLatencyRegistry apiStageLatencyRegistry(@Value("${measure.stages.enabled:false}") boolean enabled) {
         return new StageLatencyRegistry(enabled);
+    }
+
+    @Bean(initMethod = "start", destroyMethod = "stop")
+    public StageDumpRunner apiStageDumpRunner(
+            StageLatencyRegistry apiStageLatencyRegistry,
+            @Value("${measure.stages.output-path:loadtest/results/stages-v2-api.json}") String outputPath,
+            @Value("${measure.stages.snapshot-trigger-path:}") String snapshotTriggerPath,
+            @Value("${measure.stages.series-stage:}") String seriesStage,
+            @Value("${measure.stages.series-path:}") String seriesPath) {
+        return new StageDumpRunner(apiStageLatencyRegistry, outputPath, snapshotTriggerPath, seriesStage, seriesPath);
     }
 }

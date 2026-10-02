@@ -18,12 +18,14 @@ import com.flab.stocktradingengine.account.disruptor.domain.RejectReason;
 import com.flab.stocktradingengine.account.disruptor.domain.ReserveResult;
 import com.flab.stocktradingengine.account.disruptor.domain.SellReserveResult;
 import com.flab.stocktradingengine.account.disruptor.engine.AccountEvent;
+import com.flab.stocktradingengine.account.disruptor.engine.AccountSegmentStages;
 import com.flab.stocktradingengine.account.disruptor.engine.AccountOrderIdGenerator;
 import com.flab.stocktradingengine.account.disruptor.io.AccountSnapshotSink;
 import com.flab.stocktradingengine.account.disruptor.io.MatchingOrderSender;
 import com.flab.stocktradingengine.account.disruptor.snapshot.AccountSnapshot;
 import com.flab.stocktradingengine.account.disruptor.snapshot.AccountSnapshotCodec;
 import com.flab.stocktradingengine.account.disruptor.snapshot.AccountStateSnapshot;
+import com.flab.stocktradingengine.time.EpochNanos;
 import com.flab.stocktradingengine.time.LatencyHistogram;
 import com.flab.stocktradingengine.trading.entity.OrderSide;
 
@@ -82,6 +84,7 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
     private final LatencyHistogram latencyHistogram;
     private final SlotHasher slotHasher;
     private final IntPredicate ownedSlots;
+    private final AccountSegmentStages stages;
 
     // sessionId(Aeron 발행자 구분키, ADR-032 I1 D1) → 그 발행자로부터 마지막으로 반영한 체결 수신
     // 위치. 소비자 스레드(이 핸들러)만 쓰고, 호스트 스레드(그레이스풀 스톱)·1-3의 스냅샷 쓰기
@@ -138,6 +141,16 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
                                MatchingOrderSender matchingOrderSender, AccountResultListener listener,
                                AccountSnapshotSink snapshotSink, boolean snapshotTriggerEnabled, LatencyHistogram latencyHistogram,
                                SlotHasher slotHasher, IntPredicate ownedSlots) {
+        this(accounts, orderIdGenerator, matchingOrderSender, listener, snapshotSink, snapshotTriggerEnabled, latencyHistogram,
+            slotHasher, ownedSlots, AccountSegmentStages.DISABLED);
+    }
+
+    /** 구간 분해 측정(W-P6~W-P8)용 단계 히스토그램 묶음을 함께 받는다. 승인된 주문에서만 기록한다. */
+    public AccountEventHandler(Map<Long, AccountState> accounts, AccountOrderIdGenerator orderIdGenerator,
+                               MatchingOrderSender matchingOrderSender, AccountResultListener listener,
+                               AccountSnapshotSink snapshotSink, boolean snapshotTriggerEnabled, LatencyHistogram latencyHistogram,
+                               SlotHasher slotHasher, IntPredicate ownedSlots, AccountSegmentStages stages) {
+        this.stages = stages;
         this.accounts = accounts;
         this.orderIdGenerator = orderIdGenerator;
         this.matchingOrderSender = matchingOrderSender;
@@ -195,6 +208,9 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
 
     @Override
     public void onEvent(AccountEvent event, long sequence, boolean endOfBatch) {
+        if (stages.isEnabled()) {
+            event.setBusinessStartedAtNanos(EpochNanos.now());
+        }
         lastJournaledPosition = event.getJournaledPosition();
         try {
             switch (event.getType()) {
@@ -290,11 +306,27 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
         ReserveResult result = state.tryReserve(orderId, price, event.getQuantity());
         if (result.accepted()) {
             latencyHistogram.record(event.getPublishedAtEpochNanos());
+            if (stages.isEnabled()) {
+                stages.recordAccepted(event, EpochNanos.now());
+            }
             listener.onAccepted(accountId, orderId, requestId, result.reservedMargin());
-            matchingOrderSender.forwardPlace(orderId, accountId, event.getStockCode(), OrderSide.BUY, price, event.getQuantity());
+            forwardAccepted(event, orderId, OrderSide.BUY, price);
         } else {
             listener.onRejected(accountId, orderId, requestId, result.reason());
         }
+    }
+
+    /**
+     * 승인된 주문을 매칭으로 전달한다(W-P8). 계측이 꺼져 있으면 기존 여섯 인자 호출을 그대로 쓰고,
+     * 켜져 있으면 api 발신 시각·수신 시각·전달 직전 시각을 함께 싣는다.
+     */
+    private void forwardAccepted(AccountEvent event, long orderId, OrderSide side, BigDecimal price) {
+        if (!stages.isEnabled()) {
+            matchingOrderSender.forwardPlace(orderId, event.getAccountId(), event.getStockCode(), side, price, event.getQuantity());
+            return;
+        }
+        matchingOrderSender.forwardPlace(orderId, event.getAccountId(), event.getStockCode(), side, price, event.getQuantity(),
+            event.getPublishedAtEpochNanos(), event.getReceivedAtNanos(), EpochNanos.now());
     }
 
     private void handleSell(AccountEvent event) {
@@ -330,8 +362,11 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
         SellReserveResult result = state.trySellReserve(orderId, event.getStockCode(), event.getQuantity());
         if (result.accepted()) {
             latencyHistogram.record(event.getPublishedAtEpochNanos());
+            if (stages.isEnabled()) {
+                stages.recordAccepted(event, EpochNanos.now());
+            }
             listener.onSellAccepted(accountId, orderId, requestId, result.reservedQuantity());
-            matchingOrderSender.forwardPlace(orderId, accountId, event.getStockCode(), OrderSide.SELL, price, event.getQuantity());
+            forwardAccepted(event, orderId, OrderSide.SELL, price);
         } else {
             listener.onRejected(accountId, orderId, requestId, result.reason());
         }
