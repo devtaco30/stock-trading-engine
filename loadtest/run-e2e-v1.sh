@@ -45,7 +45,7 @@ start_app() {
 # 디렉터리(예: order-engine/)라, 상대경로를 쓰면 폴링 스레드가 엉뚱한 곳을 본다(실측정 확인,
 # 2026-09-16 — 리포 루트에 트리거 파일을 놔도 계속 안 읽혀서 모듈 서브디렉터리에 생긴 걸 발견).
 E2E_RESULTS_ABS="$(pwd)/loadtest/results"
-start_app order-engine " --measure.latency.enabled=true --measure.latency.snapshot-trigger-path=${E2E_RESULTS_ABS}/latency-trigger-v1 --measure.latency.output-path=${E2E_RESULTS_ABS}/latency-v1-order-engine.json"
+start_app order-engine " --measure.latency.enabled=true --measure.latency.snapshot-trigger-path=${E2E_RESULTS_ABS}/latency-trigger-v1 --measure.latency.output-path=${E2E_RESULTS_ABS}/latency-v1-order-engine.json --spring.kafka.listener.concurrency=${V1_LISTENER_CONCURRENCY:-3}"
 start_app matching-engine ""
 start_app settlement-engine ""
 start_app api ""
