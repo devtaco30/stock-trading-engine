@@ -23,6 +23,10 @@ set -uo pipefail
 #   ★V1_GROUP                         v1 컨슈머 그룹 이름을 직접 지정 (기본: order-engine 로그의 groupId)
 #   ★E6_PATTERN='...'                 파티션 재배정 로그를 찾는 정규식. 실제 문구는 리허설에서 확인해 고정한다
 #   ★CAFFEINATE=1                     1이면 측정 동안 절전을 막는다 (caffeinate -i)
+#   ★INDEX_MODE=0                     1이면 조건 준비에서 orders·holdings 인덱스(ix_b1_*)를 SQL로 만들고, 끝나면 지운다
+#                                     (measure-protocol-b1.md). v1 하나(CONDITIONS="v1")일 때만 허용. 앱 코드는 바꾸지 않는다
+#   ★ROUND_CLEAR=0                    1이면 v1 회차가 끝날 때마다 후속 처리를 기다린 뒤 계좌 2001~2100의 FILLED 주문만 지운다
+#   ★QUIESCE_TIMEOUT=120, QUIESCE_POLL_SEC=2   비움 전에 후속 처리가 끝나기를 기다리는 최대 초와 확인 간격
 #
 # 주의: run-e2e-v1.sh / run-e2e-v2.sh 는 `docker compose up -d` 를 서비스 이름 없이 부르므로 kafka-ui 도 같이 올라온다.
 #       INCLUDE_KAFKA_UI=0 이면 앱이 READY 가 된 뒤 kafka-ui 컨테이너를 멈춘다 (그 스크립트들을 고치지 않기 위한 선택).
@@ -47,12 +51,31 @@ E6_PATTERN="${E6_PATTERN:-partitions (revoked|assigned)|Revoking previously assi
 CAFFEINATE="${CAFFEINATE:-1}"
 export V1_LISTENER_CONCURRENCY
 
-RUN_ID="${RUN_ID:-b0-$(date -u +%Y%m%d-%H%M)}"
+INDEX_MODE="${INDEX_MODE:-0}"
+ROUND_CLEAR="${ROUND_CLEAR:-0}"
+QUIESCE_TIMEOUT="${QUIESCE_TIMEOUT:-120}"
+QUIESCE_POLL_SEC="${QUIESCE_POLL_SEC:-2}"
+B1_BASE_SHA="ee55642fc3b045189f6b1b37fdb5fb5b5d1e6f5f"
+B1_ORDERS_INDEX="ix_b1_orders_acct_status_side_stock"
+B1_HOLDINGS_INDEX="ix_b1_holdings_acct_stock"
+B1_INDEX_CREATED=0
+
+default_run_id_prefix() {
+    if [ "$INDEX_MODE" = "1" ] && [ "$ROUND_CLEAR" = "1" ]; then echo "b1-idx-clear"
+    elif [ "$INDEX_MODE" = "1" ]; then echo "b1-idx-keep"
+    elif [ "$ROUND_CLEAR" = "1" ]; then echo "b1-clear"
+    else echo "b0"
+    fi
+}
+RUN_ID="${RUN_ID:-$(default_run_id_prefix)-$(date -u +%Y%m%d-%H%M)}"
 RESULTS_DIR="${REPO_ROOT}/loadtest/results"
 RUN_DIR="${RESULTS_DIR}/${RUN_ID}"
 INPUT_FILE="${RESULTS_DIR}/e2e-input.jsonl"
 SEED_YML="${REPO_ROOT}/account-worker/src/main/resources/application-e2e.yml"
-PROTOCOL_FILE="loadtest/measure-protocol-b0.md"
+PROTOCOL_FILES="loadtest/measure-protocol-b0.md"
+if [ "$INDEX_MODE" = "1" ] || [ "$ROUND_CLEAR" = "1" ]; then
+    PROTOCOL_FILES="loadtest/measure-protocol-b0.md loadtest/measure-protocol-b1.md"
+fi
 COMPOSE=(docker compose -p stock-trading-engine -f docker-compose.yml -f docker-compose.loadtest.yml)
 
 PREFLIGHT_PATTERN_APPS='StockTradingEngineApplication|OrderEngineApplication|MatchingApplication|SettlementEngineApplication|AccountWorkerApplication|MatchingWorkerApplication|AccountProjection|SettlementWorker'
@@ -244,6 +267,241 @@ run_preflight() {
     return 0
 }
 
+# ---------------------------------------------------------------- 인덱스·비움 (measure-protocol-b1.md)
+
+b1_schema() {
+    echo "${B1_SCHEMA:-public}"
+}
+
+# 접수 경로의 Seq Scan 을 없애는 인덱스. 앱 코드는 두고 SQL 로만 만든다 (이름 접두사 ix_b1_)
+index_create_sql() {
+    local schema
+    schema="$(b1_schema)"
+    cat <<SQL
+CREATE INDEX IF NOT EXISTS ${B1_ORDERS_INDEX} ON ${schema}.orders (account_id, status, side, stock_code);
+CREATE INDEX IF NOT EXISTS ${B1_HOLDINGS_INDEX} ON ${schema}.holdings (account_id, stock_code);
+ANALYZE ${schema}.orders;
+ANALYZE ${schema}.holdings;
+SQL
+}
+
+index_drop_sql() {
+    local schema
+    schema="$(b1_schema)"
+    cat <<SQL
+DROP INDEX IF EXISTS ${schema}.${B1_ORDERS_INDEX};
+DROP INDEX IF EXISTS ${schema}.${B1_HOLDINGS_INDEX};
+SQL
+}
+
+# 비움: 계좌 2001~2100 의 FILLED 주문과 그 주문을 참조하는 unpaids 만 지운다.
+# PENDING 행은 지우지 않는다. 매칭 엔진이 메모리 호가창에 들고 있는 미체결 주문의 DB 행이기 때문이다.
+clear_sql() {
+    local schema
+    schema="$(b1_schema)"
+    cat <<SQL
+BEGIN;
+WITH deleted AS (
+  DELETE FROM ${schema}.unpaids
+  WHERE order_id IN (SELECT id FROM ${schema}.orders WHERE account_id BETWEEN 2001 AND 2100 AND status = 'FILLED')
+  RETURNING 1)
+SELECT 'unpaids|' || count(*) FROM deleted;
+WITH deleted AS (
+  DELETE FROM ${schema}.orders
+  WHERE account_id BETWEEN 2001 AND 2100 AND status = 'FILLED'
+  RETURNING 1)
+SELECT 'orders|' || count(*) FROM deleted;
+COMMIT;
+SQL
+}
+
+clear_vacuum_sql() {
+    local schema
+    schema="$(b1_schema)"
+    cat <<SQL
+VACUUM (ANALYZE) ${schema}.orders;
+VACUUM (ANALYZE) ${schema}.unpaids;
+SQL
+}
+
+deleted_orders_from_clear_output() {
+    awk -F'|' '$1 == "orders" { value = $2 } END { if (value == "") print "NA"; else print value }'
+}
+
+# 한 행: orders 전체|계좌 2001~2100|PENDING|FILLED|unpaids(그 계좌 주문분)|dead tuple|orders 파일 바이트
+db_state_sql() {
+    local schema
+    schema="$(b1_schema)"
+    cat <<SQL
+SELECT concat_ws('|',
+  (SELECT count(*) FROM ${schema}.orders),
+  (SELECT count(*) FROM ${schema}.orders WHERE account_id BETWEEN 2001 AND 2100),
+  (SELECT count(*) FROM ${schema}.orders WHERE account_id BETWEEN 2001 AND 2100 AND status = 'PENDING'),
+  (SELECT count(*) FROM ${schema}.orders WHERE account_id BETWEEN 2001 AND 2100 AND status = 'FILLED'),
+  (SELECT count(*) FROM ${schema}.unpaids u JOIN ${schema}.orders o ON o.id = u.order_id WHERE o.account_id BETWEEN 2001 AND 2100),
+  COALESCE((SELECT n_dead_tup FROM pg_stat_user_tables WHERE schemaname = '${schema}' AND relname = 'orders'), 0),
+  pg_relation_size('${schema}.orders'));
+SQL
+}
+
+# 접수 경로의 쿼리 세 개 (계좌 2001 매수, 계좌 2051·종목 A000020 매도, 보유 락 쿼리의 조회 형태)
+q1_sql() {
+    echo "SELECT COALESCE(SUM(reserved_margin), 0) FROM $(b1_schema).orders WHERE account_id = 2001 AND status = 'PENDING' AND side = 'BUY'"
+}
+q2_sql() {
+    echo "SELECT COALESCE(SUM(quantity - filled_quantity), 0) FROM $(b1_schema).orders WHERE account_id = 2051 AND stock_code = 'A000020' AND status = 'PENDING' AND side = 'SELL'"
+}
+qh_sql() {
+    echo "SELECT h.* FROM $(b1_schema).holdings h JOIN $(b1_schema).accounts a ON a.id = h.account_id WHERE a.account_id = 2051 AND h.stock_code = 'A000020'"
+}
+
+explain_ms() {
+    awk '/Execution Time:/ { print $3; exit }'
+}
+
+explain_plan() {
+    grep -E 'Scan' | sed -E 's/^[[:space:]]*(->)?[[:space:]]*//; s/[[:space:]]+(on|using)[[:space:]].*//; s/[[:space:]]+\(cost.*//' \
+        | paste -sd '/' - | sed 's#/# / #g'
+}
+
+# kafka-consumer-groups --describe 출력에서 LAG 합. LAG 가 숫자인 행이 하나도 없으면 NA
+lag_total_from_describe() {
+    awk 'NF >= 6 && $6 ~ /^[0-9]+$/ { sum += $6; rows++ } END { if (rows == 0) print "NA"; else print sum }'
+}
+
+# 후속 처리가 끝났는지: 이전과 지금의 FILLED 행 수가 같고 두 컨슈머 그룹의 lag 가 모두 0
+quiescent_step() {
+    local prev="$1" cur="$2" lag_matching="$3" lag_settlement="$4"
+    if [ -n "$prev" ] && [ "$prev" = "$cur" ] && [ "$lag_matching" = "0" ] && [ "$lag_settlement" = "0" ]; then
+        echo yes
+    else
+        echo no
+    fi
+}
+
+psql_app() {
+    docker exec -i stock-trading-postgres psql -X -q -At -U postgres -d stock_trading -v ON_ERROR_STOP=1 "$@"
+}
+
+group_lag() {
+    docker exec stock-trading-kafka /opt/kafka/bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 \
+        --describe --group "$1" 2> /dev/null | lag_total_from_describe
+}
+
+filled_e2e_count() {
+    psql_app -c "SELECT count(*) FROM $(b1_schema).orders WHERE account_id BETWEEN 2001 AND 2100 AND status = 'FILLED'"
+}
+
+now_ms() {
+    perl -MTime::HiRes=time -e 'printf "%d\n", time * 1000'
+}
+
+await_quiescent() {
+    local waited=0 prev="" cur="" lag_matching="" lag_settlement=""
+    while [ "$waited" -lt "$QUIESCE_TIMEOUT" ]; do
+        cur="$(filled_e2e_count)"
+        lag_matching="$(group_lag matching-engine)"
+        lag_settlement="$(group_lag settlement-engine)"
+        if [ "$(quiescent_step "$prev" "$cur" "$lag_matching" "$lag_settlement")" = "yes" ]; then
+            echo "후속 처리 완료: FILLED ${cur}, lag matching=${lag_matching} settlement=${lag_settlement}, 대기 ${waited}초"
+            return 0
+        fi
+        prev="$cur"
+        sleep "$QUIESCE_POLL_SEC"
+        waited=$((waited + QUIESCE_POLL_SEC))
+    done
+    echo "후속 처리 대기 ${QUIESCE_TIMEOUT}초 초과: FILLED ${cur}, lag matching=${lag_matching} settlement=${lag_settlement}" >&2
+    return 1
+}
+
+# 비움 + VACUUM. 걸린 시간(ms)과 지운 orders 행 수를 CLEAR_MS, CLEAR_DELETED 에 남긴다
+clear_orders() {
+    local started output
+    started="$(now_ms)"
+    output="$(clear_sql | psql_app)" || return 1
+    clear_vacuum_sql | psql_app > /dev/null || return 1
+    CLEAR_MS=$(($(now_ms) - started))
+    CLEAR_DELETED="$(printf '%s\n' "$output" | deleted_orders_from_clear_output)"
+}
+
+DBSTATS_HEADER="round,phase,orders_total,orders_e2e,pending_e2e,filled_e2e,unpaids_e2e,dead_orders,orders_bytes,q1_ms,q2_ms,qh_ms,q1_plan,q2_plan,qh_plan,clear_ms,deleted_orders"
+
+# 회차 시작 직전(start)과 비움 직후(cleared)의 DB 상태를 dbstats-<cond>.csv 에 한 줄 쓴다.
+# start 에서는 접수 경로 쿼리 세 개의 EXPLAIN (ANALYZE) 시간과 계획도 남긴다 (k6 구간 밖, 판정에 쓰지 않는다)
+record_dbstats() {
+    local cond_dir="$1" cond="$2" round="$3" phase="$4" clear_ms="${5:-}" deleted="${6:-}"
+    local file="${cond_dir}/dbstats-${cond}.csv"
+    [ -f "$file" ] || echo "$DBSTATS_HEADER" > "$file"
+    local state total e2e pending filled unpaids dead bytes
+    state="$(db_state_sql | psql_app)"
+    IFS='|' read -r total e2e pending filled unpaids dead bytes <<< "$state"
+    local q1_ms="" q2_ms="" qh_ms="" q1_plan="" q2_plan="" qh_plan="" plan_text
+    if [ "$phase" = "start" ]; then
+        plan_text="$(psql_app -c "EXPLAIN (ANALYZE) $(q1_sql)")"
+        q1_ms="$(printf '%s\n' "$plan_text" | explain_ms)"
+        q1_plan="$(printf '%s\n' "$plan_text" | explain_plan)"
+        plan_text="$(psql_app -c "EXPLAIN (ANALYZE) $(q2_sql)")"
+        q2_ms="$(printf '%s\n' "$plan_text" | explain_ms)"
+        q2_plan="$(printf '%s\n' "$plan_text" | explain_plan)"
+        plan_text="$(psql_app -c "EXPLAIN (ANALYZE) $(qh_sql)")"
+        qh_ms="$(printf '%s\n' "$plan_text" | explain_ms)"
+        qh_plan="$(printf '%s\n' "$plan_text" | explain_plan)"
+    fi
+    echo "${round},${phase},${total},${e2e},${pending},${filled},${unpaids},${dead},${bytes},${q1_ms},${q2_ms},${qh_ms},${q1_plan},${q2_plan},${qh_plan},${clear_ms},${deleted}" >> "$file"
+}
+
+record_schema() {
+    local file="$1"
+    {
+        docker exec -i stock-trading-postgres psql -X -U postgres -d stock_trading -c '\d orders' -c '\d holdings'
+    } > "$file" 2>&1
+}
+
+create_b1_indexes() {
+    index_create_sql | psql_app
+}
+
+drop_b1_indexes() {
+    index_drop_sql | psql_app
+}
+
+# 종료 때(중단 포함) 인덱스를 원복한다. 이 DB 는 다른 워킹트리와 공유한다
+b1_cleanup() {
+    if [ "$INDEX_MODE" = "1" ] && [ "$B1_INDEX_CREATED" = "1" ]; then
+        echo "인덱스 원복(ix_b1_*)"
+        drop_b1_indexes
+        B1_INDEX_CREATED=0
+    fi
+}
+
+# 접수 경로의 쿼리 세 개의 계획에 Seq Scan 이 있는지 기록한다 (EXPLAIN 만, 실행하지 않음). 있으면 경고
+check_b1_plans() {
+    local file="$1" plan_text query_sql name
+    : > "$file"
+    for name in q1 q2 qh; do
+        query_sql="$("${name}_sql")"
+        plan_text="$(psql_app -c "EXPLAIN $query_sql")"
+        {
+            echo "== ${name}: ${query_sql}"
+            printf '%s\n' "$plan_text"
+        } >> "$file"
+        if printf '%s\n' "$plan_text" | grep -qE 'Seq Scan on (orders|holdings)'; then
+            echo "경고: ${name} 계획에 Seq Scan on orders/holdings 가 있다 (${file})" >&2
+        fi
+    done
+}
+
+assert_src_main_unchanged() {
+    local changed
+    changed="$(git diff --stat "$B1_BASE_SHA" -- '*/src/main/*')"
+    if [ -n "$changed" ]; then
+        echo "앱 코드(src/main)가 ${B1_BASE_SHA} 와 다르다 — 인덱스 측정은 앱 코드를 바꾸지 않는 조건이다" >&2
+        echo "$changed" >&2
+        return 1
+    fi
+    echo "src/main diff vs ${B1_BASE_SHA}: 없음"
+}
+
 # ---------------------------------------------------------------- 측정
 
 # measure-e2e.sh 는 끝까지 실행되는 스크립트라 source 할 수 없다. 파일은 고치지 않고 함수 정의만 꺼내 쓴다.
@@ -293,6 +551,16 @@ prepare_condition() {
     [ "$cond" = "v1" ] && partitions="$V1_PARTITIONS"
     ./loadtest/reset-e2e-v1-state.sh "$partitions"
 
+    if [ "$INDEX_MODE" = "1" ] && [ "$cond" = "v1" ]; then
+        echo "--- ${cond} 준비 3-1: 인덱스 생성 (앱 기동 전, orders 테이블이 없으면 앱 기동 뒤로 미룬다)"
+        drop_b1_indexes
+        if create_b1_indexes; then
+            B1_INDEX_CREATED=1
+        else
+            echo "orders 또는 holdings 테이블이 아직 없다 — 앱 기동 뒤에 만든다"
+        fi
+    fi
+
     echo "--- ${cond} 준비 4: 앱 기동"
     ./loadtest/run-e2e-"${cond}".sh | tee "${RUN_DIR}/${cond}/logs/start-${cond}.out"
     if ! grep -q '^READY' "${RUN_DIR}/${cond}/logs/start-${cond}.out"; then
@@ -301,6 +569,14 @@ prepare_condition() {
     fi
     if [ "$INCLUDE_KAFKA_UI" != "1" ]; then
         "${COMPOSE[@]}" stop kafka-ui > /dev/null 2>&1 || true
+    fi
+
+    if [ "$INDEX_MODE" = "1" ] && [ "$cond" = "v1" ]; then
+        echo "--- ${cond} 준비 4-1: 인덱스 확인 (앱 기동 뒤)"
+        create_b1_indexes || { echo "인덱스를 만들지 못했다" >&2; return 1; }
+        B1_INDEX_CREATED=1
+        record_schema "${RUN_DIR}/${cond}/schema-before.txt"
+        check_b1_plans "${RUN_DIR}/${cond}/plans-${cond}.txt"
     fi
 
     echo "--- ${cond} 준비 5: 준비 완료 확인"
@@ -312,7 +588,7 @@ prepare_condition() {
 }
 
 # order-engine 이 실제로 쓰는 컨슈머 그룹. application-e2e.yml 에는 order-engine-e2e 라고 적혀 있지만 첫 리허설에서
-# 기동 로그의 groupId 가 order-engine 이었다. 그래서 order-engine 로그에서 읽고, 못 읽으면 V1_GROUP, 그것도 없으면 order-engine 을 쓴다
+# 기동 로그의 groupId 가 order-engine 이었다. 그래서 order-engine 로그에서 읽고, 못 읽으면 V1_GROUP, 그것도 없으면 order-engine 으로 한다
 v1_consumer_group() {
     local detected
     detected="$(grep -m1 -oE 'groupId=[^],]+' loadtest/logs/order-engine.log 2> /dev/null | sed 's/groupId=//')"
@@ -412,6 +688,10 @@ run_round() {
     order_lines="$(log_line_count loadtest/logs/order-engine.log)"
     match_lines="$(log_line_count loadtest/logs/matching-engine.log)"
 
+    if [ "$cond" = "v1" ] && { [ "$INDEX_MODE" = "1" ] || [ "$ROUND_CLEAR" = "1" ]; }; then
+        record_dbstats "$cond_dir" "$cond" "$round" start
+    fi
+
     SAMPLER_COND="$cond" ./loadtest/sample-env.sh "${cond_dir}/cpu-${cond}-${round}.csv" &
     local sampler_pid=$!
     sleep 5
@@ -455,6 +735,18 @@ run_round() {
         echo "E7: 앱이 죽었다 — ${cond} 조건을 중단한다. 처음부터 다시 돌린다 (파일은 지우지 않는다)" >&2
         return 2
     fi
+
+    if [ "$ROUND_CLEAR" = "1" ] && [ "$cond" = "v1" ]; then
+        if ! await_quiescent; then
+            echo "후속 처리가 끝나지 않아 비우지 않고 ${cond} 조건을 중단한다" >&2
+            return 3
+        fi
+        CLEAR_MS=0
+        CLEAR_DELETED=NA
+        clear_orders || { echo "비움 실패 — ${cond} 조건을 중단한다" >&2; return 3; }
+        echo "비움: orders ${CLEAR_DELETED}행 삭제, ${CLEAR_MS}ms (VACUUM 포함)"
+        record_dbstats "$cond_dir" "$cond" "$round" cleared "$CLEAR_MS" "$CLEAR_DELETED"
+    fi
 }
 
 run_condition() {
@@ -470,10 +762,14 @@ run_condition() {
         run_round "$cond" "$round" "$cond_dir"
         status=$?
         [ "$status" -eq 2 ] && break
+        [ "$status" -eq 3 ] && break
         if [ "$number" -lt "$ROUNDS" ]; then sleep "$ROUND_GAP_SEC"; fi
     done
 
     record_autovacuum after "$cond_dir" "$cond"
+    if [ "$INDEX_MODE" = "1" ] && [ "$cond" = "v1" ]; then
+        record_schema "${cond_dir}/schema-after.txt"
+    fi
     cp loadtest/logs/*.log "${cond_dir}/logs/" 2> /dev/null || true
     ./loadtest/stop-"${cond}".sh
     return "$status"
@@ -481,14 +777,18 @@ run_condition() {
 
 # 프로토콜 문서가 커밋돼 있고 바뀌지 않았는지 확인하고 해시를 남긴다 (첫 회차 전에 고정)
 fix_protocol() {
-    if [ -n "$(git status --porcelain -- "$PROTOCOL_FILE")" ]; then
-        echo "${PROTOCOL_FILE} 에 커밋되지 않은 변경이 있다 — 먼저 커밋한다" >&2
-        return 1
-    fi
-    {
-        echo "commit=$(git log -1 --format=%H -- "$PROTOCOL_FILE")"
-        shasum -a 256 "$PROTOCOL_FILE"
-    } > "${RUN_DIR}/protocol.sha256"
+    local file
+    : > "${RUN_DIR}/protocol.sha256"
+    for file in $PROTOCOL_FILES; do
+        if [ -n "$(git status --porcelain -- "$file")" ]; then
+            echo "${file} 에 커밋되지 않은 변경이 있다 — 먼저 커밋한다" >&2
+            return 1
+        fi
+        {
+            echo "commit=$(git log -1 --format=%H -- "$file")"
+            shasum -a 256 "$file"
+        } >> "${RUN_DIR}/protocol.sha256"
+    done
     cat "${RUN_DIR}/protocol.sha256"
 }
 
@@ -496,6 +796,15 @@ main() {
     if [ "$PREFLIGHT_ONLY" = "1" ]; then
         run_preflight
         exit $?
+    fi
+
+    if [ "$INDEX_MODE" = "1" ] && [ "$CONDITIONS" != "v1" ]; then
+        echo "INDEX_MODE=1 은 CONDITIONS=\"v1\" 일 때만 쓴다 (받은 값: ${CONDITIONS})" >&2
+        exit 1
+    fi
+    if [ "$ROUND_CLEAR" = "1" ] && [ "$CONDITIONS" != "v1" ]; then
+        echo "ROUND_CLEAR=1 은 CONDITIONS=\"v1\" 일 때만 쓴다 (받은 값: ${CONDITIONS})" >&2
+        exit 1
     fi
 
     mkdir -p "$RUN_DIR"
@@ -510,8 +819,19 @@ main() {
         echo "HEAD=$(git rev-parse HEAD)"
         echo "RATE=${RATE} N=${N} ROUNDS=${ROUNDS} ROUND_GAP_SEC=${ROUND_GAP_SEC} INCLUDE_KAFKA_UI=${INCLUDE_KAFKA_UI}"
         echo "V1_LISTENER_CONCURRENCY=${V1_LISTENER_CONCURRENCY} V1_PARTITIONS=${V1_PARTITIONS}"
-        echo "CONDITIONS=${CONDITIONS}"
+        echo "CONDITIONS=${CONDITIONS} INDEX_MODE=${INDEX_MODE} ROUND_CLEAR=${ROUND_CLEAR}"
+        if [ "$INDEX_MODE" = "1" ] || [ "$ROUND_CLEAR" = "1" ]; then
+            assert_src_main_unchanged
+        fi
     } > "${RUN_DIR}/env.txt"
+    if ! grep -q "^src/main diff" "${RUN_DIR}/env.txt" && { [ "$INDEX_MODE" = "1" ] || [ "$ROUND_CLEAR" = "1" ]; }; then
+        echo "src/main 변경 확인 실패 — env.txt 를 본다" >&2
+        exit 1
+    fi
+    if [ "$INDEX_MODE" = "1" ]; then
+        trap 'b1_cleanup' EXIT
+        trap 'exit 130' INT TERM
+    fi
     fix_protocol >> "${RUN_DIR}/env.txt" || exit 1
 
     if [ "$CAFFEINATE" = "1" ]; then
@@ -527,4 +847,7 @@ main() {
     echo "완료 — ${RUN_DIR}/analysis.md"
 }
 
-main
+# 테스트가 함수만 불러올 수 있게, MEASURE_SOURCE_ONLY=1 이면 main 을 실행하지 않는다
+if [ "${MEASURE_SOURCE_ONLY:-0}" != "1" ]; then
+    main
+fi
