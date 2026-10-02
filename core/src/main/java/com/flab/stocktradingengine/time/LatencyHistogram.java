@@ -56,6 +56,22 @@ public final class LatencyHistogram {
      * 통지·매칭 발신 전)에 있어 이미 예약된 주문이 통지도 매칭 발신도 못 받고 붕 뜨는(돈) 결과로
      * 이어질 수 있다 — 계측 부가 기능이 본 기능을 해치면 안 된다.</p>
      */
+    /**
+     * 이미 계산된 경과 시간(나노초)을 그대로 기록한다. 시작 시각을 다른 프로세스·스레드가 찍어 보낸 경우처럼
+     * "지금 시각과의 차이"가 아닌 두 시각의 차이를 기록할 때 쓴다(구간 분해 측정). 꺼져 있으면 분기 하나만
+     * 타고 반환하고, 켜져 있어도 예외는 계측만 건너뛰고 삼킨다 — {@link #record}와 같은 규칙이다.
+     */
+    public void recordNanos(long elapsedNanos) {
+        if (!enabled) {
+            return;
+        }
+        try {
+            recorder.recordValue(Math.max(elapsedNanos, 0L));
+        } catch (RuntimeException e) {
+            log.log(Level.WARNING, "[구간 지연 측정] recordNanos 실패(계측만 스킵, 처리는 계속됨)", e);
+        }
+    }
+
     public void record(long publishedAtEpochNanos) {
         if (!enabled) {
             return;
@@ -66,6 +82,17 @@ public final class LatencyHistogram {
         } catch (RuntimeException e) {
             log.log(Level.WARNING, "[접수 지연 측정] record 실패(계측만 스킵, 처리는 계속됨)", e);
         }
+    }
+
+    /**
+     * 마지막으로 꺼낸 뒤부터 지금까지의 구간 히스토그램을 원자적으로 꺼내고 내부를 비운다. {@link
+     * StageLatencyRegistry}가 구간을 누적·시계열로 나눠 쓰려고 같은 패키지에서만 부른다. 꺼져 있으면 null.
+     */
+    Histogram drainInterval() {
+        if (!enabled) {
+            return null;
+        }
+        return recorder.getIntervalHistogram();
     }
 
     /**
