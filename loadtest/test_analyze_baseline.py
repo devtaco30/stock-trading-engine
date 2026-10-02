@@ -6,9 +6,11 @@
 import csv
 import importlib.util
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 MODULE_PATH = Path(__file__).with_name("analyze-baseline.py")
 spec = importlib.util.spec_from_file_location("analyze_baseline", MODULE_PATH)
@@ -188,6 +190,36 @@ class ExclusionRuleTest(unittest.TestCase):
         result = self.condition_with("r05", cpu=cpu)
         self.assertEqual([], result.reasons)
 
+    def test_E4는_기본값에서_판정하지_않는다(self):
+        cpu = healthy_cpu()
+        cpu[2][8] = "Chrome:30.0|java:50|k6:10"
+        cpu[3][8] = "Chrome:26.0|java:50|k6:10"
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("ANALYZE_E4", None)
+            result = self.condition_with("r05", cpu=cpu)
+        self.assertEqual([], result.reasons)
+        self.assertTrue(result.valid)
+
+    @mock.patch.dict(os.environ, {"ANALYZE_E4": "0"})
+    def test_E4를_0으로_명시해도_판정하지_않는다(self):
+        cpu = healthy_cpu()
+        cpu[2][8] = "Chrome:30.0|java:50|k6:10"
+        cpu[3][8] = "Chrome:26.0|java:50|k6:10"
+        result = self.condition_with("r05", cpu=cpu)
+        self.assertEqual([], result.reasons)
+
+    def test_E4를_끄면_다른_사유는_그대로_판정한다(self):
+        cpu = healthy_cpu()
+        cpu[2][8] = "Chrome:30.0|java:50"
+        cpu[3][8] = "Chrome:30.0|java:50"
+        cpu[4][5] = 25.0
+        cpu[5][5] = 25.0
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("ANALYZE_E4", None)
+            result = self.condition_with("r05", cpu=cpu, hist_count=9000)
+        self.assertEqual(["E1", "COUNT"], result.reasons)
+
+    @mock.patch.dict(os.environ, {"ANALYZE_E4": "1"})
     def test_E4_허용_목록에_없는_프로세스가_25_이상으로_연속_2개면_제외한다(self):
         cpu = healthy_cpu()
         cpu[2][8] = "Chrome:30.0|java:50|k6:10"
@@ -195,6 +227,7 @@ class ExclusionRuleTest(unittest.TestCase):
         result = self.condition_with("r05", cpu=cpu)
         self.assertEqual(["E4"], result.reasons)
 
+    @mock.patch.dict(os.environ, {"ANALYZE_E4": "1"})
     def test_E4_허용_목록_프로세스는_높아도_제외하지_않는다(self):
         cpu = healthy_cpu()
         cpu[2][8] = "java:300|k6:90|kernel_task:80|com.docker.backend:70"
@@ -202,6 +235,7 @@ class ExclusionRuleTest(unittest.TestCase):
         result = self.condition_with("r05", cpu=cpu)
         self.assertEqual([], result.reasons)
 
+    @mock.patch.dict(os.environ, {"ANALYZE_E4": "1"})
     def test_E4_top이_잘라낸_Docker_VM_이름도_허용한다(self):
         cpu = healthy_cpu()
         cpu[2][8] = "com.apple.Virtua:105.0|com.docker.backe:30.0"
@@ -209,6 +243,7 @@ class ExclusionRuleTest(unittest.TestCase):
         result = self.condition_with("r05", cpu=cpu)
         self.assertEqual([], result.reasons)
 
+    @mock.patch.dict(os.environ, {"ANALYZE_E4": "1"})
     def test_E4_허용_목록에_없는_프로세스가_연속이_아니면_제외하지_않는다(self):
         cpu = healthy_cpu()
         cpu[2][8] = "Chrome:30.0|java:50"
@@ -245,6 +280,40 @@ class ExclusionRuleTest(unittest.TestCase):
         cpu[6][9] = "Battery"
         result = self.condition_with("r01", cpu=cpu, hist_count=9000)
         self.assertEqual(["WARMUP", "E3", "COUNT"], result.reasons)
+
+
+class MethodLineTest(unittest.TestCase):
+    LINE = "E4(허용 목록 밖 프로세스의 CPU 사용)는 분석에서 제외했다"
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        for cond in ("v1", "v2"):
+            fixture = Fixture(self.root, cond)
+            for number in range(1, 12):
+                fixture.add_round(f"r{number:02d}", db_delta=10000 if cond == "v1" else None)
+            fixture.write_rounds()
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_E4를_끄면_방법_절에_한_줄만_적는다(self):
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("ANALYZE_E4", None)
+            report = ab.build_report(self.root)
+        self.assertIn("## 방법", report)
+        self.assertEqual(1, report.count(self.LINE))
+
+    @mock.patch.dict(os.environ, {"ANALYZE_E4": "1"})
+    def test_E4를_켜면_그_줄이_없다(self):
+        report = ab.build_report(self.root)
+        self.assertNotIn(self.LINE, report)
+
+    def test_compare에도_같은_한_줄이_있다(self):
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("ANALYZE_E4", None)
+            report = ab.build_compare([("A", str(self.root), "v1")])
+        self.assertEqual(1, report.count(self.LINE))
 
 
 class ConditionValidityTest(unittest.TestCase):

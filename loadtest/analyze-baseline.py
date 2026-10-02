@@ -28,7 +28,7 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
-# 임시값 — Jack 확정 전 (measure-protocol-b0.md 맨 위와 같은 값)
+# E4 는 ANALYZE_E4=1 일 때만 판정한다(기본 끔). 아래는 임시값 — Jack 확정 전 (measure-protocol-b0.md 맨 위와 같은 값)
 EXPECTED_COUNT = 10000
 WARMUP_ROUND = "r01"
 IDLE_LIMIT = 30.0          # E1: 전체 idle%가 이 값 미만
@@ -40,6 +40,14 @@ EXPECTED_ROUNDS = 11
 
 # E4 허용 목록. 첫 리허설에서 실제 top 출력을 보고 확정한다(설계서 2-3절).
 DEFAULT_E4_ALLOW = r"^(k6|java|kernel_task)$|[Dd]ocker|Virtua|vmnet|qemu"
+
+E4_METHOD_LINE = "E4(허용 목록 밖 프로세스의 CPU 사용)는 분석에서 제외했다"
+
+
+def e4_enabled():
+    """E4 판정은 ANALYZE_E4=1 일 때만 한다. 기본값은 끔."""
+    return os.environ.get("ANALYZE_E4") == "1"
+
 
 REASON_ORDER = ["WARMUP", "E1", "E2", "E3", "E4", "E5", "E6", "COUNT"]
 ROUNDS_HEADER = ["round", "k6_start", "k6_end", "k6_exit", "checks_fail", "http_fail", "dropped", "hist_count",
@@ -202,7 +210,7 @@ def judge_reasons(round_, cond):
     if any(is_power_or_thermal_problem(s) for s in samples):
         reasons.add("E3")
     allow = re.compile(os.environ.get("E4_ALLOW") or DEFAULT_E4_ALLOW)
-    if has_consecutive([any(cpu >= EXTERNAL_CPU_LIMIT and not allow.search(name)
+    if e4_enabled() and has_consecutive([any(cpu >= EXTERNAL_CPU_LIMIT and not allow.search(name)
                             for name, cpu in parse_top5(s.get("top5")))
                         for s in samples], CONSECUTIVE):
         reasons.add("E4")
@@ -442,6 +450,8 @@ def build_report(result_dir):
     out = ["# 기준선 재측정 분석", "",
            "단위는 밀리초(소수 둘째 자리)다. 제외 사유 코드는 measure-protocol-b0.md의 규칙을 따른다. "
            "WARMUP은 첫 회차, COUNT는 회차 건수가 1만이 아닌 경우다. 제외된 회차의 값도 표에 그대로 싣는다.", ""]
+    if not e4_enabled():
+        out += ["## 방법", "", E4_METHOD_LINE, ""]
     for cond, rounds in rounds_by_cond.items():
         out.append(f"- {cond}: {status_text(rounds)}")
     out.append("")
@@ -570,6 +580,8 @@ def build_compare(entries):
 
     out = ["# 세트 비교", "",
            "단위는 밀리초(소수 둘째 자리)다. 별표는 제외된 회차(사유 코드는 각 세트의 analysis.md)이고, r01은 워밍업이다.", ""]
+    if not e4_enabled():
+        out += ["## 방법", "", E4_METHOD_LINE, ""]
     for label in labels:
         out.append(f"- {label}: {status_text(loaded[label])}")
     out.append("")
