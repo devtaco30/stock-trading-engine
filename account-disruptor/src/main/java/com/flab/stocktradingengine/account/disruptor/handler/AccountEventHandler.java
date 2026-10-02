@@ -387,6 +387,9 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
             return;
         }
         BuyFillResult result = state.applyBuyFill(tradeId, orderId, event.getStockCode(), event.getPrice(), event.getQuantity());
+        if (stages.isEnabled() && result.applied()) {
+            stages.recordFillApplied(event, EpochNanos.now());
+        }
         if (result.applied()) {
             listener.onStateChanged(accountId, state.balance(), state.holdings(), state.seq());
         }

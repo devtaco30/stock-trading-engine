@@ -16,6 +16,7 @@ import io.aeron.logbuffer.Header;
 import com.flab.stocktradingengine.account.disruptor.engine.AccountEngine;
 import com.flab.stocktradingengine.codec.FillCodec;
 import com.flab.stocktradingengine.codec.FilledTrade;
+import com.flab.stocktradingengine.time.EpochNanos;
 
 /**
  * ADR-032, U3 — Aeron으로 들어온 체결을 계좌 엔진에 반영하는 수신 게이트웨이.
@@ -91,17 +92,21 @@ public final class AccountFillReceiver implements AutoCloseable {
      * 검증하는 단위 테스트) 둘 다 0으로 둔다.</p>
      */
     void onFragment(DirectBuffer buffer, int offset, int length, Header header) {
+        long receivedAtOrZero = engine.stagesEnabled() ? EpochNanos.now() : 0L;
         Optional<FilledTrade> decoded = codec.tryDecode(buffer, offset);
         if (decoded.isEmpty()) {
             return;
         }
         FilledTrade trade = decoded.get();
+        long receivedAtNanos = receivedAtOrZero;
         long sourcePosition = header != null ? header.position() : 0L;
         int sourceSessionId = header != null ? header.sessionId() : 0;
         engine.publishBuyFill(trade.tradeId(), trade.buyOrderId(), trade.buyAccountId(),
-            trade.stockCode(), trade.matchPrice(), trade.filledQuantity(), sourcePosition, sourceSessionId);
+            trade.stockCode(), trade.matchPrice(), trade.filledQuantity(), sourcePosition, sourceSessionId,
+            receivedAtNanos, trade.emittedAtNanos(), trade.aggressorOriginNanos());
         engine.publishSellFill(trade.tradeId(), trade.sellOrderId(), trade.sellAccountId(),
-            trade.stockCode(), trade.filledQuantity(), sourcePosition, sourceSessionId);
+            trade.stockCode(), trade.filledQuantity(), sourcePosition, sourceSessionId,
+            receivedAtNanos, trade.emittedAtNanos(), trade.aggressorOriginNanos());
     }
 
     /**

@@ -4,10 +4,12 @@ import java.util.List;
 import java.util.Optional;
 
 import org.springframework.context.SmartLifecycle;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 import com.flab.stocktradingengine.codec.JournaledOrder;
+import com.flab.stocktradingengine.time.StageLatencyRegistry;
 import com.flab.stocktradingengine.matching.disruptor.engine.MatchingEngine;
 import com.flab.stocktradingengine.matching.disruptor.io.MatchListener;
 import com.flab.stocktradingengine.matching.disruptor.io.MatchingSnapshotSink;
@@ -48,9 +50,10 @@ public class MatchingEngineConfig {
     @Bean
     public MatchingEngine matchingEngine(MatchListener listener, Journal journal, MatchingSnapshotSink matchingSnapshotWriter,
             Optional<StoredMatchingSnapshot> matchingLoadedSnapshot, List<JournaledOrder> matchingJournalRecoveredEntries,
-            List<JournaledOrder> matchingOrderIntakeReplayedEntries) {
+            List<JournaledOrder> matchingOrderIntakeReplayedEntries,
+            ObjectProvider<StageLatencyRegistry> matchingStageLatencyRegistry) {
         MatchingEngine engine = new MatchingEngine(BUFFER_SIZE, new BlockingWaitStrategy(), listener, journal,
-            matchingSnapshotWriter, true);
+            matchingSnapshotWriter, true, matchingStageLatencyRegistry.getIfAvailable(() -> new StageLatencyRegistry(false)));
         matchingLoadedSnapshot.ifPresent(stored -> {
             engine.restore(stored.snapshot());
             engine.seedOrderIntakePositions(stored.orderIntakePosition());

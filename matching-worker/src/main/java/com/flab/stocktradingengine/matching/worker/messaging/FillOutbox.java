@@ -11,6 +11,9 @@ import org.agrona.concurrent.UnsafeBuffer;
 
 import com.flab.stocktradingengine.codec.FillCodec;
 import com.flab.stocktradingengine.codec.FilledTrade;
+import com.flab.stocktradingengine.time.EpochNanos;
+import com.flab.stocktradingengine.time.LatencyHistogram;
+import com.flab.stocktradingengine.time.StageLatencyRegistry;
 
 import io.aeron.ExclusivePublication;
 import io.aeron.Publication;
@@ -62,12 +65,27 @@ class FillOutbox {
     private final AtomicBoolean running = new AtomicBoolean(false);
     private final AtomicReference<IllegalStateException> fatalError = new AtomicReference<>();
 
+    private final boolean stagesEnabled;
+    private final LatencyHistogram fillQueueStage;
+    private final LatencyHistogram fillOfferStage;
+
     private Thread publisherThread;
 
     FillOutbox(String endpoint, ExclusivePublication publication, FillCodec codec) {
+        this(endpoint, publication, codec, new StageLatencyRegistry(false));
+    }
+
+    /**
+     * 구간 분해 측정용 — 방출 시각(W-P14)이 있는 체결에 대해 발신 스레드가 꺼내 가기까지({@code fill_queue},
+     * W-P15 − W-P14)와 offer에 걸린 시간({@code fill_offer}, W-P16 − W-P15)을 기록한다.
+     */
+    FillOutbox(String endpoint, ExclusivePublication publication, FillCodec codec, StageLatencyRegistry stageRegistry) {
         this.endpoint = endpoint;
         this.publication = publication;
         this.codec = codec;
+        this.stagesEnabled = stageRegistry.isEnabled();
+        this.fillQueueStage = stageRegistry.stage("fill_queue");
+        this.fillOfferStage = stageRegistry.stage("fill_offer");
     }
 
     /**
@@ -106,7 +124,12 @@ class FillOutbox {
         while (running.get() || !queue.isEmpty()) {
             FilledTrade trade = queue.poll();
             if (trade != null) {
+                long dequeuedAtNanos = stagesEnabled ? EpochNanos.now() : 0L;
                 publish(trade);
+                if (stagesEnabled && trade.emittedAtNanos() > 0) {
+                    fillQueueStage.recordNanos(dequeuedAtNanos - trade.emittedAtNanos());
+                    fillOfferStage.recordNanos(EpochNanos.now() - dequeuedAtNanos);
+                }
             }
             pollIdleStrategy.idle(trade != null ? 1 : 0);
         }

@@ -12,6 +12,7 @@ import io.aeron.logbuffer.Header;
 
 import com.flab.stocktradingengine.codec.EventType;
 import com.flab.stocktradingengine.codec.JournaledOrder;
+import com.flab.stocktradingengine.time.EpochNanos;
 import com.flab.stocktradingengine.codec.OrderCodec;
 import com.flab.stocktradingengine.matching.disruptor.engine.MatchingEngine;
 
@@ -78,6 +79,7 @@ public final class AeronOrderReceiver implements AutoCloseable {
      * forwardCancel이 없다) sourcePosition·sourceSessionId를 붙이지 않는다.</p>
      */
     void onFragment(DirectBuffer buffer, int offset, int length, Header header) {
+        long matchReceivedAtNanos = engine.stagesEnabled() ? EpochNanos.now() : 0L;
         JournaledOrder order = codec.decode(buffer, offset);
         if (order.type() == EventType.PLACE) {
             long sourcePosition = header != null ? header.position() : 0L;
@@ -85,7 +87,8 @@ public final class AeronOrderReceiver implements AutoCloseable {
             engine.publishPlace(
                 order.orderId(), order.accountId(), order.stockCode(),
                 order.side(), order.price(), order.quantity(), order.orderAt(),
-                sourcePosition, sourceSessionId);
+                sourcePosition, sourceSessionId,
+                order.originNanos(), order.receivedAtNanos(), order.acceptedAtNanos(), matchReceivedAtNanos);
         } else {
             engine.publishCancel(order.orderId(), order.stockCode());
         }

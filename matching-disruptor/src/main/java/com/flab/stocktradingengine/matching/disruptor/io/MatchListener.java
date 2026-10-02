@@ -18,4 +18,13 @@ public interface MatchListener {
      * @param fill      체결 결과(매수·매도 주문 ID, 수량, 체결가)
      */
     void onFill(String stockCode, FillResult fill);
+
+    /**
+     * 구간 분해 측정용 — 체결 방출 시각(W-P14)과 이 체결을 일으킨 주문(aggressor)의 발신 시각(W-P0)을
+     * 함께 전달한다. 한 주문이 체결을 여러 건 내면 첫 체결에만 값이 있고 나머지는 0이다. 시각을 실지
+     * 않는 구현은 기본 동작(시각을 버리고 기존 호출)을 쓴다.
+     */
+    default void onFill(String stockCode, FillResult fill, long emittedAtNanos, long aggressorOriginNanos) {
+        onFill(stockCode, fill);
+    }
 }

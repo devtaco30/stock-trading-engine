@@ -24,6 +24,9 @@ dependencies {
 	compileOnly(libs.lombok)
 	annotationProcessor(libs.lombok)
 
+	// 구간 분해 측정(measure/segments): 계좌 엔진과 매칭 엔진을 한 프로세스에서 연결해 F 항등식을 확인하는 테스트용.
+	testImplementation(project(":matching-disruptor"))
+	testImplementation(project(":trading"))
 	testImplementation(libs.spring.boot.starter.test)
 	testImplementation(libs.spring.kafka.test) // @EmbeddedKafka — 주문 결과 기록 트랙 U3-a 검증
 	testRuntimeOnly("org.junit.platform:junit-platform-launcher")

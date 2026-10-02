@@ -239,6 +239,13 @@ public class AccountEngine {
         }
     }
 
+    private void stampFill(AccountEvent event, long receivedAtNanos, long emittedAtNanos, long aggressorOriginNanos) {
+        if (stages.isEnabled()) {
+            event.setReceivedAtNanos(receivedAtNanos);
+            event.setFillTimes(emittedAtNanos, aggressorOriginNanos);
+        }
+    }
+
     /** 수신 폴링 스레드가 W-P2를 찍을지 정하는 데 쓴다. */
     public boolean stagesEnabled() {
         return stages.isEnabled();
@@ -491,10 +498,21 @@ public class AccountEngine {
      * Header.sessionId()}로 실어 보낸다.
      */
     public long publishBuyFill(long tradeId, long orderId, long accountId, String stockCode, BigDecimal matchPrice, int quantity, long sourcePosition, int sourceSessionId) {
+        return publishBuyFill(tradeId, orderId, accountId, stockCode, matchPrice, quantity, sourcePosition, sourceSessionId, 0L, 0L, 0L);
+    }
+
+    /**
+     * 구간 분해 측정용 — 체결 수신 폴링 스레드가 읽은 시각(W-P17), 매칭이 체결을 방출한 시각(W-P14),
+     * 그 체결을 일으킨 주문의 발신 시각(W-P0)을 함께 싣는다. 계측이 꺼져 있으면 무시한다.
+     */
+    public long publishBuyFill(long tradeId, long orderId, long accountId, String stockCode, BigDecimal matchPrice, int quantity,
+                               long sourcePosition, int sourceSessionId,
+                               long receivedAtNanos, long emittedAtNanos, long aggressorOriginNanos) {
         long sequence = ringBuffer.next();
         try {
             AccountEvent event = ringBuffer.get(sequence);
             event.setBuyFill(tradeId, orderId, accountId, stockCode, matchPrice, quantity, sourcePosition, sourceSessionId);
+            stampFill(event, receivedAtNanos, emittedAtNanos, aggressorOriginNanos);
         } finally {
             ringBuffer.publish(sequence);
         }
@@ -513,10 +531,18 @@ public class AccountEngine {
 
     /** 매도 체결 반영을 링버퍼에 발행한다. tradeId 는 체결 신원(멱등키). sourcePosition·sourceSessionId는 {@link #publishBuyFill(long, long, long, String, BigDecimal, int, long, int)}과 같다. */
     public long publishSellFill(long tradeId, long orderId, long accountId, String stockCode, int quantity, long sourcePosition, int sourceSessionId) {
+        return publishSellFill(tradeId, orderId, accountId, stockCode, quantity, sourcePosition, sourceSessionId, 0L, 0L, 0L);
+    }
+
+    /** 구간 분해 측정용 — {@link #publishBuyFill(long, long, long, String, BigDecimal, int, long, int, long, long, long)}과 같다. 매도 쪽 이벤트는 시각만 싣고 E·F는 기록하지 않는다. */
+    public long publishSellFill(long tradeId, long orderId, long accountId, String stockCode, int quantity,
+                                long sourcePosition, int sourceSessionId,
+                                long receivedAtNanos, long emittedAtNanos, long aggressorOriginNanos) {
         long sequence = ringBuffer.next();
         try {
             AccountEvent event = ringBuffer.get(sequence);
             event.setSellFill(tradeId, orderId, accountId, stockCode, quantity, sourcePosition, sourceSessionId);
+            stampFill(event, receivedAtNanos, emittedAtNanos, aggressorOriginNanos);
         } finally {
             ringBuffer.publish(sequence);
         }

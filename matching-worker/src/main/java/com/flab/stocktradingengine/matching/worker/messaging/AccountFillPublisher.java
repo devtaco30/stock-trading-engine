@@ -10,6 +10,7 @@ import com.flab.stocktradingengine.codec.FillCodec;
 import com.flab.stocktradingengine.codec.FilledTrade;
 import com.flab.stocktradingengine.matching.disruptor.io.MatchListener;
 import com.flab.stocktradingengine.support.SnowflakeIdGenerator;
+import com.flab.stocktradingengine.time.StageLatencyRegistry;
 import com.flab.stocktradingengine.trading.matching.FillResult;
 
 import io.aeron.ExclusivePublication;
@@ -74,26 +75,43 @@ public class AccountFillPublisher implements MatchListener {
             AccountDestinationResolver destinationResolver,
             Map<String, ExclusivePublication> publicationsByEndpoint,
             SnowflakeIdGenerator snowflakeIdGenerator) {
-        this.destinationResolver = destinationResolver;
-        this.snowflakeIdGenerator = snowflakeIdGenerator;
-        this.outboxesByEndpoint = buildOutboxes(publicationsByEndpoint);
+        this(destinationResolver, publicationsByEndpoint, snowflakeIdGenerator, new StageLatencyRegistry(false));
     }
 
-    private static Map<String, FillOutbox> buildOutboxes(Map<String, ExclusivePublication> publicationsByEndpoint) {
+    /** 구간 분해 측정용 — endpoint별 발신 스레드가 {@code fill_queue}, {@code fill_offer}를 등록부에 기록한다. */
+    public AccountFillPublisher(
+            AccountDestinationResolver destinationResolver,
+            Map<String, ExclusivePublication> publicationsByEndpoint,
+            SnowflakeIdGenerator snowflakeIdGenerator,
+            StageLatencyRegistry stageRegistry) {
+        this.destinationResolver = destinationResolver;
+        this.snowflakeIdGenerator = snowflakeIdGenerator;
+        this.outboxesByEndpoint = buildOutboxes(publicationsByEndpoint, stageRegistry);
+    }
+
+    private static Map<String, FillOutbox> buildOutboxes(Map<String, ExclusivePublication> publicationsByEndpoint,
+                                                         StageLatencyRegistry stageRegistry) {
         FillCodec codec = new FillCodec();
         Map<String, FillOutbox> outboxes = new LinkedHashMap<>();
         for (Map.Entry<String, ExclusivePublication> entry : publicationsByEndpoint.entrySet()) {
-            outboxes.put(entry.getKey(), new FillOutbox(entry.getKey(), entry.getValue(), codec));
+            outboxes.put(entry.getKey(), new FillOutbox(entry.getKey(), entry.getValue(), codec, stageRegistry));
         }
         return outboxes;
     }
 
     @Override
     public void onFill(String stockCode, FillResult fill) {
+        onFill(stockCode, fill, 0L, 0L);
+    }
+
+    /** 구간 분해 측정용 — 체결 방출 시각(W-P14)과 aggressor 발신 시각(W-P0)을 와이어에 싣는다. */
+    @Override
+    public void onFill(String stockCode, FillResult fill, long emittedAtNanos, long aggressorOriginNanos) {
         long tradeId = snowflakeIdGenerator.nextId();
         FilledTrade trade = new FilledTrade(
             tradeId, stockCode, fill.buyOrderId(), fill.buyAccountId(),
-            fill.sellOrderId(), fill.sellAccountId(), fill.filledQuantity(), fill.matchPrice());
+            fill.sellOrderId(), fill.sellAccountId(), fill.filledQuantity(), fill.matchPrice(),
+            emittedAtNanos, aggressorOriginNanos);
 
         String buyEndpoint = requireEndpoint(fill.buyAccountId());
         String sellEndpoint = requireEndpoint(fill.sellAccountId());

@@ -18,6 +18,9 @@ import com.flab.stocktradingengine.time.StageLatencyRegistry;
  *   <li>{@code hop_to_journal} = W-P4 − W-P3 (슬롯 발행부터 저널 핸들러 스레드가 받을 때까지)</li>
  *   <li>{@code journal_append} = W-P5 − W-P4 (저널 기록)</li>
  *   <li>{@code hop_to_business} = W-P6 − W-P5 (저널 완료부터 업무 핸들러 스레드가 받을 때까지)</li>
+ *   <li>체결 반영(매수 계좌 이벤트에서만): {@code E} = W-P20 − W-P14, {@code F} = W-P20 − aggressor의 W-P0,
+ *       {@code fill_transit} = W-P17 − W-P14, {@code fill_hop_to_journal}, {@code fill_journal_append},
+ *       {@code fill_hop_to_business}</li>
  * </ul>
  */
 public final class AccountSegmentStages {
@@ -32,6 +35,12 @@ public final class AccountSegmentStages {
     private final LatencyHistogram hopToJournal;
     private final LatencyHistogram journalAppend;
     private final LatencyHistogram hopToBusiness;
+    private final LatencyHistogram e;
+    private final LatencyHistogram f;
+    private final LatencyHistogram fillTransit;
+    private final LatencyHistogram fillHopToJournal;
+    private final LatencyHistogram fillJournalAppend;
+    private final LatencyHistogram fillHopToBusiness;
 
     public AccountSegmentStages(StageLatencyRegistry registry) {
         this.enabled = registry.isEnabled();
@@ -42,6 +51,12 @@ public final class AccountSegmentStages {
         this.hopToJournal = registry.stage("hop_to_journal");
         this.journalAppend = registry.stage("journal_append");
         this.hopToBusiness = registry.stage("hop_to_business");
+        this.e = registry.stage("E");
+        this.f = registry.stage("F");
+        this.fillTransit = registry.stage("fill_transit");
+        this.fillHopToJournal = registry.stage("fill_hop_to_journal");
+        this.fillJournalAppend = registry.stage("fill_journal_append");
+        this.fillHopToBusiness = registry.stage("fill_hop_to_business");
     }
 
     public boolean isEnabled() {
@@ -66,5 +81,28 @@ public final class AccountSegmentStages {
         hopToJournal.recordNanos(p4 - p3);
         journalAppend.recordNanos(p5 - p4);
         hopToBusiness.recordNanos(p6 - p5);
+    }
+
+    /**
+     * 체결 반영 완료 시점(W-P20)에 체결 한 건의 E, F와 보조 단계를 기록한다. 체결 한 건은 매수 계좌
+     * 이벤트에서만 부르므로(표본 한 건) 매도 쪽에서는 호출하지 않는다. 방출 시각이나 aggressor 발신 시각이
+     * 비어 있으면(첫 체결이 아닌 체결, 복구 replay) 건너뛴다.
+     */
+    public void recordFillApplied(AccountEvent event, long appliedAtNanos) {
+        long p0 = event.getAggressorOriginNanos();
+        long p14 = event.getEmittedAtNanos();
+        long p17 = event.getReceivedAtNanos();
+        long p18 = event.getJournalStartedAtNanos();
+        long p18End = event.getJournalEndedAtNanos();
+        long p19 = event.getBusinessStartedAtNanos();
+        if (p0 <= 0 || p14 <= 0 || p17 <= 0 || p18 <= 0 || p18End <= 0 || p19 <= 0) {
+            return;
+        }
+        e.recordNanos(appliedAtNanos - p14);
+        f.recordNanos(appliedAtNanos - p0);
+        fillTransit.recordNanos(p17 - p14);
+        fillHopToJournal.recordNanos(p18 - p17);
+        fillJournalAppend.recordNanos(p18End - p18);
+        fillHopToBusiness.recordNanos(p19 - p18End);
     }
 }

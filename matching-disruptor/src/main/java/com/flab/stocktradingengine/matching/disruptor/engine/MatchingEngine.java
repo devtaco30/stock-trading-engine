@@ -26,6 +26,8 @@ import com.flab.stocktradingengine.matching.disruptor.journal.Journal;
 import com.flab.stocktradingengine.matching.disruptor.snapshot.MatchingSnapshot;
 import com.flab.stocktradingengine.matching.disruptor.snapshot.MatchingSnapshotFactory;
 import com.flab.stocktradingengine.matching.disruptor.snapshot.RestingOrder;
+import com.flab.stocktradingengine.time.EpochNanos;
+import com.flab.stocktradingengine.time.StageLatencyRegistry;
 import com.flab.stocktradingengine.trading.entity.OrderSide;
 import com.flab.stocktradingengine.trading.matching.OrderBook;
 import com.flab.stocktradingengine.trading.matching.OrderEntry;
@@ -78,6 +80,7 @@ public class MatchingEngine {
     // 소비자 스레드가 반영한 값을 읽는다(account-disruptor AccountEngine.businessHandler와 같은 이유).
     private final MatchingEventHandler matchingEventHandler;
     private RingBuffer<OrderEvent> ringBuffer;
+    private final MatchingSegmentStages stages;
 
     /**
      * @param snapshotSink 러닝 중 스냅샷을 내보낼 싱크(I6 U1~U2). {@link #snapshot()}과 달리
@@ -88,6 +91,13 @@ public class MatchingEngine {
      */
     public MatchingEngine(int bufferSize, WaitStrategy waitStrategy, MatchListener listener, Journal journal,
                           MatchingSnapshotSink snapshotSink, boolean snapshotTriggerEnabled) {
+        this(bufferSize, waitStrategy, listener, journal, snapshotSink, snapshotTriggerEnabled, new StageLatencyRegistry(false));
+    }
+
+    /** 구간 분해 측정용 — 단계별 지연 등록부를 받는다(꺼진 등록부면 기존 동작과 같다). */
+    public MatchingEngine(int bufferSize, WaitStrategy waitStrategy, MatchListener listener, Journal journal,
+                          MatchingSnapshotSink snapshotSink, boolean snapshotTriggerEnabled, StageLatencyRegistry stageRegistry) {
+        this.stages = new MatchingSegmentStages(stageRegistry);
         this.journal = journal;
         ThreadFactory threadFactory = DaemonThreadFactory.INSTANCE;
         this.disruptor = new Disruptor<>(
@@ -101,8 +111,14 @@ public class MatchingEngine {
         // handleEventsWith 배선 전에 설정해야 이후 등록되는 모든 핸들러에 적용된다.
         this.disruptor.setDefaultExceptionHandler(new MatchingExceptionHandler());
         // 저널러가 먼저 기록 → 매처가 그 뒤에 매칭 (SequenceBarrier 로 게이팅)
-        this.matchingEventHandler = new MatchingEventHandler(books, listener, snapshotSink, snapshotTriggerEnabled);
+        this.matchingEventHandler = new MatchingEventHandler(books, listener, snapshotSink, snapshotTriggerEnabled, stages);
         this.disruptor.handleEventsWith(new JournalEventHandler(journal)).then(matchingEventHandler);
+    }
+
+    /** 단계 측정 등록부를 받고 러닝 중 스냅샷 없이 생성한다 — 테스트·측정용. */
+    public MatchingEngine(int bufferSize, WaitStrategy waitStrategy, MatchListener listener, Journal journal,
+                          StageLatencyRegistry stageRegistry) {
+        this(bufferSize, waitStrategy, listener, journal, NO_OP_SNAPSHOT_SINK, false, stageRegistry);
     }
 
     /** 러닝 중 스냅샷 없이(트리거 꺼짐) 생성한다 — 테스트·recover() 전용 핸들러가 쓰는 편의 생성자. */
@@ -265,13 +281,34 @@ public class MatchingEngine {
     public void publishPlace(long orderId, long accountId, String stockCode,
                              OrderSide side, BigDecimal price, int quantity, Instant orderAt,
                              long sourcePosition, int sourceSessionId) {
+        publishPlace(orderId, accountId, stockCode, side, price, quantity, orderAt, sourcePosition, sourceSessionId,
+            0L, 0L, 0L, 0L);
+    }
+
+    /**
+     * 구간 분해 측정용 — 계좌에서 실려 온 세 시각(발신 W-P0, 수신 W-P2, 승인 후 전달 W-P8)과 매칭 수신
+     * 폴링 스레드가 읽은 시각(W-P11)을 함께 싣는다. 계측이 꺼져 있으면 시각은 무시된다.
+     */
+    public void publishPlace(long orderId, long accountId, String stockCode,
+                             OrderSide side, BigDecimal price, int quantity, Instant orderAt,
+                             long sourcePosition, int sourceSessionId,
+                             long originNanos, long receivedAtNanos, long acceptedAtNanos, long matchReceivedAtNanos) {
         long sequence = ringBuffer.next();
         try {
             OrderEvent event = ringBuffer.get(sequence);
             event.setPlace(orderId, accountId, stockCode, side, price, quantity, orderAt, sourcePosition, sourceSessionId);
+            if (stages.isEnabled()) {
+                event.setSegmentTimes(originNanos, receivedAtNanos, acceptedAtNanos, matchReceivedAtNanos);
+                event.setRingClaimedAtNanos(EpochNanos.now());
+            }
         } finally {
             ringBuffer.publish(sequence);
         }
+    }
+
+    /** 수신 폴링 스레드가 W-P11을 찍을지 정하는 데 쓴다. */
+    public boolean stagesEnabled() {
+        return stages.isEnabled();
     }
 
     /** 주문 취소를 링버퍼에 발행한다. */

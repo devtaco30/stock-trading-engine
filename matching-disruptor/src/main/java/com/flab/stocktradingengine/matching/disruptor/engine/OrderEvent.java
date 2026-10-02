@@ -38,6 +38,13 @@ public class OrderEvent {
     // 실제로 반영한 뒤에야 "적용 완료 위치"로 인정한다.
     private long sourcePosition;
     private int sourceSessionId;
+    // 구간 분해 측정(W-P0·W-P2·W-P8·W-P11~W-P13) 시각. 계측이 꺼져 있으면 0으로 남는다.
+    private long originNanos;
+    private long receivedAtNanos;
+    private long acceptedAtNanos;
+    private long matchReceivedAtNanos;
+    private long ringClaimedAtNanos;
+    private long businessStartedAtNanos;
 
     /**
      * 주문 접수 명령으로 슬롯을 채운다. sourcePosition·sourceSessionId 를 모르는 발행자(저널 replay,
@@ -71,6 +78,24 @@ public class OrderEvent {
         this.sourceSessionId = sourceSessionId;
     }
 
+    /** 구간 분해 측정용 — 계좌 쪽에서 실려 온 세 시각과 매칭 수신 폴링 스레드가 읽은 시각(W-P11)을 슬롯에 남긴다. */
+    public void setSegmentTimes(long originNanos, long receivedAtNanos, long acceptedAtNanos, long matchReceivedAtNanos) {
+        this.originNanos = originNanos;
+        this.receivedAtNanos = receivedAtNanos;
+        this.acceptedAtNanos = acceptedAtNanos;
+        this.matchReceivedAtNanos = matchReceivedAtNanos;
+    }
+
+    /** 링버퍼 슬롯을 확보한 직후 시각(W-P12). */
+    public void setRingClaimedAtNanos(long ringClaimedAtNanos) {
+        this.ringClaimedAtNanos = ringClaimedAtNanos;
+    }
+
+    /** 매칭 핸들러가 이벤트를 받은 시각(W-P13). */
+    public void setBusinessStartedAtNanos(long businessStartedAtNanos) {
+        this.businessStartedAtNanos = businessStartedAtNanos;
+    }
+
     /** 주문 취소 명령으로 슬롯을 채운다. 취소는 orderId·stockCode 만 필요하다. */
     public void setCancel(long orderId, String stockCode) {
         this.type = EventType.CANCEL;
@@ -94,6 +119,12 @@ public class OrderEvent {
         this.journaledPosition = 0L;
         this.sourcePosition = 0L;
         this.sourceSessionId = 0;
+        this.originNanos = 0L;
+        this.receivedAtNanos = 0L;
+        this.acceptedAtNanos = 0L;
+        this.matchReceivedAtNanos = 0L;
+        this.ringClaimedAtNanos = 0L;
+        this.businessStartedAtNanos = 0L;
     }
 
     public void setJournaledPosition(long journaledPosition) {
@@ -142,5 +173,29 @@ public class OrderEvent {
 
     public Instant getOrderAt() {
         return orderAt;
+    }
+
+    public long getOriginNanos() {
+        return originNanos;
+    }
+
+    public long getReceivedAtNanos() {
+        return receivedAtNanos;
+    }
+
+    public long getAcceptedAtNanos() {
+        return acceptedAtNanos;
+    }
+
+    public long getMatchReceivedAtNanos() {
+        return matchReceivedAtNanos;
+    }
+
+    public long getRingClaimedAtNanos() {
+        return ringClaimedAtNanos;
+    }
+
+    public long getBusinessStartedAtNanos() {
+        return businessStartedAtNanos;
     }
 }

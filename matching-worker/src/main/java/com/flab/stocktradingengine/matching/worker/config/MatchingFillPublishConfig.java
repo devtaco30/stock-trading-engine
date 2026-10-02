@@ -4,6 +4,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -12,6 +13,7 @@ import com.flab.stocktradingengine.aeron.AeronStreamIds;
 import com.flab.stocktradingengine.aeron.ShardRoutingTable;
 import com.flab.stocktradingengine.matching.worker.messaging.AccountFillPublisher;
 import com.flab.stocktradingengine.support.SnowflakeIdGenerator;
+import com.flab.stocktradingengine.time.StageLatencyRegistry;
 
 import io.aeron.Aeron;
 import io.aeron.ExclusivePublication;
@@ -72,7 +74,9 @@ public class MatchingFillPublishConfig {
     public AccountFillPublisher accountFillPublisher(
             AccountDestinationResolver accountDestinationResolver,
             MatchingFillPublications matchingFillPublications,
-            SnowflakeIdGenerator snowflakeIdGenerator) {
-        return new AccountFillPublisher(accountDestinationResolver, matchingFillPublications.byEndpoint(), snowflakeIdGenerator);
+            SnowflakeIdGenerator snowflakeIdGenerator,
+            ObjectProvider<StageLatencyRegistry> matchingStageLatencyRegistry) {
+        return new AccountFillPublisher(
+            accountDestinationResolver, matchingFillPublications.byEndpoint(), snowflakeIdGenerator, matchingStageLatencyRegistry.getIfAvailable(() -> new StageLatencyRegistry(false)));
     }
 }

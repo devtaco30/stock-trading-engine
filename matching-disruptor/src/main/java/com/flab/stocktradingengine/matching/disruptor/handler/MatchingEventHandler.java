@@ -12,6 +12,8 @@ import com.flab.stocktradingengine.trading.matching.FillResult;
 import com.flab.stocktradingengine.trading.matching.OrderBook;
 import com.flab.stocktradingengine.trading.matching.OrderEntry;
 import com.flab.stocktradingengine.codec.EventType;
+import com.flab.stocktradingengine.time.EpochNanos;
+import com.flab.stocktradingengine.matching.disruptor.engine.MatchingSegmentStages;
 import com.flab.stocktradingengine.matching.disruptor.engine.OrderEvent;
 import com.flab.stocktradingengine.matching.disruptor.io.MatchListener;
 import com.flab.stocktradingengine.matching.disruptor.io.MatchingSnapshotSink;
@@ -65,6 +67,7 @@ public class MatchingEventHandler implements EventHandler<OrderEvent> {
     // (account-disruptor AccountEventHandler 의 accounts 맵과 같은 이유).
     private final Map<String, OrderBook> books;
     private final MatchListener listener;
+    private final MatchingSegmentStages stages;
     private final MatchingSnapshotSink snapshotSink;
     private final boolean snapshotTriggerEnabled;
     private final MatchingSnapshotCodec snapshotCodec = new MatchingSnapshotCodec();
@@ -90,6 +93,14 @@ public class MatchingEventHandler implements EventHandler<OrderEvent> {
      */
     public MatchingEventHandler(Map<String, OrderBook> books, MatchListener listener,
                                 MatchingSnapshotSink snapshotSink, boolean snapshotTriggerEnabled) {
+        this(books, listener, snapshotSink, snapshotTriggerEnabled, MatchingSegmentStages.DISABLED);
+    }
+
+    /** 구간 분해 측정(W-P13·W-P14)용 단계 히스토그램 묶음을 함께 받는다. */
+    public MatchingEventHandler(Map<String, OrderBook> books, MatchListener listener,
+                                MatchingSnapshotSink snapshotSink, boolean snapshotTriggerEnabled,
+                                MatchingSegmentStages stages) {
+        this.stages = stages;
         this.books = books;
         this.listener = listener;
         this.snapshotSink = snapshotSink;
@@ -98,6 +109,11 @@ public class MatchingEventHandler implements EventHandler<OrderEvent> {
 
     @Override
     public void onEvent(OrderEvent event, long sequence, boolean endOfBatch) {
+        if (stages.isEnabled()) {
+            long businessStartedAtNanos = EpochNanos.now();
+            event.setBusinessStartedAtNanos(businessStartedAtNanos);
+            stages.recordArrival(event, businessStartedAtNanos);
+        }
         lastJournaledPosition = event.getJournaledPosition();
         try {
             if (event.getType() == EventType.PLACE) {
@@ -163,7 +179,7 @@ public class MatchingEventHandler implements EventHandler<OrderEvent> {
         }
         OrderEntry entry = toEntry(event);
         book.addOrder(entry);
-        runMatch(event.getStockCode(), book);
+        runMatch(event, book);
     }
 
     private void handleCancel(OrderEvent event) {
@@ -174,13 +190,26 @@ public class MatchingEventHandler implements EventHandler<OrderEvent> {
         book.cancelOrder(event.getOrderId());
     }
 
-    private void runMatch(String stockCode, OrderBook book) {
+    private void runMatch(OrderEvent event, OrderBook book) {
+        String stockCode = event.getStockCode();
+        boolean firstFill = true;
         while (true) {
             Optional<FillResult> result = book.match();
             if (result.isEmpty()) {
                 break;
             }
-            listener.onFill(stockCode, result.get());
+            if (!stages.isEnabled()) {
+                listener.onFill(stockCode, result.get());
+                continue;
+            }
+            // 한 주문이 체결을 여러 건 내면 첫 체결에만 방출 시각과 aggressor 발신 시각을 싣는다(설계서 4-2절).
+            long emittedAtNanos = firstFill ? EpochNanos.now() : 0L;
+            long aggressorOriginNanos = firstFill ? event.getOriginNanos() : 0L;
+            if (firstFill) {
+                stages.recordFirstFill(event, emittedAtNanos);
+            }
+            firstFill = false;
+            listener.onFill(stockCode, result.get(), emittedAtNanos, aggressorOriginNanos);
         }
     }
 

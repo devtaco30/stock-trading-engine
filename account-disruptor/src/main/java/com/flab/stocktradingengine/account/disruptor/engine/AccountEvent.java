@@ -31,6 +31,9 @@ public class AccountEvent {
     private long journalStartedAtNanos;
     private long journalEndedAtNanos;
     private long businessStartedAtNanos;
+    // 체결 반영 측정(W-P14·W-P0): 매칭이 체결을 방출한 시각과 그 체결을 일으킨 주문의 발신 시각.
+    private long emittedAtNanos;
+    private long aggressorOriginNanos;
 
     /**
      * 매수 검증·예약 명령으로 슬롯을 채운다. orderId 는 아직 없다(C5-2a) — 핸들러가 첫 접수
@@ -116,7 +119,13 @@ public class AccountEvent {
         this.journaledPosition = journaledPosition;
     }
 
-    /** 수신 폴링 스레드가 읽은 시각(W-P2). */
+    /** 체결 이벤트에 실려 온 방출 시각(W-P14)과 aggressor 발신 시각(W-P0). */
+    public void setFillTimes(long emittedAtNanos, long aggressorOriginNanos) {
+        this.emittedAtNanos = emittedAtNanos;
+        this.aggressorOriginNanos = aggressorOriginNanos;
+    }
+
+    /** 수신 폴링 스레드가 읽은 시각(W-P2, 체결 이벤트에서는 W-P17). */
     public void setReceivedAtNanos(long receivedAtNanos) {
         this.receivedAtNanos = receivedAtNanos;
     }
@@ -160,6 +169,8 @@ public class AccountEvent {
         this.journalStartedAtNanos = 0L;
         this.journalEndedAtNanos = 0L;
         this.businessStartedAtNanos = 0L;
+        this.emittedAtNanos = 0L;
+        this.aggressorOriginNanos = 0L;
     }
 
     public AccountEventType getType() {
@@ -228,5 +239,13 @@ public class AccountEvent {
 
     public long getBusinessStartedAtNanos() {
         return businessStartedAtNanos;
+    }
+
+    public long getEmittedAtNanos() {
+        return emittedAtNanos;
+    }
+
+    public long getAggressorOriginNanos() {
+        return aggressorOriginNanos;
     }
 }
