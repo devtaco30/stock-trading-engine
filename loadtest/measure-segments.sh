@@ -452,25 +452,27 @@ saturated_round_count() {
 
 # 계획의 세트를 순서대로 돌린다. S1 이 포화한 단계로 나오면 중단한다 (4-1절). 모든 세트가 끝나면 단계 사이 보간 단계를 하나씩 더한다 (4-2절)
 run_plan() {
-    local plan="$1" index=0 token step cond_key
-    declare -A saturation_by_key=()
+    local plan="$1" index=0 token step cond_key stale
+    # bash 3.2(macOS 기본)에는 연관 배열이 없어, 단계와 조건을 이름에 넣은 변수 SEGSAT_<단계>_<조건> 에 포화 여부를 담는다
+    for stale in $(compgen -v SEGSAT_); do unset "$stale"; done
     for token in $plan; do
         index=$((index + 1))
-        read -r step cond _ _ <<< "$(parse_set_token "$token")" || return 1
-        cond_key="${step}|${token#*:}"
-        cond_key="${step}|$(echo "$token" | cut -d: -f2)"
+        read -r step _ _ _ <<< "$(parse_set_token "$token")" || return 1
+        cond_key="$(echo "$token" | cut -d: -f2)"
         run_set "$index" "$token" || echo "세트 ${token} 가 끝까지 가지 못했다 (상태 ${SET_STATUS})" >&2
-        saturation_by_key["$cond_key"]="$SET_SATURATED"
+        printf -v "SEGSAT_${step}_${cond_key}" '%s' "$SET_SATURATED"
         if [ "$step" = "S1" ] && [ "$SET_SATURATED" = "yes" ]; then
             echo "S1 이 포화한 단계로 나왔다 — 측정을 중단하고 보고한다 (세트 ${token})" >&2
             return 4
         fi
     done
-    local low high pair rate
+    local low high pair rate low_var high_var cond low_rate high_rate
     for pair in "S1 S3 192 1000" "S3 S5 1000 4000"; do
         read -r low high low_rate high_rate <<< "$pair"
         for cond in v1idx v2; do
-            if [ "$(needs_interpolation "${saturation_by_key["${low}|${cond}"]:-no}" "${saturation_by_key["${high}|${cond}"]:-no}")" = "yes" ]; then
+            low_var="SEGSAT_${low}_${cond}"
+            high_var="SEGSAT_${high}_${cond}"
+            if [ "$(needs_interpolation "${!low_var:-no}" "${!high_var:-no}")" = "yes" ]; then
                 rate="$(interp_rate "$low_rate" "$high_rate")"
                 index=$((index + 1))
                 echo "보간 단계 추가: ${low}~${high} 사이 I${rate} (${cond})"
@@ -478,6 +480,7 @@ run_plan() {
             fi
         done
     done
+    return 0
 }
 
 main() {

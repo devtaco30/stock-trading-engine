@@ -233,8 +233,48 @@ test_round_fact() {
     rm -f "$tmp"
 }
 
+# run_plan 은 단계|조건 별 포화 결과를 기억했다가 보간 단계를 넣는다. macOS 기본 bash 3.2 에서도 돌아야 한다
+# (연관 배열 declare -A 는 bash 4+ 라 3.2 에서 "S1R: unbound variable" 로 중단된 적이 있다).
+# run_set 은 앱·부하를 띄우므로 기록만 하는 가짜로 바꾼다. run_plan 은 서브셸에서 돌린다 — 3.2 에서 변수 오류가 나면 테스트 셸째로 조용히 끝나기 때문이다.
+test_run_plan() {
+    local calls_file out status original_run_set
+    original_run_set="$(declare -f run_set)"
+    calls_file="$(mktemp)"
+    run_set() {
+        echo "$2" >> "$calls_file"
+        case "$2" in
+            S5:v1idx:1) SET_SATURATED=yes ;;
+            S1:v2:1) SET_SATURATED=${FAKE_S1_V2_SATURATED:-no} ;;
+            *) SET_SATURATED=no ;;
+        esac
+        return 0
+    }
+
+    ( run_plan "S1R:v1idx:1 S1R:v2:0" ) > /dev/null 2>&1
+    status=$?
+    assert_eq "S1R 계획이 끝까지 간다" "0" "$status"
+    assert_eq "S1R 계획의 호출 수" "2" "$(wc -l < "$calls_file" | tr -d ' ')"
+
+    : > "$calls_file"
+    ( run_plan "S1:v1idx:1 S1:v2:1 S3:v1idx:1 S3:v2:1 S5:v1idx:1 S5:v2:1" ) > /dev/null 2>&1
+    status=$?
+    assert_eq "6세트 계획이 끝까지 간다" "0" "$status"
+    assert_eq "S3 낮음 S5 포화이면 보간 단계가 하나 붙는다" "I2000:v1idx:1" "$(tail -n 1 "$calls_file")"
+    assert_eq "보간은 v1idx 에만 붙는다" "7" "$(wc -l < "$calls_file" | tr -d ' ')"
+
+    : > "$calls_file"
+    ( FAKE_S1_V2_SATURATED=yes run_plan "S1:v1idx:1 S1:v2:1 S3:v1idx:1" ) > /dev/null 2>&1
+    status=$?
+    assert_eq "S1 이 포화하면 4 로 중단한다" "4" "$status"
+    assert_eq "S1 포화 뒤 세트는 돌지 않는다" "2" "$(wc -l < "$calls_file" | tr -d ' ')"
+
+    eval "$original_run_set"
+    rm -f "$calls_file"
+}
+
 test_step_config
 test_interpolation_rate
+test_run_plan
 test_saturation_reasons
 test_analyzer_env
 test_saturation_has_no_cpu_signal
