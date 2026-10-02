@@ -15,6 +15,7 @@
   analyze-baseline.py judge --dir <cond 디렉터리> --cond v1 --round r05 --k6-start N --k6-end N --k6-exit N
                             [--db-delta N] [--e6] [--e7]
   analyze-baseline.py compare [--out cmp.md] 라벨=결과디렉터리[:조건] ...   (조건 기본 v1) 여러 세트를 한 표에 나란히
+  analyze-baseline.py compare-segments <실행 디렉터리> [--out analysis-segments.md]   구간 분해 측정(묶음 C) 분석. analyze-segments.py 에 맡긴다
   analyze-baseline.py seed-check --input <e2e-input.jsonl> --seed-yml <application-e2e.yml> [--count 10000] [--rounds 11]
                                  점검 8: 입력 앞 N건의 계좌별 필요량 x 회차 수가 시드 잔고·보유 안에 들어오는지
 """
@@ -673,6 +674,20 @@ def check_seed(input_path, seed_yml_path, count=EXPECTED_COUNT, rounds=EXPECTED_
 
 # ---------- CLI ----------
 
+def run_compare_segments(run_dir, out):
+    """구간 분해 측정 분석(analyze-segments.py)에 맡긴다. 기존 명령의 동작은 바꾸지 않는다."""
+    import importlib.util
+    module_path = Path(__file__).with_name("analyze-segments.py")
+    spec = importlib.util.spec_from_file_location("analyze_segments", module_path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    text = module.build_segments_report(run_dir)
+    print(text)
+    if out:
+        Path(out).write_text(text, encoding="utf-8")
+    return 0
+
+
 def main(argv):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -696,6 +711,10 @@ def main(argv):
     compare.add_argument("--out")
     compare.add_argument("specs", nargs="+", help="라벨=결과디렉터리[:조건]")
 
+    compare_segments = sub.add_parser("compare-segments")
+    compare_segments.add_argument("run_dir")
+    compare_segments.add_argument("--out")
+
     seed = sub.add_parser("seed-check")
     seed.add_argument("--input", required=True)
     seed.add_argument("--seed-yml", required=True)
@@ -714,6 +733,9 @@ def main(argv):
         if args.out:
             Path(args.out).write_text(text + "\n", encoding="utf-8")
         return 0
+
+    if args.command == "compare-segments":
+        return run_compare_segments(args.run_dir, args.out)
 
     if args.command == "seed-check":
         problems = check_seed(args.input, args.seed_yml, args.count, args.rounds)
