@@ -25,6 +25,9 @@ const N = __ENV.N ? parseInt(__ENV.N) : null;
 const RATE = __ENV.RATE ? parseInt(__ENV.RATE) : null;
 const PRE_ALLOCATED_VUS = parseInt(__ENV.PRE_ALLOCATED_VUS || '100');
 const MAX_VUS = parseInt(__ENV.MAX_VUS || '300');
+// 구간 분해 측정(묶음 C)의 G: SCHED_HEADER=1 이고 RATE 가 있으면 요청마다 예정 도착 시각(epoch 마이크로초)을 헤더 X-Sched-At 에 싣는다.
+// api 필터가 처리 시작 시각과의 차이를 G 로 기록한다(설계서 4-4a절). 기본은 끔이라 b0·b1 요청은 그대로다.
+const SCHED_HEADER = __ENV.SCHED_HEADER === '1';
 
 const orders = new SharedArray('e2e-orders', function () {
   return open(INPUT_FILE)
@@ -69,8 +72,11 @@ export default function () {
     quantity: order.quantity,
     requestId: `${order.requestId}-${PASS}`,
   });
-  const res = http.post(`${BASE}/api/${VERSION}/orders/${path}`, body, {
-    headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
-  });
+  const headers = { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' };
+  if (SCHED_HEADER && RATE) {
+    // 예정 도착 시각 = 시나리오 시작 시각 + 순번 / 초당 건수. 마이크로초로 계산해 double 의 정수 정밀도 안에 둔다
+    headers['X-Sched-At'] = String(Math.round(exec.scenario.startTime * 1000 + (idx * 1e6) / RATE));
+  }
+  const res = http.post(`${BASE}/api/${VERSION}/orders/${path}`, body, { headers });
   check(res, { 'status is 202': (r) => r.status === 202 });
 }

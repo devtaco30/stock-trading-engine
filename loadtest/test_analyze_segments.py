@@ -36,7 +36,7 @@ V2_ACCOUNT = {"A": 120, "B": 300, "B_biz": 20, "ring_publish": 2, "hop_to_journa
               "hop_to_business": 80}
 
 
-def v2_stage_files(f_error=0.0, counts=None, small=False):
+def v2_stage_files(f_error=0.0, counts=None, small=False, g_mean=20):
     """round 하나의 v2 프로세스별 단계 dict. F 에 오차 비율을 섞는다."""
     counts = counts or {}
     a, b, c, d, e = 1.0, 74.0, 0.8, 46.0, 110.0
@@ -48,7 +48,7 @@ def v2_stage_files(f_error=0.0, counts=None, small=False):
     account["F"] = stage(f_mean, counts.get("F", 10000))
     matching = {"C": stage(150), "D": stage(d, counts.get("D", 10000)), "A@aggr": stage(a, 10000),
                 "B@aggr": stage(b, 10000), "C@aggr": stage(c, 10000)}
-    return {"account-worker": account, "matching-worker": matching, "api": {"api_send_cost": stage(30)}}
+    return {"account-worker": account, "matching-worker": matching, "api": {"api_send_cost": stage(30), "G": stage(g_mean)}}
 
 
 class SetFixture:
@@ -97,7 +97,7 @@ def make_run(tmp, builders):
     return run_dir
 
 
-def v2_set(rounds=5, f_error=0.0, **kwargs):
+def v2_set(rounds=5, f_error=0.0, **kwargs):  # kwargs: counts, small, g_mean
     def build(fixture):
         fixture.add_round("r01", valid=0, flags="WARMUP", stages=v2_stage_files(0.5), latency=(2000, 8000))
         for number in range(2, rounds + 2):
@@ -274,6 +274,65 @@ class ImpactTest(unittest.TestCase):
             text = asg.build_segments_report(run)
         self.assertIn("계측 켠/끈 영향", text)
         self.assertIn("영향 가능성 있음", text)
+
+
+class GapStageTest(unittest.TestCase):
+    def test_g_row_is_in_stage_table_with_definition(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            run = make_run(tmp, [("01-S1-v2-st1", "v2", v2_set())])
+            text = asg.build_segments_report(run)
+        g_row = next(line for line in text.splitlines() if line.startswith("| G |"))
+        self.assertIn("api 입구", g_row)
+
+    def test_ladder_shows_g_p99_and_no_promotion_note_when_small(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            run = make_run(tmp, [("01-S1-v2-st1", "v2", v2_set())])
+            text = asg.build_segments_report(run)
+        self.assertIn("G p99 µs", text)
+        self.assertNotIn("승급 신호: G p99 ≥ F p50", text)
+
+    def test_ladder_notes_promotion_signal_when_g_p99_reaches_f_p50(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            run = make_run(tmp, [("01-S1-v2-st1", "v2", v2_set(g_mean=400))])  # G p99 = 1200 >= F p50 = 232
+            text = asg.build_segments_report(run)
+        self.assertIn("승급 신호: G p99 ≥ F p50", text)
+        self.assertIn("01-S1-v2-st1".split("-")[1], text)
+
+    def test_g_signal_function_boundary(self):
+        self.assertTrue(asg.g_promotion_signal(232.0, 232.0))
+        self.assertFalse(asg.g_promotion_signal(231.9, 232.0))
+        self.assertFalse(asg.g_promotion_signal(None, 232.0))
+        self.assertFalse(asg.g_promotion_signal(100.0, None))
+
+    def test_v1_expects_api_dump_too(self):
+        def build(fixture):
+            fixture.add_round("r01", valid=0, flags="WARMUP", stages={"api": {"G": stage(10)}, "order-engine": {"B": stage(1)},
+                                                                        "matching-engine": {"C": stage(1)},
+                                                                        "settlement-engine": {"F": stage(5)}})
+            fixture.add_round("r02", stages={"order-engine": {"B": stage(1)}, "matching-engine": {"C": stage(1)},
+                                             "settlement-engine": {"F": stage(5)}})
+        with tempfile.TemporaryDirectory() as tmp:
+            run = make_run(tmp, [("01-S1-v1idx-st1", "v1", build)])
+            text = asg.build_segments_report(run)
+        self.assertIn("api r02", text)
+
+
+class RehearsalImpactTest(unittest.TestCase):
+    def test_s1r_sets_also_produce_the_impact_section(self):
+        def build_off(fixture):
+            for number in range(1, 4):
+                fixture.add_round(f"r{number:02d}", valid=0 if number == 1 else 1, flags="WARMUP" if number == 1 else "",
+                                  latency=(2000, 8000))
+
+        def build_on(fixture):
+            for number in range(1, 4):
+                fixture.add_round(f"r{number:02d}", valid=0 if number == 1 else 1, flags="WARMUP" if number == 1 else "",
+                                  stages=v2_stage_files(), latency=(2000, 8000))
+        with tempfile.TemporaryDirectory() as tmp:
+            run = make_run(tmp, [("01-S1R-v2-st0", "v2", build_off), ("02-S1R-v2-st1", "v2", build_on)])
+            text = asg.build_segments_report(run)
+        self.assertIn("영향 안 보임", text)
+        self.assertIn("리허설(S1R)은 회차가 적어 대략 비교로만 본다", text)
 
 
 class LadderTest(unittest.TestCase):

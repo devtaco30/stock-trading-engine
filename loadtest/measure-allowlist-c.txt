@@ -11,6 +11,7 @@ account-worker/src/main/java/com/flab/stocktradingengine/account/worker/config/A
 account-worker/src/main/java/com/flab/stocktradingengine/account/worker/messaging/AeronMatchingOrderSender.java
 api/src/main/java/com/flab/stocktradingengine/api/config/AccountOrderPublishConfig.java
 api/src/main/java/com/flab/stocktradingengine/api/config/ApiStageMeasurementConfig.java
+api/src/main/java/com/flab/stocktradingengine/api/config/StageGapFilter.java
 api/src/main/java/com/flab/stocktradingengine/api/messaging/AeronAccountOrderSender.java
 core/src/main/java/com/flab/stocktradingengine/codec/FillCodec.java
 core/src/main/java/com/flab/stocktradingengine/codec/FilledTrade.java

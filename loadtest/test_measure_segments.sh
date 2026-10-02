@@ -58,6 +58,7 @@ test_step_config() {
     assert_eq "S3" "1000 20000 5" "$(step_config S3)"
     assert_eq "S5" "4000 40000 4" "$(step_config S5)"
     assert_eq "S1X(계측 영향 확인용 11회)" "192 10000 11" "$(step_config S1X)"
+    assert_eq "S1R(리허설 1+2회)" "192 10000 3" "$(step_config S1R)"
     assert_eq "보간 단계 I450" "450 9000 4" "$(step_config I450)"
     assert_eq "보간 단계 I2000" "2000 40000 4" "$(step_config I2000)"
     assert_fails "모르는 단계는 실패" step_config S2
@@ -131,7 +132,7 @@ test_series_edges() {
 }
 
 test_trigger_targets() {
-    assert_eq "v1 대상" "order-engine matching-engine settlement-engine" "$(stage_trigger_targets v1)"
+    assert_eq "v1 대상(api 의 G 포함)" "api order-engine matching-engine settlement-engine" "$(stage_trigger_targets v1)"
     assert_eq "v2 대상" "api account-worker matching-worker" "$(stage_trigger_targets v2)"
     assert_eq "트리거 경로" "${RESULTS_DIR}/stage-trigger-v2-account-worker" "$(stage_trigger_path v2 account-worker)"
 }
@@ -211,6 +212,14 @@ test_stage_args() {
     assert_eq "api 는 시계열을 쓰지 않는다" "" "$(MEASURE_STAGES=1 stage_args v2 api | grep -o 'series-path=[^ ]*')"
 }
 
+test_g_wiring() {
+    # G(예정 도착 시각과 api 처리 시작 시각의 차이): v1·v2 api 모두 계측 인자를 받고 k6 에 헤더를 켜 준다
+    assert_contains "v1 기동 스크립트가 api 에 계측 인자를 붙인다" "$(cat loadtest/run-e2e-v1.sh)" 'stage_args v1 api'
+    assert_contains "v2 기동 스크립트가 api 에 계측 인자를 붙인다" "$(cat loadtest/run-e2e-v2.sh)" 'stage_args v2 api'
+    assert_contains "계측 켠 세트의 k6 에 SCHED_HEADER 를 넘긴다" "$(declare -f run_round_segments)" 'SCHED_HEADER'
+    assert_eq "api 는 시계열을 쓰지 않는다(v1)" "" "$(MEASURE_STAGES=1 stage_args v1 api | grep -o 'series-path=[^ ]*')"
+}
+
 test_round_fact() {
     local tmp
     tmp="$(mktemp)"
@@ -238,6 +247,7 @@ test_allowlist_current_branch
 test_commit_precedes
 test_set_token
 test_stage_args
+test_g_wiring
 test_round_fact
 
 echo "통과 ${PASSES}, 실패 ${FAILS}"

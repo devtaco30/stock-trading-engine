@@ -27,26 +27,28 @@ RESOLUTION_LIMIT_US = 5.0      # 이 값 미만인 단계는 해상도 미만(�
 RESIDUAL_LIMIT = 0.01          # 합 정합성: 잔차 비율이 이 값을 넘으면 불성립 (임의값, protocol-c 2절)
 WIDE_RATIO = 0.5               # 계측 영향: 끈 세트 범위 폭의 이 비율을 넘는 차이는 애매함 (protocol-c 5절)
 WARMUP_ROUND = "r01"
-SET_RE = re.compile(r"^(\d+)-(S1X|S1|S3|S5|I\d+)-(v1idx|v1|v2)-st([01])$")
+SET_RE = re.compile(r"^(\d+)-(S1X|S1R|S1|S3|S5|I\d+)-(v1idx|v1|v2)-st([01])$")
 STAGE_FILE_RE = re.compile(r"^stages-(v1|v2)-(.+)-(r\d+)\.json$")
 EXPECTED_PROCESSES = {
-    "v1": ["order-engine", "matching-engine", "settlement-engine"],
+    "v1": ["api", "order-engine", "matching-engine", "settlement-engine"],
     "v2": ["api", "account-worker", "matching-worker"],
 }
-STEP_RATES = {"S1": 192, "S1X": 192, "S3": 1000, "S5": 4000}
+STEP_RATES = {"S1": 192, "S1X": 192, "S1R": 192, "S3": 1000, "S5": 4000}
+IMPACT_STEPS = ("S1X", "S1R")
 LABEL_TEXT = {"v1": "v1(인덱스 없음)", "v1idx": "v1(인덱스 있음)", "v2": "v2"}
 
 # 단계 표시 순서. 목록에 없는 단계는 이름 순으로 뒤에 붙인다
 STAGE_ORDER = {
-    "v1": ["A", "b_idem", "b_lock", "b_sum", "b_decide", "b_insert", "B", "b_commit", "b_send_call", "C", "D",
+    "v1": ["G", "A", "b_idem", "b_lock", "b_sum", "b_decide", "b_insert", "B", "b_commit", "b_send_call", "C", "D",
            "A@aggr", "B@aggr", "C@aggr", "fill_transit", "E", "F"],
-    "v2": ["api_send_cost", "A", "ring_publish", "hop_to_journal", "journal_append", "hop_to_business", "B_biz", "B",
+    "v2": ["G", "api_send_cost", "A", "ring_publish", "hop_to_journal", "journal_append", "hop_to_business", "B_biz", "B",
            "C", "m_ring_publish", "m_hop_to_business", "D", "A@aggr", "B@aggr", "C@aggr", "fill_queue", "fill_offer",
            "fill_transit", "fill_hop_to_journal", "fill_journal_append", "fill_hop_to_business", "E", "F"],
 }
 
 # 설계서 2-3a절의 같은 정의 / 다른 정의
 DEFINITION = {
+    "G": "같은 정의(api 입구, 두 구현 공통)",
     "A": "같은 정의", "B": "같은 정의", "C": "같은 정의(시작 시각이 다름)", "D": "다른 정의", "E": "다른 정의",
     "F": "같은 정의(반영의 뜻이 다름)", "fill_transit": "같은 정의",
     "A@aggr": "A와 같음(체결 기준)", "B@aggr": "B와 같음(체결 기준)", "C@aggr": "C와 같음(체결 기준)",
@@ -222,6 +224,11 @@ def duplicate_warnings(counts):
         if count is not None and count > d_count:
             warnings.append(f"{name} {count:.0f} > D {d_count:.0f}")
     return warnings
+
+
+def g_promotion_signal(g_p99, f_p50):
+    """protocol-c 4-3절 승급 신호: G p99 가 같은 회차 F p50 이상."""
+    return g_p99 is not None and f_p50 is not None and g_p99 >= f_p50
 
 
 def impact_verdict(off_p50, off_p99, on_p50, on_p99):
@@ -421,7 +428,7 @@ def ladder_section(sets):
              "포화한 단계의 값은 대표값 인용 대상에서 제외한다(표에는 「—」로 둔다).", ""]
     groups = {}
     for data in sets:
-        if data.meta.stages != 1 or data.meta.step == "S1X":
+        if data.meta.stages != 1 or data.meta.step in IMPACT_STEPS:
             continue
         groups.setdefault((data.meta.step, data.meta.label), []).append(data)
     if not groups:
@@ -433,6 +440,7 @@ def ladder_section(sets):
 
     rows = []
     summaries = {}
+    promotion_notes = []
     for (step, label), members in sorted(groups.items(), key=lambda kv: (rate_of(kv[0][0]), kv[0][1])):
         measured = sum(len(m.measured_rounds()) for m in members)
         saturated_count = sum(1 for m in members for r in m.measured_rounds() if m.is_saturated(r))
@@ -447,15 +455,27 @@ def ladder_section(sets):
                 values = [] if is_saturated else pooled(members, stage_name, key)
                 cell[(stage_name, key)] = (median(values), min(values) if values else None, max(values) if values else None)
         summaries[(step, label)] = cell
+        g_values = {key: pooled(members, "G", key) for key in ("p50Micros", "p99Micros")}
+        g_p50 = median(g_values["p50Micros"])
+        g_p99 = median(g_values["p99Micros"])
+        f_p50_all = median(pooled(members, "F", "p50Micros"))
+        if g_promotion_signal(g_p99, f_p50_all):
+            promotion_notes.append(f"- {step} {LABEL_TEXT[label]}: 승급 신호: G p99 ≥ F p50 (G p99 {fmt_micros(g_p99)} µs, F p50 {fmt_micros(f_p50_all)} µs). "
+                                   "protocol-c 4-3절에 따라 이 단계와 더 높은 단계는 HTTP 경로 결과를 인용하지 않는다.")
         def show(stage_name, key):
             value, low, high = cell[(stage_name, key)]
             if value is None:
                 return "—"
             return fmt_micros(value) if low == high else f"{fmt_micros(value)} ({fmt_micros(low)}~{fmt_micros(high)})"
         rows.append([f"{step} ({rate_of(step)}/초)", LABEL_TEXT[label], measured, status, ", ".join(reasons) or "—",
-                     show("F", "p50Micros"), show("F", "p99Micros"), show("B", "p50Micros"), show("B", "p99Micros")])
-    lines.append(table(["단계", "조건", "측정 회차", "포화 표시", "포화 이유", "F p50 µs", "F p99 µs", "B p50 µs", "B p99 µs"], rows))
+                     show("F", "p50Micros"), show("F", "p99Micros"), show("B", "p50Micros"), show("B", "p99Micros"),
+                     fmt_micros(g_p50), fmt_micros(g_p99)])
+    lines.append(table(["단계", "조건", "측정 회차", "포화 표시", "포화 이유", "F p50 µs", "F p99 µs", "B p50 µs", "B p99 µs",
+                        "G p50 µs", "G p99 µs"], rows))
     lines.append("")
+    if promotion_notes:
+        lines.extend(promotion_notes)
+        lines.append("")
 
     compare_rows = []
     steps = sorted({step for step, _ in groups}, key=rate_of)
@@ -483,13 +503,15 @@ def ladder_section(sets):
 
 def impact_section(sets):
     lines = ["## 계측 켠/끈 영향 판정", "",
-             "S1X 세트의 끝점① 지연(latency-<조건>-rNN.json)으로 판정한다. 끈 세트에도 이 값은 있다. 켠 세트의 유효 회차 "
+             "S1X(리허설은 S1R) 세트의 끝점① 지연(latency-<조건>-rNN.json)으로 판정한다. 끈 세트에도 이 값은 있다. 켠 세트의 유효 회차 "
              "p50·p99 중앙값이 끈 세트 유효 회차의 최소~최대 범위 안이면 영향 안 보임, 둘 다 밖이면 영향 가능성 있음이다. "
              "한쪽만 밖이거나 안이어도 끈 중앙값과의 차이가 끈 범위 폭의 50%를 넘으면 애매함이다(protocol-c 5절).", ""]
+    if any(d.meta.step == "S1R" for d in sets):
+        lines += ["리허설(S1R)은 회차가 적어 대략 비교로만 본다. 본 판정은 S1X 세트(각 11회)로 한다.", ""]
     rows = []
     by_label = {}
     for data in sets:
-        if data.meta.step == "S1X":
+        if data.meta.step in IMPACT_STEPS:
             by_label.setdefault(data.meta.label, {0: [], 1: []})[data.meta.stages].append(data)
     for label, groups in sorted(by_label.items()):
         off_p50, off_p99, on_p50, on_p99 = [], [], [], []
@@ -510,7 +532,7 @@ def impact_section(sets):
     if rows:
         lines.append(table(["조건", "p50 µs 끈 중앙값(범위) / 켠 중앙값", "p99 µs 끈 중앙값(범위) / 켠 중앙값", "유효 회차 끈 / 켠", "판정"], rows))
     else:
-        lines.append("S1X 세트가 없어 판정하지 못했다.")
+        lines.append("S1X·S1R 세트가 없어 판정하지 못했다.")
     return "\n".join(lines)
 
 

@@ -51,7 +51,7 @@ E2E_RESULTS_ABS="$(pwd)/loadtest/results"
 start_app order-engine " --measure.latency.enabled=true --measure.latency.snapshot-trigger-path=${E2E_RESULTS_ABS}/latency-trigger-v1 --measure.latency.output-path=${E2E_RESULTS_ABS}/latency-v1-order-engine.json --spring.kafka.listener.concurrency=${V1_LISTENER_CONCURRENCY:-3}$(stage_args v1 order-engine)"
 start_app matching-engine "$(stage_args v1 matching-engine)"
 start_app settlement-engine "$(stage_args v1 settlement-engine)"
-start_app api ""
+start_app api "$(stage_args v1 api)"
 
 echo -n "api HTTP(8080) 대기 중"
 for _ in $(seq 1 120); do

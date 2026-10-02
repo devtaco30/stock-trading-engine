@@ -11,7 +11,7 @@ set -uo pipefail
 #
 # 세트 표기: 단계:조건[:계측]
 #   단계  S1(192/초, N 10,000, 1+5회) S3(1,000/초, 20,000, 1+4) S5(4,000/초, 40,000, 1+3)
-#         S1X(S1 속도, 11회: 계측 끈/켠 영향 확인용) I<속도>(보간 단계: N=속도x20, 1+3, 예 I450 I2000)
+#         S1X(S1 속도, 11회: 계측 끈/켠 영향 확인용) S1R(S1 속도, 3회: 리허설 1+2) I<속도>(보간 단계: N=속도x20, 1+3, 예 I450 I2000)
 #   조건  v1(인덱스 없음) v1idx(인덱스 있음, INDEX_MODE=1) v2
 #   계측  1(기본) 단계 계측을 켠다 / 0 끈다
 #
@@ -57,6 +57,7 @@ step_config() {
         S3) echo "1000 20000 5" ;;
         S5) echo "4000 40000 4" ;;
         S1X) echo "192 10000 11" ;;
+        S1R) echo "192 10000 3" ;;
         I[0-9]*)
             local rate="${1#I}"
             echo "${rate} $((rate * 20)) 4"
@@ -150,7 +151,7 @@ round_fact() {
 
 stage_trigger_targets() {
     case "$1" in
-        v1) echo "order-engine matching-engine settlement-engine" ;;
+        v1) echo "api order-engine matching-engine settlement-engine" ;;
         v2) echo "api account-worker matching-worker" ;;
     esac
 }
@@ -291,7 +292,9 @@ run_round_segments() {
 
     local k6_start k6_end k6_exit
     k6_start="$(date +%s)"
-    RATE="$RATE" N="$N" VERSION="$cond" PASS="$round" INPUT_FILE="$INPUT_FILE" \
+    # 계측을 켠 세트는 예정 도착 시각 헤더(X-Sched-At)를 실어 api 필터가 G 를 기록하게 한다. 끈 세트는 b0·b1 과 같은 요청이다
+    SCHED_HEADER="$([ "${MEASURE_STAGES:-0}" = "1" ] && echo 1 || echo 0)" \
+        RATE="$RATE" N="$N" VERSION="$cond" PASS="$round" INPUT_FILE="$INPUT_FILE" \
         k6 run --summary-export="${cond_dir}/k6-${cond}-${round}.json" loadtest/replay-e2e.js \
         > "${cond_dir}/logs/k6-${cond}-${round}.out" 2>&1
     k6_exit=$?
