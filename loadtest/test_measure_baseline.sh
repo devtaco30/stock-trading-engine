@@ -202,6 +202,10 @@ SQL
 }
 
 test_src_main_unchanged() {
+    if [ -f loadtest/measure-allowlist-c.txt ]; then
+        echo "SKIP: 구간 분해 측정 브랜치는 src/main 계측 변경이 있어 기준 커밋 대조 테스트를 건너뛴다(허용 목록 대조는 test_measure_segments.sh)"
+        return
+    fi
     local output
     output="$(assert_src_main_unchanged 2>&1)"
     assert_eq "src/main 이 기준 커밋과 같으면 성공" "0" "$?"

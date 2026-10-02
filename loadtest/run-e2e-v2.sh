@@ -10,6 +10,10 @@ set -euo pipefail
 # 아예 안 붙인다. 슬롯 경계(0~127/128~255)는 LLD D1(256칸 고정) 그대로.
 cd "$(dirname "$0")/.."
 
+# 구간 분해 측정(MEASURE_STAGES=1)이면 프로세스마다 --measure.stages.* 인자를 붙인다. 기본은 끔이라 기존 인자와 같다.
+# 계좌 워커를 둘 띄우는 WORKER_COUNT=2 분기는 계측 대상이 아니다(묶음 C는 워커 하나).
+source loadtest/stage-args.sh
+
 WORKER_COUNT="${WORKER_COUNT:-1}"
 if [ "$WORKER_COUNT" != "1" ] && [ "$WORKER_COUNT" != "2" ]; then
     echo "WORKER_COUNT는 1 또는 2만 지원한다 (받은 값: ${WORKER_COUNT})" >&2
@@ -71,9 +75,9 @@ if [ "$WORKER_COUNT" = "2" ]; then
     start_app matching-worker "$(shard_args_fill)" matching-worker
     start_app api "$(shard_args_intake)" api
 else
-    start_app account-worker " --measure.latency.enabled=true --measure.latency.snapshot-trigger-path=${E2E_RESULTS_ABS}/latency-trigger-v2 --measure.latency.output-path=${E2E_RESULTS_ABS}/latency-v2-account-worker.json" account-worker
-    start_app matching-worker "" matching-worker
-    start_app api "" api
+    start_app account-worker " --measure.latency.enabled=true --measure.latency.snapshot-trigger-path=${E2E_RESULTS_ABS}/latency-trigger-v2 --measure.latency.output-path=${E2E_RESULTS_ABS}/latency-v2-account-worker.json$(stage_args v2 account-worker)" account-worker
+    start_app matching-worker "$(stage_args v2 matching-worker)" matching-worker
+    start_app api "$(stage_args v2 api)" api
 fi
 
 await_udp_port() {
