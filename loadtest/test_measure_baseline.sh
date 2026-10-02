@@ -201,7 +201,15 @@ SQL
     unset B1_SCHEMA
 }
 
+test_src_main_unchanged() {
+    local output
+    output="$(assert_src_main_unchanged 2>&1)"
+    assert_eq "src/main 이 기준 커밋과 같으면 성공" "0" "$?"
+    assert_contains "src/main diff 없음 문구" "$output" "src/main diff vs ${B1_BASE_SHA}: 없음"
+}
+
 test_lag_total_from_describe
+test_src_main_unchanged
 test_quiescent_step
 test_explain_parsing
 test_index_sql
