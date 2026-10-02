@@ -20,6 +20,7 @@ set -uo pipefail
 #   ★V2_RESET_PARTITIONS=3            v2 준비에서 reset-e2e-v1-state.sh 에 넘기는 파티션 수 (DB 행 정리가 목적)
 #   ★DRAIN_TIMEOUT_V1=60, DRAIN_WAIT_V2=10   회차 후 배수 대기 초 (v1: DB 증가분이 N이 될 때까지 최대, v2: 고정)
 #   ★ASSIGN_TIMEOUT=120               v1 파티션 배정 확인 최대 초
+#   ★V1_GROUP                         v1 컨슈머 그룹 이름을 직접 지정 (기본: order-engine 로그의 groupId)
 #   ★E6_PATTERN='...'                 파티션 재배정 로그를 찾는 정규식. 실제 문구는 리허설에서 확인해 고정한다
 #   ★CAFFEINATE=1                     1이면 측정 동안 절전을 막는다 (caffeinate -i)
 #
@@ -310,13 +311,22 @@ prepare_condition() {
     fi
 }
 
-# v1: order-engine 이 order-engine-e2e 그룹에서 파티션을 모두 배정받았는지. 배정 전에 도착한 메시지는 읽히지 않는다(F11)
+# order-engine 이 실제로 쓰는 컨슈머 그룹. application-e2e.yml 에는 order-engine-e2e 라고 적혀 있지만 첫 리허설에서
+# 기동 로그의 groupId 가 order-engine 이었다. 그래서 order-engine 로그에서 읽고, 못 읽으면 V1_GROUP, 그것도 없으면 order-engine 을 쓴다
+v1_consumer_group() {
+    local detected
+    detected="$(grep -m1 -oE 'groupId=[^],]+' loadtest/logs/order-engine.log 2> /dev/null | sed 's/groupId=//')"
+    echo "${V1_GROUP:-${detected:-order-engine}}"
+}
+
+# v1: order-engine 이 컨슈머 그룹에서 파티션을 모두 배정받았는지. 배정 전에 도착한 메시지는 읽히지 않는다(F11)
 await_v1_assignment() {
-    local waited=0 assigned
-    echo -n "order-requests 파티션 ${V1_PARTITIONS}개 배정 대기"
+    local waited=0 assigned group
+    group="$(v1_consumer_group)"
+    echo -n "그룹 ${group} 의 order-requests 파티션 ${V1_PARTITIONS}개 배정 대기"
     while [ "$waited" -lt "$ASSIGN_TIMEOUT" ]; do
         assigned="$(docker exec stock-trading-kafka /opt/kafka/bin/kafka-consumer-groups.sh \
-            --bootstrap-server localhost:9092 --describe --group order-engine-e2e 2> /dev/null \
+            --bootstrap-server localhost:9092 --describe --group "$group" 2> /dev/null \
             | awk -v topic="order-requests" '$2 == topic && $7 != "-" && $7 != "" { count++ } END { print count + 0 }')"
         if [ "$assigned" -ge "$V1_PARTITIONS" ]; then
             echo " OK (${assigned}개)"
