@@ -472,5 +472,109 @@ class SeedCheckTest(unittest.TestCase):
         self.assertIn("generate-e2e-input.py", problems[0])
 
 
+DBSTATS_HEADER = ["round", "phase", "orders_total", "orders_e2e", "pending_e2e", "filled_e2e", "unpaids_e2e",
+                  "dead_orders", "orders_bytes", "q1_ms", "q2_ms", "qh_ms", "q1_plan", "q2_plan", "qh_plan",
+                  "clear_ms", "deleted_orders"]
+
+
+def write_dbstats(cond_dir, cond, rows):
+    path = Path(cond_dir) / f"dbstats-{cond}.csv"
+    with open(path, "w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=DBSTATS_HEADER)
+        writer.writeheader()
+        for row in rows:
+            full = {key: "" for key in DBSTATS_HEADER}
+            full.update(row)
+            writer.writerow(full)
+
+
+class CompareTest(unittest.TestCase):
+    """여러 세트의 결과 디렉터리를 한 표에 나란히 놓는 compare 명령."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def make_set(self, name, base, invalid_rounds=(), with_dbstats=False):
+        set_dir = self.root / name
+        fixture = Fixture(set_dir, "v1")
+        for number in range(1, 12):
+            round_id = f"r{number:02d}"
+            kwargs = {"p50": base + number * 1_000_000, "p99": base * 3 + number * 1_000_000, "db_delta": 10000}
+            if round_id in invalid_rounds:
+                kwargs["hist_count"] = 9000
+            cpu = healthy_cpu()
+            for row in cpu:
+                row[3] = 100.0 + number          # pg_cpu
+            fixture.add_round(round_id, cpu=cpu, **kwargs)
+        fixture.write_rounds()
+        if with_dbstats:
+            rows = []
+            for number in range(1, 12):
+                rows.append({"round": f"r{number:02d}", "phase": "start", "orders_total": 54000 + number * 10000,
+                             "orders_e2e": number * 10000, "pending_e2e": 5, "filled_e2e": 10, "dead_orders": 7,
+                             "orders_bytes": 1048576 * number, "q1_ms": 0.25 * number, "q2_ms": 0.5, "qh_ms": 0.05,
+                             "q1_plan": "Index Scan", "q2_plan": "Bitmap Heap Scan", "qh_plan": "Index Scan"})
+            write_dbstats(set_dir / "v1", "v1", rows)
+        return set_dir
+
+    def entries(self, *specs):
+        return [(label, str(path), "v1") for label, path in specs]
+
+    def test_p50_추이는_회차별로_세트를_나란히_놓고_제외된_회차에_별표를_붙인다(self):
+        a = self.make_set("a", 10_000_000, invalid_rounds=("r04",))
+        b = self.make_set("b", 3_000_000)
+        report = ab.build_compare(self.entries(("A", a), ("B", b)))
+        self.assertIn("p50 추이", report)
+        line = next(l for l in report.splitlines() if l.startswith("| r04 ") and "14.00*" in l)
+        self.assertIn("7.00", line)
+
+    def test_세트마다_성립_여부와_유효_회차_수를_쓴다(self):
+        a = self.make_set("a", 10_000_000, invalid_rounds=("r02", "r03", "r04", "r05", "r06"))
+        b = self.make_set("b", 3_000_000)
+        report = ab.build_compare(self.entries(("A", a), ("B", b)))
+        self.assertIn("A: 측정 불성립", report)
+        self.assertIn("B: 성립", report)
+
+    def test_구간_idle_최솟값과_postgres_평균_CPU_표가_있다(self):
+        a = self.make_set("a", 10_000_000)
+        report = ab.build_compare(self.entries(("A", a)))
+        self.assertIn("구간 idle 최솟값", report)
+        self.assertIn("postgres 평균 CPU", report)
+        self.assertIn("111.0", report)   # r11의 pg_cpu 평균
+
+    def test_dbstats가_있으면_테이블_크기와_쿼리_시간_표를_싣는다(self):
+        a = self.make_set("a", 10_000_000, with_dbstats=True)
+        report = ab.build_compare(self.entries(("A", a)))
+        self.assertIn("회차 시작 시점의 DB 상태", report)
+        self.assertIn("Index Scan", report)
+        self.assertIn("2.75", report)    # r11 q1_ms = 0.25 * 11
+
+    def test_dbstats가_없는_세트는_없다고_쓴다(self):
+        a = self.make_set("a", 10_000_000)
+        report = ab.build_compare(self.entries(("A", a)))
+        self.assertIn("기록 없음", report)
+
+    def test_보고서에_쓰지_않는_것은_출력하지_않는다(self):
+        a = self.make_set("a", 10_000_000, with_dbstats=True)
+        report = ab.build_compare(self.entries(("A", a)))
+        for forbidden in ("신뢰구간", "p값", "안정적", "때문에"):
+            self.assertNotIn(forbidden, report)
+
+    def test_dbstats_읽기는_시작_행만_회차로_모은다(self):
+        a = self.make_set("a", 10_000_000)
+        write_dbstats(a / "v1", "v1", [
+            {"round": "r01", "phase": "start", "orders_e2e": 0, "q1_ms": 0.1},
+            {"round": "r01", "phase": "cleared", "orders_e2e": 12, "clear_ms": 340, "deleted_orders": 9500},
+            {"round": "r02", "phase": "start", "orders_e2e": 12, "q1_ms": 0.2},
+        ])
+        stats = ab.load_dbstats(a / "v1", "v1")
+        self.assertEqual(["r01", "r02"], sorted(stats["start"].keys()))
+        self.assertEqual("9500", stats["cleared"]["r01"]["deleted_orders"])
+
+
 if __name__ == "__main__":
     unittest.main()

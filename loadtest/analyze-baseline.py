@@ -14,6 +14,7 @@
   analyze-baseline.py report <결과 디렉터리> [--out analysis.md]
   analyze-baseline.py judge --dir <cond 디렉터리> --cond v1 --round r05 --k6-start N --k6-end N --k6-exit N
                             [--db-delta N] [--e6] [--e7]
+  analyze-baseline.py compare [--out cmp.md] 라벨=결과디렉터리[:조건] ...   (조건 기본 v1) 여러 세트를 한 표에 나란히
   analyze-baseline.py seed-check --input <e2e-input.jsonl> --seed-yml <application-e2e.yml> [--count 10000] [--rounds 11]
                                  점검 8: 입력 앞 N건의 계좌별 필요량 x 회차 수가 시드 잔고·보유 안에 들어오는지
 """
@@ -472,6 +473,134 @@ def build_report(result_dir):
 
 
 
+
+# ---------- 여러 세트 나란히 (compare) ----------
+
+DBSTATS_HEADER = ["round", "phase", "orders_total", "orders_e2e", "pending_e2e", "filled_e2e", "unpaids_e2e",
+                  "dead_orders", "orders_bytes", "q1_ms", "q2_ms", "qh_ms", "q1_plan", "q2_plan", "qh_plan",
+                  "clear_ms", "deleted_orders"]
+
+
+def load_dbstats(cond_dir, cond):
+    """dbstats-<cond>.csv를 {"start": {회차: 행}, "cleared": {회차: 행}}로 읽는다. 파일이 없으면 빈 딕셔너리 둘."""
+    path = Path(cond_dir) / f"dbstats-{cond}.csv"
+    stats = {"start": {}, "cleared": {}}
+    try:
+        with open(path, newline="", encoding="utf-8") as handle:
+            for row in csv.DictReader(handle):
+                phase = row.get("phase", "")
+                if phase in stats:
+                    stats[phase][row["round"]] = row
+    except OSError:
+        pass
+    return stats
+
+
+def round_cell(round_, key):
+    if round_ is None or round_.latency is None or key not in round_.latency:
+        return "-"
+    return format_ms(round_.latency[key]) + ("" if round_.valid else "*")
+
+
+def window_idle_min(round_):
+    stats = cpu_window_stats(round_.cpu, round_.k6_start, round_.k6_end)
+    idle = stats.get("idle")
+    return f"{idle.minimum:.1f}" if idle else "-"
+
+
+def window_pg_average(round_):
+    stats = cpu_window_stats(round_.cpu, round_.k6_start, round_.k6_end)
+    pg = stats.get("pg")
+    return f"{pg.average:.1f}" if pg else "-"
+
+
+def compare_table(labels, loaded, cell):
+    all_rounds = sorted({r.round_id for rounds in loaded.values() for r in rounds})
+    rows = []
+    for round_id in all_rounds:
+        row = [round_id]
+        for label in labels:
+            match = next((r for r in loaded[label] if r.round_id == round_id), None)
+            row.append(cell(match))
+        rows.append(row)
+    return table(["회차"] + labels, rows)
+
+
+def dbstats_tables(label, stats):
+    if not stats["start"]:
+        return [f"### {label}", "", "- 기록 없음", ""]
+    rows = []
+    for round_id in sorted(stats["start"]):
+        row = stats["start"][round_id]
+
+        def cell(key, fmt=None):
+            value = (row.get(key) or "").strip()
+            if not value:
+                return "-"
+            return fmt(value) if fmt else value
+
+        rows.append([round_id, cell("orders_total"), cell("orders_e2e"), cell("pending_e2e"), cell("dead_orders"),
+                     cell("orders_bytes", lambda v: str(int(float(v)) // 1024)),
+                     cell("q1_ms", lambda v: f"{float(v):.2f}"), cell("q2_ms", lambda v: f"{float(v):.2f}"),
+                     cell("qh_ms", lambda v: f"{float(v):.2f}"), cell("q1_plan"), cell("q2_plan"), cell("qh_plan")])
+    header = ["회차", "orders 전체 행", "계좌 2001~2100 행", "PENDING 행", "dead tuple", "orders 파일(KB)",
+              "예약 증거금 합 ms", "매도 잔량 합 ms", "보유 락 ms", "예약 증거금 합 계획", "매도 잔량 합 계획", "보유 락 계획"]
+    out = [f"### {label}", "", table(header, rows), ""]
+    if stats["cleared"]:
+        cleared_rows = []
+        for round_id in sorted(stats["cleared"]):
+            row = stats["cleared"][round_id]
+            cleared_rows.append([round_id, row.get("deleted_orders") or "-", row.get("clear_ms") or "-",
+                                 row.get("orders_e2e") or "-", row.get("pending_e2e") or "-"])
+        out += ["비움 직후", "", table(["회차", "지운 orders 행", "걸린 ms", "남은 계좌 2001~2100 행", "남은 PENDING 행"],
+                                       cleared_rows), ""]
+    return out
+
+
+def build_compare(entries):
+    """entries: [(라벨, 결과 디렉터리, 조건)]. 세트마다 같은 표에 열을 하나씩 둔다."""
+    labels = []
+    loaded = {}
+    stats_by_label = {}
+    for label, result_dir, cond in entries:
+        cond_dir = Path(result_dir) / cond
+        labels.append(label)
+        loaded[label] = load_condition(cond_dir, cond)
+        stats_by_label[label] = load_dbstats(cond_dir, cond)
+
+    out = ["# 세트 비교", "",
+           "단위는 밀리초(소수 둘째 자리)다. 별표는 제외된 회차(사유 코드는 각 세트의 analysis.md)이고, r01은 워밍업이다.", ""]
+    for label in labels:
+        out.append(f"- {label}: {status_text(loaded[label])}")
+    out.append("")
+
+    out += ["## p50 추이", "", compare_table(labels, loaded, lambda r: round_cell(r, "p50Nanos")), ""]
+    out += ["## p99 추이", "", compare_table(labels, loaded, lambda r: round_cell(r, "p99Nanos")), ""]
+
+    summary_rows = []
+    for label in labels:
+        for key, name in (("p50Nanos", "p50"), ("p99Nanos", "p99")):
+            valid = summarize(loaded[label], key, True)
+            everything = summarize(loaded[label], key, False)
+            summary_rows.append([label, name,
+                                 f"{valid.median_ms:.2f} ({valid.min_ms:.2f} ~ {valid.max_ms:.2f}), n={valid.n}"
+                                 if valid.n else "-",
+                                 f"{everything.median_ms:.2f} ({everything.min_ms:.2f} ~ {everything.max_ms:.2f}), "
+                                 f"n={everything.n}" if everything.n else "-"])
+    out += ["## 요약 (중앙값, 최소~최대)", "",
+            table(["세트", "지표", "유효 측정 회차만", "11회 전체"], summary_rows), ""]
+
+    out += ["## 구간 idle 최솟값 (%, k6 시작~종료 구간 안 샘플)", "",
+            compare_table(labels, loaded, lambda r: "-" if r is None else window_idle_min(r)), ""]
+    out += ["## postgres 평균 CPU (1코어 대비 %, k6 시작~종료 구간 안 샘플)", "",
+            compare_table(labels, loaded, lambda r: "-" if r is None else window_pg_average(r)), ""]
+
+    out += ["## 회차 시작 시점의 DB 상태와 쿼리 시간", ""]
+    for label in labels:
+        out += dbstats_tables(label, stats_by_label[label])
+    return "\n".join(out)
+
+
 # ---------- 점검 8: 시드 충분성 ----------
 
 def check_seed(input_path, seed_yml_path, count=EXPECTED_COUNT, rounds=EXPECTED_ROUNDS):
@@ -551,6 +680,10 @@ def main(argv):
     judge.add_argument("--e6", action="store_true")
     judge.add_argument("--e7", action="store_true")
 
+    compare = sub.add_parser("compare")
+    compare.add_argument("--out")
+    compare.add_argument("specs", nargs="+", help="라벨=결과디렉터리[:조건]")
+
     seed = sub.add_parser("seed-check")
     seed.add_argument("--input", required=True)
     seed.add_argument("--seed-yml", required=True)
@@ -558,6 +691,18 @@ def main(argv):
     seed.add_argument("--rounds", type=int, default=EXPECTED_ROUNDS)
 
     args = parser.parse_args(argv)
+    if args.command == "compare":
+        entries = []
+        for spec in args.specs:
+            label, _, target = spec.partition("=")
+            path, _, cond = target.partition(":")
+            entries.append((label, path, cond or "v1"))
+        text = build_compare(entries)
+        print(text)
+        if args.out:
+            Path(args.out).write_text(text + "\n", encoding="utf-8")
+        return 0
+
     if args.command == "seed-check":
         problems = check_seed(args.input, args.seed_yml, args.count, args.rounds)
         for problem in problems:
