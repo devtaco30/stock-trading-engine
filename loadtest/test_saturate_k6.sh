@@ -47,5 +47,10 @@ assert_contains "사용법 안내" "$out" "사용:"
 out="$(ARRIVAL_SEC=10 bash loadtest/saturate-k6.sh --dry-run --rates "1000" 2>&1)"
 assert_contains "ARRIVAL_SEC 반영" "$out" "1000/초 N=10000"
 
+# k6 에 넘기는 입력 파일 경로는 절대경로여야 한다 (open() 이 스크립트 디렉터리 기준이라 상대경로면 loadtest/loadtest/... 로 읽는다)
+SATURATE_SOURCE_ONLY=1 source loadtest/saturate-k6.sh
+assert_eq "상대경로는 저장소 루트를 붙인다" "${REPO_ROOT}/loadtest/results/e2e-input.jsonl" "$(abs_path loadtest/results/e2e-input.jsonl)"
+assert_eq "절대경로는 그대로" "/tmp/x.jsonl" "$(abs_path /tmp/x.jsonl)"
+
 echo "통과 ${PASSES}, 실패 ${FAILS}"
 [ "$FAILS" -eq 0 ]

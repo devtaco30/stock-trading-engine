@@ -59,6 +59,14 @@ parse_args() {
     done
 }
 
+# k6 의 open() 은 상대경로를 스크립트(loadtest/) 기준으로 읽으므로 입력 파일은 절대경로로 넘긴다
+abs_path() {
+    case "$1" in
+        /*) echo "$1" ;;
+        *) echo "${REPO_ROOT}/$1" ;;
+    esac
+}
+
 input_lines() {
     if [ -f "$INPUT_FILE" ]; then
         wc -l < "$INPUT_FILE" | tr -d ' '
@@ -119,7 +127,7 @@ run_rate() {
     echo "--- ${rate}/초 N=${n}"
     curl -fsS -X POST "http://127.0.0.1:${DUMMY_PORT}/__reset" > /dev/null
     sleep "$SETTLE_SEC"
-    RATE="$rate" N="$n" VERSION=v1 PASS=solo INPUT_FILE="$INPUT_FILE" BASE="http://127.0.0.1:${DUMMY_PORT}" \
+    RATE="$rate" N="$n" VERSION=v1 PASS=solo INPUT_FILE="$(abs_path "$INPUT_FILE")" BASE="http://127.0.0.1:${DUMMY_PORT}" \
         k6 run --summary-export="${RUN_DIR}/k6-${rate}.json" loadtest/replay-e2e.js > "${RUN_DIR}/k6-${rate}.out" 2>&1 &
     local k6_pid=$!
     python3 loadtest/solo_saturation.py sample --out "${RUN_DIR}/cpu-${rate}.csv" --interval 1 \
@@ -181,4 +189,6 @@ main() {
     echo "완료 — ${RUN_DIR}/table.md"
 }
 
-main "$@"
+if [ "${SATURATE_SOURCE_ONLY:-0}" != "1" ]; then
+    main "$@"
+fi
