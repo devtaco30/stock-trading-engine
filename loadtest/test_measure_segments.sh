@@ -86,6 +86,12 @@ test_saturation_reasons() {
     assert_eq "lag 를 못 읽으면(NA) 건너뛴다" "none" "$(saturation_reasons 0 0 10000 10000 NA 100 110 5 52)"
 }
 
+test_saturation_has_no_cpu_signal() {
+    # k6 CPU 는 기록만 한다(protocol-c 4-3절). 포화 판정 함수와 그 호출에 CPU 입력이 없어야 한다
+    assert_eq "saturation_reasons 에 cpu 가 없다" "0" "$(declare -f saturation_reasons | grep -ci 'cpu')"
+    assert_eq "record_saturation 에 cpu 가 없다" "0" "$(declare -f record_saturation | grep -ci 'cpu')"
+}
+
 test_step_saturation() {
     assert_eq "측정 5회 중 3회면 포화한 단계" "yes" "$(step_is_saturated 3 5)"
     assert_eq "측정 5회 중 2회면 아니다" "no" "$(step_is_saturated 2 5)"
@@ -211,6 +217,7 @@ test_round_fact() {
 test_step_config
 test_interpolation_rate
 test_saturation_reasons
+test_saturation_has_no_cpu_signal
 test_step_saturation
 test_series_edges
 test_trigger_targets

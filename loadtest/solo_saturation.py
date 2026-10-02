@@ -7,7 +7,9 @@ k6를 붙여, 속도마다 k6가 예정 속도를 지키는지 본다. 이 파�
   solo_saturation.py sample --out cpu.csv --pid k6=123 --pid server=456 [--interval 1]  1초 간격 CPU 샘플러(종료 신호까지)
   solo_saturation.py table  <결과 디렉터리> --rates "192 500" --arrival-sec 20 --input-lines 100000 [--out table.md]
 
-포화 판정은 protocol-c 4-3절의 신호 그대로다: k6 dropped_iterations 1 이상, 또는 k6 CPU 40%(1코어 대비) 이상이 연속 2개.
+포화 판정은 k6 dropped_iterations 1 이상, 또는 더미 서버가 센 실제 도착률이 목표 속도에서 5% 이상 벗어난 경우다.
+k6 CPU는 표에 기록만 하고 판정에 쓰지 않는다(protocol-c 4-3절: 기능 문제가 없으면 CPU 값만으로 포화라 부르지 않는다).
+도착률 5% 이탈은 선언 문서에 기준이 없어 새로 정한 임의값이다.
 「k6 단독 포화점의 몇 %까지만 인용한다」는 비율은 리허설 뒤에 선언 문서가 정하므로 여기서 계산하지 않는다(표만 출력한다).
 """
 import argparse
@@ -21,8 +23,7 @@ import time
 from pathlib import Path
 
 DEFAULT_RATES = [192, 500, 1000, 2000, 4000, 6000]
-K6_CPU_LIMIT = 40.0       # protocol-c 4-3절 / b0 E2 와 같은 값 (1코어 대비 %)
-CONSECUTIVE = 2
+ARRIVAL_DEVIATION_LIMIT = 0.05   # 실제 도착률이 목표 속도에서 이 비율 이상 벗어나면 포화 (임의값, 선언 문서에 기준 없음)
 SAMPLE_HEADER = ["ts", "k6_cpu", "server_cpu", "total_busy_pct", "idle_pct"]
 
 
@@ -183,16 +184,13 @@ def _fmt(value):
 
 # ---------------------------------------------------------------- 포화 판정과 표
 
-def judge_rate(dropped, http_failed, k6_cpu_samples):
+def judge_rate(dropped, http_failed, arrival, target_rate):
+    """포화 이유 목록. k6 CPU 는 입력이 아니다(기록만). http 실패는 포화가 아니라 리허설 이상으로 따로 둔다."""
     reasons = []
     if dropped >= 1:
         reasons.append("k6_dropped")
-    run = 0
-    for value in k6_cpu_samples:
-        run = run + 1 if (value is not None and value >= K6_CPU_LIMIT) else 0
-        if run >= CONSECUTIVE:
-            reasons.append("k6_cpu")
-            break
+    if arrival is not None and abs(arrival - target_rate) / target_rate >= ARRIVAL_DEVIATION_LIMIT:
+        reasons.append("arrival_off")
     anomalies = ["http_failed"] if http_failed >= 1 else []
     return {"reasons": reasons, "saturated": bool(reasons), "anomalies": anomalies}
 
@@ -226,10 +224,11 @@ def build_row(run_dir, rate, n):
     k6_samples = [_float(row.get("k6_cpu")) for row in cpu_rows]
     idle_samples = [value for value in (_float(row.get("idle_pct")) for row in cpu_rows) if value is not None]
     present = [value for value in k6_samples if value is not None]
-    verdict = judge_rate(facts["dropped"], facts["http_failed"], k6_samples)
+    arrival = actual_arrival_rate(stats)
+    verdict = judge_rate(facts["dropped"], facts["http_failed"], arrival, rate)
     return {
         "rate": rate, "n": n, "missing": False,
-        "dropped": facts["dropped"], "http_failed": facts["http_failed"], "arrival": actual_arrival_rate(stats),
+        "dropped": facts["dropped"], "http_failed": facts["http_failed"], "arrival": arrival,
         "k6_cpu_mean": sum(present) / len(present) if present else None,
         "k6_cpu_max": max(present) if present else None,
         "idle_min": min(idle_samples) if idle_samples else None,
@@ -269,7 +268,8 @@ def build_table(rows):
     else:
         lines.append(f"포화한 첫 속도: {first_saturated}건/초")
     lines += ["",
-              "- 판정 신호: k6 dropped_iterations 1 이상(k6_dropped), k6 CPU 40% 이상이 연속 2개 샘플(k6_cpu). 둘 다 protocol-c 4-3절 값이다.",
+              "- 판정 신호: k6 dropped_iterations 1 이상(k6_dropped), 실제 도착률이 목표 속도에서 5% 이상 벗어남(arrival_off). 5%는 선언 문서에 기준이 없어 새로 정한 임의값이다.",
+              "- k6 CPU는 기록만 하고 포화 판정에 쓰지 않는다(protocol-c 4-3절).",
               "- 실제 도착률은 더미 서버가 기록한 첫·마지막 요청 시각으로 계산했다. 전체 idle은 ps 누적 시간 합의 차이로 구한 근사값이다.",
               "- 인용 비율은 리허설 데이터를 본 뒤 선언 문서에 정한다. 이 표는 포화점만 보여 준다."]
     return "\n".join(lines) + "\n"

@@ -124,38 +124,41 @@ class CpuTest(unittest.TestCase):
 
 
 class SaturationJudgeTest(unittest.TestCase):
-    def cpu_rows(self, values):
-        return [{"k6_cpu": value} for value in values]
+    """판정은 dropped_iterations, 실제 도착률의 목표 이탈(5% 이상)로만 한다. k6 CPU 는 기록만 한다(protocol-c 4-3절)."""
 
     def test_clean_rate_is_not_saturated(self):
-        verdict = ss.judge_rate(dropped=0, http_failed=0, k6_cpu_samples=[10, 12, 15, 11])
+        verdict = ss.judge_rate(dropped=0, http_failed=0, arrival=1000.0, target_rate=1000)
         self.assertEqual(verdict["reasons"], [])
         self.assertFalse(verdict["saturated"])
 
     def test_dropped_iterations_saturate(self):
-        verdict = ss.judge_rate(dropped=1, http_failed=0, k6_cpu_samples=[10, 12])
+        verdict = ss.judge_rate(dropped=1, http_failed=0, arrival=1000.0, target_rate=1000)
         self.assertEqual(verdict["reasons"], ["k6_dropped"])
         self.assertTrue(verdict["saturated"])
 
-    def test_two_consecutive_cpu_samples_at_40_saturate(self):
-        verdict = ss.judge_rate(dropped=0, http_failed=0, k6_cpu_samples=[10, 40.0, 45, 10])
-        self.assertEqual(verdict["reasons"], ["k6_cpu"])
+    def test_arrival_off_target_by_5_percent_or_more_saturates(self):
+        self.assertEqual(ss.judge_rate(0, 0, 950.0, 1000)["reasons"], ["arrival_off"])   # 정확히 5% 낮음
+        self.assertEqual(ss.judge_rate(0, 0, 1050.0, 1000)["reasons"], ["arrival_off"])  # 정확히 5% 높음
+        self.assertEqual(ss.judge_rate(0, 0, 600.0, 1000)["reasons"], ["arrival_off"])
 
-    def test_single_spike_or_split_spikes_do_not(self):
-        self.assertEqual(ss.judge_rate(0, 0, [10, 90, 10, 90, 10])["reasons"], [])
-        self.assertEqual(ss.judge_rate(0, 0, [39.9, 39.9, 39.9])["reasons"], [])
+    def test_arrival_within_5_percent_is_fine(self):
+        self.assertEqual(ss.judge_rate(0, 0, 950.1, 1000)["reasons"], [])
+        self.assertEqual(ss.judge_rate(0, 0, 1049.9, 1000)["reasons"], [])
+        self.assertEqual(ss.judge_rate(0, 0, 6001.0, 6000)["reasons"], [])
 
-    def test_cpu_threshold_is_inclusive_at_40(self):
-        self.assertEqual(ss.judge_rate(0, 0, [40.0, 40.0])["reasons"], ["k6_cpu"])
-
-    def test_missing_cpu_samples_are_skipped(self):
-        self.assertEqual(ss.judge_rate(0, 0, [None, None])["reasons"], [])
+    def test_missing_arrival_is_skipped(self):
+        self.assertEqual(ss.judge_rate(0, 0, None, 1000)["reasons"], [])
 
     def test_both_reasons_listed_in_order(self):
-        self.assertEqual(ss.judge_rate(3, 0, [50, 50])["reasons"], ["k6_dropped", "k6_cpu"])
+        self.assertEqual(ss.judge_rate(3, 0, 500.0, 1000)["reasons"], ["k6_dropped", "arrival_off"])
+
+    def test_k6_cpu_is_not_a_saturation_reason(self):
+        # 시그니처에 CPU 가 없다. build_row 가 CPU 값이 아무리 높아도 판정에 넘기지 않는 것은 TableTest 에서 확인한다
+        import inspect
+        self.assertNotIn("cpu", " ".join(inspect.signature(ss.judge_rate).parameters).lower())
 
     def test_http_failure_is_reported_as_rehearsal_anomaly_not_saturation(self):
-        verdict = ss.judge_rate(dropped=0, http_failed=4, k6_cpu_samples=[10, 10])
+        verdict = ss.judge_rate(dropped=0, http_failed=4, arrival=1000.0, target_rate=1000)
         self.assertFalse(verdict["saturated"])
         self.assertEqual(verdict["anomalies"], ["http_failed"])
 
@@ -167,20 +170,20 @@ class TableTest(unittest.TestCase):
                 "lat_p99_ms": 1.4, "lat_max_ms": 9.0, "saturated": saturated, "reasons": reasons, "anomalies": []}
 
     def test_table_has_one_row_per_rate_and_first_saturated_rate(self):
-        rows = [self.row(192, False, []), self.row(1000, False, []), self.row(4000, True, ["k6_cpu"], cpu=(55.0, 80.0)),
-                self.row(6000, True, ["k6_dropped", "k6_cpu"], dropped=300)]
+        rows = [self.row(192, False, []), self.row(1000, False, []), self.row(4000, True, ["arrival_off"], arrival=3700.0, cpu=(55.0, 80.0)),
+                self.row(6000, True, ["k6_dropped", "arrival_off"], dropped=300)]
         text = ss.build_table(rows)
         for rate in (192, 1000, 4000, 6000):
             self.assertIn(f"| {rate} |", text)
         self.assertIn("포화한 첫 속도: 4000건/초", text)
-        self.assertIn("k6_dropped, k6_cpu", text)
+        self.assertIn("k6_dropped, arrival_off", text)
 
     def test_table_when_nothing_saturates(self):
         text = ss.build_table([self.row(192, False, []), self.row(500, False, [])])
         self.assertIn("시험한 속도에서 포화 없음", text)
 
     def test_table_does_not_hardcode_quoting_ratio(self):
-        text = ss.build_table([self.row(192, False, []), self.row(4000, True, ["k6_cpu"])])
+        text = ss.build_table([self.row(192, False, []), self.row(4000, True, ["arrival_off"])])
         self.assertIn("인용 비율은 리허설 데이터를 본 뒤 선언 문서에 정한다", text)
         for forbidden in ("까지만 인용", "% 이하", "신뢰구간"):
             self.assertNotIn(forbidden, text)
@@ -211,9 +214,26 @@ class TableTest(unittest.TestCase):
             row = ss.build_row(run, 1000, 20000)
         self.assertEqual(row["rate"], 1000)
         self.assertAlmostEqual(row["arrival"], 1000.0)
-        self.assertEqual(row["reasons"], ["k6_cpu"])
+        self.assertEqual(row["reasons"], [])  # CPU 가 40% 이상이어도 포화 이유가 아니다(기록만)
+        self.assertFalse(row["saturated"])
         self.assertEqual(row["k6_cpu_max"], 50.0)
         self.assertEqual(row["idle_min"], 87.0)
+
+    def test_build_row_marks_arrival_far_from_target(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            run = Path(tmp)
+            (run / "k6-1000.json").write_text(json.dumps({"metrics": {
+                "http_req_failed": {"passes": 0, "fails": 100}, "http_reqs": {"count": 100},
+                "http_req_duration": {"avg": 0.3, "p(95)": 0.8, "p(99)": 1.2, "max": 5.0}}}))
+            (run / "server-1000.json").write_text(json.dumps({"count": 801, "firstNanos": 0, "lastNanos": 1_000_000_000}))
+            row = ss.build_row(run, 1000, 20000)
+        self.assertEqual(row["reasons"], ["arrival_off"])
+        self.assertEqual(row["dropped"], 0)  # dropped_iterations 키가 없으면 0
+
+    def test_table_note_says_cpu_is_recorded_only(self):
+        text = ss.build_table([self.row(192, False, [])])
+        self.assertIn("k6 CPU는 기록만 하고 포화 판정에 쓰지 않는다", text)
+        self.assertNotIn("k6_cpu", text)
 
     def test_build_row_without_files_is_marked_missing(self):
         with tempfile.TemporaryDirectory() as tmp:
