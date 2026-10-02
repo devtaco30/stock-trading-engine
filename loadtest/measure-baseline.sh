@@ -296,16 +296,23 @@ SQL
 
 # 비움: 계좌 2001~2100 의 FILLED 주문과 그 주문을 참조하는 unpaids 만 지운다.
 # PENDING 행은 지우지 않는다. 매칭 엔진이 메모리 호가창에 들고 있는 미체결 주문의 DB 행이기 때문이다.
+# unpaids.order_id 에는 인덱스가 없어서, orders 행을 지울 때마다 도는 외래키 검사가 unpaids 전체를 읽는다.
+# unpaids 삭제를 먼저 커밋하고 VACUUM 으로 죽은 행을 치운 뒤에 orders 를 지워야 이 검사가 싸다(같은 트랜잭션이면 3.4초, 나누면 아래 시간).
 clear_sql() {
     local schema
     schema="$(b1_schema)"
     cat <<SQL
+ANALYZE ${schema}.orders;
+ANALYZE ${schema}.unpaids;
 BEGIN;
 WITH deleted AS (
   DELETE FROM ${schema}.unpaids
   WHERE order_id IN (SELECT id FROM ${schema}.orders WHERE account_id BETWEEN 2001 AND 2100 AND status = 'FILLED')
   RETURNING 1)
 SELECT 'unpaids|' || count(*) FROM deleted;
+COMMIT;
+VACUUM (ANALYZE) ${schema}.unpaids;
+BEGIN;
 WITH deleted AS (
   DELETE FROM ${schema}.orders
   WHERE account_id BETWEEN 2001 AND 2100 AND status = 'FILLED'
