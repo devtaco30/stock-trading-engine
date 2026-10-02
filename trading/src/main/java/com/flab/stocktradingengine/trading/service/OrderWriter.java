@@ -14,6 +14,7 @@ import com.flab.stocktradingengine.account.exception.InsufficientResourceExcepti
 import com.flab.stocktradingengine.account.service.AccountService;
 import com.flab.stocktradingengine.exception.InvalidRequestException;
 import com.flab.stocktradingengine.exception.ResourceNotFoundException;
+import com.flab.stocktradingengine.time.EpochNanos;
 import com.flab.stocktradingengine.trading.command.BuyOrderCommand;
 import com.flab.stocktradingengine.trading.command.SellOrderCommand;
 import com.flab.stocktradingengine.trading.entity.Order;
@@ -46,9 +47,22 @@ public class OrderWriter {
     @Transactional
     public PlaceOrderResultView writeBuyOrder(BuyOrderCommand command,
             Supplier<BigDecimal> unpaidSumSupplier) {
+        return writeBuyOrder(command, unpaidSumSupplier, null);
+    }
+
+    /**
+     * 구간 분해 측정용 — 락 획득(V-P4), 합계 쿼리(V-P5), 판정 도달(V-P5b), 저장(V-P6) 시각을 {@code times}에 남긴다.
+     * {@code times}가 null이면 시각을 찍지 않고 기존 동작과 같다.
+     */
+    @Transactional
+    public PlaceOrderResultView writeBuyOrder(BuyOrderCommand command,
+            Supplier<BigDecimal> unpaidSumSupplier, OrderStageTimes times) {
         // BUY price * quantity 로 주문 금액 계산 -> Pessimistic Lock 으로 인해 락
         Account lockedAccount = accountService.getAccountByAccountIdForUpdate(command.accountId())
             .orElseThrow(() -> new ResourceNotFoundException("Account not found: " + command.accountId()));
+        if (times != null) {
+            times.markLocked(EpochNanos.now());
+        }
 
         // 락 획득 후 미결제 미수금 조회 — 락 전 조회 시 TOCTOU 발생
         BigDecimal pendingUnpaidSum = unpaidSumSupplier.get();
@@ -62,6 +76,9 @@ public class OrderWriter {
 
         // PENDING 매수 주문의 예약증거금 합계 — DB SUM으로 락 보유 시간 단축
         BigDecimal currentReservedMarginSum = orderRepository.sumReservedMarginByAccountId(lockedAccount.getAccountId());
+        if (times != null) {
+            times.markSummed(EpochNanos.now());
+        }
 
         // 출금 가능 금액 = 잔고 - 예약 증거금 - 미결제 미수금
         BigDecimal withdrawableBalance = lockedAccount.getBalance()
@@ -75,6 +92,9 @@ public class OrderWriter {
         // 주문 금액이 매수 가능 금액보다 크면 예외
         if (orderAmount.compareTo(buyLimit) > 0) {
             throw new InsufficientResourceException("매수 가능 금액 초과");
+        }
+        if (times != null) {
+            times.markDecided(EpochNanos.now());
         }
 
         // 증거금이 충분하면 주문 접수
@@ -93,6 +113,9 @@ public class OrderWriter {
             .build();
 
         Order saved = orderRepository.saveAndFlush(order);
+        if (times != null) {
+            times.markInserted(EpochNanos.now());
+        }
         return toView(saved);
     }
 
@@ -101,18 +124,33 @@ public class OrderWriter {
      */
     @Transactional
     public PlaceOrderResultView writeSellOrder(SellOrderCommand command) {
+        return writeSellOrder(command, null);
+    }
+
+    /** 구간 분해 측정용 — {@link #writeBuyOrder(BuyOrderCommand, Supplier, OrderStageTimes)}와 같다. */
+    @Transactional
+    public PlaceOrderResultView writeSellOrder(SellOrderCommand command, OrderStageTimes times) {
         // 보유 종목 검증 (행 락 — 조회~검증 사이 동시 매도 접수 직렬화)
         Holding holding = accountService.getHoldingByAccountIdForUpdate(command.accountId(), command.stockCode())
             .orElseThrow(() -> new InvalidRequestException("보유 종목이 아님: " + command.stockCode()));
+        if (times != null) {
+            times.markLocked(EpochNanos.now());
+        }
 
         // 가용 수량 검증 = 보유 - 이미 접수된 PENDING 매도 잔량.
         // 보유 수량만 보면 100주로 100주 매도주문을 여러 건 접수하는 over-sell 이 뚫린다(매수 증거금 예약과 대칭).
         long pendingSellQuantity = orderRepository.sumPendingSellQuantity(command.accountId(), command.stockCode());
+        if (times != null) {
+            times.markSummed(EpochNanos.now());
+        }
         long availableQuantity = holding.getQuantity() - pendingSellQuantity;
         if (availableQuantity < command.quantity()) {
             throw new InsufficientResourceException(
                 "매도 가능 수량 초과 (보유: " + holding.getQuantity()
                 + ", 미체결 매도: " + pendingSellQuantity + ", 요청: " + command.quantity() + ")");
+        }
+        if (times != null) {
+            times.markDecided(EpochNanos.now());
         }
 
         Account account = holding.getAccount();
@@ -131,6 +169,9 @@ public class OrderWriter {
             .build();
 
         Order saved = orderRepository.saveAndFlush(order);
+        if (times != null) {
+            times.markInserted(EpochNanos.now());
+        }
         return toView(saved);
     }
 

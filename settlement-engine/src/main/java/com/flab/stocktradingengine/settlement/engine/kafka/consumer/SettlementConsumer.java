@@ -1,6 +1,7 @@
 package com.flab.stocktradingengine.settlement.engine.kafka.consumer;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Component;
@@ -8,6 +9,8 @@ import org.springframework.stereotype.Component;
 import com.flab.stocktradingengine.exception.BusinessException;
 import com.flab.stocktradingengine.kafka.event.TradeFilledEvent;
 import com.flab.stocktradingengine.settlement.service.OrderSettlementService;
+import com.flab.stocktradingengine.time.EpochNanos;
+import com.flab.stocktradingengine.time.StageLatencyRegistry;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -33,12 +36,21 @@ public class SettlementConsumer {
 
     private final OrderSettlementService orderSettlementService;
 
+    // 구간 분해 측정(measure/segments). 등록부 빈이 없거나 꺼져 있으면 기존 경로만 탄다.
+    private SettlementSegmentStages stages = SettlementSegmentStages.DISABLED;
+
+    @Autowired(required = false)
+    public void setStageRegistry(StageLatencyRegistry stageRegistry) {
+        this.stages = new SettlementSegmentStages(stageRegistry);
+    }
+
     @KafkaListener(topics = "fills", groupId = "settlement-engine")
     public void consume(ConsumerRecord<String, Object> record, Acknowledgment ack) {
+        long receivedAtNanos = stages.isEnabled() ? EpochNanos.now() : 0L; // V-P11
         Object event = record.value();
         try {
             if (event instanceof TradeFilledEvent fill) {
-                handleFill(fill);
+                handleFill(fill, receivedAtNanos);
             } else {
                 log.warn("[정산 컨슈머] 알 수 없는 이벤트 타입: topic={} type={}",
                     record.topic(), event == null ? "null" : event.getClass().getSimpleName());
@@ -53,11 +65,14 @@ public class SettlementConsumer {
         // 그 외 RuntimeException(DB 장애 등)은 전파 → ack 미호출 → Kafka 재전달
     }
 
-    private void handleFill(TradeFilledEvent fill) {
+    private void handleFill(TradeFilledEvent fill, long receivedAtNanos) {
         orderSettlementService.fillTradePartially(
             fill.tradeId(),
             fill.buyOrderId(), fill.sellOrderId(),
             fill.filledQuantity(), fill.matchPrice());
+        if (stages.isEnabled()) {
+            stages.recordApplied(fill, receivedAtNanos, EpochNanos.now()); // V-P12
+        }
 
         log.info("[체결 DB 반영 완료] 종목={} 매수={} 매도={} 수량={} 가격={}",
             fill.stockCode(), fill.buyOrderId(), fill.sellOrderId(),

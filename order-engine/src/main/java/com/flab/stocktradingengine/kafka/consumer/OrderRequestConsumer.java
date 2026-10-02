@@ -3,6 +3,7 @@ package com.flab.stocktradingengine.kafka.consumer;
 import java.math.BigDecimal;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.Acknowledgment;
@@ -16,10 +17,12 @@ import com.flab.stocktradingengine.kafka.event.OrderPlacedEvent;
 import com.flab.stocktradingengine.kafka.event.OrderRequestEvent;
 import com.flab.stocktradingengine.time.EpochNanos;
 import com.flab.stocktradingengine.time.LatencyHistogram;
+import com.flab.stocktradingengine.time.StageLatencyRegistry;
 import com.flab.stocktradingengine.trading.command.BuyOrderCommand;
 import com.flab.stocktradingengine.trading.command.SellOrderCommand;
 import com.flab.stocktradingengine.trading.entity.OrderSide;
 import com.flab.stocktradingengine.trading.service.OrderCommandService;
+import com.flab.stocktradingengine.trading.service.OrderStageTimes;
 import com.flab.stocktradingengine.trading.view.PlaceOrderResultView;
 
 import lombok.RequiredArgsConstructor;
@@ -60,12 +63,21 @@ public class OrderRequestConsumer {
     private final KafkaTemplate<String, Object> kafkaTemplate;
     private final LatencyHistogram latencyHistogram;
 
+    // 구간 분해 측정(measure/segments). 등록부 빈이 없거나 꺼져 있으면 기존 경로만 탄다.
+    private OrderSegmentStages stages = OrderSegmentStages.DISABLED;
+
+    @Autowired(required = false)
+    public void setStageRegistry(StageLatencyRegistry stageRegistry) {
+        this.stages = new OrderSegmentStages(stageRegistry);
+    }
+
     @KafkaListener(topics = "order-requests", groupId = "order-engine")
     public void consume(ConsumerRecord<String, Object> record, Acknowledgment ack) {
+        long receivedAtNanos = stages.isEnabled() ? EpochNanos.now() : 0L; // V-P1
         Object event = record.value(); // OrderRequestEvent 또는 OrderCancelRequestEvent
         try {
             if (event instanceof OrderRequestEvent orderRequest) {
-                handleOrderRequest(orderRequest);
+                handleOrderRequest(orderRequest, receivedAtNanos);
             } else if (event instanceof OrderCancelRequestEvent cancelRequest) {
                 handleCancelRequest(cancelRequest);
             } else {
@@ -83,22 +95,28 @@ public class OrderRequestConsumer {
         // 그 외 RuntimeException(DB 장애 등)은 전파 → ack 미호출 → Kafka 재전달
     }
 
-    private void handleOrderRequest(OrderRequestEvent event) {
+    private void handleOrderRequest(OrderRequestEvent event, long receivedAtNanos) {
+        OrderStageTimes times = stages.isEnabled() ? OrderStageTimes.startingAt(receivedAtNanos) : null;
         PlaceOrderResultView result;
         if (event.side() == OrderSide.BUY) {
             BuyOrderCommand command = new BuyOrderCommand(
                 event.accountId(), event.stockCode(),
                 event.orderType(), event.price(), event.quantity(), event.requestedAt(), event.requestId());
             // unpaidSum: settlement 모듈 접근 불가(모듈 계층 제약) → 0 처리
-            result = orderCommandService.placeBuyOrder(command, () -> BigDecimal.ZERO);
+            result = times == null
+                ? orderCommandService.placeBuyOrder(command, () -> BigDecimal.ZERO)
+                : orderCommandService.placeBuyOrder(command, () -> BigDecimal.ZERO, times);
             latencyHistogram.record(EpochNanos.of(event.requestedAt()));
         } else {
             SellOrderCommand command = new SellOrderCommand(
                 event.accountId(), event.stockCode(),
                 event.orderType(), event.price(), event.quantity(), event.requestedAt(), event.requestId());
-            result = orderCommandService.placeSellOrder(command);
+            result = times == null
+                ? orderCommandService.placeSellOrder(command)
+                : orderCommandService.placeSellOrder(command, times);
             latencyHistogram.record(EpochNanos.of(event.requestedAt()));
         }
+        long acceptedAtNanos = times != null && OrderSegmentStages.wasInserted(times) ? EpochNanos.now() : 0L; // V-P7
 
         kafkaTemplate.send(
             KafkaTopics.orders(),
@@ -107,9 +125,13 @@ public class OrderRequestConsumer {
                 result.orderId(), event.accountId(),
                 event.stockCode(), event.side(),
                 event.price(), event.quantity(),
-                event.requestedAt()
+                event.requestedAt(),
+                acceptedAtNanos > 0 ? receivedAtNanos : 0L, acceptedAtNanos
             )
         );
+        if (acceptedAtNanos > 0) {
+            stages.recordAccepted(EpochNanos.of(event.requestedAt()), times, acceptedAtNanos, EpochNanos.now()); // V-P8
+        }
         log.info("[주문 접수 완료] 종목={} 주문={} side={}", event.stockCode(), result.orderId(), event.side());
     }
 

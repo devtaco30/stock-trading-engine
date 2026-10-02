@@ -9,6 +9,7 @@ import java.util.stream.Collectors;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.listener.ConsumerSeekAware;
@@ -24,6 +25,8 @@ import com.flab.stocktradingengine.matching.kafka.partition.StockPartitionResolv
 import com.flab.stocktradingengine.matching.redis.LtpRedisRepository;
 import com.flab.stocktradingengine.matching.redis.OrderbookRedisRepository;
 import com.flab.stocktradingengine.support.SnowflakeIdGenerator;
+import com.flab.stocktradingengine.time.EpochNanos;
+import com.flab.stocktradingengine.time.StageLatencyRegistry;
 import com.flab.stocktradingengine.trading.entity.Order;
 import com.flab.stocktradingengine.trading.matching.FillResult;
 import com.flab.stocktradingengine.trading.matching.OrderBook;
@@ -72,6 +75,14 @@ public class MatchingConsumer implements ConsumerSeekAware {
     private final SnowflakeIdGenerator snowflakeIdGenerator;
     private final StockPartitionResolver stockPartitionResolver;
 
+    // 구간 분해 측정(measure/segments). 등록부 빈이 없거나 꺼져 있으면 기존 경로만 탄다.
+    private MatchingSegmentStages stages = MatchingSegmentStages.DISABLED;
+
+    @Autowired(required = false)
+    public void setStageRegistry(StageLatencyRegistry stageRegistry) {
+        this.stages = new MatchingSegmentStages(stageRegistry);
+    }
+
     // ── 파티션 할당/반환 ────────────────────────────────────────────────────
 
     /**
@@ -117,10 +128,11 @@ public class MatchingConsumer implements ConsumerSeekAware {
 
     @KafkaListener(topics = "orders", groupId = "matching-engine")
     public void consume(ConsumerRecord<String, Object> record, Acknowledgment ack) {
+        long matchReceivedAtNanos = stages.isEnabled() ? EpochNanos.now() : 0L; // V-P9
         Object event = record.value();
         try {
             if (event instanceof OrderPlacedEvent placed) {
-                handlePlaced(placed);
+                handlePlaced(placed, matchReceivedAtNanos);
             } else if (event instanceof OrderCancelledEvent cancelled) {
                 handleCancelled(cancelled);
             } else {
@@ -142,7 +154,7 @@ public class MatchingConsumer implements ConsumerSeekAware {
         // 그 외 RuntimeException(Redis 장애, Kafka 발행 실패 등)은 전파 → ack 미호출 → Kafka 재전달
     }
 
-    private void handlePlaced(OrderPlacedEvent event) {
+    private void handlePlaced(OrderPlacedEvent event, long matchReceivedAtNanos) {
         OrderBook book = orderBookRegistry.getOrCreate(event.stockCode());
         OrderEntry entry = toEntry(event);
 
@@ -151,8 +163,11 @@ public class MatchingConsumer implements ConsumerSeekAware {
             return;
         }
 
+        if (stages.isEnabled()) {
+            stages.recordArrival(event, matchReceivedAtNanos);
+        }
         book.addOrder(entry);
-        runMatch(event.stockCode(), book);
+        runMatch(event.stockCode(), book, event, matchReceivedAtNanos);
     }
 
     private void handleCancelled(OrderCancelledEvent event) {
@@ -171,10 +186,12 @@ public class MatchingConsumer implements ConsumerSeekAware {
                 book.addOrder(toEntry(order));
             }
         });
-        runMatch(stockCode, book);
+        runMatch(stockCode, book, null, 0L);
     }
 
-    private void runMatch(String stockCode, OrderBook book) {
+    /** @param aggressor 방금 도착해 체결을 일으킨 주문. 호가창 복원처럼 도착 주문이 없으면 null. */
+    private void runMatch(String stockCode, OrderBook book, OrderPlacedEvent aggressor, long matchReceivedAtNanos) {
+        boolean firstFill = true;
         while (true) {
             // 체결 가능한 쌍을 찾아 매칭 시도.
             Optional<FillResult> result = book.match();
@@ -193,13 +210,23 @@ public class MatchingConsumer implements ConsumerSeekAware {
 
             // 체결 이벤트 발행 (tradeId = 체결 단위 멱등키, settlement 중복 반영 방지)
             long tradeId = snowflakeIdGenerator.nextId();
+            // 한 주문이 체결을 여러 건 내면 첫 체결에만 방출 시각(V-P10)과 aggressor 요청 시각을 싣는다.
+            long emittedAtNanos = 0L;
+            long aggressorOriginNanos = 0L;
+            if (stages.isEnabled() && aggressor != null && firstFill && MatchingSegmentStages.hasAcceptedTimes(aggressor)) {
+                emittedAtNanos = EpochNanos.now();
+                aggressorOriginNanos = EpochNanos.of(aggressor.orderAt());
+                stages.recordFirstFill(aggressor, matchReceivedAtNanos, emittedAtNanos);
+            }
+            firstFill = false;
             kafkaTemplate.send(KafkaTopics.fills(), stockCode,
                 new TradeFilledEvent(
                     tradeId,
                     stockCode,
                     fill.buyOrderId(), fill.buyAccountId(),
                     fill.sellOrderId(), fill.sellAccountId(),
-                    fill.filledQuantity(), fill.matchPrice()
+                    fill.filledQuantity(), fill.matchPrice(),
+                    emittedAtNanos, aggressorOriginNanos
                 ));
         }
     }

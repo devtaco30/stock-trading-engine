@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.flab.stocktradingengine.exception.InvalidRequestException;
+import com.flab.stocktradingengine.time.EpochNanos;
 import com.flab.stocktradingengine.trading.command.BuyOrderCommand;
 import com.flab.stocktradingengine.trading.command.SellOrderCommand;
 import com.flab.stocktradingengine.trading.entity.Order;
@@ -60,6 +61,22 @@ public class OrderCommandService {
         }
     }
 
+    /** 구간 분해 측정용 — 멱등 조회 반환 시각(V-P3)을 남기고 지점 시각을 writer까지 넘긴다. */
+    public PlaceOrderResultView placeBuyOrder(BuyOrderCommand command,
+            Supplier<BigDecimal> unpaidSumSupplier, OrderStageTimes times) {
+        Optional<Order> duplicate = idempotencyReader.findByRequestId(command.requestId());
+        times.markIdemChecked(EpochNanos.now());
+        if (duplicate.isPresent()) {
+            return toView(duplicate.get());
+        }
+
+        try {
+            return orderWriter.writeBuyOrder(command, unpaidSumSupplier, times);
+        } catch (DataIntegrityViolationException race) {
+            return recoverDuplicate(command.requestId(), race);
+        }
+    }
+
     /**
      * 매도 주문 접수.
      */
@@ -71,6 +88,21 @@ public class OrderCommandService {
 
         try {
             return orderWriter.writeSellOrder(command);
+        } catch (DataIntegrityViolationException race) {
+            return recoverDuplicate(command.requestId(), race);
+        }
+    }
+
+    /** 구간 분해 측정용 — {@link #placeBuyOrder(BuyOrderCommand, Supplier, OrderStageTimes)}와 같다. */
+    public PlaceOrderResultView placeSellOrder(SellOrderCommand command, OrderStageTimes times) {
+        Optional<Order> duplicate = idempotencyReader.findByRequestId(command.requestId());
+        times.markIdemChecked(EpochNanos.now());
+        if (duplicate.isPresent()) {
+            return toView(duplicate.get());
+        }
+
+        try {
+            return orderWriter.writeSellOrder(command, times);
         } catch (DataIntegrityViolationException race) {
             return recoverDuplicate(command.requestId(), race);
         }
