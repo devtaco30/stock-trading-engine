@@ -373,6 +373,13 @@ record_saturation() {
     echo "포화 판정 ${round}: ${reasons}"
 }
 
+# 묶음 C 의 judge 환경: E2(k6 CPU)는 회차를 제외하지 않고 기록만 하고(measure-protocol-c.md 첫 문단), 기대 건수는 세트의 N 이다.
+# 환경 변수가 없을 때 analyze-baseline.py 의 b0·b1 동작은 그대로다.
+set_analyzer_env() {
+    export ANALYZE_E2=0
+    export ANALYZE_EXPECTED_COUNT="$1"
+}
+
 # 세트 하나: 앱 기동부터 ROUNDS 회까지. 결과 폴더는 RUN_DIR 을 세트 폴더로 바꿔서 기존 함수들의 경로(${RUN_DIR}/${cond}/...)를 그대로 쓴다.
 # 끝나면 SET_STATUS(0 정상, 1 준비 실패, 2 E7)와 SET_SATURATED(yes|no), SET_MEASURED 를 남긴다.
 run_set() {
@@ -381,6 +388,7 @@ run_set() {
     read -r RATE N ROUNDS <<< "$(step_config "$step")" || return 1
     INDEX_MODE="$index_mode"
     CONDITIONS="$cond"
+    set_analyzer_env "$N"
     export MEASURE_STAGES="$stages"
     local set_name set_cond_label
     set_cond_label="$cond"

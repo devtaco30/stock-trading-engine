@@ -172,6 +172,53 @@ class ExclusionRuleTest(unittest.TestCase):
         result = self.condition_with("r05", cpu=cpu)
         self.assertEqual([], result.reasons)
 
+    @mock.patch.dict(os.environ, {"ANALYZE_E2": "0"})
+    def test_E2를_0으로_끄면_기록만_하고_회차를_제외하지_않는다(self):
+        cpu = healthy_cpu()
+        cpu[2][1] = 40.0
+        cpu[3][1] = 90.0
+        result = self.condition_with("r05", cpu=cpu)
+        self.assertEqual([], result.reasons)
+        self.assertTrue(result.valid)
+
+    @mock.patch.dict(os.environ, {"ANALYZE_E2": "1"})
+    def test_E2를_1로_주면_기존대로_제외한다(self):
+        cpu = healthy_cpu()
+        cpu[2][1] = 40.0
+        cpu[3][1] = 55.0
+        self.assertEqual(["E2"], self.condition_with("r05", cpu=cpu).reasons)
+
+    @mock.patch.dict(os.environ, {"ANALYZE_E2": "0"})
+    def test_E2를_끄면_다른_사유는_그대로_판정한다(self):
+        cpu = healthy_cpu()
+        cpu[2][1] = 60.0
+        cpu[3][1] = 60.0
+        cpu[4][5] = 25.0
+        cpu[5][5] = 25.0
+        result = self.condition_with("r05", cpu=cpu, hist_count=9000)
+        self.assertEqual(["E1", "COUNT"], result.reasons)
+
+    @mock.patch.dict(os.environ, {"ANALYZE_EXPECTED_COUNT": "20000"})
+    def test_기대_건수를_환경_변수로_바꾸면_그_건수를_기준으로_건수_불일치를_본다(self):
+        result = self.condition_with("r05", hist_count=20000, db_delta=20000)
+        self.assertEqual([], result.reasons)
+        result = self.condition_with("r05", cond="v2", hist_count=10000)
+        self.assertEqual(["COUNT"], result.reasons)
+
+    def test_기대_건수_환경_변수가_없으면_2만_건은_건수_불일치다(self):
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("ANALYZE_EXPECTED_COUNT", None)
+            self.assertEqual(["COUNT"], self.condition_with("r05", hist_count=20000, db_delta=20000).reasons)
+
+    def test_기대_건수_환경_변수가_없으면_1만_건은_그대로_통과한다(self):
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("ANALYZE_EXPECTED_COUNT", None)
+            self.assertEqual([], self.condition_with("r05", hist_count=10000, db_delta=10000).reasons)
+
+    @mock.patch.dict(os.environ, {"ANALYZE_EXPECTED_COUNT": "abc"})
+    def test_기대_건수_환경_변수가_숫자가_아니면_기본값을_쓴다(self):
+        self.assertEqual([], self.condition_with("r05", hist_count=10000, db_delta=10000).reasons)
+
     def test_E3_배터리_샘플이_하나라도_있으면_제외한다(self):
         cpu = healthy_cpu()
         cpu[6][9] = "Battery"

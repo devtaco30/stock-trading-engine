@@ -50,6 +50,18 @@ def e4_enabled():
     return os.environ.get("ANALYZE_E4") == "1"
 
 
+def e2_enabled():
+    """E2(k6 CPU) 회차 제외는 ANALYZE_E2=0 일 때만 끈다. 기본값은 켬이라 b0·b1 재분석 결과가 바뀌지 않는다.
+    묶음 C 실행은 오케스트레이터가 0으로 넘겨 E2 를 기록만 한다(measure-protocol-c.md 첫 문단)."""
+    return os.environ.get("ANALYZE_E2") != "0"
+
+
+def expected_count():
+    """회차당 기대 주문 수. ANALYZE_EXPECTED_COUNT 가 숫자면 그 값, 아니면 기본 1만 건(b0·b1). 묶음 C 속도 단계는 N 이 다르다."""
+    value = os.environ.get("ANALYZE_EXPECTED_COUNT", "")
+    return int(value) if value.isdigit() and int(value) > 0 else EXPECTED_COUNT
+
+
 REASON_ORDER = ["WARMUP", "E1", "E2", "E3", "E4", "E5", "E6", "COUNT"]
 ROUNDS_HEADER = ["round", "k6_start", "k6_end", "k6_exit", "checks_fail", "http_fail", "dropped", "hist_count",
                  "db_delta", "flags", "valid"]
@@ -205,8 +217,8 @@ def judge_reasons(round_, cond):
     if has_consecutive([(to_float(s.get("idle")) is not None and to_float(s.get("idle")) < IDLE_LIMIT)
                         for s in samples], CONSECUTIVE):
         reasons.add("E1")
-    if has_consecutive([(to_float(s.get("k6_cpu")) is not None and to_float(s.get("k6_cpu")) >= K6_CPU_LIMIT)
-                        for s in samples], CONSECUTIVE):
+    if e2_enabled() and has_consecutive([(to_float(s.get("k6_cpu")) is not None and to_float(s.get("k6_cpu")) >= K6_CPU_LIMIT)
+                                         for s in samples], CONSECUTIVE):
         reasons.add("E2")
     if any(is_power_or_thermal_problem(s) for s in samples):
         reasons.add("E3")
@@ -223,8 +235,8 @@ def judge_reasons(round_, cond):
     if "E6" in round_.flags:
         reasons.add("E6")
 
-    count_mismatch = round_.hist_count != EXPECTED_COUNT
-    if cond == "v1" and round_.db_delta != EXPECTED_COUNT:
+    count_mismatch = round_.hist_count != expected_count()
+    if cond == "v1" and round_.db_delta != expected_count():
         count_mismatch = True
     if count_mismatch:
         reasons.add("COUNT")
