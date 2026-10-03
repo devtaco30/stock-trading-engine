@@ -219,11 +219,25 @@ class ExclusionRuleTest(unittest.TestCase):
     def test_기대_건수_환경_변수가_숫자가_아니면_기본값을_쓴다(self):
         self.assertEqual([], self.condition_with("r05", hist_count=10000, db_delta=10000).reasons)
 
-    def test_E3_배터리_샘플이_하나라도_있으면_제외한다(self):
+    def test_배터리_샘플만_있으면_제외하지_않고_기록만_남긴다(self):
         cpu = healthy_cpu()
         cpu[6][9] = "Battery"
         result = self.condition_with("r05", cpu=cpu)
+        self.assertEqual([], result.reasons)
+        self.assertTrue(result.valid)
+        self.assertEqual(["BATT"], result.notes)
+
+    def test_배터리가_없으면_기록도_없다(self):
+        result = self.condition_with("r05")
+        self.assertEqual([], result.notes)
+
+    def test_배터리이면서_CPU_속도_제한이_있으면_E3로_제외하고_배터리도_기록한다(self):
+        cpu = healthy_cpu()
+        cpu[6][9] = "Battery"
+        cpu[6][10] = "90"
+        result = self.condition_with("r05", cpu=cpu)
         self.assertEqual(["E3"], result.reasons)
+        self.assertEqual(["BATT"], result.notes)
 
     def test_E3_CPU_속도_제한이_100_미만이면_제외한다(self):
         cpu = healthy_cpu()
@@ -324,7 +338,7 @@ class ExclusionRuleTest(unittest.TestCase):
 
     def test_여러_사유가_겹치면_모두_기록한다(self):
         cpu = healthy_cpu()
-        cpu[6][9] = "Battery"
+        cpu[6][10] = "90"
         result = self.condition_with("r01", cpu=cpu, hist_count=9000)
         self.assertEqual(["WARMUP", "E3", "COUNT"], result.reasons)
 
@@ -393,6 +407,74 @@ class ConditionValidityTest(unittest.TestCase):
     def test_워밍업은_유효_회차_수에_들어가지_않는다(self):
         rounds = self.condition_with_invalid(0)
         self.assertEqual(10, ab.valid_measurement_count(rounds))
+
+
+class RejudgeTest(unittest.TestCase):
+    """이미 끝난 결과 폴더의 rounds csv 만 현재 규칙으로 다시 만든다. 원본 측정 파일은 건드리지 않는다."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        battery = healthy_cpu()
+        for row in battery:
+            row[9] = "Battery"
+        fixture = Fixture(self.root, "v2")
+        for number in range(1, 6):
+            fixture.add_round(f"r{number:02d}", cpu=[list(row) for row in battery])
+        self.dir = fixture.dir
+        header = ["round", "k6_start", "k6_end", "k6_exit", "checks_fail", "http_fail", "dropped", "hist_count",
+                  "db_delta", "flags", "valid"]
+        old_rows = [["r01", K6_START, K6_END, 0, 0, 0, 0, 10000, "", "WARMUP E3", 0],
+                    ["r02", K6_START, K6_END, 0, 0, 0, 0, 10000, "", "E3", 0],
+                    ["r03", K6_START, K6_END, 0, 0, 0, 0, 10000, "", "E3 E6", 0],
+                    ["r04", K6_START, K6_END, 0, 0, 0, 0, 10000, "", "E3 E7", 0],
+                    ["r05", K6_START, K6_END, 0, 0, 0, 0, 10000, "", "E3", 0]]
+        with open(self.dir / "rounds-v2.csv", "w", newline="") as handle:
+            writer = csv.writer(handle)
+            writer.writerow(header)
+            writer.writerows(old_rows)
+        self.old_text = (self.dir / "rounds-v2.csv").read_text()
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def new_rows(self):
+        with open(self.dir / "rounds-v2.csv", newline="") as handle:
+            return {row["round"]: row for row in csv.DictReader(handle)}
+
+    def test_배터리만_이유였던_회차는_유효가_되고_기록이_남는다(self):
+        ab.rejudge_rounds(self.dir, "v2")
+        rows = self.new_rows()
+        self.assertEqual(("1", "BATT"), (rows["r02"]["valid"], rows["r02"]["flags"]))
+        self.assertEqual(("0", "WARMUP BATT"), (rows["r01"]["valid"], rows["r01"]["flags"]))
+
+    def test_재배정_표시와_프로세스_사망은_입력으로_이어받는다(self):
+        ab.rejudge_rounds(self.dir, "v2")
+        rows = self.new_rows()
+        self.assertEqual("0", rows["r03"]["valid"])
+        self.assertIn("E6", rows["r03"]["flags"].split())
+        self.assertEqual("0", rows["r04"]["valid"])
+        self.assertIn("E7", rows["r04"]["flags"].split())
+
+    def test_원본_rounds_csv는_따로_보관하고_측정_파일은_그대로다(self):
+        before = (self.dir / "latency-v2-r02.json").read_text()
+        ab.rejudge_rounds(self.dir, "v2")
+        self.assertEqual(self.old_text, (self.dir / "rounds-v2.original.csv").read_text())
+        self.assertEqual(before, (self.dir / "latency-v2-r02.json").read_text())
+
+    def test_두_번_해도_원본_보관본을_덮어쓰지_않는다(self):
+        ab.rejudge_rounds(self.dir, "v2")
+        ab.rejudge_rounds(self.dir, "v2")
+        self.assertEqual(self.old_text, (self.dir / "rounds-v2.original.csv").read_text())
+
+    def test_열_제한이_있는_회차는_다시_판정해도_E3로_제외된다(self):
+        rows = list(csv.reader(open(self.dir / "cpu-v2-r05.csv", newline="")))
+        rows[3][10] = "90"
+        with open(self.dir / "cpu-v2-r05.csv", "w", newline="") as handle:
+            csv.writer(handle).writerows(rows)
+        ab.rejudge_rounds(self.dir, "v2")
+        self.assertEqual("0", self.new_rows()["r05"]["valid"])
+        self.assertIn("E3", self.new_rows()["r05"]["flags"].split())
 
 
 class SummaryAndReportTest(unittest.TestCase):

@@ -89,6 +89,7 @@ class Round:
     k6: K6Facts = field(default_factory=K6Facts)
     cpu: list = field(default_factory=list)
     reasons: list = field(default_factory=list)
+    notes: list = field(default_factory=list)   # 제외 사유는 아니고 기록만 남기는 표시 (BATT)
 
     @property
     def valid(self):
@@ -220,7 +221,7 @@ def judge_reasons(round_, cond):
     if e2_enabled() and has_consecutive([(to_float(s.get("k6_cpu")) is not None and to_float(s.get("k6_cpu")) >= K6_CPU_LIMIT)
                                          for s in samples], CONSECUTIVE):
         reasons.add("E2")
-    if any(is_power_or_thermal_problem(s) for s in samples):
+    if any(is_thermal_problem(s) for s in samples):
         reasons.add("E3")
     allow = re.compile(os.environ.get("E4_ALLOW") or DEFAULT_E4_ALLOW)
     if e4_enabled() and has_consecutive([any(cpu >= EXTERNAL_CPU_LIMIT and not allow.search(name)
@@ -244,10 +245,12 @@ def judge_reasons(round_, cond):
     return [code for code in REASON_ORDER if code in reasons]
 
 
-def is_power_or_thermal_problem(sample):
+def is_on_battery(sample):
     batt = (sample.get("batt") or "").strip()
-    if batt and batt != "AC":
-        return True
+    return bool(batt) and batt != "AC"
+
+
+def is_thermal_problem(sample):
     limit = to_float(sample.get("therm_limit"))
     return limit is not None and limit < 100.0
 
@@ -267,6 +270,9 @@ def build_round(cond_dir, cond, round_id, row):
         cpu=read_cpu_samples(cond_dir / f"cpu-{cond}-{round_id}.csv"),
     )
     round_.reasons = judge_reasons(round_, cond)
+    # 배터리 전원은 제외 사유가 아니라 기록만 남긴다 (E3 는 CPU 속도 제한만 본다)
+    if any(is_on_battery(sample) for sample in window_samples(round_.cpu, round_.k6_start, round_.k6_end)):
+        round_.notes.append("BATT")
     return round_
 
 
@@ -327,7 +333,7 @@ def judge_row(cond_dir, cond, round_id, k6_start, k6_end, k6_exit, db_delta, e6=
     row = {"flags": " ".join(flags), "k6_start": k6_start, "k6_end": k6_end, "k6_exit": k6_exit,
            "db_delta": "" if db_delta is None else db_delta}
     round_ = build_round(cond_dir, cond, round_id, row)
-    marks = list(round_.reasons) + (["E7"] if e7 else [])
+    marks = list(round_.reasons) + (["E7"] if e7 else []) + list(round_.notes)
     return {
         "round": round_id,
         "k6_start": k6_start,
@@ -341,6 +347,30 @@ def judge_row(cond_dir, cond, round_id, k6_start, k6_end, k6_exit, db_delta, e6=
         "flags": " ".join(marks),
         "valid": "1" if round_.valid and not e7 else "0",
     }
+
+
+def rejudge_rounds(cond_dir, cond):
+    """끝난 결과 폴더의 rounds csv 를 현재 판정 규칙으로 다시 만든다.
+    원래 csv 는 rounds-<cond>.original.csv 로 한 번만 보관하고(이미 있으면 덮어쓰지 않는다), 측정 파일(latency, k6, cpu, stages)은 읽기만 한다.
+    E6(재배정)과 E7(프로세스 사망)은 측정 중에 정해진 입력이라 원래 csv 의 표시를 그대로 이어받는다."""
+    cond_dir = Path(cond_dir)
+    path = cond_dir / f"rounds-{cond}.csv"
+    original = cond_dir / f"rounds-{cond}.original.csv"
+    with open(path, newline="", encoding="utf-8") as handle:
+        old_rows = list(csv.DictReader(handle))
+    if not original.exists():
+        original.write_text(path.read_text(encoding="utf-8"), encoding="utf-8")
+    new_rows = []
+    for row in old_rows:
+        marks = (row.get("flags") or "").split()
+        new_rows.append(judge_row(cond_dir, cond, row["round"], to_int(row.get("k6_start")) or 0,
+                                  to_int(row.get("k6_end")) or 0, to_int(row.get("k6_exit")) or 0,
+                                  to_int(row.get("db_delta")), e6="E6" in marks, e7="E7" in marks))
+    with open(path, "w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=ROUNDS_HEADER)
+        writer.writeheader()
+        writer.writerows(new_rows)
+    return new_rows
 
 
 def append_row(cond_dir, cond, row):
@@ -719,6 +749,10 @@ def main(argv):
     judge.add_argument("--e6", action="store_true")
     judge.add_argument("--e7", action="store_true")
 
+    rejudge = sub.add_parser("rejudge")
+    rejudge.add_argument("--dir", required=True)
+    rejudge.add_argument("--cond", required=True, choices=["v1", "v2"])
+
     compare = sub.add_parser("compare")
     compare.add_argument("--out")
     compare.add_argument("specs", nargs="+", help="라벨=결과디렉터리[:조건]")
@@ -744,6 +778,12 @@ def main(argv):
         print(text)
         if args.out:
             Path(args.out).write_text(text + "\n", encoding="utf-8")
+        return 0
+
+    if args.command == "rejudge":
+        rows = rejudge_rounds(args.dir, args.cond)
+        for row in rows:
+            print(f"{row['round']} valid={row['valid']} flags={row['flags'] or '-'}")
         return 0
 
     if args.command == "compare-segments":

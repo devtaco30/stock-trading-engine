@@ -194,6 +194,8 @@ test_set_token() {
     assert_fails "인덱스 없는 v1 조건은 받지 않는다" parse_set_token S1:v1:1
     assert_eq "인덱스 없는 v1 조건 거부 메시지" "1" "$(parse_set_token S1:v1:1 2>&1 | grep -c '모르는 조건: v1 ')"
     assert_not_contains "기본 계획에 인덱스 없는 v1 세트가 없다" "$(default_set_plan)" ":v1:"
+    assert_contains "선언 문서가 E3의 전원 부분을 기록 전용으로 밝힌다" "$(cat loadtest/measure-protocol-c.md)" "측정은 배터리 전원에서 수행했다. E3의 전원 부분은 기록 전용으로 바꿨고, 이 변경은 이 실행의 분석 전에 정했다"
+    assert_contains "선언 문서의 E3 설명이 CPU 속도 제한만 남긴다" "$(cat loadtest/measure-protocol-c.md)" "E3(CPU 속도 제한"
     assert_not_contains "선언 문서에 인덱스 없는 v1 조건이 없다" "$(cat loadtest/measure-protocol-c.md)" "인덱스 없"
     assert_eq "v2 계측 끔" "S1X v2 0 0" "$(parse_set_token S1X:v2:0)"
     assert_eq "단계 표시가 없으면 기본 켬" "S5 v2 0 1" "$(parse_set_token S5:v2)"

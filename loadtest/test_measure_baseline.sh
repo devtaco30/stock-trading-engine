@@ -212,27 +212,28 @@ test_src_main_unchanged() {
     assert_contains "src/main diff 없음 문구" "$output" "src/main diff vs ${B1_BASE_SHA}: 없음"
 }
 
-# 사용자가 지시하면 배터리 전원·저전력 모드 점검을 건너뛴다. 건너뛴 사실은 [기록]으로 남고 걸림으로 세지 않는다
-test_laptop_state_override() {
+# 배터리 전원과 저전력 모드는 점검 실패 항목이 아니라 기록 전용이다. 열 제한(CPU_Speed_Limit)은 계속 걸림으로 센다
+test_laptop_state_record_only() {
     pmset() {
         case "$*" in
             "-g batt") printf "Now drawing from 'Battery Power'\n -InternalBattery-0\t98%%; discharging\n" ;;
-            "-g therm") echo "Note: No thermal warning level has been recorded" ;;
+            "-g therm") echo "${FAKE_THERM:-Note: No thermal warning level has been recorded}" ;;
             *) printf ' lowpowermode         1\n sleep 1\n' ;;
         esac
     }
     top() { :; }
-    local out failures
+    local out
     PREFLIGHT_FAILURES=0
     out="$(preflight_laptop 2>&1)"
     PREFLIGHT_FAILURES=0
     preflight_laptop > /dev/null 2>&1
-    assert_eq "기본은 배터리·저전력 모드를 걸림으로 센다" "2" "$PREFLIGHT_FAILURES"
+    assert_eq "배터리·저전력 모드는 걸림으로 세지 않는다" "0" "$PREFLIGHT_FAILURES"
+    assert_contains "배터리는 기록으로 남는다" "$out" "[기록] AC 전원이 아니다"
+    assert_contains "저전력 모드는 기록으로 남는다" "$out" "[기록] Low Power Mode 가 켜져 있다"
+    assert_not_contains "걸림이 없다" "$out" "[걸림]"
     PREFLIGHT_FAILURES=0
-    out="$(ALLOW_BATTERY_RUN=1 preflight_laptop 2>&1)"
-    assert_contains "건너뛰면 기록을 남긴다" "$out" "[기록] 사용자 지시로 AC 전원 점검을 건너뛴다"
-    assert_contains "저전력 모드도 기록을 남긴다" "$out" "[기록] 사용자 지시로 Low Power Mode 점검을 건너뛴다"
-    assert_not_contains "건너뛰면 걸림이 없다" "$out" "[걸림]"
+    FAKE_THERM="  CPU_Speed_Limit = 80" preflight_laptop > /dev/null 2>&1
+    assert_eq "CPU 속도 제한은 계속 걸림이다" "1" "$PREFLIGHT_FAILURES"
     unset -f pmset top
 }
 
@@ -293,7 +294,7 @@ test_v1_topics() {
     rm -f "$FAKE_TOPIC_STATE" "$FAKE_TOPIC_CALLS"
 }
 
-test_laptop_state_override
+test_laptop_state_record_only
 test_v1_topics
 test_lag_total_from_describe
 test_src_main_unchanged
