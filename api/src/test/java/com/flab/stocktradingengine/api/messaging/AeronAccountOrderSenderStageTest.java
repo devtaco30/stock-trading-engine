@@ -98,4 +98,17 @@ class AeronAccountOrderSenderStageTest {
 
         sender.send(OrderSide.BUY, 1L, "005930", new BigDecimal("10000"), 1, "req-5");
     }
+
+    @Test
+    void 발신_시각을_넘기면_api_send_cost는_그_시각부터_계산한다() {
+        StageLatencyRegistry registry = new StageLatencyRegistry(true);
+        AeronAccountOrderSender sender =
+            new AeronAccountOrderSender(RESOLVER, Map.of(ENDPOINT, publicationReturning(100L)), registry);
+        long fiveMillisAgo = com.flab.stocktradingengine.time.EpochNanos.now() - 5_000_000L;
+
+        sender.send(OrderSide.BUY, 1L, "005930", new BigDecimal("10000"), 1, "req-origin", fiveMillisAgo);
+
+        // 큐 대기 시간이 포함된다: 5ms 전에 찍은 시각부터 재므로 최소 5,000µs 이상
+        assertThat(registry.snapshotAndResetAll().get("api_send_cost").maxMicros()).isGreaterThanOrEqualTo(5_000L);
+    }
 }

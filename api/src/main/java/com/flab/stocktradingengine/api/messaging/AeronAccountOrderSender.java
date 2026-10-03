@@ -106,7 +106,15 @@ public class AeronAccountOrderSender {
      *         {@link #MAX_ATTEMPTS}번 재시도해도 offer가 성공하지 못하면
      */
     public void send(OrderSide side, long accountId, String stockCode, BigDecimal price, int quantity, String requestId) {
-        long originNanos = EpochNanos.now();
+        send(side, accountId, stockCode, price, quantity, requestId, EpochNanos.now());
+    }
+
+    /**
+     * 발행 시각을 호출자가 정하는 오버로드. 주문을 큐에 넣은 시점(HTTP 스레드)을 시작 시각으로 유지하려고 전달 스레드가 이 시각을 그대로
+     * 넘긴다. 큐 대기 시간과 offer 시간이 모두 끝점① 지연과 {@code api_send_cost}에 들어간다.
+     */
+    public void send(OrderSide side, long accountId, String stockCode, BigDecimal price, int quantity, String requestId,
+            long originNanos) {
         DecodedAccountOrder order = new DecodedAccountOrder(
             side, accountId, stockCode, price, quantity, requestId, originNanos);
         UnsafeBuffer buffer = encodeBuffer.get();

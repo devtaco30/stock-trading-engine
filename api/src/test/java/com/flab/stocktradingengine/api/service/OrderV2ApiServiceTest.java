@@ -1,10 +1,12 @@
 package com.flab.stocktradingengine.api.service;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -15,6 +17,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -23,7 +26,8 @@ import com.flab.stocktradingengine.account.entity.Account;
 import com.flab.stocktradingengine.api.dto.order.BuyOrderRequest;
 import com.flab.stocktradingengine.api.dto.order.SellOrderRequest;
 import com.flab.stocktradingengine.api.exception.ForbiddenException;
-import com.flab.stocktradingengine.api.messaging.AeronAccountOrderSender;
+import com.flab.stocktradingengine.api.messaging.AccountOrderDispatcher;
+import com.flab.stocktradingengine.api.messaging.PendingOrder;
 import com.flab.stocktradingengine.api.redis.LtpRedisRepository;
 import com.flab.stocktradingengine.api.resolver.AccountAccessResolver;
 import com.flab.stocktradingengine.exception.InvalidRequestException;
@@ -42,7 +46,7 @@ class OrderV2ApiServiceTest {
     @Mock AccountAccessResolver accountAccessResolver;
     @Mock LtpRedisRepository ltpRedisRepository;
     @Mock QuoteService quoteService;
-    @Mock AeronAccountOrderSender aeronAccountOrderSender;
+    @Mock AccountOrderDispatcher accountOrderDispatcher;
 
     @InjectMocks
     OrderV2ApiService orderV2ApiService;
@@ -132,8 +136,14 @@ class OrderV2ApiServiceTest {
 
         assertDoesNotThrow(() -> orderV2ApiService.placeBuyOrder(USER_ID, request));
 
-        verify(aeronAccountOrderSender).send(
-            eq(OrderSide.BUY), eq(ACCOUNT_ID), eq(STOCK_CODE), eq(REFERENCE_PRICE), eq(10), eq("req-1"));
+        PendingOrder submitted = capturedSubmission();
+        assertThat(submitted.side()).isEqualTo(OrderSide.BUY);
+        assertThat(submitted.accountId()).isEqualTo(ACCOUNT_ID);
+        assertThat(submitted.stockCode()).isEqualTo(STOCK_CODE);
+        assertThat(submitted.price()).isEqualTo(REFERENCE_PRICE);
+        assertThat(submitted.quantity()).isEqualTo(10);
+        assertThat(submitted.requestId()).isEqualTo("req-1");
+        assertThat(submitted.originNanos()).isPositive();
     }
 
     @Test
@@ -145,7 +155,27 @@ class OrderV2ApiServiceTest {
 
         assertDoesNotThrow(() -> orderV2ApiService.placeSellOrder(USER_ID, request));
 
-        verify(aeronAccountOrderSender).send(
-            eq(OrderSide.SELL), eq(ACCOUNT_ID), eq(STOCK_CODE), eq(REFERENCE_PRICE), eq(10), eq("req-2"));
+        PendingOrder submitted = capturedSubmission();
+        assertThat(submitted.side()).isEqualTo(OrderSide.SELL);
+        assertThat(submitted.requestId()).isEqualTo("req-2");
+    }
+
+    private PendingOrder capturedSubmission() {
+        ArgumentCaptor<PendingOrder> captor = ArgumentCaptor.forClass(PendingOrder.class);
+        verify(accountOrderDispatcher).submit(captor.capture());
+        return captor.getValue();
+    }
+
+    @Test
+    @DisplayName("전달 큐가 가득 차면 submit의 503이 그대로 나간다 — offer 실패는 더 이상 요청 스레드에서 나오지 않는다")
+    void 큐가_가득이면_503() {
+        BuyOrderRequest request = buyRequest(REFERENCE_PRICE, "req-full");
+        when(accountAccessResolver.resolveAccountOwnedAndActive(USER_ID, ACCOUNT_ID)).thenReturn(mockAccount);
+        when(ltpRedisRepository.get(STOCK_CODE)).thenReturn(Optional.of(REFERENCE_PRICE));
+        doThrow(new com.flab.stocktradingengine.api.exception.OrderPublishException("전달 큐가 가득 참"))
+            .when(accountOrderDispatcher).submit(org.mockito.ArgumentMatchers.any(PendingOrder.class));
+
+        assertThatThrownBy(() -> orderV2ApiService.placeBuyOrder(USER_ID, request))
+            .isInstanceOf(com.flab.stocktradingengine.api.exception.OrderPublishException.class);
     }
 }

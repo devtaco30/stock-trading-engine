@@ -9,13 +9,15 @@ import org.springframework.stereotype.Service;
 import com.flab.stocktradingengine.account.entity.Account;
 import com.flab.stocktradingengine.api.dto.order.BuyOrderRequest;
 import com.flab.stocktradingengine.api.dto.order.SellOrderRequest;
-import com.flab.stocktradingengine.api.messaging.AeronAccountOrderSender;
+import com.flab.stocktradingengine.api.messaging.AccountOrderDispatcher;
+import com.flab.stocktradingengine.api.messaging.PendingOrder;
 import com.flab.stocktradingengine.api.redis.LtpRedisRepository;
 import com.flab.stocktradingengine.api.resolver.AccountAccessResolver;
 import com.flab.stocktradingengine.exception.InvalidRequestException;
 import com.flab.stocktradingengine.exception.ResourceNotFoundException;
 import com.flab.stocktradingengine.market.service.QuoteService;
 import com.flab.stocktradingengine.market.view.QuoteView;
+import com.flab.stocktradingengine.time.EpochNanos;
 import com.flab.stocktradingengine.trading.entity.OrderSide;
 
 import lombok.RequiredArgsConstructor;
@@ -27,9 +29,9 @@ import lombok.extern.slf4j.Slf4j;
  * 클라이언트 필수로 바꾼다 — 게이트웨이가 여럿(stateless)일 수 있어 서버가 대신 생성하면
  * 재전송을 같은 요청으로 못 알아봐 중복 예약이 생긴다({@code fork5 결정 ③}).
  *
- * <p>검증을 통과하면 {@link AeronAccountOrderSender}로 계좌 인테이크에 동기 발신한다(fork5 U1b).
- * 발신은 HTTP 요청 스레드에서 직접 encode+offer — 발신 실패는 {@code OrderPublishException}으로
- * 503이 되어 클라이언트가 같은 requestId로 재전송할 수 있게 한다(주문을 조용히 버리지 않는다).</p>
+ * <p>검증을 통과하면 {@link AccountOrderDispatcher}의 전달 큐에 넣고 곧바로 반환한다(202). Aeron 발신과 재시도는 전용 스레드가 맡고,
+ * 끝내 실패한 주문은 Redis 기록과 ERROR 로그로 남는다. 요청 스레드가 503을 주는 경우는 큐가 가득 찼거나 목적지가 아직 배정되지 않은 때뿐이다.
+ * v1은 Kafka 전송 결과를 기다리지 않고 202를 주므로 두 구현의 202는 같은 뜻(받았고 뒤로 넘길 책임을 졌다)이 된다.</p>
  *
  * <h3>가격 제한폭 검증을 v1과 별도로 갖는 이유</h3>
  * <p>v1 {@code OrderApiService.validatePriceBandLimit}은 private이다. 지금 단계에서 공용 빈으로
@@ -45,7 +47,7 @@ public class OrderV2ApiService {
     private final AccountAccessResolver accountAccessResolver;
     private final LtpRedisRepository ltpRedisRepository;
     private final QuoteService quoteService;
-    private final AeronAccountOrderSender aeronAccountOrderSender;
+    private final AccountOrderDispatcher accountOrderDispatcher;
 
     /** 매수 주문 접수. 검증 후 계좌 인테이크로 동기 발신한다. */
     public void placeBuyOrder(Long userId, BuyOrderRequest request) {
@@ -53,8 +55,9 @@ public class OrderV2ApiService {
         Account account = accountAccessResolver.resolveAccountOwnedAndActive(userId, request.accountId());
         validatePriceBandLimit(request.stockCode(), request.price());
 
-        aeronAccountOrderSender.send(
-            OrderSide.BUY, account.getAccountId(), request.stockCode(), request.price(), request.quantity(), requestId);
+        accountOrderDispatcher.submit(new PendingOrder(
+            OrderSide.BUY, account.getAccountId(), request.stockCode(), request.price(), request.quantity(), requestId,
+            EpochNanos.now()));
         log.info("[v2 매수 접수] 종목={} 계좌={} requestId={}", request.stockCode(), account.getAccountId(), requestId);
     }
 
@@ -64,8 +67,9 @@ public class OrderV2ApiService {
         Account account = accountAccessResolver.resolveAccountOwnedAndActive(userId, request.accountId());
         validatePriceBandLimit(request.stockCode(), request.price());
 
-        aeronAccountOrderSender.send(
-            OrderSide.SELL, account.getAccountId(), request.stockCode(), request.price(), request.quantity(), requestId);
+        accountOrderDispatcher.submit(new PendingOrder(
+            OrderSide.SELL, account.getAccountId(), request.stockCode(), request.price(), request.quantity(), requestId,
+            EpochNanos.now()));
         log.info("[v2 매도 접수] 종목={} 계좌={} requestId={}", request.stockCode(), account.getAccountId(), requestId);
     }
 
