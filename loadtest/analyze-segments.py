@@ -27,13 +27,13 @@ RESOLUTION_LIMIT_US = 5.0      # 이 값 미만인 단계는 해상도 미만(�
 RESIDUAL_LIMIT = 0.01          # 합 정합성: 잔차 비율이 이 값을 넘으면 불성립 (임의값, protocol-c 2절)
 WIDE_RATIO = 0.5               # 계측 영향: 끈 세트 범위 폭의 이 비율을 넘는 차이는 애매함 (protocol-c 5절)
 WARMUP_ROUND = "r01"
-SET_RE = re.compile(r"^(\d+)-(S1X|S1R|S1|S3|S5|L|I\d+)-(v1idx|v2)-st([01])$")
+SET_RE = re.compile(r"^(\d+)-(S1X|S1R|S1|S3|S5X|S5|L|I\d+)-(v1idx|v2)-st([01])$")
 STAGE_FILE_RE = re.compile(r"^stages-(v1|v2)-(.+)-(r\d+)\.json$")
 EXPECTED_PROCESSES = {
     "v1": ["api", "order-engine", "matching-engine", "settlement-engine"],
     "v2": ["api", "account-worker", "matching-worker"],
 }
-STEP_RATES = {"S1": 192, "S1X": 192, "S1R": 192, "S3": 1000, "S5": 4000}
+STEP_RATES = {"S1": 192, "S1X": 192, "S1R": 192, "S3": 1000, "S5": 4000, "S5X": 4000}
 IMPACT_STEPS = ("S1X", "S1R")
 LABEL_TEXT = {"v1idx": "v1(인덱스 있음)", "v2": "v2"}
 

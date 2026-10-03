@@ -195,6 +195,11 @@ class LadderSearchTest(unittest.TestCase):
         parsed = asg.parse_set_name("01-L-v1idx-st1")
         self.assertEqual(("L", "v1idx", 1), (parsed.step, parsed.label, parsed.stages))
 
+    def test_s5x_set_name_is_accepted_at_4000_per_second(self):
+        parsed = asg.parse_set_name("02-S5X-v2-st1")
+        self.assertEqual(("S5X", "v2"), (parsed.step, parsed.label))
+        self.assertEqual(4000, asg.STEP_RATES["S5X"])
+
     def test_table_has_one_row_per_round_with_rate(self):
         text = self.report(self.PLAN)
         self.assertIn("## 포화점 탐색", text)
