@@ -115,6 +115,7 @@ class SetNameTest(unittest.TestCase):
     def test_rejects_other_names(self):
         self.assertIsNone(asg.parse_set_name("v1"))
         self.assertIsNone(asg.parse_set_name("01-S9-v1-st1"))
+        self.assertIsNone(asg.parse_set_name("01-S1-v1-st1"))  # 인덱스 없는 v1은 측정 조건이 아니다
 
 
 class ResidualTest(unittest.TestCase):
@@ -397,6 +398,17 @@ class TableShapeTest(unittest.TestCase):
         protocol = Path(__file__).with_name("measure-protocol-c.md").read_text(encoding="utf-8")
         self.assertNotIn("fwd", protocol)
         self.assertIn("계좌 → 매칭 방향 발신 큐는 따로 측정하지 않고 C 단계에 포함된다", protocol)
+
+    def test_report_has_no_index_less_v1_condition(self):
+        def v1_set(fixture):
+            for number in range(1, 4):
+                fixture.add_round(f"r{number:02d}", valid=0 if number == 1 else 1, flags="WARMUP" if number == 1 else "",
+                                  stages={"order-engine": {"B": stage(4000), "A": stage(900)}}, latency=(4000, 12000))
+        with tempfile.TemporaryDirectory() as tmp:
+            run = make_run(tmp, [("01-S1-v1idx-st1", "v1", v1_set), ("02-S1-v2-st1", "v2", v2_set())])
+            text = asg.build_segments_report(run)
+        self.assertNotIn("인덱스 없", text)
+        self.assertNotIn("v1(인덱스 없음)", text)
 
     def test_warmup_round_is_not_in_stage_values(self):
         def build(fixture):

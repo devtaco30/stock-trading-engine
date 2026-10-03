@@ -191,7 +191,10 @@ test_commit_precedes() {
 
 test_set_token() {
     assert_eq "v1 인덱스 있음" "S3 v1 1 1" "$(parse_set_token S3:v1idx:1)"
-    assert_eq "v1 인덱스 없음" "S1 v1 0 1" "$(parse_set_token S1:v1:1)"
+    assert_fails "인덱스 없는 v1 조건은 받지 않는다" parse_set_token S1:v1:1
+    assert_eq "인덱스 없는 v1 조건 거부 메시지" "1" "$(parse_set_token S1:v1:1 2>&1 | grep -c '모르는 조건: v1 ')"
+    assert_not_contains "기본 계획에 인덱스 없는 v1 세트가 없다" "$(default_set_plan)" ":v1:"
+    assert_not_contains "선언 문서에 인덱스 없는 v1 조건이 없다" "$(cat loadtest/measure-protocol-c.md)" "인덱스 없"
     assert_eq "v2 계측 끔" "S1X v2 0 0" "$(parse_set_token S1X:v2:0)"
     assert_eq "단계 표시가 없으면 기본 켬" "S5 v2 0 1" "$(parse_set_token S5:v2)"
     assert_fails "모르는 조건은 실패" parse_set_token S1:v3:1
