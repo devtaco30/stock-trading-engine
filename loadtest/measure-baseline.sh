@@ -17,6 +17,7 @@ set -uo pipefail
 #   ★RATE=192, N=10000, ROUNDS=11     k6 도착률, 회차당 주문 수, 회차 수
 #   ★V1_LISTENER_CONCURRENCY=9        v1 order-engine 컨슈머 수. run-e2e-v1.sh 로 넘기며 기본 3 인 그 스크립트와 달리 여기서는 9
 #   ★V1_PARTITIONS=$V1_LISTENER_CONCURRENCY   order-requests 토픽 파티션 수
+#   ★V1_ORDERS_PARTITIONS=50, V1_FILLS_PARTITIONS=50   orders, fills 토픽 파티션 수 (앱의 KafkaTopicConfig 기본값. v1 앱 기동 전에 이 수로 만든다)
 #   ★V2_RESET_PARTITIONS=3            v2 준비에서 reset-e2e-v1-state.sh 에 넘기는 파티션 수 (DB 행 정리가 목적)
 #   ★DRAIN_TIMEOUT_V1=60, DRAIN_WAIT_V2=10   회차 후 배수 대기 초 (v1: DB 증가분이 N이 될 때까지 최대, v2: 고정)
 #   ★ASSIGN_TIMEOUT=120               v1 파티션 배정 확인 최대 초
@@ -43,6 +44,9 @@ N="${N:-10000}"
 ROUNDS="${ROUNDS:-11}"
 V1_LISTENER_CONCURRENCY="${V1_LISTENER_CONCURRENCY:-9}"
 V1_PARTITIONS="${V1_PARTITIONS:-$V1_LISTENER_CONCURRENCY}"
+# orders 와 fills 의 파티션 수는 각 앱의 KafkaTopicConfig 기본값(app.kafka.orders.partitions, app.kafka.fills.partitions: 50)이다
+V1_ORDERS_PARTITIONS="${V1_ORDERS_PARTITIONS:-50}"
+V1_FILLS_PARTITIONS="${V1_FILLS_PARTITIONS:-50}"
 V2_RESET_PARTITIONS="${V2_RESET_PARTITIONS:-3}"
 DRAIN_TIMEOUT_V1="${DRAIN_TIMEOUT_V1:-60}"
 DRAIN_WAIT_V2="${DRAIN_WAIT_V2:-10}"
@@ -540,6 +544,34 @@ stop_all_apps() {
     ./loadtest/stop-v2.sh
 }
 
+# kafka-topics.sh 호출 한 곳. 테스트가 이 함수를 바꿔 Docker 없이 확인한다
+kafka_topics() {
+    docker exec stock-trading-kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 "$@"
+}
+
+# v1 앱이 쓰는 토픽과 파티션 수 ("이름 수" 한 줄씩)
+v1_topic_specs() {
+    echo "order-requests ${V1_PARTITIONS}"
+    echo "orders ${V1_ORDERS_PARTITIONS}"
+    echo "fills ${V1_FILLS_PARTITIONS}"
+}
+
+# v1 앱을 띄우기 전에 토픽을 정해진 파티션 수로 만들고, 읽은 파티션 수가 같은지 확인한다.
+# 정산 앱이 fills 보다 먼저 떠서 토픽이 없으면 브로커가 1 파티션으로 자동 생성하고, 컨슈머는 약 5분 뒤에야 나머지 파티션을 받는다
+ensure_v1_topics() {
+    local name expected described actual
+    while read -r name expected; do
+        kafka_topics --create --if-not-exists --topic "$name" --partitions "$expected" --replication-factor 1 > /dev/null 2>&1
+        described="$(kafka_topics --describe --topic "$name" 2>&1)"
+        actual="$(printf '%s\n' "$described" | sed -n 's/.*PartitionCount: *\([0-9][0-9]*\).*/\1/p' | head -n 1)"
+        if [ "$actual" != "$expected" ]; then
+            echo "토픽 ${name} 의 파티션 수가 ${expected} 이어야 하는데 ${actual:-읽지 못함} 이다" >&2
+            return 1
+        fi
+        echo "토픽 확인: ${name} 파티션 ${actual}"
+    done < <(v1_topic_specs)
+}
+
 prepare_condition() {
     local cond="$1"
     echo "--- ${cond} 준비 1: 이전 앱 정지"
@@ -557,6 +589,11 @@ prepare_condition() {
     local partitions="$V2_RESET_PARTITIONS"
     [ "$cond" = "v1" ] && partitions="$V1_PARTITIONS"
     ./loadtest/reset-e2e-v1-state.sh "$partitions"
+
+    if [ "$cond" = "v1" ]; then
+        echo "--- ${cond} 준비 3-0: 토픽 생성·확인 (앱 기동 전)"
+        ensure_v1_topics || return 1
+    fi
 
     if [ "$INDEX_MODE" = "1" ] && [ "$cond" = "v1" ]; then
         echo "--- ${cond} 준비 3-1: 인덱스 생성 (앱 기동 전, orders 테이블이 없으면 앱 기동 뒤로 미룬다)"

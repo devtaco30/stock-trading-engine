@@ -212,6 +212,64 @@ test_src_main_unchanged() {
     assert_contains "src/main diff 없음 문구" "$output" "src/main diff vs ${B1_BASE_SHA}: 없음"
 }
 
+# v1 앱을 띄우기 전에 order-requests, orders, fills 토픽을 정해진 파티션 수로 만들고 확인한다.
+# 정산 앱이 fills 보다 먼저 떠서 토픽이 없으면 브로커 자동 생성(1 파티션)으로 시작해 약 5분 뒤에야 나머지 파티션을 받는다.
+test_v1_topics() {
+    FAKE_TOPIC_STATE="$(mktemp)"
+    FAKE_TOPIC_CALLS="$(mktemp)"
+    kafka_topics() {
+        echo "$*" >> "$FAKE_TOPIC_CALLS"
+        local topic="" partitions="" i=("$@")
+        local idx
+        for ((idx = 0; idx < ${#i[@]}; idx++)); do
+            [ "${i[$idx]}" = "--topic" ] && topic="${i[$((idx + 1))]}"
+            [ "${i[$idx]}" = "--partitions" ] && partitions="${i[$((idx + 1))]}"
+        done
+        case "$*" in
+            *--create*) echo "${topic}=${partitions}" >> "$FAKE_TOPIC_STATE" ;;
+            *--describe*)
+                local count
+                count="${FAKE_DESCRIBE_COUNT:-$(grep "^${topic}=" "$FAKE_TOPIC_STATE" | tail -n 1 | cut -d= -f2)}"
+                [ -n "$count" ] && printf 'Topic: %s\tTopicId: x\tPartitionCount: %s\tReplicationFactor: 1\tConfigs: \n' "$topic" "$count"
+                ;;
+        esac
+        return 0
+    }
+
+    local specs
+    specs="$(v1_topic_specs)"
+    assert_contains "order-requests 는 V1_PARTITIONS 개" "$specs" "order-requests ${V1_PARTITIONS}"
+    assert_contains "orders 는 order-engine KafkaTopicConfig 기본값 50" "$specs" "orders 50"
+    assert_contains "fills 는 matching-engine KafkaTopicConfig 기본값 50" "$specs" "fills 50"
+
+    ensure_v1_topics > /dev/null 2>&1
+    assert_eq "정상이면 성공" "0" "$?"
+    local calls
+    calls="$(cat "$FAKE_TOPIC_CALLS")"
+    assert_contains "fills 를 50 파티션으로 만든다" "$calls" "--create --if-not-exists --topic fills --partitions 50"
+    assert_contains "orders 를 50 파티션으로 만든다" "$calls" "--create --if-not-exists --topic orders --partitions 50"
+    assert_contains "order-requests 를 만든다" "$calls" "--topic order-requests --partitions ${V1_PARTITIONS}"
+
+    FAKE_DESCRIBE_COUNT=1 ensure_v1_topics > /dev/null 2>&1
+    assert_eq "확인한 파티션 수가 다르면 실패" "1" "$?"
+    : > "$FAKE_TOPIC_STATE"
+    ( kafka_topics() { return 0; }; ensure_v1_topics > /dev/null 2>&1 )
+    assert_eq "토픽 정보를 읽지 못하면 실패" "1" "$?"
+
+    local body create_line app_line
+    body="$(declare -f prepare_condition)"
+    create_line="$(printf '%s\n' "$body" | grep -n 'ensure_v1_topics' | head -n 1 | cut -d: -f1)"
+    app_line="$(printf '%s\n' "$body" | grep -n 'run-e2e-' | head -n 1 | cut -d: -f1)"
+    assert_eq "토픽 확인 호출이 prepare_condition 에 있다" "1" "$([ -n "$create_line" ] && echo 1 || echo 0)"
+    assert_eq "토픽 확인이 앱 기동보다 앞이다" "1" "$([ -n "$create_line" ] && [ -n "$app_line" ] && [ "$create_line" -lt "$app_line" ] && echo 1 || echo 0)"
+    assert_contains "확인 실패하면 앱 기동으로 넘어가지 않는다" "$body" "ensure_v1_topics || return 1"
+
+    unset -f kafka_topics
+    unset FAKE_DESCRIBE_COUNT
+    rm -f "$FAKE_TOPIC_STATE" "$FAKE_TOPIC_CALLS"
+}
+
+test_v1_topics
 test_lag_total_from_describe
 test_src_main_unchanged
 test_quiescent_step
