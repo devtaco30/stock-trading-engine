@@ -20,6 +20,7 @@ dependencies {
 
 	implementation(libs.spring.boot.starter)
 	implementation(libs.spring.kafka)
+	implementation(libs.spring.boot.starter.data.redis) // 최근 체결가(LTP)를 v1 matching-engine과 같은 Redis 키에 기록한다
 	implementation("com.fasterxml.jackson.core:jackson-databind") // Spring Kafka JsonSerializer 런타임 필요(버전은 Spring Boot BOM)
 
 	compileOnly(libs.lombok)

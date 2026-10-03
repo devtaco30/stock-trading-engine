@@ -8,6 +8,12 @@ spring:
       - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
       - org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration
       - org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration
+  # 최근 체결가(LTP) 기록용 Redis. 명령 타임아웃을 짧게 둬 응답 없는 Redis에서 기록 스레드가 오래 멈추지 않게 한다(매칭 스레드는 Redis에 닿지 않는다)
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      timeout: 2s
   kafka:
     bootstrap-servers: localhost:9092
     producer:
