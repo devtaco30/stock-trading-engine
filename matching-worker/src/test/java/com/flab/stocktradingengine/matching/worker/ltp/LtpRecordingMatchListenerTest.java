@@ -100,4 +100,23 @@ class LtpRecordingMatchListenerTest {
             writer.close();
         }
     }
+
+    @Test
+    void onBookChanged도_감싼_listener로_전달한다() {
+        List<String> seen = new ArrayList<>();
+        MatchListener inner = new MatchListener() {
+            @Override
+            public void onFill(String stockCode, FillResult fill) { }
+
+            @Override
+            public void onBookChanged(String stockCode, com.flab.stocktradingengine.trading.matching.OrderBook book) {
+                seen.add(stockCode);
+            }
+        };
+        LtpRecordingMatchListener listener = new LtpRecordingMatchListener(inner, new LastTradedPriceWriter((c, v) -> { }, 100));
+
+        listener.onBookChanged("A1", new com.flab.stocktradingengine.trading.matching.OrderBook());
+
+        assertThat(seen).containsExactly("A1");
+    }
 }

@@ -2,6 +2,7 @@ package com.flab.stocktradingengine.matching.worker.ltp;
 
 import com.flab.stocktradingengine.matching.disruptor.io.MatchListener;
 import com.flab.stocktradingengine.trading.matching.FillResult;
+import com.flab.stocktradingengine.trading.matching.OrderBook;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -35,6 +36,11 @@ public class LtpRecordingMatchListener implements MatchListener {
     public void onFill(String stockCode, FillResult fill, long emittedAtNanos, long aggressorOriginNanos) {
         recordSafely(stockCode, fill);
         delegate.onFill(stockCode, fill, emittedAtNanos, aggressorOriginNanos);
+    }
+
+    @Override
+    public void onBookChanged(String stockCode, OrderBook book) {
+        delegate.onBookChanged(stockCode, book);
     }
 
     private void recordSafely(String stockCode, FillResult fill) {
