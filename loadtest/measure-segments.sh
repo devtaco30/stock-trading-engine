@@ -53,6 +53,11 @@ SEGMENT_SETS="${SEGMENT_SETS:-}"
 
 # ---------------------------------------------------------------- 단계 구성과 보간 (measure-protocol-c.md 4절)
 
+# k6 가상 사용자(VU) 수. 필요한 동시 요청 수는 도착률 x 응답 시간(Little의 법칙)이다. replay-e2e.js 의 기본 maxVUs 300 은 응답 5ms 를 가정한
+# 값이라(필요 약 20개), 실측 응답 80~97ms 의 4,000건/초(필요 약 320~400개)에서 모자랐다. 선언 문서 4-5절
+K6_PRE_ALLOCATED_VUS="${K6_PRE_ALLOCATED_VUS:-500}"
+K6_MAX_VUS="${K6_MAX_VUS:-1500}"
+
 # "속도 N 회차수(워밍업 1 포함)" 를 출력한다
 step_config() {
     case "$1" in
@@ -356,6 +361,7 @@ run_round_segments() {
     k6_start="$(date +%s)"
     # 계측을 켠 세트는 예정 도착 시각 헤더(X-Sched-At)를 실어 api 필터가 G 를 기록하게 한다. 끈 세트는 b0·b1 과 같은 요청이다
     SCHED_HEADER="$([ "${MEASURE_STAGES:-0}" = "1" ] && echo 1 || echo 0)" \
+        PRE_ALLOCATED_VUS="$K6_PRE_ALLOCATED_VUS" MAX_VUS="$K6_MAX_VUS" \
         RATE="$RATE" N="$N" VERSION="$cond" PASS="$round" INPUT_FILE="$INPUT_FILE" \
         k6 run --summary-export="${cond_dir}/k6-${cond}-${round}.json" loadtest/replay-e2e.js \
         > "${cond_dir}/logs/k6-${cond}-${round}.out" 2>&1

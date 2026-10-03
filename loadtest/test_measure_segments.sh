@@ -311,6 +311,21 @@ test_saturation_csv_line() {
     assert_eq "이유가 none 이어도 같다" "11 none 5" "$columns"
 }
 
+# k6 가상 사용자(VU) 수: 필요한 동시 요청 수는 도착률 x 응답 시간(Little의 법칙)이다. 기본 maxVUs 300은 응답 5ms 가정이라 4,000건/초에서 모자랐다
+test_k6_vus() {
+    assert_eq "미리 만들어 둘 VU 기본값" "500" "$K6_PRE_ALLOCATED_VUS"
+    assert_eq "최대 VU 기본값" "1500" "$K6_MAX_VUS"
+    local body
+    body="$(declare -f run_round_segments)"
+    assert_contains "회차 실행이 k6에 PRE_ALLOCATED_VUS를 넘긴다" "$body" 'PRE_ALLOCATED_VUS="$K6_PRE_ALLOCATED_VUS"'
+    assert_contains "회차 실행이 k6에 MAX_VUS를 넘긴다" "$body" 'MAX_VUS="$K6_MAX_VUS"'
+    local protocol_text
+    protocol_text="$(cat loadtest/measure-protocol-c.md)"
+    assert_contains "선언 문서에 VU 설정과 근거가 있다" "$protocol_text" "PRE_ALLOCATED_VUS=500, MAX_VUS=1500"
+    assert_contains "선언 문서가 Little의 법칙으로 근거를 적는다" "$protocol_text" "Little의 법칙"
+    assert_contains "선언 문서가 설정값 오류로 적는다" "$protocol_text" "설정값 오류(응답 시간 가정이 틀림)"
+}
+
 # 포화점 탐색(계단) 세트 L: 회차마다 속도가 오른다. 첫 회차는 워밍업이고, 포화 신호가 처음 나온 회차에서 멈춘다
 test_ladder() {
     assert_eq "기본 계단 속도" "192 300 400 500 700 1000 1500 2000 3000 4000" "$(ladder_rates)"
@@ -359,6 +374,7 @@ test_ladder() {
     rm -rf "$dir" "$calls"
 }
 
+test_k6_vus
 test_record_only_steps
 test_saturation_csv_line
 test_ladder
