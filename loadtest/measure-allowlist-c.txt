@@ -44,6 +44,8 @@ matching-worker/src/main/java/com/flab/stocktradingengine/matching/worker/config
 matching-worker/src/main/java/com/flab/stocktradingengine/matching/worker/config/MatchingStageMeasurementConfig.java
 matching-worker/src/main/java/com/flab/stocktradingengine/matching/worker/ltp/LastTradedPriceWriter.java
 matching-worker/src/main/java/com/flab/stocktradingengine/matching/worker/ltp/LtpRecordingMatchListener.java
+matching-worker/src/main/java/com/flab/stocktradingengine/matching/worker/ltp/OrderbookRecordingMatchListener.java
+matching-worker/src/main/java/com/flab/stocktradingengine/matching/worker/ltp/OrderbookSnapshotWriter.java
 matching-worker/src/main/java/com/flab/stocktradingengine/matching/worker/messaging/AccountFillPublisher.java
 matching-worker/src/main/java/com/flab/stocktradingengine/matching/worker/messaging/FillOutbox.java
 matching-worker/src/main/resources/application.yml
