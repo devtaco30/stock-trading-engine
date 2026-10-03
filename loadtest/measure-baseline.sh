@@ -13,6 +13,7 @@ set -uo pipefail
 #   INCLUDE_KAFKA_UI=0        1이면 kafka-ui도 유지한다. 0이면 postgres redis kafka만 쓴다 (아래 주의 참고)
 #   CONDITIONS="v1 v2"        조건 실행 순서
 #   PREFLIGHT_ONLY=0          1이면 점검만 실행
+#   ALLOW_BATTERY_RUN=0       1이면 배터리 전원·저전력 모드 점검을 건너뛴다(사용자 지시 전용. 결과는 env.txt 의 기록으로 구분한다)
 #   ★RUN_ID=b0-<UTC yyyymmdd-HHMM>   결과 디렉터리 이름 (loadtest/results/<RUN_ID>/)
 #   ★RATE=192, N=10000, ROUNDS=11     k6 도착률, 회차당 주문 수, 회차 수
 #   ★V1_LISTENER_CONCURRENCY=9        v1 order-engine 컨슈머 수. run-e2e-v1.sh 로 넘기며 기본 3 인 그 스크립트와 달리 여기서는 9
@@ -199,12 +200,20 @@ preflight_laptop() {
     batt="$(pmset -g batt)"
     echo "$batt"
     if ! echo "$batt" | head -1 | grep -q "AC Power"; then
-        fail "AC 전원이 아니다"
+        if [ "${ALLOW_BATTERY_RUN:-0}" = "1" ]; then
+            note "사용자 지시로 AC 전원 점검을 건너뛴다 (ALLOW_BATTERY_RUN=1). 이 실행은 본 측정 조건과 다르다"
+        else
+            fail "AC 전원이 아니다"
+        fi
     fi
     pmset -g | grep -iE 'lowpowermode|sleep|disablesleep'
     low="$(pmset -g | awk '/lowpowermode/ { print $2 }')"
     if [ -n "$low" ] && [ "$low" != "0" ]; then
-        fail "Low Power Mode 가 켜져 있다 (lowpowermode=${low})"
+        if [ "${ALLOW_BATTERY_RUN:-0}" = "1" ]; then
+            note "사용자 지시로 Low Power Mode 점검을 건너뛴다 (lowpowermode=${low}, ALLOW_BATTERY_RUN=1). 이 실행은 본 측정 조건과 다르다"
+        else
+            fail "Low Power Mode 가 켜져 있다 (lowpowermode=${low})"
+        fi
     fi
     therm="$(pmset -g therm)"
     echo "$therm"

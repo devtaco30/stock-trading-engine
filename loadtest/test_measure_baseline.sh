@@ -212,6 +212,30 @@ test_src_main_unchanged() {
     assert_contains "src/main diff 없음 문구" "$output" "src/main diff vs ${B1_BASE_SHA}: 없음"
 }
 
+# 사용자가 지시하면 배터리 전원·저전력 모드 점검을 건너뛴다. 건너뛴 사실은 [기록]으로 남고 걸림으로 세지 않는다
+test_laptop_state_override() {
+    pmset() {
+        case "$*" in
+            "-g batt") printf "Now drawing from 'Battery Power'\n -InternalBattery-0\t98%%; discharging\n" ;;
+            "-g therm") echo "Note: No thermal warning level has been recorded" ;;
+            *) printf ' lowpowermode         1\n sleep 1\n' ;;
+        esac
+    }
+    top() { :; }
+    local out failures
+    PREFLIGHT_FAILURES=0
+    out="$(preflight_laptop 2>&1)"
+    PREFLIGHT_FAILURES=0
+    preflight_laptop > /dev/null 2>&1
+    assert_eq "기본은 배터리·저전력 모드를 걸림으로 센다" "2" "$PREFLIGHT_FAILURES"
+    PREFLIGHT_FAILURES=0
+    out="$(ALLOW_BATTERY_RUN=1 preflight_laptop 2>&1)"
+    assert_contains "건너뛰면 기록을 남긴다" "$out" "[기록] 사용자 지시로 AC 전원 점검을 건너뛴다"
+    assert_contains "저전력 모드도 기록을 남긴다" "$out" "[기록] 사용자 지시로 Low Power Mode 점검을 건너뛴다"
+    assert_not_contains "건너뛰면 걸림이 없다" "$out" "[걸림]"
+    unset -f pmset top
+}
+
 # v1 앱을 띄우기 전에 order-requests, orders, fills 토픽을 정해진 파티션 수로 만들고 확인한다.
 # 정산 앱이 fills 보다 먼저 떠서 토픽이 없으면 브로커 자동 생성(1 파티션)으로 시작해 약 5분 뒤에야 나머지 파티션을 받는다.
 test_v1_topics() {
@@ -269,6 +293,7 @@ test_v1_topics() {
     rm -f "$FAKE_TOPIC_STATE" "$FAKE_TOPIC_CALLS"
 }
 
+test_laptop_state_override
 test_v1_topics
 test_lag_total_from_describe
 test_src_main_unchanged
