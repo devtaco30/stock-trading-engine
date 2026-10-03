@@ -664,6 +664,19 @@ class SeedCheckTest(unittest.TestCase):
                                  self.write_seed([{"id": 2001, "balance": 3300}]), count=2, rounds=11)
         self.assertEqual([], problems)
 
+    def test_회차마다_건수가_다르면_회차별_필요량을_더한다(self):
+        # 회차 건수 2, 4, 4 → 2001 필요량 300 + 300 + 300 = 900 / 2051 보유 필요량 0 + 4 + 4 = 8
+        orders = self.write_input(self.orders())
+        seed = self.write_seed([{"id": 2001, "balance": 900}, {"id": 2051, "balance": 0, "holdings": {"A1": 8}}])
+        self.assertEqual([], ab.check_seed(orders, seed, counts=[2, 4, 4]))
+
+    def test_회차별_건수_합이_시드를_넘으면_알린다(self):
+        orders = self.write_input(self.orders())
+        seed = self.write_seed([{"id": 2001, "balance": 899}, {"id": 2051, "balance": 0, "holdings": {"A1": 8}}])
+        problems = ab.check_seed(orders, seed, counts=[2, 4, 4])
+        self.assertEqual(1, len(problems))
+        self.assertIn("2001", problems[0])
+
     def test_입력_파일이_없으면_문제로_알린다(self):
         problems = ab.check_seed(self.root / "none.jsonl", self.write_seed([]), count=4, rounds=11)
         self.assertEqual(1, len(problems))

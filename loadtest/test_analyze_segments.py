@@ -61,6 +61,7 @@ class SetFixture:
         self.dir.mkdir(parents=True)
         self.rounds = []
         self.saturation = []
+        self.rates = []
 
     def add_round(self, round_id, valid=1, flags="", reasons="none", stages=None, skip_processes=(),
                   latency=None, hist_count=10000, cpu_rows=None):
@@ -83,6 +84,11 @@ class SetFixture:
                  "maxNanos": p99 * 2000}))
 
     def write(self):
+        if self.rates:
+            with open(self.dir / f"rates-{self.cond}.csv", "w", newline="") as handle:
+                writer = csv.writer(handle)
+                writer.writerow(["round", "rate", "n"])
+                writer.writerows(self.rates)
         with open(self.dir / f"rounds-{self.cond}.csv", "w", newline="") as handle:
             writer = csv.writer(handle)
             writer.writerow(ROUNDS_HEADER)
@@ -159,6 +165,61 @@ class ResourceSectionTest(unittest.TestCase):
         text = self.run_text(with_cpu=False)
         self.assertIn("## 자원 사용", text)
         self.assertIn("CPU 기록 파일이 없다", text)
+
+
+def ladder_set(plan):
+    """plan: [(회차, 속도, N, 포화 이유, G p99 µs, F p50 µs)]. v1 세트 모양(api 의 G, settlement-engine 의 F)."""
+    def build(fixture):
+        for round_id, rate, n, reasons, g_p99, f_p50 in plan:
+            stages = {"api": {"G": {"count": n, "p50Micros": 10, "p95Micros": 20, "p99Micros": g_p99, "maxMicros": g_p99 * 2, "meanMicros": 12.0}},
+                      "settlement-engine": {"F": {"count": n // 2, "p50Micros": f_p50, "p95Micros": f_p50 * 2, "p99Micros": f_p50 * 3,
+                                                   "maxMicros": f_p50 * 5, "meanMicros": float(f_p50)}}}
+            fixture.add_round(round_id, valid=0 if round_id == "r01" else 1, flags="WARMUP" if round_id == "r01" else "",
+                              reasons=reasons, stages=stages, latency=(3000, 7000), hist_count=n)
+            fixture.rates.append([round_id, rate, n])
+    return build
+
+
+class LadderSearchTest(unittest.TestCase):
+    def report(self, plan):
+        with tempfile.TemporaryDirectory() as tmp:
+            return asg.build_segments_report(make_run(tmp, [("01-L-v1idx-st1", "v1", ladder_set(plan))]))
+
+    PLAN = [("r01", 192, 3840, "k6_dropped", 500, 3000),     # 워밍업의 포화 신호는 판정에서 뺀다
+            ("r02", 300, 6000, "none", 400, 3000),
+            ("r03", 700, 14000, "none", 900, 3500),
+            ("r04", 1000, 20000, "k6_dropped", 1200, 4000),
+            ("r05", 1500, 30000, "none", 5000, 4500)]
+
+    def test_set_name_with_ladder_step_is_accepted(self):
+        parsed = asg.parse_set_name("01-L-v1idx-st1")
+        self.assertEqual(("L", "v1idx", 1), (parsed.step, parsed.label, parsed.stages))
+
+    def test_table_has_one_row_per_round_with_rate(self):
+        text = self.report(self.PLAN)
+        self.assertIn("## 포화점 탐색", text)
+        self.assertIn("| r02 | 300 | 6,000 | none | 400 | 3,000 | 아니오 | 정상 |", text)
+        self.assertIn("| r04 | 1,000 | 20,000 | k6_dropped | 1,200 | 4,000 | 아니오 | 포화 |", text)
+
+    def test_g_p99_at_or_above_f_p50_is_a_saturation_signal(self):
+        text = self.report(self.PLAN)
+        self.assertIn("| r05 | 1,500 | 30,000 | none | 5,000 | 4,500 | 예 | 포화 |", text)
+
+    def test_first_saturated_rate_is_reported_and_warmup_is_ignored(self):
+        text = self.report(self.PLAN)
+        self.assertIn("처음 포화 신호가 나온 속도: 1,000건/초 (k6_dropped)", text)
+        self.assertIn("마지막 정상 속도: 700건/초", text)
+        self.assertIn("| r01 | 192 | 3,840 | k6_dropped | 500 | 3,000 | 아니오 | 워밍업 |", text)
+
+    def test_no_saturation_says_so_with_highest_rate(self):
+        plan = [("r01", 192, 3840, "none", 100, 3000), ("r02", 300, 6000, "none", 100, 3000), ("r03", 500, 10000, "none", 100, 3000)]
+        text = self.report(plan)
+        self.assertIn("포화 신호가 나온 속도가 없다 (탐색한 가장 높은 속도 500건/초)", text)
+
+    def test_ladder_set_is_kept_out_of_stage_table_and_step_comparison(self):
+        text = self.report(self.PLAN)
+        self.assertIn("계단 세트는 회차마다 속도가 달라 단계 표를 집계하지 않는다", text)
+        self.assertIn("속도 단계 세트가 없다", text)  # 계단 세트는 속도 단계 비교 표에 들어가지 않는다
 
 
 class SetNameTest(unittest.TestCase):

@@ -242,10 +242,30 @@ preflight_env_record() {
 }
 
 # 점검 8: 시드가 11회차에 충분한지. 입력 앞 N건의 계좌별 필요량 x ROUNDS 가 시드 잔고·보유 안에 들어와야 한다
+# 시드 확인 인자(한 줄에 하나). 계단 세트는 회차마다 건수가 달라 회차별 건수 목록을, 그 밖에는 건수 x 회차 수를 쓴다
+seed_check_args() {
+    if [ "${LADDER_ACTIVE:-0}" = "1" ]; then
+        echo "--counts"
+        ladder_counts
+    else
+        echo "--count"
+        echo "$N"
+        echo "--rounds"
+        echo "$ROUNDS"
+    fi
+}
+
 preflight_seed() {
-    section "점검 8: 시드 충분성 (입력 앞 ${N}건 x ${ROUNDS}회차)"
-    if python3 loadtest/analyze-baseline.py seed-check --input "$INPUT_FILE" --seed-yml "$SEED_YML" \
-        --count "$N" --rounds "$ROUNDS"; then
+    local args=() arg
+    while IFS= read -r arg; do
+        args+=("$arg")
+    done < <(seed_check_args)
+    if [ "${LADDER_ACTIVE:-0}" = "1" ]; then
+        section "점검 8: 시드 충분성 (계단, 회차별 건수 $(ladder_counts))"
+    else
+        section "점검 8: 시드 충분성 (입력 앞 ${N}건 x ${ROUNDS}회차)"
+    fi
+    if python3 loadtest/analyze-baseline.py seed-check --input "$INPUT_FILE" --seed-yml "$SEED_YML" "${args[@]}"; then
         :
     else
         fail "시드가 모자라거나 입력 파일이 없다"

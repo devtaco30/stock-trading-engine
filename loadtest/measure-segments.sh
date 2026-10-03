@@ -58,6 +58,12 @@ step_config() {
         S5) echo "4000 40000 4" ;;
         S1X) echo "192 10000 11" ;;
         S1R) echo "192 10000 3" ;;
+        L)
+            local rates first_rate
+            rates="$(ladder_rates)"
+            first_rate="${rates%% *}"
+            echo "${first_rate} $(ladder_n "$first_rate") $(echo "$rates" | wc -w | tr -d ' ')"
+            ;;
         I[0-9]*)
             local rate="${1#I}"
             echo "${rate} $((rate * 20)) 4"
@@ -266,6 +272,59 @@ default_set_plan() {
     echo "S1:v1idx:1 S1:v2:1 S1:v2:1 S1:v1idx:1 S3:v1idx:1 S3:v2:1 S5:v1idx:1 S5:v2:1"
 }
 
+# ---------------------------------------------------------------- 포화점 탐색(계단, 세트 L)
+
+# 계단 속도(건/초). 첫 값은 워밍업 회차(r01)의 속도다. 탐색용이라 임의의 값이고 선언 문서 4-4절에 적는다
+ladder_rates() {
+    echo "${LADDER_RATES:-192 300 400 500 700 1000 1500 2000 3000 4000}"
+}
+
+# 회차의 주문 수: 속도 x 도착 시간(LADDER_ARRIVAL_SEC, 기본 20초). 시드 용량 때문에 LADDER_N_CAP(기본 4만)에서 자른다
+ladder_n() {
+    local n=$(($1 * ${LADDER_ARRIVAL_SEC:-20})) cap="${LADDER_N_CAP:-40000}"
+    [ "$n" -gt "$cap" ] && n="$cap"
+    echo "$n"
+}
+
+# 회차별 건수 목록(시드 확인에 쓴다)
+ladder_counts() {
+    local rate counts=""
+    for rate in $(ladder_rates); do
+        counts="${counts:+$counts }$(ladder_n "$rate")"
+    done
+    echo "$counts"
+}
+
+# 계단 한 세트의 회차를 돈다. 회차마다 속도와 N 이 바뀐다. 첫 회차(워밍업)는 포화 판정에서 뺀다.
+# 처음으로 포화 신호가 나온 회차에서 멈추고(그 뒤 회차는 밀린 처리분이 섞인다) 그 속도를 ladder-first-saturated.txt 에 남긴다. 없으면 none
+run_ladder_rounds() {
+    local cond="$1" cond_dir="$2" number=0 rate round reasons first_saturated="none" status=0
+    echo "round,rate,n" > "${cond_dir}/rates-${cond}.csv"
+    for rate in $(ladder_rates); do
+        number=$((number + 1))
+        round="$(printf 'r%02d' "$number")"
+        RATE="$rate"
+        N="$(ladder_n "$rate")"
+        set_analyzer_env "$N"
+        echo "${round},${RATE},${N}" >> "${cond_dir}/rates-${cond}.csv"
+        echo "=== 계단 ${round}: ${RATE}건/초, N=${N}"
+        run_round_segments "$cond" "$round" "$cond_dir"
+        status=$?
+        if [ "$status" -eq 2 ]; then
+            break
+        fi
+        reasons="$(awk -F, -v r="$round" '$1 == r { print $2 }' "${cond_dir}/saturation-${cond}.csv" 2> /dev/null | tail -n 1)"
+        if [ "$number" -gt 1 ] && [ -n "$reasons" ] && [ "$reasons" != "none" ]; then
+            first_saturated="$rate"
+            echo "포화 신호가 처음 나온 속도: ${rate}건/초 (${reasons}) — 계단을 멈춘다"
+            break
+        fi
+        sleep "${ROUND_GAP_SEC:-0}"
+    done
+    echo "$first_saturated" > "${cond_dir}/ladder-first-saturated.txt"
+    return "$status"
+}
+
 # ---------------------------------------------------------------- 회차와 세트
 
 # measure-baseline.sh 의 run_round 와 같은 절차에 단계 덤프 수집과 포화 계산을 더한 것. 비움(ROUND_CLEAR)은 쓰지 않는다.
@@ -388,6 +447,8 @@ run_set() {
     local index="$1" token="$2" step cond index_mode stages
     read -r step cond index_mode stages <<< "$(parse_set_token "$token")" || return 1
     read -r RATE N ROUNDS <<< "$(step_config "$step")" || return 1
+    LADDER_ACTIVE=0
+    [ "$step" = "L" ] && LADDER_ACTIVE=1
     INDEX_MODE="$index_mode"
     CONDITIONS="$cond"
     set_analyzer_env "$N"
@@ -417,13 +478,19 @@ run_set() {
     else
         record_autovacuum before "$cond_dir" "$cond"
         local number round status
-        for number in $(seq 1 "$ROUNDS"); do
-            round="$(printf 'r%02d' "$number")"
-            run_round_segments "$cond" "$round" "$cond_dir"
+        if [ "$LADDER_ACTIVE" = "1" ]; then
+            run_ladder_rounds "$cond" "$cond_dir"
             status=$?
-            if [ "$status" -eq 2 ]; then SET_STATUS=2; break; fi
-            if [ "$number" -lt "$ROUNDS" ]; then sleep "$ROUND_GAP_SEC"; fi
-        done
+            if [ "$status" -eq 2 ]; then SET_STATUS=2; fi
+        else
+            for number in $(seq 1 "$ROUNDS"); do
+                round="$(printf 'r%02d' "$number")"
+                run_round_segments "$cond" "$round" "$cond_dir"
+                status=$?
+                if [ "$status" -eq 2 ]; then SET_STATUS=2; break; fi
+                if [ "$number" -lt "$ROUNDS" ]; then sleep "$ROUND_GAP_SEC"; fi
+            done
+        fi
         record_autovacuum after "$cond_dir" "$cond"
         copy_series_files "$cond" "$cond_dir"
         if [ "$INDEX_MODE" = "1" ] && [ "$cond" = "v1" ]; then

@@ -277,6 +277,52 @@ test_run_plan() {
     rm -f "$calls_file"
 }
 
+# 포화점 탐색(계단) 세트 L: 회차마다 속도가 오른다. 첫 회차는 워밍업이고, 포화 신호가 처음 나온 회차에서 멈춘다
+test_ladder() {
+    assert_eq "기본 계단 속도" "192 300 400 500 700 1000 1500 2000 3000 4000" "$(ladder_rates)"
+    assert_eq "속도를 환경 변수로 바꾼다" "192 1000 2000" "$(LADDER_RATES="192 1000 2000" ladder_rates)"
+    assert_eq "N 은 속도 x 도착 20초" "6000" "$(ladder_n 300)"
+    assert_eq "N 은 4만으로 자른다(시드 용량)" "40000" "$(ladder_n 3000)"
+    assert_eq "4000/초도 4만" "40000" "$(ladder_n 4000)"
+    assert_eq "회차별 건수 목록" "3840 6000 8000 10000 14000 20000 30000 40000 40000 40000" "$(ladder_counts)"
+    assert_eq "계단 설정은 첫 속도, 첫 건수, 회차 수" "192 3840 10" "$(step_config L)"
+    assert_eq "계단 세트도 세트 표기로 받는다" "L v1 1 1" "$(parse_set_token L:v1idx:1)"
+
+    assert_eq "계단 세트는 회차별 건수로 시드를 확인한다" "--counts 3840 6000 8000 10000 14000 20000 30000 40000 40000 40000" "$(LADDER_ACTIVE=1 seed_check_args | tr '\n' ' ' | sed 's/ $//')"
+    local saved_n="${N:-}" saved_rounds="${ROUNDS:-}"
+    N=10000
+    ROUNDS=3
+    assert_eq "일반 세트는 건수 x 회차" "--count 10000 --rounds 3" "$(LADDER_ACTIVE=0 seed_check_args | tr '\n' ' ' | sed 's/ $//')"
+    N="$saved_n"
+    ROUNDS="$saved_rounds"
+
+    local dir calls original_round
+    dir="$(mktemp -d)"
+    calls="$(mktemp)"
+    original_round="$(declare -f run_round_segments)"
+    run_round_segments() {
+        echo "${2}:${RATE}:${N}" >> "$calls"
+        [ -f "${3}/saturation-v1.csv" ] || echo "$SATURATION_HEADER" > "${3}/saturation-v1.csv"
+        local reasons=none
+        [ "$RATE" -ge 1000 ] && reasons=k6_dropped
+        echo "${2},${reasons},0,0,${N},${N},0,NA,NA,NA,20" >> "${3}/saturation-v1.csv"
+        return 0
+    }
+    ROUND_GAP_SEC=0 LADDER_RATES="192 300 700 1000 1500" run_ladder_rounds v1 "$dir" > /dev/null 2>&1
+    assert_eq "포화 신호가 처음 나온 1000에서 멈춘다" "r01:192:3840 r02:300:6000 r03:700:14000 r04:1000:20000" "$(tr '\n' ' ' < "$calls" | sed 's/ $//')"
+    assert_eq "속도 기록 파일" "round,rate,n r01,192,3840 r02,300,6000 r03,700,14000 r04,1000,20000" "$(tr '\n' ' ' < "$dir/rates-v1.csv" | sed 's/ $//')"
+    assert_eq "처음 포화한 속도를 남긴다" "1000" "$(cat "$dir/ladder-first-saturated.txt")"
+
+    : > "$calls"
+    rm -f "$dir"/*.csv "$dir"/ladder-first-saturated.txt
+    ROUND_GAP_SEC=0 LADDER_RATES="192 300 700" run_ladder_rounds v1 "$dir" > /dev/null 2>&1
+    assert_eq "포화가 없으면 끝까지 간다" "3" "$(wc -l < "$calls" | tr -d ' ')"
+    assert_eq "포화가 없으면 포화 속도 없음" "none" "$(cat "$dir/ladder-first-saturated.txt")"
+    eval "$original_round"
+    rm -rf "$dir" "$calls"
+}
+
+test_ladder
 test_step_config
 test_interpolation_rate
 test_run_plan

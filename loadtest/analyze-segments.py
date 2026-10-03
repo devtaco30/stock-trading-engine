@@ -27,7 +27,7 @@ RESOLUTION_LIMIT_US = 5.0      # 이 값 미만인 단계는 해상도 미만(�
 RESIDUAL_LIMIT = 0.01          # 합 정합성: 잔차 비율이 이 값을 넘으면 불성립 (임의값, protocol-c 2절)
 WIDE_RATIO = 0.5               # 계측 영향: 끈 세트 범위 폭의 이 비율을 넘는 차이는 애매함 (protocol-c 5절)
 WARMUP_ROUND = "r01"
-SET_RE = re.compile(r"^(\d+)-(S1X|S1R|S1|S3|S5|I\d+)-(v1idx|v2)-st([01])$")
+SET_RE = re.compile(r"^(\d+)-(S1X|S1R|S1|S3|S5|L|I\d+)-(v1idx|v2)-st([01])$")
 STAGE_FILE_RE = re.compile(r"^stages-(v1|v2)-(.+)-(r\d+)\.json$")
 EXPECTED_PROCESSES = {
     "v1": ["api", "order-engine", "matching-engine", "settlement-engine"],
@@ -101,6 +101,7 @@ class SetData:
     latency: dict = field(default_factory=dict)       # round -> {"p50": µs, "p99": µs}
     resources: dict = field(default_factory=dict)     # round -> 측정 구간(k6_start~k6_end) 안의 자원 샘플(cpu-<cond>-rNN.csv 행)
     has_cpu_files: bool = False
+    rates: dict = field(default_factory=dict)         # round -> (속도 건/초, 회차 주문 수 N). 계단 세트(L)만 있다
     has_saturation_file: bool = False
 
     def measured_rounds(self):
@@ -152,6 +153,10 @@ def load_set(set_dir, meta):
             data.resources[row["round"]] = [sample for sample in read_csv_rows(cpu_path)
                                             if start is not None and end is not None
                                             and to_int(sample.get("ts")) is not None and start <= to_int(sample["ts"]) <= end]
+    for row in read_csv_rows(cond_dir / f"rates-{meta.cond}.csv"):
+        rate, n = to_int(row.get("rate")), to_int(row.get("n"))
+        if rate is not None:
+            data.rates[row["round"]] = (rate, n)
     sat_path = cond_dir / f"saturation-{meta.cond}.csv"
     data.has_saturation_file = sat_path.exists()
     for row in read_csv_rows(sat_path):
@@ -355,6 +360,9 @@ READING_LINES = [
 
 def set_section(data):
     lines = [f"### {set_title(data)}", ""]
+    if data.meta.step == "L":
+        lines += ["계단 세트는 회차마다 속도가 달라 단계 표를 집계하지 않는다. 회차별 값은 「포화점 탐색」 표에 있다."]
+        return "\n".join(lines)
     measured = data.measured_rounds()
     included = data.included_rounds()
     saturated = [r for r in measured if data.is_saturated(r)]
@@ -451,7 +459,7 @@ def ladder_section(sets):
              "포화한 단계의 값은 대표값 인용 대상에서 제외한다(표에는 「—」로 둔다).", ""]
     groups = {}
     for data in sets:
-        if data.meta.stages != 1 or data.meta.step in IMPACT_STEPS:
+        if data.meta.stages != 1 or data.meta.step in IMPACT_STEPS or data.meta.step == "L":
             continue
         groups.setdefault((data.meta.step, data.meta.label), []).append(data)
     if not groups:
@@ -646,6 +654,56 @@ def resource_section(sets):
     return "\n".join(lines).rstrip()
 
 
+def ladder_search_section(sets):
+    """계단 세트(L): 속도를 회차마다 올려 처음 포화 신호가 나온 속도를 찾는다. 새 임계값은 만들지 않고 선언된 신호를 그대로 쓴다:
+    회차의 포화 이유(dropped_iterations 1 이상 등, 4-1절)와 G p99 ≥ 같은 회차 F p50(4-3절). 워밍업 회차는 판정에서 뺀다."""
+    ladders = [d for d in sets if d.meta.step == "L"]
+    if not ladders:
+        return ""
+    lines = ["## 포화점 탐색", "",
+             "계단 세트의 회차마다 속도를 올린 결과다. 포화 신호는 선언 문서 4-1절의 포화 이유(dropped_iterations 1 이상, 요청 실패, 건수 부족, 소비 지연, "
+             "회차 안 지연 증가, 배수 시간)와 4-3절의 G p99 ≥ 같은 회차 F p50이다. 첫 회차(워밍업)는 판정에서 뺀다.", ""]
+    for data in ladders:
+        lines += [f"### {data.meta.name}", ""]
+        rows = []
+        first_saturated = None
+        last_normal = None
+        highest = None
+        for round_id in sorted(data.rates):
+            rate, n = data.rates[round_id]
+            reasons = data.saturation.get(round_id, "none") or "none"
+            snapshots = data.stage_rounds.get(round_id, {})
+            g_p99 = (snapshots.get("G") or {}).get("p99Micros")
+            f_p50 = (snapshots.get("F") or {}).get("p50Micros")
+            g_over_f = g_promotion_signal(g_p99, f_p50)
+            if round_id == WARMUP_ROUND:
+                verdict = "워밍업"
+            elif not data.is_valid(round_id):
+                verdict = "무효"
+            else:
+                saturated = reasons != "none" or g_over_f
+                verdict = "포화" if saturated else "정상"
+                highest = rate if highest is None else max(highest, rate)
+                if saturated and first_saturated is None:
+                    first_saturated = (rate, [r for r in reasons.split(",") if r != "none"] + (["G p99 ≥ F p50"] if g_over_f else []))
+                if not saturated and first_saturated is None:
+                    last_normal = rate
+            rows.append([round_id, f"{rate:,}", f"{n:,}" if n is not None else "—", reasons, fmt_micros(g_p99), fmt_micros(f_p50),
+                         "예" if g_over_f else "아니오", verdict])
+        lines.append(table(["회차", "속도(건/초)", "N", "포화 이유", "G p99 µs", "F p50 µs", "G p99 ≥ F p50", "판정"], rows))
+        lines.append("")
+        if first_saturated:
+            lines.append(f"처음 포화 신호가 나온 속도: {first_saturated[0]:,}건/초 ({', '.join(first_saturated[1])})")
+            if last_normal is not None:
+                lines.append(f"마지막 정상 속도: {last_normal:,}건/초")
+        elif highest is not None:
+            lines.append(f"포화 신호가 나온 속도가 없다 (탐색한 가장 높은 속도 {highest:,}건/초)")
+        else:
+            lines.append("판정에 쓸 수 있는 회차가 없다.")
+        lines.append("")
+    return "\n".join(lines).rstrip()
+
+
 def correspondence_section():
     lines = ["## 두 구현의 단계 대응", "", "설계서 2-3a절을 옮긴 것이다. 위 표와 다르면 설계서가 기준이다.", "",
              table(["단계", "같은 정의 / 다른 정의", "내용"], CORRESPONDENCE), "",
@@ -692,7 +750,7 @@ def build_segments_report(run_dir):
     lines += ["", "## 세트별 단계 표", ""]
     for data in sets:
         lines += [set_section(data), ""]
-    for section in (residual_section(sets), resource_section(sets), ladder_section(sets), impact_section(sets), correspondence_section(),
+    for section in (residual_section(sets), resource_section(sets), ladder_search_section(sets), ladder_section(sets), impact_section(sets), correspondence_section(),
                     warning_section(sets)):
         lines += [section, ""]
     return "\n".join(lines).rstrip() + "\n"

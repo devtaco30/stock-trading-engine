@@ -658,9 +658,10 @@ def build_compare(entries):
 
 # ---------- 점검 8: 시드 충분성 ----------
 
-def check_seed(input_path, seed_yml_path, count=EXPECTED_COUNT, rounds=EXPECTED_ROUNDS):
-    """입력 앞 count건의 계좌별 필요량 x rounds가 시드 안에 들어오는지 본다. 문제 목록을 돌려주고, 비면 통과다.
+def check_seed(input_path, seed_yml_path, count=EXPECTED_COUNT, rounds=EXPECTED_ROUNDS, counts=None):
+    """회차마다 입력 앞 N건의 계좌별 필요량을 더한 값이 시드 안에 들어오는지 본다. 문제 목록을 돌려주고, 비면 통과다.
 
+    counts 가 없으면 count 건을 rounds 회차 돌린다. counts(회차별 건수 목록)가 있으면 회차마다 건수가 달라도 회차별 필요량을 더한다.
     매수 필요량은 price x quantity의 합이고 증거금률 1.00을 전제로 한다(시드가 1.00이다). 증거금률이 1.00이
     아닌 계좌는 필요량에 증거금률을 곱해 비교한다. 매도 필요량은 (계좌, 종목)별 수량의 합이다.
     """
@@ -672,15 +673,22 @@ def check_seed(input_path, seed_yml_path, count=EXPECTED_COUNT, rounds=EXPECTED_
     except ImportError:
         return ["PyYAML 이 필요하다 (python3 -m pip install pyyaml)"]
 
-    buy_need = {}
-    sell_need = {}
+    round_counts = list(counts) if counts else [count] * rounds
+    rounds = len(round_counts)
+    orders = []
     with open(input_path, encoding="utf-8") as handle:
         for index, line in enumerate(handle):
-            if index >= count:
+            if index >= max(round_counts):
                 break
-            if not line.strip():
-                continue
-            order = json.loads(line)
+            if line.strip():
+                orders.append((index, json.loads(line)))
+
+    buy_need = {}
+    sell_need = {}
+    for round_count in round_counts:
+        for index, order in orders:
+            if index >= round_count:
+                break
             account = order["accountId"]
             if order["side"] == "BUY":
                 buy_need[account] = buy_need.get(account, 0) + order["price"] * order["quantity"]
@@ -696,21 +704,21 @@ def check_seed(input_path, seed_yml_path, count=EXPECTED_COUNT, rounds=EXPECTED_
     for account, need in sorted(buy_need.items()):
         entry = seeded.get(account)
         if entry is None:
-            problems.append(f"계좌 {account}: 시드에 없다 (매수 필요량 {need} x {rounds})")
+            problems.append(f"계좌 {account}: 시드에 없다 (매수 필요량 {need}, {rounds}회차 합)")
             continue
         margin_rate = float(entry.get("margin-rate", 1.0))
-        required = need * margin_rate * rounds
+        required = need * margin_rate
         if entry["balance"] < required:
             problems.append(f"계좌 {account}: 잔고 {entry['balance']} < 필요 {required:g} (매수 {need} x 증거금률 "
-                            f"{margin_rate:g} x {rounds}회차)")
+                            f"{margin_rate:g}, {rounds}회차 합)")
     for (account, stock), need in sorted(sell_need.items()):
         entry = seeded.get(account)
         if entry is None:
-            problems.append(f"계좌 {account}: 시드에 없다 (매도 {stock} 필요량 {need} x {rounds})")
+            problems.append(f"계좌 {account}: 시드에 없다 (매도 {stock} 필요량 {need}, {rounds}회차 합)")
             continue
         held = (entry.get("holdings") or {}).get(stock, 0)
-        if held < need * rounds:
-            problems.append(f"계좌 {account} 종목 {stock}: 보유 {held} < 필요 {need * rounds} ({need} x {rounds}회차)")
+        if held < need:
+            problems.append(f"계좌 {account} 종목 {stock}: 보유 {held} < 필요 {need} ({rounds}회차 합)")
     return problems
 
 
@@ -766,6 +774,7 @@ def main(argv):
     seed.add_argument("--seed-yml", required=True)
     seed.add_argument("--count", type=int, default=EXPECTED_COUNT)
     seed.add_argument("--rounds", type=int, default=EXPECTED_ROUNDS)
+    seed.add_argument("--counts", help="회차별 건수를 공백으로 이은 목록(예: '3840 5000 8000'). 있으면 --count·--rounds 대신 쓴다")
 
     args = parser.parse_args(argv)
     if args.command == "compare":
@@ -790,11 +799,13 @@ def main(argv):
         return run_compare_segments(args.run_dir, args.out)
 
     if args.command == "seed-check":
-        problems = check_seed(args.input, args.seed_yml, args.count, args.rounds)
+        counts = [int(token) for token in args.counts.split()] if args.counts else None
+        problems = check_seed(args.input, args.seed_yml, args.count, args.rounds, counts=counts)
         for problem in problems:
             print(problem)
         if not problems:
-            print(f"시드 충분: 앞 {args.count}건 x {args.rounds}회차가 시드 잔고·보유 안에 들어온다")
+            what = f"회차별 {args.counts}건" if args.counts else f"앞 {args.count}건 x {args.rounds}회차"
+            print(f"시드 충분: {what}이 시드 잔고·보유 안에 들어온다")
         return 1 if problems else 0
 
     if args.command == "report":
