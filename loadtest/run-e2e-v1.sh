@@ -36,7 +36,7 @@ fi
 
 start_app() {
     local module="$1" extra_args="$2"
-    nohup ./gradlew ":${module}:bootRun" --args="--spring.profiles.active=e2e${extra_args}" \
+    nohup ./gradlew ":${module}:bootRun" --args="--spring.profiles.active=e2e${extra_args}$(app_log_args)" \
         > "${LOG_DIR}/${module}.log" 2>&1 &
     echo $! > "${PID_DIR}/${module}.pid"
     echo "${module} 기동 시작(런처 PID $(cat "${PID_DIR}/${module}.pid"), 로그 ${LOG_DIR}/${module}.log)"

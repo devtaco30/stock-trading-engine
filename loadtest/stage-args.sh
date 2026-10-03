@@ -34,3 +34,10 @@ stage_args() {
         printf ' --measure.stages.series-path=%s/series-%s-%s.csv' "$STAGE_RESULTS_ABS" "$cond" "$label"
     fi
 }
+
+# 우리 코드의 로거(com.flab.stocktradingengine 패키지)만 APP_LOG_LEVEL 로 맞춘다. 비어 있으면 아무것도 출력하지 않아 기동 인자가 그대로다.
+# 루트 로거는 건드리지 않는다: 하네스가 프레임워크 INFO 줄(Kafka 컨슈머 그룹, 파티션 재배정)을 로그에서 읽기 때문이다
+app_log_args() {
+    [ -n "${APP_LOG_LEVEL:-}" ] || return 0
+    printf ' --logging.level.com.flab.stocktradingengine=%s' "$APP_LOG_LEVEL"
+}

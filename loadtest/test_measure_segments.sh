@@ -311,6 +311,18 @@ test_saturation_csv_line() {
     assert_eq "이유가 none 이어도 같다" "11 none 5" "$columns"
 }
 
+# 우리 코드의 로거만 WARN으로 올린다(주문당 INFO 로그 제거). 루트를 올리면 하네스가 읽는 프레임워크 INFO 줄이 사라진다
+test_app_log_level() {
+    assert_eq "하네스 기본은 WARN" "WARN" "$APP_LOG_LEVEL"
+    assert_eq "설정하지 않으면 인자가 없다(기존 b0·b1 기동 인자와 같다)" "" "$(APP_LOG_LEVEL="" app_log_args)"
+    assert_eq "WARN이면 우리 패키지 인자 하나가 붙는다" " --logging.level.com.flab.stocktradingengine=WARN" "$(APP_LOG_LEVEL=WARN app_log_args)"
+    assert_not_contains "루트 로거는 건드리지 않는다" "$(APP_LOG_LEVEL=WARN app_log_args)" "logging.level.root"
+    assert_contains "v1 기동 스크립트가 인자를 붙인다" "$(cat loadtest/run-e2e-v1.sh)" 'app_log_args'
+    assert_contains "v2 기동 스크립트가 인자를 붙인다" "$(cat loadtest/run-e2e-v2.sh)" 'app_log_args'
+    assert_not_contains "기동 스크립트는 선언 해시 대상이 아니다" "$PROTOCOL_FILES" "run-e2e"
+    assert_not_contains "stage-args.sh도 해시 대상이 아니다" "$PROTOCOL_FILES" "stage-args"
+}
+
 # k6 가상 사용자(VU) 수: 필요한 동시 요청 수는 도착률 x 응답 시간(Little의 법칙)이다. 기본 maxVUs 300은 응답 5ms 가정이라 4,000건/초에서 모자랐다
 test_k6_vus() {
     assert_eq "미리 만들어 둘 VU 기본값" "500" "$K6_PRE_ALLOCATED_VUS"
@@ -375,6 +387,7 @@ test_ladder() {
 }
 
 test_k6_vus
+test_app_log_level
 test_record_only_steps
 test_saturation_csv_line
 test_ladder

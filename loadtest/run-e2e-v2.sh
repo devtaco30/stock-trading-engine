@@ -49,7 +49,7 @@ fi
 # 태스크 타깃(:module:bootRun).
 start_app() {
     local label="$1" extra_args="$2" module="$3"
-    nohup ./gradlew ":${module}:bootRun" --args="--spring.profiles.active=udp,e2e${extra_args}" \
+    nohup ./gradlew ":${module}:bootRun" --args="--spring.profiles.active=udp,e2e${extra_args}$(app_log_args)" \
         > "${LOG_DIR}/${label}.log" 2>&1 &
     echo $! > "${PID_DIR}/${label}.pid"
     echo "${label} 기동 시작(런처 PID $(cat "${PID_DIR}/${label}.pid"), 로그 ${LOG_DIR}/${label}.log)"

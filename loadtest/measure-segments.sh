@@ -55,6 +55,10 @@ SEGMENT_SETS="${SEGMENT_SETS:-}"
 
 # k6 가상 사용자(VU) 수. 필요한 동시 요청 수는 도착률 x 응답 시간(Little의 법칙)이다. replay-e2e.js 의 기본 maxVUs 300 은 응답 5ms 를 가정한
 # 값이라(필요 약 20개), 실측 응답 80~97ms 의 4,000건/초(필요 약 320~400개)에서 모자랐다. 선언 문서 4-5절
+# 우리 코드의 로거만 WARN 으로 맞춘다(주문당 INFO 로그 제거). 기동 스크립트가 app_log_args 로 인자를 붙인다. measure-baseline.sh 는 이 값을 정하지
+# 않아 기존 b0·b1 기동 인자는 그대로다
+export APP_LOG_LEVEL="${APP_LOG_LEVEL:-WARN}"
+
 K6_PRE_ALLOCATED_VUS="${K6_PRE_ALLOCATED_VUS:-500}"
 K6_MAX_VUS="${K6_MAX_VUS:-1500}"
 
