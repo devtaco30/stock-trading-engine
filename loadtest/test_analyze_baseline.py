@@ -554,6 +554,62 @@ class RecordOnlyTest(unittest.TestCase):
         self.assertTrue((self.root / "v2" / "rounds-v2.original.csv").exists())
 
 
+class RejudgeEnvironmentTest(unittest.TestCase):
+    """rejudge 는 하네스가 judge 를 부를 때의 환경(E2 끔, 회차별 기대 건수)을 그대로 따라야 한다."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        busy_k6 = healthy_cpu()
+        for row in busy_k6:
+            row[1] = 90.0      # k6 CPU 가 높다 → E2 가 켜져 있으면 연속 샘플로 걸린다
+        fixture = Fixture(self.root, "v1")
+        sizes = {"r01": 3000, "r02": 6000, "r03": 8000}
+        for round_id, size in sizes.items():
+            fixture.add_round(round_id, hist_count=size, db_delta=size, cpu=[list(r) for r in busy_k6])
+        self.dir = fixture.dir
+        header = ["round", "k6_start", "k6_end", "k6_exit", "checks_fail", "http_fail", "dropped", "hist_count", "db_delta", "flags", "valid"]
+        with open(self.dir / "rounds-v1.csv", "w", newline="") as handle:
+            writer = csv.writer(handle)
+            writer.writerow(header)
+            for round_id, size in sizes.items():
+                writer.writerow([round_id, K6_START, K6_END, 0, 0, 0, 0, size, size, "COUNT E2", 0])
+        with open(self.dir / "rates-v1.csv", "w", newline="") as handle:
+            writer = csv.writer(handle)
+            writer.writerow(["round", "rate", "n"])
+            writer.writerows([["r01", 192, 3000], ["r02", 300, 6000], ["r03", 400, 8000]])
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def rows(self):
+        with open(self.dir / "rounds-v1.csv", newline="") as handle:
+            return {row["round"]: row for row in csv.DictReader(handle)}
+
+    def test_회차별_건수는_rates_csv의_n을_기대_건수로_쓴다(self):
+        ab.rejudge_rounds(self.dir, "v1", e2_off=True)
+        rows = self.rows()
+        self.assertEqual(("1", ""), (rows["r02"]["valid"], rows["r02"]["flags"]))
+        self.assertEqual(("1", ""), (rows["r03"]["valid"], rows["r03"]["flags"]))
+
+    def test_E2를_끄지_않으면_k6_CPU로_걸린다(self):
+        with mock.patch.dict(os.environ, {"ANALYZE_E2": "1"}):
+            ab.rejudge_rounds(self.dir, "v1", e2_off=False)
+        self.assertIn("E2", self.rows()["r02"]["flags"])
+
+    def test_입력은_원본_csv에서_읽어_두_번째_재계산이_첫_결과에_기대지_않는다(self):
+        ab.rejudge_rounds(self.dir, "v1", e2_off=False)     # 잘못된 환경으로 한 번 돌렸다고 하자
+        ab.rejudge_rounds(self.dir, "v1", e2_off=True)
+        self.assertEqual("1", self.rows()["r02"]["valid"])
+
+    def test_rates_csv가_없으면_expected_count_인자를_쓴다(self):
+        (self.dir / "rates-v1.csv").unlink()
+        ab.rejudge_rounds(self.dir, "v1", e2_off=True, expected_count=6000)
+        rows = self.rows()
+        self.assertEqual("1", rows["r02"]["valid"])
+        self.assertIn("COUNT", rows["r03"]["flags"])
+
+
 class SummaryAndReportTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()

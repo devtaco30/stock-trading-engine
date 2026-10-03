@@ -12,7 +12,7 @@
 
 사용:
   analyze-baseline.py report <결과 디렉터리> [--out analysis.md]
-  analyze-baseline.py rejudge --dir <cond 디렉터리> --cond v2 [--record-only "E1 E5"]   rounds csv 를 현재 규칙으로 다시 만든다(원본은 .original.csv 로 보관)
+  analyze-baseline.py rejudge --dir <cond 디렉터리> --cond v2 [--record-only "E1 E5"] [--no-e2] [--expected-count N]   rounds csv 를 현재 규칙으로 다시 만든다(원본은 .original.csv 로 보관)
   analyze-baseline.py judge --dir <cond 디렉터리> --cond v1 --round r05 --k6-start N --k6-end N --k6-exit N
                             [--db-delta N] [--e6] [--e7]
   analyze-baseline.py compare [--out cmp.md] 라벨=결과디렉터리[:조건] ...   (조건 기본 v1) 여러 세트를 한 표에 나란히
@@ -21,6 +21,7 @@
                                  점검 8: 입력 앞 N건의 계좌별 필요량 x 회차 수가 시드 잔고·보유 안에 들어오는지
 """
 import argparse
+import contextlib
 import csv
 import json
 import os
@@ -362,37 +363,50 @@ def judge_row(cond_dir, cond, round_id, k6_start, k6_end, k6_exit, db_delta, e6=
     }
 
 
-def rejudge_rounds(cond_dir, cond, record_only=None):
-    """끝난 결과 폴더의 rounds csv 를 현재 판정 규칙으로 다시 만든다.
-    원래 csv 는 rounds-<cond>.original.csv 로 한 번만 보관하고(이미 있으면 덮어쓰지 않는다), 측정 파일(latency, k6, cpu, stages)은 읽기만 한다.
-    E6(재배정)과 E7(프로세스 사망)은 측정 중에 정해진 입력이라 원래 csv 의 표시를 그대로 이어받는다."""
-    cond_dir = Path(cond_dir)
-    previous_env = os.environ.get("ANALYZE_RECORD_ONLY")
-    if record_only is not None:
-        os.environ["ANALYZE_RECORD_ONLY"] = record_only
+@contextlib.contextmanager
+def temporary_env(values):
+    """None 이 아닌 값만 환경 변수로 잠시 넣고 끝나면 되돌린다."""
+    saved = {key: os.environ.get(key) for key in values}
     try:
-        return _rejudge_rounds(cond_dir, cond)
+        for key, value in values.items():
+            if value is not None:
+                os.environ[key] = value
+        yield
     finally:
-        if record_only is not None:
-            if previous_env is None:
-                os.environ.pop("ANALYZE_RECORD_ONLY", None)
+        for key, old in saved.items():
+            if old is None:
+                os.environ.pop(key, None)
             else:
-                os.environ["ANALYZE_RECORD_ONLY"] = previous_env
+                os.environ[key] = old
 
 
-def _rejudge_rounds(cond_dir, cond):
+def rejudge_rounds(cond_dir, cond, record_only=None, expected_count=None, e2_off=False):
+    """끝난 결과 폴더의 rounds csv 를 현재 판정 규칙으로 다시 만든다.
+    입력은 rounds-<cond>.original.csv 가 있으면 그것이고(없으면 현재 csv 를 그 이름으로 한 번 보관한다), 측정 파일(latency, k6, cpu, stages)은 읽기만 한다.
+    E6(재배정)과 E7(프로세스 사망)은 측정 중에 정해진 입력이라 원래 csv 의 표시를 그대로 이어받는다.
+    하네스가 judge 를 부를 때의 환경을 따른다: e2_off 는 ANALYZE_E2=0, 회차별 기대 건수는 rates-<cond>.csv 의 n(없으면 expected_count),
+    record_only 는 ANALYZE_RECORD_ONLY."""
+    cond_dir = Path(cond_dir)
     path = cond_dir / f"rounds-{cond}.csv"
     original = cond_dir / f"rounds-{cond}.original.csv"
-    with open(path, newline="", encoding="utf-8") as handle:
-        old_rows = list(csv.DictReader(handle))
     if not original.exists():
         original.write_text(path.read_text(encoding="utf-8"), encoding="utf-8")
+    with open(original, newline="", encoding="utf-8") as handle:
+        old_rows = list(csv.DictReader(handle))
+    rates_path = cond_dir / f"rates-{cond}.csv"
+    round_counts = {}
+    if rates_path.exists():
+        with open(rates_path, newline="", encoding="utf-8") as handle:
+            round_counts = {row["round"]: row["n"] for row in csv.DictReader(handle)}
     new_rows = []
     for row in old_rows:
         marks = (row.get("flags") or "").split()
-        new_rows.append(judge_row(cond_dir, cond, row["round"], to_int(row.get("k6_start")) or 0,
-                                  to_int(row.get("k6_end")) or 0, to_int(row.get("k6_exit")) or 0,
-                                  to_int(row.get("db_delta")), e6="E6" in marks, e7="E7" in marks))
+        count = round_counts.get(row["round"], None if expected_count is None else str(expected_count))
+        env = {"ANALYZE_RECORD_ONLY": record_only, "ANALYZE_EXPECTED_COUNT": count, "ANALYZE_E2": "0" if e2_off else None}
+        with temporary_env(env):
+            new_rows.append(judge_row(cond_dir, cond, row["round"], to_int(row.get("k6_start")) or 0,
+                                      to_int(row.get("k6_end")) or 0, to_int(row.get("k6_exit")) or 0,
+                                      to_int(row.get("db_delta")), e6="E6" in marks, e7="E7" in marks))
     with open(path, "w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=ROUNDS_HEADER)
         writer.writeheader()
@@ -787,6 +801,8 @@ def main(argv):
     rejudge = sub.add_parser("rejudge")
     rejudge.add_argument("--dir", required=True)
     rejudge.add_argument("--cond", required=True, choices=["v1", "v2"])
+    rejudge.add_argument("--no-e2", action="store_true", help="ANALYZE_E2=0 으로 판정한다(묶음 C 세트는 E2 를 기록만 한다)")
+    rejudge.add_argument("--expected-count", type=int, help="회차 기대 건수. rates-<cond>.csv 가 있으면 회차별 n 이 우선한다")
     rejudge.add_argument("--record-only", help="제외 사유 대신 표시만 남길 코드(공백으로 이음, E1 E5만 가능). 계단·4,000건/초 세트용")
 
     compare = sub.add_parser("compare")
@@ -818,7 +834,7 @@ def main(argv):
         return 0
 
     if args.command == "rejudge":
-        rows = rejudge_rounds(args.dir, args.cond, record_only=args.record_only)
+        rows = rejudge_rounds(args.dir, args.cond, record_only=args.record_only, expected_count=args.expected_count, e2_off=args.no_e2)
         for row in rows:
             print(f"{row['round']} valid={row['valid']} flags={row['flags'] or '-'}")
         return 0
