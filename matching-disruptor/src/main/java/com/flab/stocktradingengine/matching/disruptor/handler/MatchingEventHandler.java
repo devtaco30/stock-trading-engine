@@ -2,8 +2,10 @@ package com.flab.stocktradingengine.matching.disruptor.handler;
 
 import java.lang.System.Logger;
 import java.lang.System.Logger.Level;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import com.lmax.disruptor.EventHandler;
@@ -81,6 +83,9 @@ public class MatchingEventHandler implements EventHandler<OrderEvent> {
     // 스냅샷 쓰기 스레드가 takeSnapshot() 호출 시점에 이 맵을 읽어가므로(다른 스레드) 동시성 맵.
     private final Map<Integer, Long> lastAppliedOrderIntakePositions = new ConcurrentHashMap<>();
 
+    // 이 배치에서 건드린 종목. 배치의 마지막 이벤트에서 종목마다 한 번 listener 에 호가창 변경을 알리고 비운다 — 이 스레드만 접근한다
+    private final Set<String> touchedInBatch = new HashSet<>();
+
     public MatchingEventHandler(Map<String, OrderBook> books, MatchListener listener) {
         this(books, listener, NO_OP_SINK, false);
     }
@@ -115,6 +120,7 @@ public class MatchingEventHandler implements EventHandler<OrderEvent> {
             stages.recordArrival(event, businessStartedAtNanos);
         }
         lastJournaledPosition = event.getJournaledPosition();
+        String stockCode = event.getStockCode();   // 아래 finally 에서 슬롯을 비우기 전에 읽어 둔다
         try {
             if (event.getType() == EventType.PLACE) {
                 handlePlace(event);
@@ -130,10 +136,32 @@ public class MatchingEventHandler implements EventHandler<OrderEvent> {
             // 슬롯 재사용 대비: 이 핸들러가 마지막 소비자이므로 처리 후 비운다.
             event.clear();
         }
+        if (stockCode != null) {
+            touchedInBatch.add(stockCode);
+        }
+        if (endOfBatch) {
+            notifyBooksChanged();
+        }
         appliedSeq++;
         if (snapshotTriggerEnabled && appliedSeq % SNAPSHOT_INTERVAL_JOURNAL_ENTRIES == 0) {
             takeSnapshot();
         }
+    }
+
+    /** 배치 끝에서 건드린 종목마다 한 번 알린다. 호가창이 없는 종목은 건너뛰고, listener 예외는 매칭을 멈추지 않게 삼킨다. */
+    private void notifyBooksChanged() {
+        for (String touched : touchedInBatch) {
+            OrderBook book = books.get(touched);
+            if (book == null) {
+                continue;
+            }
+            try {
+                listener.onBookChanged(touched, book);
+            } catch (RuntimeException e) {
+                log.log(Level.WARNING, "[매칭] 호가창 변경 알림 실패(매칭은 계속함): 종목=" + touched + " 원인=" + e);
+            }
+        }
+        touchedInBatch.clear();
     }
 
     /** books를 직렬화해 쓰기 큐에 넣는다(I6 U1). 직렬화(메모리 복사)까지만 이 스레드가 한다. */

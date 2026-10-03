@@ -1,6 +1,7 @@
 package com.flab.stocktradingengine.matching.disruptor.io;
 
 import com.flab.stocktradingengine.trading.matching.FillResult;
+import com.flab.stocktradingengine.trading.matching.OrderBook;
 
 /**
  * 체결 결과를 매칭 코어 밖으로 내보내는 출구.
@@ -26,5 +27,13 @@ public interface MatchListener {
      */
     default void onFill(String stockCode, FillResult fill, long emittedAtNanos, long aggressorOriginNanos) {
         onFill(stockCode, fill);
+    }
+
+    /**
+     * 이벤트를 처리한 뒤 이 종목의 호가창이 바뀌었을 수 있음을 알린다. 매칭 핸들러가 배치의 마지막 이벤트에서 그 배치가 건드린 종목마다
+     * 한 번씩 부른다(한가해서 배치 크기가 1이면 이벤트마다). 호가창은 매칭 스레드만 읽고 바꾸므로 구현은 이 호출 안에서 필요한 값을
+     * 복사해야 하고, I/O를 하면 안 된다. 기본 구현은 아무것도 하지 않는다.
+     */
+    default void onBookChanged(String stockCode, OrderBook book) {
     }
 }
