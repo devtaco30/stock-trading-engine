@@ -99,6 +99,8 @@ class SetData:
     stage_rounds: dict = field(default_factory=dict)  # round -> {단계: 스냅샷}
     processes_seen: dict = field(default_factory=dict)  # round -> {프로세스}
     latency: dict = field(default_factory=dict)       # round -> {"p50": µs, "p99": µs}
+    resources: dict = field(default_factory=dict)     # round -> 측정 구간(k6_start~k6_end) 안의 자원 샘플(cpu-<cond>-rNN.csv 행)
+    has_cpu_files: bool = False
     has_saturation_file: bool = False
 
     def measured_rounds(self):
@@ -124,11 +126,32 @@ def read_csv_rows(path):
         return list(csv.DictReader(handle))
 
 
+def to_int(value):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def to_float(value):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def load_set(set_dir, meta):
     data = SetData(meta=meta)
     cond_dir = Path(set_dir) / meta.cond
     for row in read_csv_rows(cond_dir / f"rounds-{meta.cond}.csv"):
         data.rounds[row["round"]] = {"valid": row.get("valid") == "1", "flags": row.get("flags", "")}
+        cpu_path = cond_dir / f"cpu-{meta.cond}-{row['round']}.csv"
+        if cpu_path.exists():
+            data.has_cpu_files = True
+            start, end = to_int(row.get("k6_start")), to_int(row.get("k6_end"))
+            data.resources[row["round"]] = [sample for sample in read_csv_rows(cpu_path)
+                                            if start is not None and end is not None
+                                            and to_int(sample.get("ts")) is not None and start <= to_int(sample["ts"]) <= end]
     sat_path = cond_dir / f"saturation-{meta.cond}.csv"
     data.has_saturation_file = sat_path.exists()
     for row in read_csv_rows(sat_path):
@@ -536,6 +559,93 @@ def impact_section(sets):
     return "\n".join(lines)
 
 
+# ---------------------------------------------------------------- 자원 사용
+
+def resource_columns(data):
+    """cpu csv 에 있는 열에서 (표시 이름, CPU 열, 메모리 열) 목록. 메모리 열이 없는 옛 csv 는 메모리 열이 None."""
+    names = set()
+    for samples in data.resources.values():
+        for sample in samples[:1]:
+            names.update(sample.keys())
+    entries = []
+    for column in sorted(c for c in names if c.startswith("jvm_")):
+        label = column[len("jvm_"):]
+        entries.append((label, column, f"rss_{label}" if f"rss_{label}" in names else None))
+    if "pg_cpu" in names:
+        entries.append(("postgres(컨테이너)", "pg_cpu", "pg_mem" if "pg_mem" in names else None))
+    if "kafka_cpu" in names:
+        entries.append(("kafka(컨테이너)", "kafka_cpu", "kafka_mem" if "kafka_mem" in names else None))
+    return entries
+
+
+def resource_stats(data, value_of):
+    """집계 회차의 샘플에 value_of(sample)을 적용한다(None 은 건너뜀). (전체 평균, 회차 평균 최소, 회차 평균 최대, 최댓값)."""
+    round_means, maximum = [], None
+    for round_id in data.included_rounds():
+        values = [v for v in (value_of(sample) for sample in data.resources.get(round_id, [])) if v is not None]
+        if not values:
+            continue
+        round_means.append(statistics.mean(values))
+        maximum = max(values) if maximum is None else max(maximum, max(values))
+    if not round_means:
+        return None
+    return statistics.mean(round_means), min(round_means), max(round_means), maximum
+
+
+def resource_section(sets):
+    lines = ["## 자원 사용", "",
+             "집계 회차(워밍업·무효·포화 회차 제외)의 측정 구간(k6 시작~종료) 안 샘플로 구한다. CPU는 sample-env.sh가 기록한 값(1코어 = 100%)을 100으로 "
+             "나눈 코어 수이고, 평균은 회차 평균의 평균이다. 메모리는 JVM은 RSS(실제로 올라간 물리 메모리), 컨테이너는 docker stats의 사용량이며 힙 크기가 아니다. "
+             "합계는 모든 열에 값이 있는 샘플에서만 낸다.", ""]
+    any_table = False
+    for data in sets:
+        lines.append(f"### {data.meta.name}")
+        lines.append("")
+        if not data.has_cpu_files:
+            lines += ["CPU 기록 파일이 없다.", ""]
+            continue
+        entries = resource_columns(data)
+        if not entries:
+            lines += ["CPU 열을 읽지 못했다.", ""]
+            continue
+        rows = []
+
+        def cpu_of(column):
+            return lambda sample: None if to_float(sample.get(column)) is None else to_float(sample[column]) / 100.0
+
+        def mem_of(column):
+            return lambda sample: to_float(sample.get(column)) if column else None
+
+        def row_for(label, cpu_fn, mem_fn):
+            cpu, mem = resource_stats(data, cpu_fn), resource_stats(data, mem_fn)
+            cpu_cells = ["—", "—", "—"] if cpu is None else [f"{cpu[0]:.2f}", f"{cpu[1]:.2f}~{cpu[2]:.2f}", f"{cpu[3]:.2f}"]
+            mem_cells = ["—", "—"] if mem is None else [f"{mem[0]:.1f}", f"{mem[3]:.1f}"]
+            return [label] + cpu_cells + mem_cells
+
+        for label, cpu_column, mem_column in entries:
+            rows.append(row_for(label, cpu_of(cpu_column), mem_of(mem_column)))
+
+        def total(columns_fn, selected):
+            def inner(sample):
+                values = [to_float(sample.get(column)) for column in selected]
+                return None if not selected or any(v is None for v in values) else columns_fn(values)
+            return inner
+
+        jvm = [e for e in entries if e[1].startswith("jvm_")]
+        everything = entries
+        for label, selected in (("앱 JVM 합계", jvm), ("앱 JVM + Postgres + Kafka 합계", everything)):
+            cpu_fn = total(lambda v: sum(v) / 100.0, [e[1] for e in selected])
+            mem_columns = [e[2] for e in selected]
+            mem_fn = total(sum, mem_columns) if all(mem_columns) else (lambda sample: None)
+            rows.append(row_for(label, cpu_fn, mem_fn))
+        lines.append(table(["프로세스", "CPU 평균(코어)", "CPU 회차 평균 범위", "CPU 최댓값(코어)", "메모리 평균(MB)", "메모리 최댓값(MB)"], rows))
+        lines.append("")
+        any_table = True
+    if not any_table and not sets:
+        lines.append("세트가 없다.")
+    return "\n".join(lines).rstrip()
+
+
 def correspondence_section():
     lines = ["## 두 구현의 단계 대응", "", "설계서 2-3a절을 옮긴 것이다. 위 표와 다르면 설계서가 기준이다.", "",
              table(["단계", "같은 정의 / 다른 정의", "내용"], CORRESPONDENCE), "",
@@ -582,7 +692,7 @@ def build_segments_report(run_dir):
     lines += ["", "## 세트별 단계 표", ""]
     for data in sets:
         lines += [set_section(data), ""]
-    for section in (residual_section(sets), ladder_section(sets), impact_section(sets), correspondence_section(),
+    for section in (residual_section(sets), resource_section(sets), ladder_section(sets), impact_section(sets), correspondence_section(),
                     warning_section(sets)):
         lines += [section, ""]
     return "\n".join(lines).rstrip() + "\n"

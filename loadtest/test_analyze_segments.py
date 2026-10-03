@@ -63,13 +63,19 @@ class SetFixture:
         self.saturation = []
 
     def add_round(self, round_id, valid=1, flags="", reasons="none", stages=None, skip_processes=(),
-                  latency=None, hist_count=10000):
+                  latency=None, hist_count=10000, cpu_rows=None):
         self.rounds.append([round_id, 1000, 1052, 0, 0, 0, 0, hist_count, "", flags, valid])
         self.saturation.append([round_id, reasons, 0, 0, hist_count, 10000, 0, "NA", "NA", "NA", 52])
         for process, snapshots in (stages or {}).items():
             if process in skip_processes:
                 continue
             (self.dir / f"stages-{self.cond}-{process}-{round_id}.json").write_text(json.dumps(snapshots))
+        if cpu_rows is not None:
+            header = list(cpu_rows[0].keys())
+            with open(self.dir / f"cpu-{self.cond}-{round_id}.csv", "w", newline="") as handle:
+                writer = csv.DictWriter(handle, fieldnames=header)
+                writer.writeheader()
+                writer.writerows(cpu_rows)
         if latency is not None:
             p50, p99 = latency
             (self.dir / f"latency-{self.cond}-{round_id}.json").write_text(json.dumps(
@@ -103,6 +109,56 @@ def v2_set(rounds=5, f_error=0.0, **kwargs):  # kwargs: counts, small, g_mean
         for number in range(2, rounds + 2):
             fixture.add_round(f"r{number:02d}", stages=v2_stage_files(f_error, **kwargs), latency=(2000, 8000))
     return build
+
+
+def resource_rows(with_memory=True):
+    """창(1000~1052) 안 샘플 두 개와 창 밖 샘플 하나. 첫 샘플 빈 값은 제외돼야 한다."""
+    def row(ts, api, worker, pg, kafka, rss_api, rss_worker, pg_mem, kafka_mem):
+        base = {"ts": ts, "jvm_api": api, "jvm_account-worker": worker, "pg_cpu": pg, "kafka_cpu": kafka}
+        if with_memory:
+            base.update({"rss_api": rss_api, "rss_account-worker": rss_worker, "pg_mem": pg_mem, "kafka_mem": kafka_mem})
+        return base
+    return [row(999, 900, 900, 90, 90, 9000, 9000, 900, 900),
+            row(1000, "", "", 10, 20, "", "", 30, 400),
+            row(1010, 50, 100, 10, 20, 100, 200, 30, 400),
+            row(1020, 70, 120, 10, 40, 120, 220, 30, 400)]
+
+
+class ResourceSectionTest(unittest.TestCase):
+    def run_text(self, with_memory=True, with_cpu=True):
+        def build(fixture):
+            fixture.add_round("r01", valid=0, flags="WARMUP", stages=v2_stage_files(0.0), latency=(2000, 8000))
+            for number in range(2, 5):
+                fixture.add_round(f"r{number:02d}", stages=v2_stage_files(0.0), latency=(2000, 8000),
+                                  cpu_rows=resource_rows(with_memory) if with_cpu else None)
+        with tempfile.TemporaryDirectory() as tmp:
+            return asg.build_segments_report(make_run(tmp, [("01-S1-v2-st1", "v2", build)]))
+
+    def test_cpu_in_cores_over_window_samples_only(self):
+        text = self.run_text()
+        self.assertIn("## 자원 사용", text)
+        # 창 밖 샘플(ts 999)과 빈 값 샘플은 빠지고 50/70 → 평균 0.60코어, 최대 0.70코어
+        self.assertIn("| api | 0.60 | 0.60~0.60 | 0.70 | 110.0 | 120.0 |", text)
+        self.assertIn("| account-worker | 1.10 | 1.10~1.10 | 1.20 | 210.0 | 220.0 |", text)
+
+    def test_container_rows_and_sums(self):
+        text = self.run_text()
+        # kafka CPU는 창 안 세 샘플(20, 20, 40)의 평균 26.7% = 0.27코어, 최대 0.40코어
+        self.assertIn("| postgres(컨테이너) | 0.10 | 0.10~0.10 | 0.10 | 30.0 | 30.0 |", text)
+        self.assertIn("| kafka(컨테이너) | 0.27 | 0.27~0.27 | 0.40 | 400.0 | 400.0 |", text)
+        # JVM 합계: (150+190)/2=1.70 평균, 최대 1.90. RSS 합계: (300+340)/2=320.0 평균, 최대 340.0
+        self.assertIn("| 앱 JVM 합계 | 1.70 | 1.70~1.70 | 1.90 | 320.0 | 340.0 |", text)
+        # 전체 합계: 첫 샘플 1.80, 둘째 2.40 → 평균 2.10, 최대 2.40. 메모리: 300+30+400=730, 340+30+400=770 → 평균 750.0, 최대 770.0
+        self.assertIn("| 앱 JVM + Postgres + Kafka 합계 | 2.10 | 2.10~2.10 | 2.40 | 750.0 | 770.0 |", text)
+
+    def test_old_csv_without_memory_columns_shows_dash(self):
+        text = self.run_text(with_memory=False)
+        self.assertIn("| api | 0.60 | 0.60~0.60 | 0.70 | — | — |", text)
+
+    def test_set_without_cpu_files_is_noted(self):
+        text = self.run_text(with_cpu=False)
+        self.assertIn("## 자원 사용", text)
+        self.assertIn("CPU 기록 파일이 없다", text)
 
 
 class SetNameTest(unittest.TestCase):

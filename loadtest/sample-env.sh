@@ -12,6 +12,8 @@ set -uo pipefail
 #   - idle, user, sys: `top -l 2 -s 1` 의 두 번째 샘플 "CPU usage" 줄
 #   - top5: 두 번째 샘플의 상위 5개 프로세스를 `이름:CPU%|이름:CPU%|...` 한 문자열로 합친 것
 #   - batt: AC 또는 Battery, therm_limit: `pmset -g therm` 의 CPU_Speed_Limit (없으면 NA)
+#   - rss_<이름>: JVM 프로세스의 RSS(실제로 올라간 물리 메모리) MB. `ps -o rss=` 합계. 힙 크기가 아니다
+#   - pg_mem, kafka_mem: 컨테이너 메모리 사용량 MB (`docker stats` 의 MemUsage). 기존 열 뒤에 붙여 앞 열의 위치가 바뀌지 않는다
 #
 # 환경 변수 (이 스크립트에서 새로 정한 이름과 기본값)
 #   SAMPLER_COND        v1 | v2. JVM 열 목록을 정한다 (기본 v1)
@@ -104,7 +106,34 @@ read_top() {
 }
 
 read_docker_cpu() {
-    docker stats --no-stream --format '{{.Name}},{{.CPUPerc}}' "$PG_CONTAINER" "$KAFKA_CONTAINER" 2>/dev/null | tr -d '%'
+    docker stats --no-stream --format '{{.Name}},{{.CPUPerc}},{{.MemUsage}}' "$PG_CONTAINER" "$KAFKA_CONTAINER" 2>/dev/null | tr -d '%'
+}
+
+# "123.4MiB" 같은 docker 크기 표기를 MB(소수 첫째 자리)로 바꾼다. 빈 값은 빈 값
+to_mb() {
+    echo "$1" | awk 'NF {
+        value = $1 + 0
+        unit = $1; sub(/^[0-9.]+/, "", unit)
+        if (unit == "GiB" || unit == "GB") value = value * 1024
+        else if (unit == "KiB" || unit == "kB" || unit == "KB") value = value / 1024
+        else if (unit == "B") value = value / 1048576
+        printf "%.1f\n", value
+    }'
+}
+
+# docker stats 출력에서 컨테이너 메모리 사용량(MB). "이름,CPU,사용량 / 한도" 형식의 세 번째 칸 앞부분을 쓴다
+container_mem() {
+    local raw
+    raw="$(echo "$1" | awk -F, -v name="$2" '$1 == name { split($3, parts, " "); print parts[1] }')"
+    to_mb "$raw"
+}
+
+# 프로세스 id 들의 RSS 합계(MB). id 가 없으면 빈 값
+rss_mb() {
+    [ "$#" -gt 0 ] || return 0
+    local kb
+    kb="$(ps -o rss= -p "$(echo "$@" | tr ' ' ',')" 2>/dev/null | awk '{ s += $1 } END { if (NR > 0) print s }')"
+    [ -n "$kb" ] && awk -v kb="$kb" 'BEGIN { printf "%.1f\n", kb / 1024 }'
 }
 
 container_cpu() {
@@ -127,11 +156,15 @@ write_header() {
     for entry in $SAMPLER_JVMS; do
         header="${header},jvm_${entry%%=*}"
     done
-    echo "${header},pg_cpu,kafka_cpu,idle,user,sys,top5,batt,therm_limit" > "$OUT_FILE"
+    local memory_header=""
+    for entry in $SAMPLER_JVMS; do
+        memory_header="${memory_header},rss_${entry%%=*}"
+    done
+    echo "${header},pg_cpu,kafka_cpu,idle,user,sys,top5,batt,therm_limit${memory_header},pg_mem,kafka_mem" > "$OUT_FILE"
 }
 
 sample_once() {
-    local ts k6_pids k6_cpu line entry label pattern jvm_cpus="" docker_out pg_cpu kafka_cpu top_out
+    local ts k6_pids k6_cpu line entry label pattern jvm_cpus="" jvm_rss="" docker_out pg_cpu kafka_cpu pg_mem kafka_mem top_out
     ts="$(date +%s)"
 
     k6_pids="$(pgrep -x k6 | head -1)"
@@ -143,25 +176,32 @@ sample_once() {
         pattern="${entry#*=}"
         # shellcheck disable=SC2046
         jvm_cpus="${jvm_cpus},$(cpu_pct "jvm_${label}" $(pgrep -f "$pattern"))"
+        # shellcheck disable=SC2046
+        jvm_rss="${jvm_rss},$(rss_mb $(pgrep -f "$pattern"))"
     done
 
     docker_out="$(read_docker_cpu)"
     pg_cpu="$(container_cpu "$docker_out" "$PG_CONTAINER")"
     kafka_cpu="$(container_cpu "$docker_out" "$KAFKA_CONTAINER")"
+    pg_mem="$(container_mem "$docker_out" "$PG_CONTAINER")"
+    kafka_mem="$(container_mem "$docker_out" "$KAFKA_CONTAINER")"
 
     top_out="$(read_top)"
-    line="${ts},${k6_cpu}${jvm_cpus},${pg_cpu},${kafka_cpu},${top_out},$(read_batt),$(read_therm)"
+    line="${ts},${k6_cpu}${jvm_cpus},${pg_cpu},${kafka_cpu},${top_out},$(read_batt),$(read_therm)${jvm_rss},${pg_mem},${kafka_mem}"
     echo "$line" >> "$OUT_FILE"
 }
 
-write_header
-count=0
-while true; do
-    sample_once
-    count=$((count + 1))
-    if [ "${SAMPLER_ONCE:-0}" = "1" ] && [ "$count" -ge 2 ]; then
-        break
-    fi
-    sleep "$PAUSE_SEC"
-done
-rm -rf "$STATE_DIR"
+# 테스트가 함수만 불러올 수 있게, SAMPLER_SOURCE_ONLY=1 이면 샘플링 루프를 돌지 않는다
+if [ "${SAMPLER_SOURCE_ONLY:-0}" != "1" ]; then
+    write_header
+    count=0
+    while true; do
+        sample_once
+        count=$((count + 1))
+        if [ "${SAMPLER_ONCE:-0}" = "1" ] && [ "$count" -ge 2 ]; then
+            break
+        fi
+        sleep "$PAUSE_SEC"
+    done
+    rm -rf "$STATE_DIR"
+fi
