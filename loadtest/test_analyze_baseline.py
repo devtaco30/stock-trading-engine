@@ -477,6 +477,83 @@ class RejudgeTest(unittest.TestCase):
         self.assertIn("E3", self.new_rows()["r05"]["flags"].split())
 
 
+class RecordOnlyTest(unittest.TestCase):
+    """계단(L)과 4,000건/초(S5X) 단계에서는 E1·E5가 포화의 증상이라 제외 사유가 아니라 기록만 남긴다(ANALYZE_RECORD_ONLY)."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def low_idle_cpu(self):
+        cpu = healthy_cpu()
+        cpu[5][5] = 10.0
+        cpu[6][5] = 12.0
+        return cpu
+
+    def judged_round(self, round_id="r05", **kwargs):
+        self.calls = getattr(self, "calls", 0) + 1
+        root = self.root / f"call{self.calls}"
+        root.mkdir()
+        fixture = Fixture(root, "v2")
+        for number in range(1, 8):
+            current = f"r{number:02d}"
+            fixture.add_round(current, **(kwargs if current == round_id else {}))
+        fixture.write_rounds()
+        self.last_root = root
+        return judged(root, "v2", round_id)
+
+    def test_기본은_E1과_E5가_제외_사유다(self):
+        self.assertEqual(["E1"], self.judged_round(cpu=self.low_idle_cpu()).reasons)
+        self.assertEqual(["E5"], self.judged_round(dropped=5).reasons)
+
+    @mock.patch.dict(os.environ, {"ANALYZE_RECORD_ONLY": "E1 E5"})
+    def test_기록_전용이면_E1_E5가_있어도_유효하고_표시만_남는다(self):
+        idle = self.judged_round(cpu=self.low_idle_cpu())
+        self.assertEqual([], idle.reasons)
+        self.assertTrue(idle.valid)
+        self.assertEqual(["E1"], idle.notes)
+        dropped = self.judged_round(dropped=5)
+        self.assertTrue(dropped.valid)
+        self.assertEqual(["E5"], dropped.notes)
+
+    @mock.patch.dict(os.environ, {"ANALYZE_RECORD_ONLY": "E1 E5"})
+    def test_기록_전용이어도_워밍업_건수_불일치_열_제한은_제외한다(self):
+        self.assertEqual(["WARMUP"], self.judged_round("r01", dropped=5).reasons)
+        self.assertEqual(["COUNT"], self.judged_round(hist_count=9000, dropped=5).reasons)
+        thermal = healthy_cpu()
+        thermal[6][10] = "90"
+        self.assertEqual(["E3"], self.judged_round(cpu=thermal, dropped=5).reasons)
+
+    @mock.patch.dict(os.environ, {"ANALYZE_RECORD_ONLY": "E1 E5"})
+    def test_judge_행의_flags_열에는_기록_전용_표시도_남는다(self):
+        self.judged_round(dropped=5)
+        row = ab.judge_row(self.last_root / "v2", "v2", "r05", K6_START, K6_END, 0, None)
+        self.assertEqual("1", row["valid"])
+        self.assertEqual("E5", row["flags"])
+
+    def test_rejudge에_기록_전용을_주면_옛_판정이_바뀐다(self):
+        fixture = Fixture(self.root, "v2")
+        for number in range(1, 5):
+            fixture.add_round(f"r{number:02d}", dropped=5)
+        fixture.write_rounds()
+        path = self.root / "v2" / "rounds-v2.csv"
+        header = ["round", "k6_start", "k6_end", "k6_exit", "checks_fail", "http_fail", "dropped", "hist_count", "db_delta", "flags", "valid"]
+        with open(path, "w", newline="") as handle:
+            writer = csv.writer(handle)
+            writer.writerow(header)
+            for number in range(1, 5):
+                writer.writerow([f"r{number:02d}", K6_START, K6_END, 0, 0, 0, 5, 10000, "", "E5", 0])
+        ab.rejudge_rounds(self.root / "v2", "v2", record_only="E1 E5")
+        with open(path, newline="") as handle:
+            rows = {row["round"]: row for row in csv.DictReader(handle)}
+        self.assertEqual(("1", "E5"), (rows["r03"]["valid"], rows["r03"]["flags"]))
+        self.assertEqual("0", rows["r01"]["valid"])
+        self.assertTrue((self.root / "v2" / "rounds-v2.original.csv").exists())
+
+
 class SummaryAndReportTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()

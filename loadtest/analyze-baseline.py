@@ -12,6 +12,7 @@
 
 사용:
   analyze-baseline.py report <결과 디렉터리> [--out analysis.md]
+  analyze-baseline.py rejudge --dir <cond 디렉터리> --cond v2 [--record-only "E1 E5"]   rounds csv 를 현재 규칙으로 다시 만든다(원본은 .original.csv 로 보관)
   analyze-baseline.py judge --dir <cond 디렉터리> --cond v1 --round r05 --k6-start N --k6-end N --k6-exit N
                             [--db-delta N] [--e6] [--e7]
   analyze-baseline.py compare [--out cmp.md] 라벨=결과디렉터리[:조건] ...   (조건 기본 v1) 여러 세트를 한 표에 나란히
@@ -208,6 +209,14 @@ def parse_top5(text):
     return processes
 
 
+RECORD_ONLY_ALLOWED = ("E1", "E5")   # 기록 전용으로 바꿀 수 있는 사유는 이 둘뿐이다
+
+
+def record_only_codes():
+    """ANALYZE_RECORD_ONLY(공백으로 이은 사유 코드)에 든 코드. 하네스가 계단·4,000건/초 세트에만 준다."""
+    return set(os.environ.get("ANALYZE_RECORD_ONLY", "").split())
+
+
 def judge_reasons(round_, cond):
     """이 회차의 제외 사유를 REASON_ORDER 순서로 돌려준다. 빈 목록이면 유효 회차다."""
     reasons = set()
@@ -242,7 +251,11 @@ def judge_reasons(round_, cond):
     if count_mismatch:
         reasons.add("COUNT")
 
-    return [code for code in REASON_ORDER if code in reasons]
+    codes = [code for code in REASON_ORDER if code in reasons]
+    # 계단(L)과 4,000건/초(S5X) 단계에서는 E1·E5 가 포화의 증상이라 제외하지 않고 표시만 남긴다. 다른 사유는 그대로 제외한다
+    recorded = [code for code in codes if code in RECORD_ONLY_ALLOWED and code in record_only_codes()]
+    round_.notes.extend(recorded)
+    return [code for code in codes if code not in recorded]
 
 
 def is_on_battery(sample):
@@ -349,11 +362,25 @@ def judge_row(cond_dir, cond, round_id, k6_start, k6_end, k6_exit, db_delta, e6=
     }
 
 
-def rejudge_rounds(cond_dir, cond):
+def rejudge_rounds(cond_dir, cond, record_only=None):
     """끝난 결과 폴더의 rounds csv 를 현재 판정 규칙으로 다시 만든다.
     원래 csv 는 rounds-<cond>.original.csv 로 한 번만 보관하고(이미 있으면 덮어쓰지 않는다), 측정 파일(latency, k6, cpu, stages)은 읽기만 한다.
     E6(재배정)과 E7(프로세스 사망)은 측정 중에 정해진 입력이라 원래 csv 의 표시를 그대로 이어받는다."""
     cond_dir = Path(cond_dir)
+    previous_env = os.environ.get("ANALYZE_RECORD_ONLY")
+    if record_only is not None:
+        os.environ["ANALYZE_RECORD_ONLY"] = record_only
+    try:
+        return _rejudge_rounds(cond_dir, cond)
+    finally:
+        if record_only is not None:
+            if previous_env is None:
+                os.environ.pop("ANALYZE_RECORD_ONLY", None)
+            else:
+                os.environ["ANALYZE_RECORD_ONLY"] = previous_env
+
+
+def _rejudge_rounds(cond_dir, cond):
     path = cond_dir / f"rounds-{cond}.csv"
     original = cond_dir / f"rounds-{cond}.original.csv"
     with open(path, newline="", encoding="utf-8") as handle:
@@ -760,6 +787,7 @@ def main(argv):
     rejudge = sub.add_parser("rejudge")
     rejudge.add_argument("--dir", required=True)
     rejudge.add_argument("--cond", required=True, choices=["v1", "v2"])
+    rejudge.add_argument("--record-only", help="제외 사유 대신 표시만 남길 코드(공백으로 이음, E1 E5만 가능). 계단·4,000건/초 세트용")
 
     compare = sub.add_parser("compare")
     compare.add_argument("--out")
@@ -790,7 +818,7 @@ def main(argv):
         return 0
 
     if args.command == "rejudge":
-        rows = rejudge_rounds(args.dir, args.cond)
+        rows = rejudge_rounds(args.dir, args.cond, record_only=args.record_only)
         for row in rows:
             print(f"{row['round']} valid={row['valid']} flags={row['flags'] or '-'}")
         return 0

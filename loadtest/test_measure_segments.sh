@@ -198,6 +198,9 @@ test_set_token() {
     assert_contains "선언 문서의 E3 설명이 CPU 속도 제한만 남긴다" "$(cat loadtest/measure-protocol-c.md)" "E3(CPU 속도 제한"
     local protocol_text
     protocol_text="$(cat loadtest/measure-protocol-c.md)"
+    assert_contains "선언 문서가 L·S5X의 E1·E5 기록 전용을 밝힌다" "$protocol_text" "계단(L)과 4,000건/초(S5X) 단계에서는 E1과 E5를 기록 전용으로 둔다(제외 사유로 쓰지 않는다)"
+    assert_contains "선언 문서가 변경 시점과 이유를 숨기지 않는다" "$protocol_text" "이 변경은 L·S5X 결과를 본 뒤에 정했다. 이유: 포화 회차에서 E1·E5는 포화가 일으키는 증상이고 환경 오류를 뜻하지 않는다"
+    assert_contains "선언 문서가 포화 회차 처리를 그대로 둔다" "$protocol_text" "포화 회차는 4-1절대로 표에 싣고 대표값에서 뺀다"
     assert_contains "선언 문서에 포화점 탐색 절이 있다" "$protocol_text" "### 4-4. 포화점 탐색"
     assert_contains "선언 문서의 계단 속도가 코드 기본값과 같다" "$protocol_text" "192(워밍업 회차), 300, 400, 500, 700, 1,000, 1,500, 2,000, 3,000, 4,000건/초"
     assert_contains "선언 문서가 새 임계값을 만들지 않는다고 밝힌다" "$protocol_text" "새 임계값을 만들지 않고"
@@ -288,6 +291,26 @@ test_run_plan() {
     rm -f "$calls_file"
 }
 
+# 계단(L)과 4,000건/초(S5X)에서는 E1·E5 가 포화의 증상이라 기록 전용이다. 다른 단계는 그대로 제외 사유다
+test_record_only_steps() {
+    assert_eq "계단은 E1 E5 기록 전용" "E1 E5" "$(record_only_for_step L)"
+    assert_eq "4,000건/초 재측정은 E1 E5 기록 전용" "E1 E5" "$(record_only_for_step S5X)"
+    assert_eq "S1X 는 그대로" "" "$(record_only_for_step S1X)"
+    assert_eq "S5 는 그대로" "" "$(record_only_for_step S5)"
+    assert_eq "보간 단계도 그대로" "" "$(record_only_for_step I450)"
+}
+
+# saturation csv 는 이유가 둘 이상(쉼표 포함)이어도 열이 밀리지 않아야 한다
+test_saturation_csv_line() {
+    local line columns reasons
+    line="$(saturation_csv_line r02 "k6_dropped,drain" 14384 0 40000 40000 0 NA NA 129 10)"
+    columns="$(python3 -c 'import csv,sys; r=next(csv.reader([sys.argv[1]])); print(len(r), r[1], r[4], r[9])' "$line")"
+    assert_eq "이유가 둘이어도 열이 11개이고 값이 제자리에 있다" "11 k6_dropped,drain 40000 129" "$columns"
+    line="$(saturation_csv_line r03 none 0 0 40000 40000 0 100 120 5 10)"
+    columns="$(python3 -c 'import csv,sys; r=next(csv.reader([sys.argv[1]])); print(len(r), r[1], r[9])' "$line")"
+    assert_eq "이유가 none 이어도 같다" "11 none 5" "$columns"
+}
+
 # 포화점 탐색(계단) 세트 L: 회차마다 속도가 오른다. 첫 회차는 워밍업이고, 포화 신호가 처음 나온 회차에서 멈춘다
 test_ladder() {
     assert_eq "기본 계단 속도" "192 300 400 500 700 1000 1500 2000 3000 4000" "$(ladder_rates)"
@@ -336,6 +359,8 @@ test_ladder() {
     rm -rf "$dir" "$calls"
 }
 
+test_record_only_steps
+test_saturation_csv_line
 test_ladder
 test_step_config
 test_interpolation_rate

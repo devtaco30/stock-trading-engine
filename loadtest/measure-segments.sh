@@ -423,6 +423,17 @@ sum_lags() {
     echo "$total"
 }
 
+# saturation csv 한 줄. 이유에 쉼표가 있을 때(이유가 둘 이상)만 큰따옴표로 감싸 열이 밀리지 않게 한다. 이유가 하나이면 따옴표가 없어
+# awk -F, 로 두 번째 칸이 none 인지 보는 기존 코드가 그대로 동작한다
+saturation_csv_line() {
+    local round="$1" reasons="$2"
+    shift 2
+    case "$reasons" in
+        *,*) reasons="\"${reasons}\"" ;;
+    esac
+    echo "${round},${reasons},$1,$2,$3,$4,$5,$6,$7,$8,$9"
+}
+
 record_saturation() {
     local cond="$1" round="$2" cond_dir="$3" k6_start="$4" k6_end="$5" lag="$6" drain="$7"
     local rounds_file="${cond_dir}/rounds-${cond}.csv" file="${cond_dir}/saturation-${cond}.csv"
@@ -434,8 +445,16 @@ record_saturation() {
     arrival=$(((N + RATE - 1) / RATE))
     reasons="$(saturation_reasons "$dropped" "$failed" "$hist" "$N" "$lag" "$first" "$last" "$drain" "$arrival")"
     [ -f "$file" ] || echo "$SATURATION_HEADER" > "$file"
-    echo "${round},${reasons},${dropped},${failed},${hist},${N},${lag},${first},${last},${drain},${arrival}" >> "$file"
+    saturation_csv_line "$round" "$reasons" "$dropped" "$failed" "$hist" "$N" "$lag" "$first" "$last" "$drain" "$arrival" >> "$file"
     echo "포화 판정 ${round}: ${reasons}"
+}
+
+# 계단(L)과 4,000건/초(S5X)에서는 E1·E5 가 포화의 증상이라 제외 사유가 아니라 기록만 남긴다(선언 문서 4-4절, 4-5절). 다른 단계는 비워 둔다
+record_only_for_step() {
+    case "$1" in
+        L | S5X) echo "E1 E5" ;;
+        *) echo "" ;;
+    esac
 }
 
 # 묶음 C 의 judge 환경: E2(k6 CPU)는 회차를 제외하지 않고 기록만 하고(measure-protocol-c.md 첫 문단), 기대 건수는 세트의 N 이다.
@@ -456,6 +475,7 @@ run_set() {
     INDEX_MODE="$index_mode"
     CONDITIONS="$cond"
     set_analyzer_env "$N"
+    export ANALYZE_RECORD_ONLY="$(record_only_for_step "$step")"
     export MEASURE_STAGES="$stages"
     local set_name set_cond_label
     set_cond_label="$cond"
