@@ -540,7 +540,8 @@ def correspondence_section():
     lines = ["## 두 구현의 단계 대응", "", "설계서 2-3a절을 옮긴 것이다. 위 표와 다르면 설계서가 기준이다.", "",
              table(["단계", "같은 정의 / 다른 정의", "내용"], CORRESPONDENCE), "",
              "- v1에만 있는 단계: b_idem, b_lock, b_sum, b_insert, b_send_call.",
-             "- v2에만 있는 단계: ring_publish, hop_to_journal, hop_to_business, m_ring_publish, m_hop_to_business, fwd 계열, fill_hop 계열.",
+             "- v2에만 있는 단계: ring_publish, hop_to_journal, hop_to_business, m_ring_publish, m_hop_to_business, fill_hop 계열.",
+             "- 한계: 계좌 → 매칭 방향 발신 큐는 따로 측정하지 않고 C 단계에 포함된다.",
              "- 체결 한 건의 기록 규칙은 두 구현이 같다(v2 매수 체결 이벤트, v1 정산 컨슈머가 체결 이벤트 한 건을 처리한 뒤)."]
     return "\n".join(lines)
 

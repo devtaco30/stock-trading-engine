@@ -387,6 +387,17 @@ class TableShapeTest(unittest.TestCase):
         self.assertIn("두 구현의 단계 대응", text)
         self.assertIn("v1에만 있는 단계", text)
 
+    def test_correspondence_has_no_unimplemented_fwd_stage(self):
+        # fwd_queue·fwd_offer(계좌 → 매칭 발신 큐)는 구현하지 않기로 했다. 대응표와 선언 문서에 남아 있으면 안 된다.
+        with tempfile.TemporaryDirectory() as tmp:
+            run = make_run(tmp, [("01-S1-v2-st1", "v2", v2_set())])
+            text = asg.build_segments_report(run)
+        self.assertNotIn("fwd", text)
+        self.assertIn("계좌 → 매칭 방향 발신 큐는 따로 측정하지 않고 C 단계에 포함된다", text)
+        protocol = Path(__file__).with_name("measure-protocol-c.md").read_text(encoding="utf-8")
+        self.assertNotIn("fwd", protocol)
+        self.assertIn("계좌 → 매칭 방향 발신 큐는 따로 측정하지 않고 C 단계에 포함된다", protocol)
+
     def test_warmup_round_is_not_in_stage_values(self):
         def build(fixture):
             fixture.add_round("r01", valid=0, flags="WARMUP", stages={"account-worker": {"F": stage(99999)}})
