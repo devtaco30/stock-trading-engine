@@ -392,8 +392,13 @@ run_round_segments() {
             drain_sec=$(($(date +%s) - k6_end))
             echo "v2 후속 처리 대기 시간 초과 — 배수 시간 ${drain_sec}초로 기록" >&2
         fi
-        lag_total="$(sum_lags "$(group_lag account-projection-worker)" "$(group_lag settlement-worker)")"
+        lag_total="$(sum_lags "$(v2_group_lag account-projection-worker account-state)" "$(v2_group_lag settlement-worker settlement-requests)")"
+        # v2 의 DB 반영 대기 시간은 따로 기록한다. 포화 판정에는 넘기지 않는다: 이전 v2 결과(drain 없음)와 같은 규칙을 유지해
+        # 층 1 비교가 달라지지 않게 하고, 이 값이 v1 규칙(도착 시간의 50% 초과)에 해당하는지는 분석기가 따로 표시한다
+        record_db_drain "$cond" "$round" "$cond_dir" "$drain_sec" "$lag_total"
     fi
+    local sat_drain="$drain_sec" sat_lag="$lag_total"
+    if [ "$cond" = "v2" ]; then sat_drain="NA"; sat_lag="NA"; fi
 
     rm -f "${RESULTS_DIR}/latency-${cond}-${round}.json"
     request_latency_snapshot "$cond" "$round"
@@ -423,12 +428,20 @@ run_round_segments() {
     [ "$e7" = "1" ] && args+=(--e7)
     python3 loadtest/analyze-baseline.py "${args[@]}"
 
-    record_saturation "$cond" "$round" "$cond_dir" "$k6_start" "$k6_end" "$lag_total" "$drain_sec"
+    record_saturation "$cond" "$round" "$cond_dir" "$k6_start" "$k6_end" "$sat_lag" "$sat_drain"
 
     if [ "$e7" = "1" ]; then
         echo "E7: 앱이 죽었다 — ${cond} 조건을 중단한다. 처음부터 다시 돌린다 (파일은 지우지 않는다)" >&2
         return 2
     fi
+}
+
+# v2 DB 반영 대기 시간(k6 종료부터 후속 처리 완료까지의 초)과 그때의 lag 를 dbdrain-<cond>.csv 에 한 줄 쓴다
+record_db_drain() {
+    local cond="$1" round="$2" cond_dir="$3" drain="$4" lag="$5"
+    local file="${cond_dir}/dbdrain-${cond}.csv"
+    [ -f "$file" ] || echo "round,drain_sec,lag" > "$file"
+    echo "${round},${drain},${lag}" >> "$file"
 }
 
 # 컨슈머 그룹 lag 합. NA 가 하나라도 있으면 NA

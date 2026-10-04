@@ -194,6 +194,41 @@ test_round_uses_v2_quiescence() {
     assert_contains "v2 lag 는 두 그룹의 합" "$body" "account-projection-worker"
 }
 
+test_v2_group_lag() {
+    group_lag() { echo "${FAKE_LAG:-NA}"; }
+    topic_end_total() { echo "${FAKE_END:-0}"; }
+    FAKE_LAG=7 FAKE_END=0 assert_eq "숫자 lag 는 그대로" "7" "$(FAKE_LAG=7 v2_group_lag settlement-worker settlement-requests)"
+    assert_eq "그룹에 lag 행이 없고 토픽이 비어 있으면 0" "0" "$(FAKE_LAG=NA FAKE_END=0 v2_group_lag settlement-worker settlement-requests)"
+    assert_eq "그룹에 lag 행이 없는데 토픽에 메시지가 있으면 NA" "NA" "$(FAKE_LAG=NA FAKE_END=12 v2_group_lag settlement-worker settlement-requests)"
+    assert_eq "토픽 끝 오프셋을 못 읽으면 NA" "NA" "$(FAKE_LAG=NA FAKE_END=NA v2_group_lag settlement-worker settlement-requests)"
+    unset -f group_lag topic_end_total
+}
+
+test_await_quiescent_v2_uses_real_clock() {
+    local body
+    body="$(declare -f await_quiescent_v2)"
+    assert_contains "대기 한도는 실제 경과 시간(SECONDS)으로 센다" "$body" "SECONDS"
+    assert_contains "settlement 그룹도 빈 토픽이면 0 으로 읽는다" "$body" "v2_group_lag settlement-worker settlement-requests"
+}
+
+test_record_db_drain() {
+    local dir
+    dir="$(mktemp -d)"
+    record_db_drain v2 r02 "$dir" 41 0
+    record_db_drain v2 r03 "$dir" 38 NA
+    assert_eq "헤더와 두 줄" "round,drain_sec,lag
+r02,41,0
+r03,38,NA" "$(cat "${dir}/dbdrain-v2.csv")"
+    rm -rf "$dir"
+}
+
+test_round_keeps_saturation_rule_for_v2() {
+    local body
+    body="$(declare -f run_round_segments)"
+    assert_contains "v2 DB 반영 대기 시간은 따로 기록한다" "$body" "record_db_drain"
+    assert_contains "v2 포화 판정에는 drain 과 lag 를 넘기지 않는다(이전 v2 결과와 같은 규칙)" "$body" 'record_saturation "$cond" "$round" "$cond_dir" "$k6_start" "$k6_end" "$sat_lag" "$sat_drain"'
+}
+
 test_topic_specs
 test_reset_v2_topics
 test_reset_v2_groups_and_state
@@ -203,6 +238,10 @@ test_process_lists
 test_start_script
 test_prepare_condition_order
 test_round_uses_v2_quiescence
+test_v2_group_lag
+test_await_quiescent_v2_uses_real_clock
+test_record_db_drain
+test_round_keeps_saturation_rule_for_v2
 
 echo "통과 ${PASSES}, 실패 ${FAILS}"
 [ "$FAILS" -eq 0 ]

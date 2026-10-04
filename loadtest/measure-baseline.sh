@@ -649,20 +649,37 @@ v2_projection_progress() {
     if [ -n "$value" ]; then echo "$value"; else echo NA; fi
 }
 
-# v2 후속 처리가 끝났는지: DB 반영 진행량이 이전과 같고 두 워커 그룹의 lag 가 모두 0. v1 의 quiescent_step 과 같은 판정이다
+# 토픽의 모든 파티션 끝 오프셋 합(= 지금까지 쓰인 메시지 수). 읽지 못하면 NA
+topic_end_total() {
+    local out
+    out="$(docker exec stock-trading-kafka /opt/kafka/bin/kafka-get-offsets.sh --bootstrap-server localhost:9092 --topic "$1" --time -1 2> /dev/null)"
+    if [ -z "$out" ]; then echo NA; return; fi
+    printf '%s\n' "$out" | awk -F: 'NF >= 3 && $3 ~ /^[0-9]+$/ { sum += $3; rows++ } END { if (rows == 0) print "NA"; else print sum }'
+}
+
+# v2 컨슈머 그룹 lag. 그룹이 아직 오프셋을 커밋한 적이 없으면 describe 에 lag 숫자가 없어 NA 가 나온다. 입력 토픽이 비어 있으면 읽을 것이 없으니 0 이다
+v2_group_lag() {
+    local group="$1" topic="$2" lag ends
+    lag="$(group_lag "$group")"
+    if [ "$lag" != "NA" ]; then echo "$lag"; return; fi
+    ends="$(topic_end_total "$topic")"
+    if [ "$ends" = "0" ]; then echo 0; else echo NA; fi
+}
+
+# v2 후속 처리가 끝났는지: DB 반영 진행량이 이전과 같고 두 워커 그룹의 lag 가 모두 0. v1 의 quiescent_step 과 같은 판정이다.
+# 한도는 실제 경과 시간(SECONDS)으로 센다: 한 번 확인할 때 docker exec 가 여러 번 돌아 반복 한 번이 폴링 간격보다 훨씬 길다
 await_quiescent_v2() {
-    local waited=0 prev="" cur="" lag_projection="" lag_settlement=""
-    while [ "$waited" -lt "$QUIESCE_TIMEOUT" ]; do
+    local started="$SECONDS" prev="" cur="" lag_projection="" lag_settlement=""
+    while [ $((SECONDS - started)) -lt "$QUIESCE_TIMEOUT" ]; do
         cur="$(v2_projection_progress)"
-        lag_projection="$(group_lag account-projection-worker)"
-        lag_settlement="$(group_lag settlement-worker)"
+        lag_projection="$(v2_group_lag account-projection-worker account-state)"
+        lag_settlement="$(v2_group_lag settlement-worker settlement-requests)"
         if [ "$cur" != "NA" ] && [ "$(quiescent_step "$prev" "$cur" "$lag_projection" "$lag_settlement")" = "yes" ]; then
-            echo "v2 후속 처리 완료: seq 합 ${cur}, lag projection=${lag_projection} settlement=${lag_settlement}, 대기 ${waited}초"
+            echo "v2 후속 처리 완료: seq 합 ${cur}, lag projection=${lag_projection} settlement=${lag_settlement}, 대기 $((SECONDS - started))초"
             return 0
         fi
         prev="$cur"
         sleep "$QUIESCE_POLL_SEC"
-        waited=$((waited + QUIESCE_POLL_SEC))
     done
     echo "v2 후속 처리 대기 ${QUIESCE_TIMEOUT}초 초과: seq 합 ${cur}, lag projection=${lag_projection} settlement=${lag_settlement}" >&2
     return 1
