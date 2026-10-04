@@ -6,6 +6,8 @@ account-disruptor/src/main/java/com/flab/stocktradingengine/account/disruptor/ha
 account-disruptor/src/main/java/com/flab/stocktradingengine/account/disruptor/io/AccountFillReceiver.java
 account-disruptor/src/main/java/com/flab/stocktradingengine/account/disruptor/io/AccountOrderReceiver.java
 account-disruptor/src/main/java/com/flab/stocktradingengine/account/disruptor/io/MatchingOrderSender.java
+account-projection-worker/src/main/java/com/flab/stocktradingengine/account/projection/worker/config/ProjectionStageMeasurementConfig.java
+account-projection-worker/src/main/java/com/flab/stocktradingengine/account/projection/worker/messaging/AccountStateConsumer.java
 account-worker/src/main/java/com/flab/stocktradingengine/account/worker/config/AccountEngineConfig.java
 account-worker/src/main/java/com/flab/stocktradingengine/account/worker/config/AccountLatencyMeasurementConfig.java
 account-worker/src/main/java/com/flab/stocktradingengine/account/worker/messaging/AeronMatchingOrderSender.java

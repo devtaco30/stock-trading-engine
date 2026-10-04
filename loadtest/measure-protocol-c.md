@@ -22,6 +22,10 @@ E4(허용 목록 밖 프로세스의 CPU 사용)는 분석에서 제외했다.
 - 모든 속도 단계의 비교는 인덱스 있는 v1을 상대로 한다. 결과는 Seq Scan을 제거해 튜닝한 v1과의 비교라는 점을 보고서에 한 줄로 밝힌다.
 - v1 테이블은 쌓이는 조건이다(`measure-protocol-b1.md`의 세트 1과 같음). 주문마다 INFO 로그를 남기는 것은 두 구현 모두 b0·b1과 같다.
 - 환경: 같은 노트북에서 k6, api, JVM, Docker VM(Kafka·Postgres)이 돈다. 세트마다 시작 시점의 상위 프로세스 CPU를 기록한다.
+- v2 프로세스 구성(DB 반영 포함 재측정): 이전 v2 측정은 api, account-worker, matching-worker 세 개만 띄웠고, v2에서 체결을 DB에 반영하는 settlement-worker와 account-projection-worker는 띄우지 않았다. 재측정에서는 두 워커를 함께 띄운다(v2 프로세스 5개). 두 워커의 Postgres 접속은 gitignore 대상인 `application-local.yml` 대신 명령행 인자(`localhost:9702/stock_trading`, api의 e2e 설정과 같은 값)로 준다. 매 v2 세트 시작 전에 `account-state`, `settlement-requests`, `account-settlements`, `order-results` 토픽을 지우고 파티션 1개로 다시 만들고, 두 워커의 컨슈머 그룹 오프셋과 `account_projection`, `account_projection_holding`, `pending_settlements` 테이블을 지운다. 이 토픽은 이전 하네스가 만들지 않아 브로커가 자동 생성했고 이전 실행의 메시지가 남아 있었다.
+- v2 DB 반영(층 2): v2의 F는 account-worker의 메모리 계좌 상태 갱신까지(층 1)이다. 층 2는 account-projection-worker가 계좌 상태를 Postgres에 커밋한 시점이다. 계측을 켠 세트에서 projection 워커가 커밋 직후에 이벤트마다 (커밋 직후 시각 − 이벤트의 `epochMillis`)를 `db_reflect`에, 배치 반영 시간을 `db_batch`에 기록한다. 이벤트 시각은 account-worker가 계좌 상태를 바꾼 직후에 찍은 값이고 두 시각 모두 밀리초 해상도(±1ms)다. 배치 안에서 같은 계좌의 앞선 이벤트는 건너뛰지만 모든 이벤트에 같은 방식으로 기록한다. 층 1 F와 층 2의 합은 중앙값을 더한 근사이며 한 건을 이어서 잰 값이 아니다.
+- v2 후속 처리 완료(drain): k6 종료 뒤 `account_projection`의 seq 합이 두 번 연속 같고 `account-projection-worker`와 `settlement-worker` 그룹의 lag가 0이 될 때까지의 초(제한 120초, 2초 간격). v1의 drain과 같은 방식이며 4-1절 포화 판정(drain이 도착 시간의 50% 초과, lag 0 초과)을 v2에도 같은 규칙으로 적용한다.
+- v2에서 v1과 같은 양이 아닌 일(재측정 뒤에도 남는 것): 중복 주문 확인과 계좌 잠금·합계 SELECT, `orders` INSERT와 체결 시 갱신, `processed_fills` 읽기·쓰기, `holdings` 잠금 갱신, `unpaids` INSERT는 v2에서 일어나지 않는다. projection 워커는 체결 한 건마다 문장을 실행하지 않고 배치 안에서 계좌별 최신 상태 하나만 기록한다. 호가창과 최근 체결가의 Redis 기록은 v2가 100ms 단위로 합쳐 v1보다 횟수가 적다. v2의 account-worker는 측정 중 Kafka에 `account-state`(체결마다 계좌별 1건)와 `order-results`(주문마다 1건)를 발행하고, `order-results`는 읽는 프로세스가 없다. 리포트에 이 목록을 표로 싣는다.
 
 ## 2. 구간 정의 (측정 전 확정)
 
