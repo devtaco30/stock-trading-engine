@@ -133,7 +133,7 @@ test_series_edges() {
 
 test_trigger_targets() {
     assert_eq "v1 대상(api 의 G 포함)" "api order-engine matching-engine settlement-engine" "$(stage_trigger_targets v1)"
-    assert_eq "v2 대상" "api account-worker matching-worker" "$(stage_trigger_targets v2)"
+    assert_eq "v2 대상" "api account-worker matching-worker account-projection-worker" "$(stage_trigger_targets v2)"
     assert_eq "트리거 경로" "${RESULTS_DIR}/stage-trigger-v2-account-worker" "$(stage_trigger_path v2 account-worker)"
 }
 

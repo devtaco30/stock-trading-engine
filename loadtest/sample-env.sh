@@ -32,7 +32,7 @@ KAFKA_CONTAINER="${SAMPLER_KAFKA:-stock-trading-kafka}"
 if [ -z "${SAMPLER_JVMS:-}" ]; then
     case "$COND" in
         v1) SAMPLER_JVMS="api=com.flab.stocktradingengine.api.StockTradingEngineApplication order-engine=com.flab.stocktradingengine.OrderEngineApplication matching-engine=com.flab.stocktradingengine.matching.MatchingApplication settlement-engine=com.flab.stocktradingengine.settlement.engine.SettlementEngineApplication" ;;
-        v2) SAMPLER_JVMS="api=com.flab.stocktradingengine.api.StockTradingEngineApplication account-worker=com.flab.stocktradingengine.account.worker.AccountWorkerApplication matching-worker=com.flab.stocktradingengine.matching.worker.MatchingWorkerApplication" ;;
+        v2) SAMPLER_JVMS="api=com.flab.stocktradingengine.api.StockTradingEngineApplication account-worker=com.flab.stocktradingengine.account.worker.AccountWorkerApplication matching-worker=com.flab.stocktradingengine.matching.worker.MatchingWorkerApplication settlement-worker=com.flab.stocktradingengine.settlement.worker.SettlementWorkerApplication account-projection-worker=com.flab.stocktradingengine.account.projection.worker.AccountProjectionWorkerApplication" ;;
         *) echo "SAMPLER_COND 는 v1 또는 v2 여야 한다 (받은 값: ${COND})" >&2; exit 1 ;;
     esac
 fi

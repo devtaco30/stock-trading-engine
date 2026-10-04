@@ -89,7 +89,7 @@ PREFLIGHT_FAILURES=0
 main_class_pattern_for() {
     case "$1" in
         v1) echo 'StockTradingEngineApplication|OrderEngineApplication|matching\.MatchingApplication|SettlementEngineApplication' ;;
-        v2) echo 'StockTradingEngineApplication|AccountWorkerApplication|MatchingWorkerApplication' ;;
+        v2) echo 'StockTradingEngineApplication|AccountWorkerApplication|MatchingWorkerApplication|SettlementWorkerApplication|AccountProjectionWorkerApplication' ;;
     esac
 }
 
@@ -593,6 +593,115 @@ ensure_v1_topics() {
     done < <(v1_topic_specs)
 }
 
+# v2 에서 account-worker 가 쓰고 두 워커가 읽는 토픽과 파티션 수 ("이름 수" 한 줄씩). 두 워커 모두 컨슈머 1개라 파티션은 1개다
+v2_topic_specs() {
+    echo "account-state 1"
+    echo "settlement-requests 1"
+    echo "account-settlements 1"
+    echo "order-results 1"
+}
+
+kafka_consumer_groups() {
+    docker exec stock-trading-kafka /opt/kafka/bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 "$@"
+}
+
+# v2 앱을 띄우기 전에 위 토픽을 지우고 다시 만든다. 지금까지 어떤 하네스도 이 토픽을 만들지 않아 브로커가 자동 생성했고, 이전 실행의 메시지가 남아 있다.
+# 남은 메시지가 있으면 새 워커가 그것부터 소비해 지연이 부풀려진다. 지운 토픽이 사라질 때까지 기다린 뒤 만들고 파티션 수를 확인한다
+V2_TOPIC_GONE_POLL_SEC="${V2_TOPIC_GONE_POLL_SEC:-1}"
+reset_v2_topics() {
+    local name expected described actual waited
+    while read -r name expected; do
+        kafka_topics --delete --topic "$name" > /dev/null 2>&1
+        waited=0
+        while kafka_topics --list 2> /dev/null | grep -qx -- "$name" && [ "$waited" -lt 30 ]; do
+            sleep "$V2_TOPIC_GONE_POLL_SEC"
+            waited=$((waited + 1))
+        done
+        kafka_topics --create --topic "$name" --partitions "$expected" --replication-factor 1 > /dev/null 2>&1
+        described="$(kafka_topics --describe --topic "$name" 2>&1)"
+        actual="$(printf '%s\n' "$described" | sed -n 's/.*PartitionCount: *\([0-9][0-9]*\).*/\1/p' | head -n 1)"
+        if [ "$actual" != "$expected" ]; then
+            echo "토픽 ${name} 의 파티션 수가 ${expected} 이어야 하는데 ${actual:-읽지 못함} 이다" >&2
+            return 1
+        fi
+        echo "토픽 초기화: ${name} 파티션 ${actual}"
+    done < <(v2_topic_specs)
+}
+
+# 두 워커의 컨슈머 그룹 오프셋을 지운다(앱이 떠 있지 않을 때만 지워진다. 없거나 지워지지 않아도 계속한다)
+reset_v2_groups() {
+    local group
+    for group in account-projection-worker settlement-worker; do
+        kafka_consumer_groups --delete --group "$group" > /dev/null 2>&1 || true
+    done
+}
+
+# 이전 실행이 만든 projection·미수금 예약 테이블을 지운다. 남아 있으면 이전 seq 때문에 새 이벤트가 stale 로 무시된다.
+# 워커가 기동하면서 ddl-auto=update 로 다시 만든다
+reset_v2_projection_state() {
+    psql_app -c "DROP TABLE IF EXISTS account_projection_holding, account_projection, pending_settlements"
+}
+
+# account_projection 의 seq 합. 워커가 DB 에 반영한 진행량이다. 테이블이 없으면 NA
+v2_projection_progress() {
+    local value
+    value="$(psql_app -c "SELECT coalesce(sum(seq), 0) FROM account_projection" 2> /dev/null)"
+    if [ -n "$value" ]; then echo "$value"; else echo NA; fi
+}
+
+# v2 후속 처리가 끝났는지: DB 반영 진행량이 이전과 같고 두 워커 그룹의 lag 가 모두 0. v1 의 quiescent_step 과 같은 판정이다
+await_quiescent_v2() {
+    local waited=0 prev="" cur="" lag_projection="" lag_settlement=""
+    while [ "$waited" -lt "$QUIESCE_TIMEOUT" ]; do
+        cur="$(v2_projection_progress)"
+        lag_projection="$(group_lag account-projection-worker)"
+        lag_settlement="$(group_lag settlement-worker)"
+        if [ "$cur" != "NA" ] && [ "$(quiescent_step "$prev" "$cur" "$lag_projection" "$lag_settlement")" = "yes" ]; then
+            echo "v2 후속 처리 완료: seq 합 ${cur}, lag projection=${lag_projection} settlement=${lag_settlement}, 대기 ${waited}초"
+            return 0
+        fi
+        prev="$cur"
+        sleep "$QUIESCE_POLL_SEC"
+        waited=$((waited + QUIESCE_POLL_SEC))
+    done
+    echo "v2 후속 처리 대기 ${QUIESCE_TIMEOUT}초 초과: seq 합 ${cur}, lag projection=${lag_projection} settlement=${lag_settlement}" >&2
+    return 1
+}
+
+# 그룹이 토픽 파티션을 배정받은 개수
+v2_group_assigned() {
+    local group="$1" topic="$2"
+    kafka_consumer_groups --describe --group "$group" 2> /dev/null \
+        | awk -v topic="$topic" '$2 == topic && $7 != "-" && $7 != "" { count++ } END { print count + 0 }'
+}
+
+# Postgres(public)에 테이블이 있는지. projection 워커가 DB 인자를 못 받으면 인메모리 H2 에 경고 없이 기록하므로 이것으로 걸러낸다
+v2_table_exists() {
+    local found
+    found="$(psql_app -c "SELECT to_regclass('public.$1') IS NOT NULL" 2> /dev/null)"
+    [ "$found" = "t" ]
+}
+
+# v2: 두 워커가 컨슈머 그룹 파티션을 받고 자기 테이블을 Postgres 에 만들었는지
+await_v2_workers() {
+    local waited=0 proj_assigned=0 settle_assigned=0
+    echo -n "v2 워커 준비 대기(그룹 배정과 Postgres 테이블)"
+    while [ "$waited" -lt "$ASSIGN_TIMEOUT" ]; do
+        proj_assigned="$(v2_group_assigned account-projection-worker account-state)"
+        settle_assigned="$(v2_group_assigned settlement-worker settlement-requests)"
+        if [ "${proj_assigned:-0}" -ge 1 ] && [ "${settle_assigned:-0}" -ge 1 ] \
+            && v2_table_exists account_projection && v2_table_exists pending_settlements; then
+            echo " OK (projection 파티션 ${proj_assigned}, settlement 파티션 ${settle_assigned})"
+            return 0
+        fi
+        echo -n "."
+        sleep 1
+        waited=$((waited + 1))
+    done
+    echo " TIMEOUT (projection 배정 ${proj_assigned}, settlement 배정 ${settle_assigned}) — DB 인자가 빠지면 projection 워커가 H2 로 떨어진다" >&2
+    return 1
+}
+
 prepare_condition() {
     local cond="$1"
     echo "--- ${cond} 준비 1: 이전 앱 정지"
@@ -614,6 +723,11 @@ prepare_condition() {
     if [ "$cond" = "v1" ]; then
         echo "--- ${cond} 준비 3-0: 토픽 생성·확인 (앱 기동 전)"
         ensure_v1_topics || return 1
+    else
+        echo "--- ${cond} 준비 3-0: v2 토픽·그룹·projection 테이블 초기화 (앱 기동 전)"
+        reset_v2_topics || return 1
+        reset_v2_groups
+        reset_v2_projection_state || return 1
     fi
 
     if [ "$INDEX_MODE" = "1" ] && [ "$cond" = "v1" ]; then
@@ -648,7 +762,8 @@ prepare_condition() {
     if [ "$cond" = "v1" ]; then
         await_v1_assignment
     else
-        await_v2_ports
+        await_v2_ports || return 1
+        await_v2_workers
     fi
 }
 

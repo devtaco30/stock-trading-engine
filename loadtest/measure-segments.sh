@@ -171,7 +171,7 @@ round_fact() {
 stage_trigger_targets() {
     case "$1" in
         v1) echo "api order-engine matching-engine settlement-engine" ;;
-        v2) echo "api account-worker matching-worker" ;;
+        v2) echo "api account-worker matching-worker account-projection-worker" ;;
     esac
 }
 
@@ -375,7 +375,7 @@ run_round_segments() {
     wait_for_drain "$cond" "${db_before:-0}"
 
     # 후속 처리 완료까지의 시간(포화 판정의 배수 시간). v1 은 FILLED 개수가 멈추고 컨슈머 lag 가 0이 될 때까지.
-    # v2 는 하네스가 후속 처리 완료를 볼 수단이 없어 NA 로 둔다(고정 대기만 한다).
+    # v2 는 account-projection-worker 의 DB 반영 진행(account_projection 의 seq 합)이 멈추고 두 워커 그룹의 lag 가 0이 될 때까지.
     local drain_sec="NA" lag_total="NA"
     if [ "$cond" = "v1" ]; then
         if await_quiescent > /dev/null; then
@@ -385,6 +385,14 @@ run_round_segments() {
             echo "후속 처리 대기 시간 초과 — 배수 시간 ${drain_sec}초로 기록" >&2
         fi
         lag_total="$(sum_lags "$(group_lag "$(v1_consumer_group)")" "$(group_lag matching-engine)" "$(group_lag settlement-engine)")"
+    else
+        if await_quiescent_v2 > /dev/null; then
+            drain_sec=$(($(date +%s) - k6_end))
+        else
+            drain_sec=$(($(date +%s) - k6_end))
+            echo "v2 후속 처리 대기 시간 초과 — 배수 시간 ${drain_sec}초로 기록" >&2
+        fi
+        lag_total="$(sum_lags "$(group_lag account-projection-worker)" "$(group_lag settlement-worker)")"
     fi
 
     rm -f "${RESULTS_DIR}/latency-${cond}-${round}.json"

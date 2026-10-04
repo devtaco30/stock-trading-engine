@@ -21,13 +21,15 @@ main_class_for() {
         api) echo "com.flab.stocktradingengine.api.StockTradingEngineApplication" ;;
         matching-worker) echo "com.flab.stocktradingengine.matching.worker.MatchingWorkerApplication" ;;
         account-worker) echo "com.flab.stocktradingengine.account.worker.AccountWorkerApplication" ;;
+        settlement-worker) echo "com.flab.stocktradingengine.settlement.worker.SettlementWorkerApplication" ;;
+        account-projection-worker) echo "com.flab.stocktradingengine.account.projection.worker.AccountProjectionWorkerApplication" ;;
     esac
 }
 
-for module in api matching-worker account-worker; do
+for module in api matching-worker account-worker settlement-worker account-projection-worker; do
     main_class=$(main_class_for "$module")
     # main_class_for가 아는 모듈만 case에 있다 — 빈 문자열이면 pkill -f ""가 전체 프로세스를
-    # 매칭해버리니(파멸적) 건너뛴다. 지금 루프는 고정 3개 모듈이라 실제로는 안 비지만 방어로 둔다.
+    # 매칭해버리니(파멸적) 건너뛴다. 지금 루프는 고정 5개 모듈이라 실제로는 안 비지만 방어로 둔다.
     # I8 U3 — account-worker를 WORKER_COUNT=2로 띄우면 같은 main 클래스의 JVM이 둘이라, 이
     # pkill 한 번으로 A·B 둘 다 잡힌다(라벨은 pid/로그 파일명에만 쓰고, main 클래스는 공유).
     if [ -n "$main_class" ] && pkill -f "$main_class" 2>/dev/null; then

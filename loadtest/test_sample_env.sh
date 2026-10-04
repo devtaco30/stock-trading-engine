@@ -50,7 +50,7 @@ test_header() {
     : > "$OUT"
     write_header
     assert_eq "헤더 끝에 메모리 열이 붙는다" \
-        "ts,k6_cpu,jvm_api,jvm_account-worker,jvm_matching-worker,pg_cpu,kafka_cpu,idle,user,sys,top5,batt,therm_limit,rss_api,rss_account-worker,rss_matching-worker,pg_mem,kafka_mem" \
+        "ts,k6_cpu,jvm_api,jvm_account-worker,jvm_matching-worker,jvm_settlement-worker,jvm_account-projection-worker,pg_cpu,kafka_cpu,idle,user,sys,top5,batt,therm_limit,rss_api,rss_account-worker,rss_matching-worker,rss_settlement-worker,rss_account-projection-worker,pg_mem,kafka_mem" \
         "$(cat "$OUT")"
 }
 

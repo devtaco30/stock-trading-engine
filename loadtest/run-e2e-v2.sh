@@ -55,6 +55,19 @@ start_app() {
     echo "${label} 기동 시작(런처 PID $(cat "${PID_DIR}/${label}.pid"), 로그 ${LOG_DIR}/${label}.log)"
 }
 
+# DB 를 쓰는 v2 워커(settlement-worker, account-projection-worker)용. 두 모듈에는 udp·e2e 프로파일이 없고(프로파일을 붙여도 아무 설정도
+# 바뀌지 않는다) Postgres 접속은 application-local.yml(gitignore, Jack 관리)에 있다. 그 파일을 만들지 않고 api 의 e2e 설정과 같은
+# 접속 값을 명령행 인자로 준다. account-projection-worker 는 이 인자가 없으면 인메모리 H2 에 경고 없이 기록하므로,
+# 하네스가 준비 단계(await_v2_workers)에서 Postgres 에 테이블이 생겼는지 확인한다.
+WORKER_DB_ARGS=" --spring.datasource.url=jdbc:postgresql://localhost:9702/stock_trading --spring.datasource.username=postgres --spring.datasource.password=postgres --spring.datasource.driver-class-name=org.postgresql.Driver --spring.jpa.database-platform=org.hibernate.dialect.PostgreSQLDialect"
+start_worker() {
+    local label="$1" module="$2" extra_args="$3"
+    nohup ./gradlew ":${module}:bootRun" --args="${WORKER_DB_ARGS}${extra_args}$(app_log_args)" \
+        > "${LOG_DIR}/${label}.log" 2>&1 &
+    echo $! > "${PID_DIR}/${label}.pid"
+    echo "${label} 기동 시작(런처 PID $(cat "${PID_DIR}/${label}.pid"), 로그 ${LOG_DIR}/${label}.log)"
+}
+
 # I8 U3 — api·계좌워커 공용(담당 슬롯 판정은 계좌워커가 자기 인테이크 채널과 대조해 정한다,
 # D2) / 매칭워커 전용(체결 fan-out 목적지) 두 갈래. 슬롯 0~127=워커A, 128~255=워커B.
 shard_args_intake() {
@@ -78,6 +91,8 @@ else
     start_app account-worker " --measure.latency.enabled=true --measure.latency.snapshot-trigger-path=${E2E_RESULTS_ABS}/latency-trigger-v2 --measure.latency.output-path=${E2E_RESULTS_ABS}/latency-v2-account-worker.json$(stage_args v2 account-worker)" account-worker
     start_app matching-worker "$(stage_args v2 matching-worker)" matching-worker
     start_app api "$(stage_args v2 api)" api
+    start_worker settlement-worker settlement-worker ""
+    start_worker account-projection-worker account-projection-worker "$(stage_args v2 account-projection-worker)"
 fi
 
 await_udp_port() {
