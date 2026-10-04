@@ -100,6 +100,8 @@ class SetData:
     rounds: dict = field(default_factory=dict)        # round -> {"valid": bool, "flags": str}
     saturation: dict = field(default_factory=dict)    # round -> reasons 문자열
     drain: dict = field(default_factory=dict)         # round -> 후속 처리 완료까지의 초(saturation csv 의 drain_sec, 없으면 None)
+    db_drain: dict = field(default_factory=dict)      # round -> v2 DB 반영 대기 초(dbdrain-v2.csv). 포화 판정에는 쓰지 않는다
+    arrival_sec: dict = field(default_factory=dict)   # round -> 도착에 걸린 초(saturation csv 의 arrival_sec)
     stage_rounds: dict = field(default_factory=dict)  # round -> {단계: 스냅샷}
     processes_seen: dict = field(default_factory=dict)  # round -> {프로세스}
     latency: dict = field(default_factory=dict)       # round -> {"p50": µs, "p99": µs}
@@ -166,6 +168,9 @@ def load_set(set_dir, meta):
     for row in read_csv_rows(sat_path):
         data.saturation[row["round"]] = row.get("reasons", "none")
         data.drain[row["round"]] = to_float(row.get("drain_sec"))
+        data.arrival_sec[row["round"]] = to_float(row.get("arrival_sec"))
+    for row in read_csv_rows(cond_dir / f"dbdrain-{meta.cond}.csv"):
+        data.db_drain[row["round"]] = to_float(row.get("drain_sec"))
     if cond_dir.exists():
         for path in sorted(cond_dir.iterdir()):
             match = STAGE_FILE_RE.match(path.name)
@@ -719,11 +724,14 @@ def db_layer_section(sets):
         if reflect["rounds"] == 0:
             continue
         layer_one = stage_summary(data, "F")
-        drains = [data.drain[r] for r in data.included_rounds() if data.drain.get(r) is not None]
+        rounds = [r for r in data.included_rounds() if data.db_drain.get(r) is not None]
+        drains = [data.db_drain[r] for r in rounds]
         drain_cell = "—" if not drains else f"{median(drains):g}"
+        over = [r for r in rounds if data.arrival_sec.get(r) and data.db_drain[r] > 0.5 * data.arrival_sec[r]]
+        over_cell = "—" if not drains else str(len(over))
         total = None if layer_one["p50"] is None or reflect["p50"] is None else layer_one["p50"] + reflect["p50"]
         rows.append([data.meta.name, reflect["rounds"], with_range(layer_one, "p50"), with_range(reflect, "p50"),
-                     with_range(reflect, "p99"), fmt_micros(total), drain_cell])
+                     with_range(reflect, "p99"), fmt_micros(total), drain_cell, over_cell])
     if not rows:
         return ""
     lines = ["## v2 DB 반영(층 2)", "",
@@ -732,10 +740,13 @@ def db_layer_section(sets):
              "이벤트마다 기록한 값이다(밀리초 해상도, ±1ms). 한 배치 안에서 같은 계좌의 앞선 이벤트는 건너뛰지만 모든 이벤트에 "
              "같은 방식으로 기록한다.", "",
              table(["세트", "집계 회차", "층 1 F p50 µs", "층 2 db_reflect p50 µs", "층 2 db_reflect p99 µs",
-                    "층 1 p50 + 층 2 p50 µs (근사)", "후속 처리 완료까지(drain) 초, 회차 중앙값"], rows), "",
+                    "층 1 p50 + 층 2 p50 µs (근사)", "후속 처리 완료까지(drain) 초, 회차 중앙값",
+                    "drain 이 도착 시간의 50%를 넘은 회차(v1 포화 규칙)"], rows), "",
              "- 합산은 두 중앙값을 더한 근사값이다. 주문 발행부터 DB 커밋까지를 한 건씩 이어서 잰 값이 아니다(두 층의 이벤트가 같은 건이 아니다).",
-             "- 근거: db_reflect 는 projection 워커의 단계 덤프, drain 은 두 워커 그룹의 lag 가 0이 되고 account_projection 의 seq 합이 멈출 때까지 "
-             "(saturation-v2.csv 의 drain_sec)."]
+             "- 근거: db_reflect 는 projection 워커의 단계 덤프, drain 은 k6 종료부터 두 워커 그룹의 lag 가 0이 되고 account_projection 의 seq 합이 "
+             "멈출 때까지(dbdrain-v2.csv).",
+             "- v2 의 포화 판정에는 drain 을 쓰지 않는다(이전 v2 결과와 같은 규칙). 그래서 마지막 열에 해당하는 회차도 집계에서 빠지지 않고, "
+             "v1 규칙을 적용했다면 포화로 분류되었을 회차 수를 따로 적는다."]
     return "\n".join(lines)
 
 

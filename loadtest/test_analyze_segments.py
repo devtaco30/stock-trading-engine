@@ -63,12 +63,15 @@ class SetFixture:
         self.dir.mkdir(parents=True)
         self.rounds = []
         self.saturation = []
+        self.db_drain = []
         self.rates = []
 
     def add_round(self, round_id, valid=1, flags="", reasons="none", stages=None, skip_processes=(),
                   latency=None, hist_count=10000, cpu_rows=None, drain="NA"):
         self.rounds.append([round_id, 1000, 1052, 0, 0, 0, 0, hist_count, "", flags, valid])
-        self.saturation.append([round_id, reasons, 0, 0, hist_count, 10000, 0, "NA", "NA", drain, 52])
+        self.saturation.append([round_id, reasons, 0, 0, hist_count, 10000, 0, "NA", "NA", "NA", 52])
+        if drain != "NA":
+            self.db_drain.append([round_id, drain, 0])
         for process, snapshots in (stages or {}).items():
             if process in skip_processes:
                 continue
@@ -95,6 +98,11 @@ class SetFixture:
             writer = csv.writer(handle)
             writer.writerow(ROUNDS_HEADER)
             writer.writerows(self.rounds)
+        if self.db_drain:
+            with open(self.dir / f"dbdrain-{self.cond}.csv", "w", newline="") as handle:
+                writer = csv.writer(handle)
+                writer.writerow(["round", "drain_sec", "lag"])
+                writer.writerows(self.db_drain)
         with open(self.dir / f"saturation-{self.cond}.csv", "w", newline="") as handle:
             writer = csv.writer(handle)
             writer.writerow(SAT_HEADER)
@@ -476,7 +484,20 @@ class DbLayerTest(unittest.TestCase):
         self.assertIn("232", section)
         self.assertIn("12,000", section)
         self.assertIn("12,232", section)
-        self.assertIn("| 6 |", section)
+        self.assertIn("| 6 | 0 |", section)  # drain 중앙값 6초, 도착 시간 52초의 50%(26초)를 넘는 회차 0개
+
+    def test_db_layer_section_flags_rounds_over_the_v1_drain_rule(self):
+        def build(fixture):
+            fixture.add_round("r01", valid=0, flags="WARMUP", stages=v2_stage_files(0.5), drain="30")
+            for number, drain in ((2, "40"), (3, "41"), (4, "12")):
+                fixture.add_round(f"r{number:02d}", stages=v2_stage_files(0.0), drain=drain)
+        with tempfile.TemporaryDirectory() as tmp:
+            run = make_run(tmp, [("01-S1X-v2-st1", "v2", build)])
+            text = asg.build_segments_report(run)
+        section = text.split("## v2 DB 반영", 1)[1].split("\n## ", 1)[0]
+        self.assertIn("| 40 | 2 |", section)  # drain 중앙값 40초, 26초 초과 회차 2개(3개 중)
+        # v2 포화 판정에는 drain 을 쓰지 않으므로 이 회차들은 집계에서 빠지지 않는다
+        self.assertIn("| 01-S1X-v2-st1 | 3 |", section)
 
     def test_db_layer_section_skips_sets_without_projection_dump(self):
         with tempfile.TemporaryDirectory() as tmp:
