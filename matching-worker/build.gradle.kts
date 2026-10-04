@@ -27,6 +27,7 @@ dependencies {
 	annotationProcessor(libs.lombok)
 
 	testImplementation(libs.spring.boot.starter.test)
+	testImplementation(libs.snowflake) // 새 발급기가 기존 라이브러리와 같은 번호를 내는지 비교한다
 	testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
