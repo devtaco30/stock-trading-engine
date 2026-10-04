@@ -44,6 +44,8 @@ matching-worker/src/main/java/com/flab/stocktradingengine/matching/worker/config
 matching-worker/src/main/java/com/flab/stocktradingengine/matching/worker/config/MatchingEngineConfig.java
 matching-worker/src/main/java/com/flab/stocktradingengine/matching/worker/config/MatchingFillPublishConfig.java
 matching-worker/src/main/java/com/flab/stocktradingengine/matching/worker/config/MatchingStageMeasurementConfig.java
+matching-worker/src/main/java/com/flab/stocktradingengine/matching/worker/config/SnowflakeConfig.java
+matching-worker/src/main/java/com/flab/stocktradingengine/matching/worker/id/MonotonicSnowflakeIdGenerator.java
 matching-worker/src/main/java/com/flab/stocktradingengine/matching/worker/ltp/LastTradedPriceWriter.java
 matching-worker/src/main/java/com/flab/stocktradingengine/matching/worker/ltp/LtpRecordingMatchListener.java
 matching-worker/src/main/java/com/flab/stocktradingengine/matching/worker/ltp/OrderbookRecordingMatchListener.java
