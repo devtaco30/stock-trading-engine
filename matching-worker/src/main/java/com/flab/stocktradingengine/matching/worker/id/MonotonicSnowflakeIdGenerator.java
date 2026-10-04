@@ -37,7 +37,7 @@ public class MonotonicSnowflakeIdGenerator extends SnowflakeIdGenerator {
     }
 
     /** 테스트가 시계를 직접 정할 수 있게 한 생성자. */
-    MonotonicSnowflakeIdGenerator(long nodeId, LongSupplier clockMillis) {
+    public MonotonicSnowflakeIdGenerator(long nodeId, LongSupplier clockMillis) {
         super(nodeId);
         long clamped = nodeId < 0 ? 0 : Math.min(nodeId, MAX_NODE_ID);
         this.nodeBits = clamped << NODE_SHIFT;
