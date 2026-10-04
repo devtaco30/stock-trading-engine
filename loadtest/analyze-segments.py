@@ -31,7 +31,7 @@ SET_RE = re.compile(r"^(\d+)-(S1X|S1R|S1|S3|S5X|S5|L|I\d+)-(v1idx|v2)-st([01])$"
 STAGE_FILE_RE = re.compile(r"^stages-(v1|v2)-(.+)-(r\d+)\.json$")
 EXPECTED_PROCESSES = {
     "v1": ["api", "order-engine", "matching-engine", "settlement-engine"],
-    "v2": ["api", "account-worker", "matching-worker"],
+    "v2": ["api", "account-worker", "matching-worker", "account-projection-worker"],
 }
 STEP_RATES = {"S1": 192, "S1X": 192, "S1R": 192, "S3": 1000, "S5": 4000, "S5X": 4000}
 IMPACT_STEPS = ("S1X", "S1R")
@@ -43,7 +43,8 @@ STAGE_ORDER = {
            "A@aggr", "B@aggr", "C@aggr", "fill_transit", "E", "F"],
     "v2": ["G", "api_send_cost", "A", "ring_publish", "hop_to_journal", "journal_append", "hop_to_business", "B_biz", "B",
            "C", "m_ring_publish", "m_hop_to_business", "D", "A@aggr", "B@aggr", "C@aggr", "fill_queue", "fill_offer",
-           "fill_transit", "fill_hop_to_journal", "fill_journal_append", "fill_hop_to_business", "E", "F"],
+           "fill_transit", "fill_hop_to_journal", "fill_journal_append", "fill_hop_to_business", "E", "F", "db_batch",
+           "db_reflect"],
 }
 
 # 설계서 2-3a절의 같은 정의 / 다른 정의
@@ -61,11 +62,13 @@ CORRESPONDENCE = [
     ("A", "같은 정의", "발행 시각부터 처리 프로세스의 첫 읽기까지. v1은 Kafka 프로듀서·브로커·컨슈머 fetch·역직렬화, v2는 UDP와 폴링 스레드"),
     ("B", "같은 정의", "처리 프로세스의 첫 읽기부터 영속화를 포함한 접수 완료까지. v1은 DB 커밋, v2는 저널 기록 뒤 승인"),
     ("판정 도달", "다른 정의", "v1 b_decide(락 획득부터 한도 검사 통과까지, 합계 쿼리 포함), v2 B_biz(업무 핸들러가 이벤트를 받은 뒤 승인까지)"),
-    ("영속화 비용", "다른 정의", "v1 b_commit(저장 뒤 트랜잭션 커밋 완료까지), v2 journal_append(Archive 스트림 offer, fsync 보장 없음)"),
+    ("영속화 비용", "다른 정의", "v1 b_commit(저장 뒤 트랜잭션 커밋 완료까지), v2 journal_append(Archive 스트림 offer, 파일 동기화 수준 0으로 일반 쓰기)"),
     ("C", "같은 정의, 시작 시각이 다름", "접수 완료부터 매칭 프로세스의 첫 읽기까지. v1은 커밋 직후라 send 호출 시간이 안에 있고, v2는 onAccepted 콜백 뒤라 콜백 시간이 빠진다"),
     ("D", "다른 정의", "체결을 일으킨 주문의 첫 체결 기준. v1은 호가창 매칭에 최근 체결가 Redis 저장과 로그가 들어 있고 v2는 호가창 매칭만"),
     ("E", "다른 정의", "v1은 Kafka 전달과 정산 DB 트랜잭션 커밋까지, v2는 Aeron 전달과 저널 기록, 메모리 잔고 반영까지"),
-    ("F", "같은 정의, 반영의 뜻이 다름", "체결을 일으킨 주문의 발행 시각부터 계좌 반영 완료까지. v1은 정산 트랜잭션 커밋, v2는 메모리 계좌 상태 갱신"),
+    ("F", "같은 정의, 반영의 뜻이 다름", "체결을 일으킨 주문의 발행 시각부터 계좌 반영 완료까지. v1은 정산 트랜잭션 커밋, v2는 메모리 계좌 상태 갱신(층 1)"),
+    ("db_reflect", "v2만 있음", "층 2. account-worker가 계좌 상태를 바꾼 시각부터 account-projection-worker의 DB 커밋 직후까지(이벤트마다, 밀리초 해상도)"),
+    ("db_batch", "v2만 있음", "account-projection-worker가 Kafka 배치 하나를 DB에 반영(커밋)하는 데 걸린 시간"),
     ("fill_transit", "같은 정의", "체결 방출부터 반영 프로세스의 첫 읽기까지. 전달 수단이 다름"),
 ]
 
@@ -96,6 +99,7 @@ class SetData:
     meta: SetName
     rounds: dict = field(default_factory=dict)        # round -> {"valid": bool, "flags": str}
     saturation: dict = field(default_factory=dict)    # round -> reasons 문자열
+    drain: dict = field(default_factory=dict)         # round -> 후속 처리 완료까지의 초(saturation csv 의 drain_sec, 없으면 None)
     stage_rounds: dict = field(default_factory=dict)  # round -> {단계: 스냅샷}
     processes_seen: dict = field(default_factory=dict)  # round -> {프로세스}
     latency: dict = field(default_factory=dict)       # round -> {"p50": µs, "p99": µs}
@@ -161,6 +165,7 @@ def load_set(set_dir, meta):
     data.has_saturation_file = sat_path.exists()
     for row in read_csv_rows(sat_path):
         data.saturation[row["round"]] = row.get("reasons", "none")
+        data.drain[row["round"]] = to_float(row.get("drain_sec"))
     if cond_dir.exists():
         for path in sorted(cond_dir.iterdir()):
             match = STAGE_FILE_RE.match(path.name)
@@ -704,6 +709,36 @@ def ladder_search_section(sets):
     return "\n".join(lines).rstrip()
 
 
+def db_layer_section(sets):
+    """v2 의 층 1(F, 메모리 반영까지)과 층 2(db_reflect, 계좌 상태 변경부터 DB 커밋까지)를 나란히 싣는다."""
+    rows = []
+    for data in sets:
+        if data.meta.cond != "v2" or data.meta.stages != 1 or data.meta.step == "L":
+            continue
+        reflect = stage_summary(data, "db_reflect")
+        if reflect["rounds"] == 0:
+            continue
+        layer_one = stage_summary(data, "F")
+        drains = [data.drain[r] for r in data.included_rounds() if data.drain.get(r) is not None]
+        drain_cell = "—" if not drains else f"{median(drains):g}"
+        total = None if layer_one["p50"] is None or reflect["p50"] is None else layer_one["p50"] + reflect["p50"]
+        rows.append([data.meta.name, reflect["rounds"], with_range(layer_one, "p50"), with_range(reflect, "p50"),
+                     with_range(reflect, "p99"), fmt_micros(total), drain_cell])
+    if not rows:
+        return ""
+    lines = ["## v2 DB 반영(층 2)", "",
+             "v2 의 F 는 메모리 계좌 상태 갱신까지(층 1)이고, DB 반영은 account-projection-worker 가 Kafka account-state 를 읽어 "
+             "Postgres 에 기록한 시점이다(층 2). 층 2 는 account-worker 가 계좌 상태를 바꾼 시각부터 projection 워커의 DB 커밋 직후까지를 "
+             "이벤트마다 기록한 값이다(밀리초 해상도, ±1ms). 한 배치 안에서 같은 계좌의 앞선 이벤트는 건너뛰지만 모든 이벤트에 "
+             "같은 방식으로 기록한다.", "",
+             table(["세트", "집계 회차", "층 1 F p50 µs", "층 2 db_reflect p50 µs", "층 2 db_reflect p99 µs",
+                    "층 1 p50 + 층 2 p50 µs (근사)", "후속 처리 완료까지(drain) 초, 회차 중앙값"], rows), "",
+             "- 합산은 두 중앙값을 더한 근사값이다. 주문 발행부터 DB 커밋까지를 한 건씩 이어서 잰 값이 아니다(두 층의 이벤트가 같은 건이 아니다).",
+             "- 근거: db_reflect 는 projection 워커의 단계 덤프, drain 은 두 워커 그룹의 lag 가 0이 되고 account_projection 의 seq 합이 멈출 때까지 "
+             "(saturation-v2.csv 의 drain_sec)."]
+    return "\n".join(lines)
+
+
 def correspondence_section():
     lines = ["## 두 구현의 단계 대응", "", "설계서 2-3a절을 옮긴 것이다. 위 표와 다르면 설계서가 기준이다.", "",
              table(["단계", "같은 정의 / 다른 정의", "내용"], CORRESPONDENCE), "",
@@ -750,7 +785,7 @@ def build_segments_report(run_dir):
     lines += ["", "## 세트별 단계 표", ""]
     for data in sets:
         lines += [set_section(data), ""]
-    for section in (residual_section(sets), resource_section(sets), ladder_search_section(sets), ladder_section(sets), impact_section(sets), correspondence_section(),
+    for section in (residual_section(sets), db_layer_section(sets), resource_section(sets), ladder_search_section(sets), ladder_section(sets), impact_section(sets), correspondence_section(),
                     warning_section(sets)):
         lines += [section, ""]
     return "\n".join(lines).rstrip() + "\n"

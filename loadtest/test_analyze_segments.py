@@ -48,7 +48,9 @@ def v2_stage_files(f_error=0.0, counts=None, small=False, g_mean=20):
     account["F"] = stage(f_mean, counts.get("F", 10000))
     matching = {"C": stage(150), "D": stage(d, counts.get("D", 10000)), "A@aggr": stage(a, 10000),
                 "B@aggr": stage(b, 10000), "C@aggr": stage(c, 10000)}
-    return {"account-worker": account, "matching-worker": matching, "api": {"api_send_cost": stage(30), "G": stage(g_mean)}}
+    projection = {"db_batch": stage(4000, counts.get("db_batch", 500)), "db_reflect": stage(12000, counts.get("db_reflect", 9500))}
+    return {"account-worker": account, "matching-worker": matching, "api": {"api_send_cost": stage(30), "G": stage(g_mean)},
+            "account-projection-worker": projection}
 
 
 class SetFixture:
@@ -64,9 +66,9 @@ class SetFixture:
         self.rates = []
 
     def add_round(self, round_id, valid=1, flags="", reasons="none", stages=None, skip_processes=(),
-                  latency=None, hist_count=10000, cpu_rows=None):
+                  latency=None, hist_count=10000, cpu_rows=None, drain="NA"):
         self.rounds.append([round_id, 1000, 1052, 0, 0, 0, 0, hist_count, "", flags, valid])
-        self.saturation.append([round_id, reasons, 0, 0, hist_count, 10000, 0, "NA", "NA", "NA", 52])
+        self.saturation.append([round_id, reasons, 0, 0, hist_count, 10000, 0, "NA", "NA", drain, 52])
         for process, snapshots in (stages or {}).items():
             if process in skip_processes:
                 continue
@@ -438,6 +440,49 @@ class GapStageTest(unittest.TestCase):
             run = make_run(tmp, [("01-S1-v1idx-st1", "v1", build)])
             text = asg.build_segments_report(run)
         self.assertIn("api r02", text)
+
+
+class DbLayerTest(unittest.TestCase):
+    """v2 의 층 2(계좌 상태 변경부터 DB 커밋까지)가 단계 표와 전용 절에 실리는지."""
+
+    def test_db_reflect_row_is_in_the_stage_table_as_one_sided(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            run = make_run(tmp, [("01-S1X-v2-st1", "v2", v2_set())])
+            text = asg.build_segments_report(run)
+        row = next(line for line in text.splitlines() if line.startswith("| db_reflect |"))
+        self.assertIn("한쪽 구현에만 있음", row)
+        self.assertIn("| db_batch |", text)
+
+    def test_v2_expects_projection_dump(self):
+        def build(fixture):
+            fixture.add_round("r01", valid=0, flags="WARMUP", stages=v2_stage_files(0.5))
+            fixture.add_round("r02", stages=v2_stage_files(0.0), skip_processes=("account-projection-worker",))
+        with tempfile.TemporaryDirectory() as tmp:
+            run = make_run(tmp, [("01-S1X-v2-st1", "v2", build)])
+            text = asg.build_segments_report(run)
+        self.assertIn("account-projection-worker r02", text)
+
+    def test_db_layer_section_adds_layer_one_and_layer_two_and_reports_drain(self):
+        def build(fixture):
+            fixture.add_round("r01", valid=0, flags="WARMUP", stages=v2_stage_files(0.5), drain="3")
+            for number, drain in ((2, "4"), (3, "6"), (4, "8")):
+                fixture.add_round(f"r{number:02d}", stages=v2_stage_files(0.0), drain=drain)
+        with tempfile.TemporaryDirectory() as tmp:
+            run = make_run(tmp, [("01-S1X-v2-st1", "v2", build)])
+            text = asg.build_segments_report(run)
+        self.assertIn("## v2 DB 반영", text)
+        section = text.split("## v2 DB 반영", 1)[1].split("\n## ", 1)[0]
+        # F(층 1) p50 = 1+74+0.8+46+110 = 232(반올림), db_reflect p50 = 12000 → 합산 근사 12,232. drain 중앙값 6초
+        self.assertIn("232", section)
+        self.assertIn("12,000", section)
+        self.assertIn("12,232", section)
+        self.assertIn("| 6 |", section)
+
+    def test_db_layer_section_skips_sets_without_projection_dump(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            run = make_run(tmp, [("01-S1X-v1idx-st1", "v1", lambda fixture: fixture.add_round("r02", stages={"settlement-engine": {"F": stage(5)}}))])
+            text = asg.build_segments_report(run)
+        self.assertNotIn("## v2 DB 반영", text)
 
 
 class RehearsalImpactTest(unittest.TestCase):
