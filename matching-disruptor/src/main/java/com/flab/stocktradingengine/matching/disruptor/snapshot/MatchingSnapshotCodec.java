@@ -24,7 +24,7 @@ import com.flab.stocktradingengine.trading.entity.OrderSide;
  *
  * <h3>레이아웃 (running offset, 앞에서 뒤로)</h3>
  * <pre>
- * journalPosition:8, tradeIdCounter:8, stockCount:4,
+ * journalPosition:8, stockCount:4,
  * (stockCode:4+N, restingOrderCount:4,
  *   (orderId:8, accountId:8, side:1, priceUnscaled:8, priceScale:4,
  *    quantity:4, orderAtEpochMillis:8, filledQuantity:4, cancelled:1) × restingOrderCount,
@@ -42,23 +42,13 @@ public final class MatchingSnapshotCodec {
     }
 
     public MatchingSnapshot decode(byte[] bytes) {
-        return decode(new UnsafeBuffer(bytes), 0, true);
-    }
-
-    /**
-     * 체결번호 카운터가 없던 옛 배치({@code journalPosition:8, stockCount:4, ...})를 읽는다. 카운터는 0이다. 스냅샷 파일 버전 1이
-     * 이 배치다(옛 번호는 시계 기반이라 새 번호와 범위가 겹치지 않아 0에서 시작해도 충돌하지 않는다).
-     */
-    public MatchingSnapshot decodeLegacy(byte[] bytes) {
-        return decode(new UnsafeBuffer(bytes), 0, false);
+        return decode(new UnsafeBuffer(bytes), 0);
     }
 
     private int encode(MutableDirectBuffer buffer, int offset, MatchingSnapshot snapshot) {
         int position = offset;
 
         buffer.putLong(position, snapshot.journalPosition());
-        position += Long.BYTES;
-        buffer.putLong(position, snapshot.tradeIdCounter());
         position += Long.BYTES;
         buffer.putInt(position, snapshot.booksByStock().size());
         position += Integer.BYTES;
@@ -120,16 +110,11 @@ public final class MatchingSnapshotCodec {
         return position;
     }
 
-    private MatchingSnapshot decode(DirectBuffer buffer, int offset, boolean hasTradeIdCounter) {
+    private MatchingSnapshot decode(DirectBuffer buffer, int offset) {
         int position = offset;
 
         long journalPosition = buffer.getLong(position);
         position += Long.BYTES;
-        long tradeIdCounter = 0L;
-        if (hasTradeIdCounter) {
-            tradeIdCounter = buffer.getLong(position);
-            position += Long.BYTES;
-        }
         int stockCount = buffer.getInt(position);
         position += Integer.BYTES;
 
@@ -141,7 +126,7 @@ public final class MatchingSnapshotCodec {
             booksByStock.put(stockCode, result.value());
             position = result.nextOffset();
         }
-        return new MatchingSnapshot(booksByStock, journalPosition, tradeIdCounter);
+        return new MatchingSnapshot(booksByStock, journalPosition);
     }
 
     private DecodeResult<BookSnapshot> decodeBookSnapshot(DirectBuffer buffer, int offset) {
