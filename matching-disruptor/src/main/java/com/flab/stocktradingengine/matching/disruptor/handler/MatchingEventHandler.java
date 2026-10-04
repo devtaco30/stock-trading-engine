@@ -16,6 +16,7 @@ import com.flab.stocktradingengine.trading.matching.OrderEntry;
 import com.flab.stocktradingengine.codec.EventType;
 import com.flab.stocktradingengine.time.EpochNanos;
 import com.flab.stocktradingengine.matching.disruptor.engine.MatchingSegmentStages;
+import com.flab.stocktradingengine.matching.disruptor.engine.MatchingTradeIdGenerator;
 import com.flab.stocktradingengine.matching.disruptor.engine.OrderEvent;
 import com.flab.stocktradingengine.matching.disruptor.io.MatchListener;
 import com.flab.stocktradingengine.matching.disruptor.io.MatchingSnapshotSink;
@@ -73,6 +74,8 @@ public class MatchingEventHandler implements EventHandler<OrderEvent> {
     private final MatchingSnapshotSink snapshotSink;
     private final boolean snapshotTriggerEnabled;
     private final MatchingSnapshotCodec snapshotCodec = new MatchingSnapshotCodec();
+    // 체결번호 발급기. 엔진이 들고 실행 핸들러와 복구 핸들러에 같은 인스턴스를 넘긴다 — 리플레이가 카운터를 전진시켜야 한다(ADR-023 갱신 2c)
+    private final MatchingTradeIdGenerator tradeIdGenerator;
 
     // JournalEventHandler가 슬롯에 실어준 값(I6 U1) — 이 핸들러(소비자 스레드)만 읽는다.
     private long lastJournaledPosition;
@@ -105,6 +108,14 @@ public class MatchingEventHandler implements EventHandler<OrderEvent> {
     public MatchingEventHandler(Map<String, OrderBook> books, MatchListener listener,
                                 MatchingSnapshotSink snapshotSink, boolean snapshotTriggerEnabled,
                                 MatchingSegmentStages stages) {
+        this(books, listener, snapshotSink, snapshotTriggerEnabled, stages, new MatchingTradeIdGenerator(0L));
+    }
+
+    /** 체결번호 발급기를 엔진에서 받는다. 이 발급기의 카운터가 스냅샷에 들어가고 리플레이가 같은 인스턴스를 전진시킨다. */
+    public MatchingEventHandler(Map<String, OrderBook> books, MatchListener listener,
+                                MatchingSnapshotSink snapshotSink, boolean snapshotTriggerEnabled,
+                                MatchingSegmentStages stages, MatchingTradeIdGenerator tradeIdGenerator) {
+        this.tradeIdGenerator = tradeIdGenerator;
         this.stages = stages;
         this.books = books;
         this.listener = listener;
@@ -166,7 +177,7 @@ public class MatchingEventHandler implements EventHandler<OrderEvent> {
 
     /** books를 직렬화해 쓰기 큐에 넣는다(I6 U1). 직렬화(메모리 복사)까지만 이 스레드가 한다. */
     private void takeSnapshot() {
-        MatchingSnapshot snapshot = MatchingSnapshotFactory.capture(books, lastJournaledPosition);
+        MatchingSnapshot snapshot = MatchingSnapshotFactory.capture(books, lastJournaledPosition, tradeIdGenerator.counter());
         byte[] snapshotBytes = snapshotCodec.encode(snapshot);
         boolean offered = snapshotSink.offer(snapshotBytes, lastAppliedOrderIntakePositions(), appliedSeq);
         if (!offered) {
@@ -226,8 +237,10 @@ public class MatchingEventHandler implements EventHandler<OrderEvent> {
             if (result.isEmpty()) {
                 break;
             }
+            // 번호는 listener가 있든 없든 발급한다: 리플레이 핸들러의 listener는 no-op이지만 카운터는 라이브와 같이 전진해야 한다
+            long tradeId = tradeIdGenerator.next();
             if (!stages.isEnabled()) {
-                listener.onFill(stockCode, result.get());
+                listener.onFill(stockCode, result.get(), tradeId, 0L, 0L);
                 continue;
             }
             // 한 주문이 체결을 여러 건 내면 첫 체결에만 방출 시각과 aggressor 발신 시각을 싣는다(설계서 4-2절).
@@ -237,7 +250,7 @@ public class MatchingEventHandler implements EventHandler<OrderEvent> {
                 stages.recordFirstFill(event, emittedAtNanos);
             }
             firstFill = false;
-            listener.onFill(stockCode, result.get(), emittedAtNanos, aggressorOriginNanos);
+            listener.onFill(stockCode, result.get(), tradeId, emittedAtNanos, aggressorOriginNanos);
         }
     }
 

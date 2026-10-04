@@ -19,6 +19,10 @@ public final class MatchingSnapshotFactory {
     }
 
     public static MatchingSnapshot capture(Map<String, OrderBook> books, long journalPosition) {
+        return capture(books, journalPosition, 0L);
+    }
+
+    public static MatchingSnapshot capture(Map<String, OrderBook> books, long journalPosition, long tradeIdCounter) {
         Map<String, BookSnapshot> booksByStock = new HashMap<>();
         for (Map.Entry<String, OrderBook> entry : books.entrySet()) {
             String stockCode = entry.getKey();
@@ -34,7 +38,7 @@ public final class MatchingSnapshotFactory {
 
             booksByStock.put(stockCode, new BookSnapshot(restingOrders, filledTimestampsEpochMillis));
         }
-        return new MatchingSnapshot(booksByStock, journalPosition);
+        return new MatchingSnapshot(booksByStock, journalPosition, tradeIdCounter);
     }
 
     private static RestingOrder toRestingOrder(OrderEntry entry) {

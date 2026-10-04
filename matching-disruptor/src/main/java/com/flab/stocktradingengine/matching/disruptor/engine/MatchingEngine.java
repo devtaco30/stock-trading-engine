@@ -79,6 +79,8 @@ public class MatchingEngine {
     // 라이브 배선에 쓴 것과 같은 인스턴스를 들고 있어야 lastAppliedOrderIntakePositions()가 실제
     // 소비자 스레드가 반영한 값을 읽는다(account-disruptor AccountEngine.businessHandler와 같은 이유).
     private final MatchingEventHandler matchingEventHandler;
+    // 체결번호 발급기(ADR-023 갱신 2c). 실행 핸들러와 recover()의 복구 핸들러가 같은 인스턴스를 쓴다 — 리플레이가 카운터를 전진시킨다
+    private final MatchingTradeIdGenerator tradeIdGenerator;
     private RingBuffer<OrderEvent> ringBuffer;
     private final MatchingSegmentStages stages;
 
@@ -97,6 +99,19 @@ public class MatchingEngine {
     /** 구간 분해 측정용 — 단계별 지연 등록부를 받는다(꺼진 등록부면 기존 동작과 같다). */
     public MatchingEngine(int bufferSize, WaitStrategy waitStrategy, MatchListener listener, Journal journal,
                           MatchingSnapshotSink snapshotSink, boolean snapshotTriggerEnabled, StageLatencyRegistry stageRegistry) {
+        this(bufferSize, waitStrategy, listener, journal, snapshotSink, snapshotTriggerEnabled, stageRegistry, 0L);
+    }
+
+    /** 체결번호의 nodeId(0~1023)를 받는다. 다른 생성자는 nodeId 0을 쓴다. */
+    public MatchingEngine(int bufferSize, WaitStrategy waitStrategy, MatchListener listener, Journal journal,
+                          StageLatencyRegistry stageRegistry, long nodeId) {
+        this(bufferSize, waitStrategy, listener, journal, NO_OP_SNAPSHOT_SINK, false, stageRegistry, nodeId);
+    }
+
+    public MatchingEngine(int bufferSize, WaitStrategy waitStrategy, MatchListener listener, Journal journal,
+                          MatchingSnapshotSink snapshotSink, boolean snapshotTriggerEnabled, StageLatencyRegistry stageRegistry,
+                          long nodeId) {
+        this.tradeIdGenerator = new MatchingTradeIdGenerator(nodeId);
         this.stages = new MatchingSegmentStages(stageRegistry);
         this.journal = journal;
         ThreadFactory threadFactory = DaemonThreadFactory.INSTANCE;
@@ -111,7 +126,7 @@ public class MatchingEngine {
         // handleEventsWith 배선 전에 설정해야 이후 등록되는 모든 핸들러에 적용된다.
         this.disruptor.setDefaultExceptionHandler(new MatchingExceptionHandler());
         // 저널러가 먼저 기록 → 매처가 그 뒤에 매칭 (SequenceBarrier 로 게이팅)
-        this.matchingEventHandler = new MatchingEventHandler(books, listener, snapshotSink, snapshotTriggerEnabled, stages);
+        this.matchingEventHandler = new MatchingEventHandler(books, listener, snapshotSink, snapshotTriggerEnabled, stages, tradeIdGenerator);
         this.disruptor.handleEventsWith(new JournalEventHandler(journal)).then(matchingEventHandler);
     }
 
@@ -195,7 +210,8 @@ public class MatchingEngine {
      */
     public void recover(Iterable<JournaledOrder> entries) {
         requireNotStarted();
-        MatchingEventHandler recoveryHandler = new MatchingEventHandler(books, NO_OP_LISTENER);
+        MatchingEventHandler recoveryHandler = new MatchingEventHandler(books, NO_OP_LISTENER, NO_OP_SNAPSHOT_SINK, false,
+            MatchingSegmentStages.DISABLED, tradeIdGenerator);
         OrderEvent scratch = new OrderEvent();
         for (JournaledOrder order : entries) {
             applyToScratch(scratch, order);
@@ -211,7 +227,7 @@ public class MatchingEngine {
      * 된다. 언제가 안전한지 판단하는 건 호출부(matching-worker 호스트) 책임이다.</p>
      */
     public MatchingSnapshot snapshot() {
-        return MatchingSnapshotFactory.capture(books, journal.position());
+        return MatchingSnapshotFactory.capture(books, journal.position(), tradeIdGenerator.counter());
     }
 
     /**
@@ -221,6 +237,7 @@ public class MatchingEngine {
      */
     public void restore(MatchingSnapshot snapshot) {
         requireNotStarted();
+        tradeIdGenerator.restoreCounter(snapshot.tradeIdCounter());
         snapshot.booksByStock().forEach((stockCode, bookSnapshot) -> {
             OrderBook book = books.computeIfAbsent(stockCode, k -> new OrderBook());
             for (RestingOrder restingOrder : bookSnapshot.restingOrders()) {
