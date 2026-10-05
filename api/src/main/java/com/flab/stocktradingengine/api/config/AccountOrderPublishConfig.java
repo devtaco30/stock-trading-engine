@@ -45,9 +45,13 @@ public class AccountOrderPublishConfig {
         String aeronDirectoryName = CommonContext.generateRandomDirName();
         // 이 드라이버는 통신용 임시 디렉터리(aeron-*)만 갖는다(Archive 없음) — 프로세스가 죽으면
         // 쓸모없는데 기본값이 안 지워 무한히 쌓인다(I10).
-        return MediaDriver.launchEmbedded(new MediaDriver.Context().aeronDirectoryName(aeronDirectoryName)
+        return MediaDriver.launchEmbedded(mediaDriverContext(aeronDirectoryName));
+    }
+
+    static MediaDriver.Context mediaDriverContext(String aeronDirectoryName) {
+        return new MediaDriver.Context().aeronDirectoryName(aeronDirectoryName)
             .dirDeleteOnStart(true)
-            .dirDeleteOnShutdown(true));
+            .dirDeleteOnShutdown(true);
     }
 
     @Bean(destroyMethod = "close")

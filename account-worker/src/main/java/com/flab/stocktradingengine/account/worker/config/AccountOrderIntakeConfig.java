@@ -108,12 +108,7 @@ public class AccountOrderIntakeConfig {
         // Aeron 드라이버 통신용 임시 디렉터리(aeron-*) — Archive 저널·체결 디렉터리(accountArchiveDir,
         // 재시작 넘어 보존해야 해 절대 안 건드린다)와는 다른 자리다. 이 드라이버 디렉터리는 프로세스가
         // 죽으면 쓸모없는데 기본값이 안 지워 무한히 쌓인다(I10).
-        MediaDriver.Context mediaDriverContext = new MediaDriver.Context().aeronDirectoryName(aeronDirectoryName)
-            .dirDeleteOnStart(true)
-            .dirDeleteOnShutdown(true);
-        if (ipcTermBufferLength > 0) {
-            mediaDriverContext.ipcTermBufferLength(ipcTermBufferLength);
-        }
+        MediaDriver.Context mediaDriverContext = mediaDriverContext(aeronDirectoryName, ipcTermBufferLength);
 
         Archive.Context archiveContext = new Archive.Context()
             .controlChannel(controlRequestChannel)
@@ -125,6 +120,16 @@ public class AccountOrderIntakeConfig {
         }
 
         return ArchivingMediaDriver.launch(mediaDriverContext, archiveContext);
+    }
+
+    static MediaDriver.Context mediaDriverContext(String aeronDirectoryName, int ipcTermBufferLength) {
+        MediaDriver.Context mediaDriverContext = new MediaDriver.Context().aeronDirectoryName(aeronDirectoryName)
+            .dirDeleteOnStart(true)
+            .dirDeleteOnShutdown(true);
+        if (ipcTermBufferLength > 0) {
+            mediaDriverContext.ipcTermBufferLength(ipcTermBufferLength);
+        }
+        return mediaDriverContext;
     }
 
     @Bean(destroyMethod = "close")
