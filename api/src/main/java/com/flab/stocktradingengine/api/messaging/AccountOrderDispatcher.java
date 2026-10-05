@@ -2,8 +2,9 @@ package com.flab.stocktradingengine.api.messaging;
 
 import java.util.concurrent.locks.LockSupport;
 
-import org.agrona.concurrent.BackoffIdleStrategy;
 import org.agrona.concurrent.IdleStrategy;
+
+import com.flab.stocktradingengine.support.IdleStrategies;
 import org.agrona.concurrent.ManyToOneConcurrentArrayQueue;
 
 import com.flab.stocktradingengine.aeron.AccountDestinationResolver;
@@ -32,7 +33,7 @@ public class AccountOrderDispatcher implements AutoCloseable {
     private final OrderDeliveryFailureStore failureStore;
     private final ManyToOneConcurrentArrayQueue<PendingOrder> queue;
     private final long deadlineMillis;
-    private final IdleStrategy idleStrategy = new BackoffIdleStrategy();
+    private final IdleStrategy idleStrategy;
 
     private volatile boolean accepting = true;
     private volatile boolean running;
@@ -41,6 +42,14 @@ public class AccountOrderDispatcher implements AutoCloseable {
     public AccountOrderDispatcher(
             AccountDestinationResolver destinationResolver, AeronAccountOrderSender sender,
             OrderDeliveryFailureStore failureStore, int queueCapacity, long deadlineMillis) {
+        this(destinationResolver, sender, failureStore, queueCapacity, deadlineMillis, IdleStrategies.forThread());
+    }
+
+    /** 쉬는 방식 변경 실험(EXPERIMENT_IDLE)이 전달 스레드의 쉬는 방식을 바꿀 수 있게 전략을 주입받는다. */
+    public AccountOrderDispatcher(
+            AccountDestinationResolver destinationResolver, AeronAccountOrderSender sender,
+            OrderDeliveryFailureStore failureStore, int queueCapacity, long deadlineMillis, IdleStrategy idleStrategy) {
+        this.idleStrategy = idleStrategy;
         this.destinationResolver = destinationResolver;
         this.sender = sender;
         this.failureStore = failureStore;

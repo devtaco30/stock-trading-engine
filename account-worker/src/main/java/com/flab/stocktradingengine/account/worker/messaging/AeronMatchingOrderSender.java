@@ -11,6 +11,7 @@ import org.agrona.concurrent.IdleStrategy;
 import org.agrona.concurrent.OneToOneConcurrentArrayQueue;
 import org.agrona.concurrent.UnsafeBuffer;
 
+import com.flab.stocktradingengine.support.IdleStrategies;
 import com.flab.stocktradingengine.account.disruptor.io.MatchingOrderSender;
 import com.flab.stocktradingengine.account.worker.config.MatchingOrderSenderConfig;
 import com.flab.stocktradingengine.codec.EventType;
@@ -74,7 +75,7 @@ public class AeronMatchingOrderSender implements MatchingOrderSender, AutoClosea
     private final OrderCodec codec = new OrderCodec();
     private final OneToOneConcurrentArrayQueue<JournaledOrder> outbox = new OneToOneConcurrentArrayQueue<>(OUTBOX_CAPACITY);
     private final IdleStrategy enqueueIdleStrategy = new BackoffIdleStrategy();
-    private final IdleStrategy pollIdleStrategy = new BackoffIdleStrategy();
+    private final IdleStrategy pollIdleStrategy;
     private final IdleStrategy offerIdleStrategy = new BackoffIdleStrategy();
     private final AtomicBoolean running = new AtomicBoolean(false);
     private final AtomicReference<IllegalStateException> fatalError = new AtomicReference<>();
@@ -85,7 +86,16 @@ public class AeronMatchingOrderSender implements MatchingOrderSender, AutoClosea
     private Thread publisherThread;
 
     public AeronMatchingOrderSender(Publication matchingOrderPublication) {
+        this(matchingOrderPublication, IdleStrategies.forThread());
+    }
+
+    /**
+     * 쉬는 방식 변경 실험(EXPERIMENT_IDLE)이 발신 스레드의 큐 폴링 쉬는 방식(주문 이동 경로의 대기 지점)을 바꿀 수 있게
+     * 전략을 주입받는다. 큐가 가득 찼을 때와 offer가 실패했을 때만 쓰는 나머지 두 전략은 바꾸지 않는다.
+     */
+    public AeronMatchingOrderSender(Publication matchingOrderPublication, IdleStrategy pollIdleStrategy) {
         this.matchingOrderPublication = matchingOrderPublication;
+        this.pollIdleStrategy = pollIdleStrategy;
     }
 
     /**

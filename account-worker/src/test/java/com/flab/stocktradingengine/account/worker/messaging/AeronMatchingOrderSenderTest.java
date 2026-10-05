@@ -202,4 +202,51 @@ class AeronMatchingOrderSenderTest {
             .extracting(ILoggingEvent::getFormattedMessage)
             .anyMatch(message -> message.contains("1건"));
     }
+
+    @Test
+    void 주입한_쉬는_방식을_발신_스레드가_일이_없을_때와_있을_때_모두_부른다() {
+        Publication publication = mock(Publication.class);
+        when(publication.offer(any(DirectBuffer.class), anyInt(), anyInt())).thenReturn(100L);
+        java.util.concurrent.atomic.AtomicInteger idleWithoutWork = new java.util.concurrent.atomic.AtomicInteger();
+        java.util.concurrent.atomic.AtomicInteger idleWithWork = new java.util.concurrent.atomic.AtomicInteger();
+        org.agrona.concurrent.IdleStrategy counting = new org.agrona.concurrent.IdleStrategy() {
+            @Override
+            public void idle(int workCount) {
+                (workCount == 0 ? idleWithoutWork : idleWithWork).incrementAndGet();
+            }
+
+            @Override
+            public void idle() {
+                idleWithoutWork.incrementAndGet();
+            }
+
+            @Override
+            public void reset() {
+            }
+        };
+        sender = new AeronMatchingOrderSender(publication, counting);
+        sender.start();
+
+        sender.forwardPlace(1L, ACCOUNT_ID, STOCK_CODE, OrderSide.BUY, new BigDecimal("10000"), 10);
+
+        verify(publication, timeout(VERIFY_TIMEOUT_MILLIS).times(1)).offer(any(DirectBuffer.class), anyInt(), anyInt());
+        long deadline = System.nanoTime() + 1_000_000_000L;
+        while ((idleWithWork.get() == 0 || idleWithoutWork.get() == 0) && System.nanoTime() < deadline) {
+            Thread.onSpinWait();
+        }
+        assertThat(idleWithWork.get()).isPositive();
+        assertThat(idleWithoutWork.get()).isPositive();
+    }
+
+    @Test
+    void 주입이_없으면_지금과_같은_기본_Backoff를_쓴다() throws Exception {
+        org.junit.jupiter.api.Assumptions.assumeTrue(System.getenv(com.flab.stocktradingengine.support.IdleStrategies.ENV_NAME) == null);
+        sender = new AeronMatchingOrderSender(mock(Publication.class));
+        for (String name : new String[] {"enqueueIdleStrategy", "pollIdleStrategy", "offerIdleStrategy"}) {
+            java.lang.reflect.Field field = AeronMatchingOrderSender.class.getDeclaredField(name);
+            field.setAccessible(true);
+
+            assertThat(field.get(sender).getClass()).as(name).isEqualTo(org.agrona.concurrent.BackoffIdleStrategy.class);
+        }
+    }
 }

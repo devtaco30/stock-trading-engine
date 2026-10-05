@@ -242,4 +242,43 @@ class AccountOrderDispatcherTest {
 
         assertThatThrownBy(() -> d.submit(order("req-1"))).isInstanceOf(OrderPublishException.class);
     }
+
+    @Test
+    void 주입한_쉬는_방식을_전달_스레드가_큐가_비었을_때_부른다() throws InterruptedException {
+        AtomicInteger idleCalls = new AtomicInteger();
+        org.agrona.concurrent.IdleStrategy counting = new org.agrona.concurrent.IdleStrategy() {
+            @Override
+            public void idle(int workCount) {
+                idleCalls.incrementAndGet();
+            }
+
+            @Override
+            public void idle() {
+                idleCalls.incrementAndGet();
+            }
+
+            @Override
+            public void reset() {
+            }
+        };
+        dispatcher = new AccountOrderDispatcher(resolver, sender, store, 8, 1_000L, counting);
+
+        dispatcher.start();
+        long deadline = System.nanoTime() + 2_000_000_000L;
+        while (idleCalls.get() == 0 && System.nanoTime() < deadline) {
+            Thread.sleep(5);
+        }
+
+        assertThat(idleCalls.get()).as("전달 스레드가 주입한 전략의 idle을 불러야 한다").isPositive();
+    }
+
+    @Test
+    void 주입이_없으면_지금과_같은_기본_Backoff를_쓴다() throws Exception {
+        org.junit.jupiter.api.Assumptions.assumeTrue(System.getenv(com.flab.stocktradingengine.support.IdleStrategies.ENV_NAME) == null);
+        AccountOrderDispatcher plain = new AccountOrderDispatcher(resolver, sender, store, 8, 1_000L);
+        java.lang.reflect.Field field = AccountOrderDispatcher.class.getDeclaredField("idleStrategy");
+        field.setAccessible(true);
+
+        assertThat(field.get(plain).getClass()).isEqualTo(org.agrona.concurrent.BackoffIdleStrategy.class);
+    }
 }

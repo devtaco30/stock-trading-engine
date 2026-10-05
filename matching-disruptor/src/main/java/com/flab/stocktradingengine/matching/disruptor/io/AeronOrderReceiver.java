@@ -3,13 +3,13 @@ package com.flab.stocktradingengine.matching.disruptor.io;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.agrona.DirectBuffer;
-import org.agrona.concurrent.BackoffIdleStrategy;
 import org.agrona.concurrent.IdleStrategy;
 
 import io.aeron.Subscription;
 import io.aeron.logbuffer.FragmentHandler;
 import io.aeron.logbuffer.Header;
 
+import com.flab.stocktradingengine.support.IdleStrategies;
 import com.flab.stocktradingengine.codec.EventType;
 import com.flab.stocktradingengine.codec.JournaledOrder;
 import com.flab.stocktradingengine.time.EpochNanos;
@@ -42,15 +42,21 @@ public final class AeronOrderReceiver implements AutoCloseable {
     private final Subscription subscription;
     private final MatchingEngine engine;
     private final OrderCodec codec = new OrderCodec();
-    private final IdleStrategy idleStrategy = new BackoffIdleStrategy();
+    private final IdleStrategy idleStrategy;
     private final AtomicBoolean running = new AtomicBoolean(false);
     private final FragmentHandler fragmentHandler = this::onFragment;
 
     private Thread pollThread;
 
     public AeronOrderReceiver(Subscription subscription, MatchingEngine engine) {
+        this(subscription, engine, IdleStrategies.forThread());
+    }
+
+    /** 쉬는 방식 변경 실험(EXPERIMENT_IDLE)이 폴링 스레드의 쉬는 방식을 바꿀 수 있게 전략을 주입받는다. */
+    public AeronOrderReceiver(Subscription subscription, MatchingEngine engine, IdleStrategy idleStrategy) {
         this.subscription = subscription;
         this.engine = engine;
+        this.idleStrategy = idleStrategy;
     }
 
     /** 폴링 스레드를 기동한다. */
