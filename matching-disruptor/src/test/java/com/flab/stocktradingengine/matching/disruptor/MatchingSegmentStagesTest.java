@@ -94,9 +94,15 @@ class MatchingSegmentStagesTest {
         assertEquals(2L, count(snapshots, "C"), "접수된 주문마다 C");
         assertEquals(2L, count(snapshots, "m_ring_publish"));
         assertEquals(2L, count(snapshots, "m_hop_to_business"));
-        for (String stage : new String[] {"D", "A@aggr", "B@aggr", "C@aggr"}) {
+        for (String stage : new String[] {"D", "A@aggr", "B@aggr", "C@aggr", "M"}) {
             assertEquals(1L, count(snapshots, stage), stage);
         }
+        double partsMicros = snapshots.get("A@aggr").meanMicros() + snapshots.get("B@aggr").meanMicros()
+            + snapshots.get("C@aggr").meanMicros() + snapshots.get("D").meanMicros();
+        double mMicros = snapshots.get("M").meanMicros();
+        assertTrue(Math.abs(partsMicros - mMicros) / mMicros <= 0.01, "M은 A·B·C@aggr와 D의 합이어야 한다: " + partsMicros + " vs " + mMicros);
+        double emittedMinusOriginMicros = (fillTimes.get(0)[0] - fillTimes.get(0)[1]) / 1000.0;
+        assertTrue(Math.abs(emittedMinusOriginMicros - mMicros) / mMicros <= 0.01, "M은 방출 시각 − 발행 시각이어야 한다");
         assertEquals(1, fillTimes.size());
         assertTrue(fillTimes.get(0)[0] > 0, "방출 시각이 실려야 한다");
         assertEquals(originBuy, fillTimes.get(0)[1], "aggressor는 나중에 도착한 매수 주문");
@@ -116,7 +122,7 @@ class MatchingSegmentStagesTest {
         Thread.sleep(100);
 
         Map<String, StageSnapshot> snapshots = registry.snapshotAndResetAll();
-        for (String stage : new String[] {"D", "A@aggr", "B@aggr", "C@aggr"}) {
+        for (String stage : new String[] {"D", "A@aggr", "B@aggr", "C@aggr", "M"}) {
             assertEquals(0L, count(snapshots, stage), stage);
         }
         assertTrue(fillTimes.isEmpty());
@@ -131,10 +137,43 @@ class MatchingSegmentStagesTest {
         engine.publishPlace(2L, 200L, STOCK, OrderSide.BUY, new BigDecimal("10000"), 1, Instant.now());
         assertTrue(fillLatch.await(2, TimeUnit.SECONDS));
 
-        for (String stage : new String[] {"C", "D", "A@aggr", "m_ring_publish"}) {
+        for (String stage : new String[] {"C", "D", "A@aggr", "m_ring_publish", "M"}) {
             assertEquals(0L, count(registry.snapshotAndResetAll(), stage), stage);
         }
         assertTrue(twoArgCalled);
         assertFalse(!fillTimes.isEmpty());
+    }
+
+    @Test
+    void 한_주문이_체결을_세_건_내도_M은_첫_체결에서_한_건만_기록한다() throws InterruptedException {
+        StageLatencyRegistry registry = new StageLatencyRegistry(true);
+        fillLatch = new CountDownLatch(3);
+        start(registry);
+        for (long orderId = 1; orderId <= 3; orderId++) {
+            placeWithTimes(orderId, 100L + orderId, OrderSide.SELL, EpochNanos.now() - 50_000);
+        }
+        long origin = EpochNanos.now() - 40_000;
+        long received = origin + 1_000;
+        long accepted = received + 1_000;
+        engine.publishPlace(9L, 200L, STOCK, OrderSide.BUY, new BigDecimal("10000"), 3, Instant.now(),
+            0L, 0, origin, received, accepted, EpochNanos.now());
+        assertTrue(fillLatch.await(2, TimeUnit.SECONDS));
+
+        Map<String, StageSnapshot> snapshots = registry.snapshotAndResetAll();
+        assertEquals(3, fillTimes.size());
+        assertEquals(1L, count(snapshots, "M"));
+        assertEquals(1L, count(snapshots, "D"));
+    }
+
+    @Test
+    void 발행_시각이_비어_있으면_M을_기록하지_않는다() throws InterruptedException {
+        StageLatencyRegistry registry = new StageLatencyRegistry(true);
+        start(registry);
+
+        placeWithTimes(1L, 100L, OrderSide.SELL, 0L);
+        placeWithTimes(2L, 200L, OrderSide.BUY, 0L);
+        assertTrue(fillLatch.await(2, TimeUnit.SECONDS));
+
+        assertEquals(0L, count(registry.snapshotAndResetAll(), "M"));
     }
 }

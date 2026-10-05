@@ -13,6 +13,8 @@ import com.flab.stocktradingengine.time.StageLatencyRegistry;
  *   <li>{@code D} = W-P14 − W-P11 (체결을 일으킨 주문의 첫 체결만)</li>
  *   <li>{@code A@aggr}, {@code B@aggr}, {@code C@aggr} — 같은 체결을 일으킨 주문 기준의 A, B, C.
  *       A@aggr = W-P2 − W-P0, B@aggr = W-P8 − W-P2, C@aggr = W-P11 − W-P8. 체결 한 건의 F 항등식에 쓴다.</li>
+ *   <li>{@code M} = W-P14 − W-P0 (주문 발행부터 체결 완료까지. W-P14는 {@code book.match()}가 체결 결과를 돌려준 직후라
+ *       v1의 V-P10m과 같은 뜻이다. 체결을 일으킨 주문의 첫 체결만. M = A@aggr + B@aggr + C@aggr + D)</li>
  * </ul>
  */
 public final class MatchingSegmentStages {
@@ -27,6 +29,7 @@ public final class MatchingSegmentStages {
     private final LatencyHistogram aAggr;
     private final LatencyHistogram bAggr;
     private final LatencyHistogram cAggr;
+    private final LatencyHistogram m;
 
     public MatchingSegmentStages(StageLatencyRegistry registry) {
         this.enabled = registry.isEnabled();
@@ -37,6 +40,7 @@ public final class MatchingSegmentStages {
         this.aAggr = registry.stage("A@aggr");
         this.bAggr = registry.stage("B@aggr");
         this.cAggr = registry.stage("C@aggr");
+        this.m = registry.stage("M");
     }
 
     public boolean isEnabled() {
@@ -69,5 +73,6 @@ public final class MatchingSegmentStages {
         aAggr.recordNanos(p2 - p0);
         bAggr.recordNanos(p8 - p2);
         cAggr.recordNanos(p11 - p8);
+        m.recordNanos(emittedAtNanos - p0);
     }
 }
