@@ -175,6 +175,13 @@ test_allowlist() {
     rm -f "$tmp"
 }
 
+test_experiment_env_record() {
+    assert_eq "EXPERIMENT_IDLE 이 없으면 기록하지 않는다" "" "$(unset EXPERIMENT_IDLE; experiment_env_record)"
+    assert_eq "빈 값이면 기록하지 않는다" "" "$(EXPERIMENT_IDLE= experiment_env_record)"
+    assert_eq "threads 를 기록한다" "EXPERIMENT_IDLE=threads" "$(EXPERIMENT_IDLE=threads experiment_env_record)"
+    assert_eq "driver 를 기록한다" "EXPERIMENT_IDLE=driver" "$(EXPERIMENT_IDLE=driver experiment_env_record)"
+}
+
 test_allowlist_current_branch() {
     local output
     output="$(check_src_main_allowlist 2>&1)"
@@ -416,6 +423,7 @@ test_trigger_targets
 test_trigger_stage_dump
 test_allowlist
 test_allowlist_current_branch
+test_experiment_env_record
 test_commit_precedes
 test_set_token
 test_stage_args

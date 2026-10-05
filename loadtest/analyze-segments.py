@@ -830,9 +830,26 @@ def warning_section(sets):
     return "\n".join(lines)
 
 
+def experiment_idle_mode(run_dir):
+    """env.txt 의 EXPERIMENT_IDLE=<값> 줄. 없으면 None."""
+    env_path = Path(run_dir) / "env.txt"
+    try:
+        text = env_path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    for line in text.splitlines():
+        if line.startswith("EXPERIMENT_IDLE="):
+            value = line.split("=", 1)[1].strip()
+            return value or None
+    return None
+
+
 def build_segments_report(run_dir):
     sets = load_run(run_dir)
     lines = [f"# 구간 분해 측정 분석 ({Path(run_dir).name})", ""]
+    experiment = experiment_idle_mode(run_dir)
+    if experiment:
+        lines += [f"> 쉬는 방식 변경 실험: {experiment} (EXPERIMENT_IDLE). 이 실행은 기본 쉬는 방식의 실행과 코드 설정이 달라 그 실행을 대체하지 않는다.", ""]
     if not sets:
         lines.append("세트 폴더가 없다. <NN>-<단계>-<조건>-st<계측> 형식의 폴더를 찾지 못했다.")
         return "\n".join(lines)

@@ -721,5 +721,27 @@ class MatchDoneSectionTest(unittest.TestCase):
         self.assertIn("| D_match |", corr)
 
 
+class ExperimentHeaderTest(unittest.TestCase):
+    """쉬는 방식 변경 실험(env.txt 의 EXPERIMENT_IDLE)이 report 맨 위에 표시되는지."""
+
+    def text(self, env_text):
+        with tempfile.TemporaryDirectory() as tmp:
+            run = make_run(tmp, [("01-S1X-v2-st1", "v2", v2_set())])
+            if env_text is not None:
+                (run / "env.txt").write_text(env_text)
+            return asg.build_segments_report(run)
+
+    def test_header_line_shows_the_experiment_mode(self):
+        text = self.text("run_id=c-x1\nEXPERIMENT_IDLE=threads\nPLAN=S1X:v2:1\n")
+        first_lines = text.splitlines()[:4]
+        self.assertTrue(any("쉬는 방식 변경 실험: threads" in line for line in first_lines), first_lines)
+
+    def test_no_header_line_without_the_setting(self):
+        self.assertNotIn("쉬는 방식 변경 실험", self.text("run_id=c-m1\nPLAN=S1X:v2:1\n"))
+
+    def test_no_header_line_without_env_file(self):
+        self.assertNotIn("쉬는 방식 변경 실험", self.text(None))
+
+
 if __name__ == "__main__":
     unittest.main()

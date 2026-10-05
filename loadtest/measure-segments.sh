@@ -223,6 +223,12 @@ series_label_for() {
 
 # ---------------------------------------------------------------- 시작 검사
 
+# 쉬는 방식 변경 실험(EXPERIMENT_IDLE)이 켜져 있으면 env.txt 에 그 값을 남긴다. 없거나 비어 있으면 아무것도 출력하지 않는다
+experiment_env_record() {
+    [ -n "${EXPERIMENT_IDLE:-}" ] || return 0
+    echo "EXPERIMENT_IDLE=${EXPERIMENT_IDLE}"
+}
+
 # 변경된 src/main 파일 이름(표준입력)에서 허용 목록(파일 인자)에 없는 것을 출력한다. 목록 파일이 없으면 실패
 allowlist_violations() {
     local list="$1"
@@ -633,6 +639,7 @@ main() {
         echo "start=${start_epoch} $(date)"
         echo "HEAD=$(git rev-parse HEAD)"
         echo "PLAN=${plan}"
+        experiment_env_record
         echo "ROUND_GAP_SEC=${ROUND_GAP_SEC} INCLUDE_KAFKA_UI=${INCLUDE_KAFKA_UI} V1_LISTENER_CONCURRENCY=${V1_LISTENER_CONCURRENCY} V1_PARTITIONS=${V1_PARTITIONS}"
         check_src_main_allowlist || echo "ALLOWLIST_CHECK_FAILED"
         git diff --name-only "$B1_BASE_SHA" -- '*/src/main/*' | sed 's/^/허용 목록 대조 대상: /'
