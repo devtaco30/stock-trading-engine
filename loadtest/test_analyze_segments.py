@@ -36,7 +36,7 @@ V2_ACCOUNT = {"A": 120, "B": 300, "B_biz": 20, "ring_publish": 2, "hop_to_journa
               "hop_to_business": 80}
 
 
-def v2_stage_files(f_error=0.0, counts=None, small=False, g_mean=20):
+def v2_stage_files(f_error=0.0, counts=None, small=False, g_mean=20, m_error=None):
     """round 하나의 v2 프로세스별 단계 dict. F 에 오차 비율을 섞는다."""
     counts = counts or {}
     a, b, c, d, e = 1.0, 74.0, 0.8, 46.0, 110.0
@@ -48,6 +48,8 @@ def v2_stage_files(f_error=0.0, counts=None, small=False, g_mean=20):
     account["F"] = stage(f_mean, counts.get("F", 10000))
     matching = {"C": stage(150), "D": stage(d, counts.get("D", 10000)), "A@aggr": stage(a, 10000),
                 "B@aggr": stage(b, 10000), "C@aggr": stage(c, 10000)}
+    if m_error is not None:
+        matching["M"] = stage((a + b + c + d) * (1 + m_error), 10000)
     projection = {"db_batch": stage(4000, counts.get("db_batch", 500)), "db_reflect": stage(12000, counts.get("db_reflect", 9500))}
     return {"account-worker": account, "matching-worker": matching, "api": {"api_send_cost": stage(30), "G": stage(g_mean)},
             "account-projection-worker": projection}
@@ -119,7 +121,7 @@ def make_run(tmp, builders):
     return run_dir
 
 
-def v2_set(rounds=5, f_error=0.0, **kwargs):  # kwargs: counts, small, g_mean
+def v2_set(rounds=5, f_error=0.0, **kwargs):  # kwargs: counts, small, g_mean, m_error
     def build(fixture):
         fixture.add_round("r01", valid=0, flags="WARMUP", stages=v2_stage_files(0.5), latency=(2000, 8000))
         for number in range(2, rounds + 2):
@@ -645,6 +647,78 @@ class CommandTest(unittest.TestCase):
             status = ab.main(["compare-segments", str(run), "--out", str(out)])
             self.assertEqual(status, 0)
             self.assertIn("구간 분해 측정 분석", out.read_text(encoding="utf-8"))
+
+
+def v1_stage_files(m_error=0.0, d_match=20.0, d_full=5000.0):
+    """v1 round 하나. 기존 D 는 최근 체결가 Redis 저장을 포함해 크고, M 은 A@aggr+B@aggr+C@aggr+D_match 다."""
+    a, b, c = 800.0, 3000.0, 1000.0
+    m_mean = (a + b + c + d_match) * (1 + m_error)
+    return {"matching-engine": {"C": stage(1000), "D": stage(d_full), "D_match": stage(d_match), "A@aggr": stage(a),
+                                "B@aggr": stage(b), "C@aggr": stage(c), "M": stage(m_mean)},
+            "api": {"G": stage(10)}, "order-engine": {"B": stage(3000)}, "settlement-engine": {"F": stage(16000)}}
+
+
+def v1_set(rounds=5, **kwargs):
+    def build(fixture):
+        fixture.add_round("r01", valid=0, flags="WARMUP", stages=v1_stage_files(**kwargs))
+        for number in range(2, rounds + 2):
+            fixture.add_round(f"r{number:02d}", stages=v1_stage_files(**kwargs))
+    return build
+
+
+class MatchDoneSectionTest(unittest.TestCase):
+    """주문 발행부터 체결 완료(M)가 두 구현 모두 같은 정의로 단계 표와 전용 절에 실리는지."""
+
+    def text(self, builders):
+        with tempfile.TemporaryDirectory() as tmp:
+            return asg.build_segments_report(make_run(tmp, builders))
+
+    def section(self, text):
+        self.assertIn("## 발행~체결 완료(M)", text)
+        return text.split("## 발행~체결 완료(M)", 1)[1].split("\n## ", 1)[0]
+
+    def test_v2_m_row_is_in_the_stage_table_as_same_definition(self):
+        text = self.text([("01-S1X-v2-st1", "v2", v2_set(m_error=0.0))])
+        row = next(line for line in text.splitlines() if line.startswith("| M |"))
+        self.assertIn("같은 정의", row)
+
+    def test_v1_d_match_row_is_marked_as_the_same_definition_as_v2_d(self):
+        text = self.text([("01-S1X-v1idx-st1", "v1", v1_set())])
+        row = next(line for line in text.splitlines() if line.startswith("| D_match |"))
+        self.assertIn("v2의 D와 같은 정의", row)
+
+    def test_section_shows_m_percentiles_and_residual_for_v2(self):
+        section = self.section(self.text([("01-S1X-v2-st1", "v2", v2_set(m_error=0.0))]))
+        self.assertIn("01-S1X-v2-st1", section)
+        self.assertIn("122", section)  # M 평균 = 1+74+0.8+46 = 121.8 → p50 122
+        self.assertIn("0.000%", section)
+        self.assertIn("성립", section)
+
+    def test_v1_residual_uses_d_match_not_the_old_d(self):
+        # 기존 D(5,000µs, Redis 저장 포함)를 합에 쓰면 잔차가 크게 벌어진다. D_match 를 쓰면 성립한다.
+        section = self.section(self.text([("01-S1X-v1idx-st1", "v1", v1_set(d_match=20.0, d_full=5000.0))]))
+        self.assertIn("0.000%", section)
+        self.assertIn("D_match 사용, 성립", section)
+        self.assertNotIn("합 정합성 불성립", section)
+
+    def test_residual_over_one_percent_is_marked_invalid(self):
+        section = self.section(self.text([("01-S1X-v2-st1", "v2", v2_set(m_error=0.05))]))
+        self.assertIn("합 정합성 불성립", section)
+
+    def test_ratio_line_compares_v2_against_v1_when_both_have_m(self):
+        section = self.section(self.text([("01-S1X-v1idx-st1", "v1", v1_set()),
+                                          ("02-S1X-v2-st1", "v2", v2_set(m_error=0.0))]))
+        self.assertIn("v2 중앙값 / v1 중앙값", section)
+
+    def test_sets_without_m_do_not_get_the_section(self):
+        text = self.text([("01-S1X-v2-st1", "v2", v2_set())])
+        self.assertNotIn("## 발행~체결 완료(M)", text)
+
+    def test_correspondence_table_lists_m_and_d_match(self):
+        text = self.text([("01-S1X-v2-st1", "v2", v2_set(m_error=0.0))])
+        corr = text.split("## 두 구현의 단계 대응", 1)[1]
+        self.assertIn("| M |", corr)
+        self.assertIn("| D_match |", corr)
 
 
 if __name__ == "__main__":

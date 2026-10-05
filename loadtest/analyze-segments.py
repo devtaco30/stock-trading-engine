@@ -40,9 +40,9 @@ LABEL_TEXT = {"v1idx": "v1(인덱스 있음)", "v2": "v2"}
 # 단계 표시 순서. 목록에 없는 단계는 이름 순으로 뒤에 붙인다
 STAGE_ORDER = {
     "v1": ["G", "A", "b_idem", "b_lock", "b_sum", "b_decide", "b_insert", "B", "b_commit", "b_send_call", "C", "D",
-           "A@aggr", "B@aggr", "C@aggr", "fill_transit", "E", "F"],
+           "D_match", "A@aggr", "B@aggr", "C@aggr", "M", "fill_transit", "E", "F"],
     "v2": ["G", "api_send_cost", "A", "ring_publish", "hop_to_journal", "journal_append", "hop_to_business", "B_biz", "B",
-           "C", "m_ring_publish", "m_hop_to_business", "D", "A@aggr", "B@aggr", "C@aggr", "fill_queue", "fill_offer",
+           "C", "m_ring_publish", "m_hop_to_business", "D", "A@aggr", "B@aggr", "C@aggr", "M", "fill_queue", "fill_offer",
            "fill_transit", "fill_hop_to_journal", "fill_journal_append", "fill_hop_to_business", "E", "F", "db_batch",
            "db_reflect"],
 }
@@ -53,6 +53,7 @@ DEFINITION = {
     "A": "같은 정의", "B": "같은 정의", "C": "같은 정의(시작 시각이 다름)", "D": "다른 정의", "E": "다른 정의",
     "F": "같은 정의(반영의 뜻이 다름)", "fill_transit": "같은 정의",
     "A@aggr": "A와 같음(체결 기준)", "B@aggr": "B와 같음(체결 기준)", "C@aggr": "C와 같음(체결 기준)",
+    "M": "같은 정의(체결 완료 = 매칭 결과 직후)", "D_match": "v2의 D와 같은 정의(매칭 계산만)",
     "b_decide": "다른 정의(판정 도달)", "B_biz": "다른 정의(판정 도달)",
     "b_commit": "다른 정의(영속화 비용)", "journal_append": "다른 정의(영속화 비용)",
 }
@@ -65,6 +66,8 @@ CORRESPONDENCE = [
     ("영속화 비용", "다른 정의", "v1 b_commit(저장 뒤 트랜잭션 커밋 완료까지), v2 journal_append(Archive 스트림 offer, 파일 동기화 수준 0으로 일반 쓰기)"),
     ("C", "같은 정의, 시작 시각이 다름", "접수 완료부터 매칭 프로세스의 첫 읽기까지. v1은 커밋 직후라 send 호출 시간이 안에 있고, v2는 onAccepted 콜백 뒤라 콜백 시간이 빠진다"),
     ("D", "다른 정의", "체결을 일으킨 주문의 첫 체결 기준. v1은 호가창 매칭에 최근 체결가 Redis 저장과 로그가 들어 있고 v2는 호가창 매칭만"),
+    ("D_match", "v1만 있음, v2의 D와 같은 정의", "v1 매칭 컨슈머가 주문을 읽은 시각부터 첫 체결 결과가 나온 직후까지. 최근 체결가 Redis 저장·로그·tradeId 발급은 들어 있지 않다"),
+    ("M", "같은 정의", "체결을 일으킨 주문의 발행 시각부터 그 주문의 첫 체결 결과가 나온 직후까지. 계좌 반영·DB 반영·체결 전달은 포함하지 않는다. 접수 구간(B) 안에서 하는 일은 두 구현이 다르다"),
     ("E", "다른 정의", "v1은 Kafka 전달과 정산 DB 트랜잭션 커밋까지, v2는 Aeron 전달과 저널 기록, 메모리 잔고 반영까지"),
     ("F", "같은 정의, 반영의 뜻이 다름", "체결을 일으킨 주문의 발행 시각부터 계좌 반영 완료까지. v1은 정산 트랜잭션 커밋, v2는 메모리 계좌 상태 갱신(층 1)"),
     ("db_reflect", "v2만 있음", "층 2. account-worker가 계좌 상태를 바꾼 시각부터 account-projection-worker의 DB 커밋 직후까지(이벤트마다, 밀리초 해상도)"),
@@ -714,6 +717,49 @@ def ladder_search_section(sets):
     return "\n".join(lines).rstrip()
 
 
+def match_done_section(sets):
+    """주문 발행부터 체결 완료(M). 두 구현에서 같은 정의의 끝점(매칭 결과 직후)이다. M 이 있는 세트만 싣는다."""
+    rows = []
+    medians = {}
+    for data in sets:
+        if data.meta.stages != 1 or data.meta.step == "L":
+            continue
+        m = stage_summary(data, "M")
+        if m["rounds"] == 0:
+            continue
+        match_stage = "D_match" if data.meta.cond == "v1" else "D"
+        parts = ["A@aggr", "B@aggr", "C@aggr", match_stage]
+        ratios = []
+        for round_id in data.included_rounds():
+            snapshots = data.stage_rounds.get(round_id, {})
+            if all(name in snapshots and snapshots[name].get("count", 0) > 0 for name in ["M"] + parts):
+                ratios.append(residual_ratio(snapshots["M"]["meanMicros"], [snapshots[n]["meanMicros"] for n in parts]))
+        if ratios:
+            ratio = median(ratios)
+            verdict = "합 정합성 불성립" if residual_fails(ratio) else "성립"
+            residual_cell = f"{ratio * 100:.3f}%"
+        else:
+            verdict, residual_cell = "해당 없음", "—"
+        medians[data.meta.cond] = m
+        rows.append([data.meta.name, m["rounds"], fmt_count(m["count"]), with_range(m, "p50"), fmt_micros(m["p95"]),
+                     with_range(m, "p99"), residual_cell, f"{match_stage} 사용, {verdict}"])
+    if not rows:
+        return ""
+    lines = ["## 발행~체결 완료(M) 비교", "",
+             "M 은 체결을 일으킨 주문의 발행 시각부터 그 주문의 첫 체결 결과가 나온 직후까지다. 계좌 반영, DB 반영, 체결 전달은 들어 있지 않다. "
+             "v1 은 MatchingConsumer 가 book.match() 결과를 받은 직후, v2 는 MatchingEventHandler 의 체결 방출 시각(매칭 결과 직후)이다. "
+             "접수 구간(B) 안에서 하는 일은 두 구현이 다르다(v1 락·쿼리·커밋, v2 링버퍼·저널·메모리 판정).", "",
+             table(["세트", "집계 회차", "회차당 기록 건수", "M p50 µs (최소~최대)", "M p95 µs", "M p99 µs (최소~최대)",
+                    "합 잔차(평균 기준)", "정합성"], rows), ""]
+    if "v1" in medians and "v2" in medians and medians["v1"]["p50"] and medians["v2"]["p50"]:
+        v1, v2 = medians["v1"], medians["v2"]
+        overlap = not (v2["p50_max"] < v1["p50_min"] or v1["p50_max"] < v2["p50_min"])
+        lines.append(f"- p50 중앙값 비율: v2 중앙값 / v1 중앙값 = {v2['p50'] / v1['p50']:.2f} "
+                     f"(회차별 p50 범위 {'겹침' if overlap else '겹치지 않음'}). 원인은 이 표로 판정하지 않는다.")
+    lines.append("- 합 잔차는 M 의 평균과 A@aggr + B@aggr + C@aggr + 매칭 계산(v1 D_match, v2 D) 평균 합의 차이 비율이다. 1%를 넘으면 그 세트를 불성립으로 표시한다.")
+    return "\n".join(lines)
+
+
 def db_layer_section(sets):
     """v2 의 층 1(F, 메모리 반영까지)과 층 2(db_reflect, 계좌 상태 변경부터 DB 커밋까지)를 나란히 싣는다."""
     rows = []
@@ -796,7 +842,7 @@ def build_segments_report(run_dir):
     lines += ["", "## 세트별 단계 표", ""]
     for data in sets:
         lines += [set_section(data), ""]
-    for section in (residual_section(sets), db_layer_section(sets), resource_section(sets), ladder_search_section(sets), ladder_section(sets), impact_section(sets), correspondence_section(),
+    for section in (residual_section(sets), match_done_section(sets), db_layer_section(sets), resource_section(sets), ladder_search_section(sets), ladder_section(sets), impact_section(sets), correspondence_section(),
                     warning_section(sets)):
         lines += [section, ""]
     return "\n".join(lines).rstrip() + "\n"
