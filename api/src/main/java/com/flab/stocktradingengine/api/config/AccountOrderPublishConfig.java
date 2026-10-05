@@ -20,6 +20,9 @@ import io.aeron.CommonContext;
 import io.aeron.Publication;
 import io.aeron.driver.MediaDriver;
 
+import com.flab.stocktradingengine.support.IdleStrategies;
+import com.flab.stocktradingengine.support.IdleStrategies.Mode;
+
 /**
  * fork5, U1b — v2 게이트웨이가 계좌 인테이크로 주문을 발신할 Aeron 배선. 발신만 하는 클라이언트라
  * Archive(durable 녹화)는 안 둔다 — account-worker/matching-worker의 {@code *IntakeConfig}와
@@ -45,13 +48,23 @@ public class AccountOrderPublishConfig {
         String aeronDirectoryName = CommonContext.generateRandomDirName();
         // 이 드라이버는 통신용 임시 디렉터리(aeron-*)만 갖는다(Archive 없음) — 프로세스가 죽으면
         // 쓸모없는데 기본값이 안 지워 무한히 쌓인다(I10).
-        return MediaDriver.launchEmbedded(mediaDriverContext(aeronDirectoryName));
+        return MediaDriver.launchEmbedded(mediaDriverContext(aeronDirectoryName, IdleStrategies.mode()));
     }
 
     static MediaDriver.Context mediaDriverContext(String aeronDirectoryName) {
-        return new MediaDriver.Context().aeronDirectoryName(aeronDirectoryName)
+        return mediaDriverContext(aeronDirectoryName, Mode.DEFAULT);
+    }
+
+    /** 쉬는 방식 변경 실험(EXPERIMENT_IDLE=driver)에서만 sender·receiver 스레드의 쉬는 방식을 지정한다. */
+    static MediaDriver.Context mediaDriverContext(String aeronDirectoryName, Mode mode) {
+        MediaDriver.Context context = new MediaDriver.Context().aeronDirectoryName(aeronDirectoryName)
             .dirDeleteOnStart(true)
             .dirDeleteOnShutdown(true);
+        if (IdleStrategies.forDriver(mode) != null) {
+            context.senderIdleStrategy(IdleStrategies.forDriver(mode))
+                .receiverIdleStrategy(IdleStrategies.forDriver(mode));
+        }
+        return context;
     }
 
     @Bean(destroyMethod = "close")

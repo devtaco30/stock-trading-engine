@@ -29,6 +29,9 @@ import io.aeron.archive.client.AeronArchive;
 import io.aeron.archive.codecs.SourceLocation;
 import io.aeron.driver.MediaDriver;
 
+import com.flab.stocktradingengine.support.IdleStrategies;
+import com.flab.stocktradingengine.support.IdleStrategies.Mode;
+
 /**
  * 파이프라인 연결 ① — 주문을 Aeron IPC로 받는 인테이크 경로 배선.
  * account-worker {@code AccountOrderIntakeConfig}와 같은 결(대칭 미러).
@@ -104,7 +107,7 @@ public class MatchingOrderIntakeConfig {
         String aeronDirectoryName = CommonContext.generateRandomDirName();
 
         return ArchivingMediaDriver.launch(
-            mediaDriverContext(aeronDirectoryName),
+            mediaDriverContext(aeronDirectoryName, IdleStrategies.mode()),
             new Archive.Context()
                 .controlChannel(controlRequestChannel)
                 .replicationChannel(REPLICATION_CHANNEL)
@@ -114,12 +117,22 @@ public class MatchingOrderIntakeConfig {
     }
 
     static MediaDriver.Context mediaDriverContext(String aeronDirectoryName) {
-        return new MediaDriver.Context().aeronDirectoryName(aeronDirectoryName)
+        return mediaDriverContext(aeronDirectoryName, Mode.DEFAULT);
+    }
+
+    /** 쉬는 방식 변경 실험(EXPERIMENT_IDLE=driver)에서만 sender·receiver 스레드의 쉬는 방식을 지정한다. */
+    static MediaDriver.Context mediaDriverContext(String aeronDirectoryName, Mode mode) {
+        MediaDriver.Context context = new MediaDriver.Context().aeronDirectoryName(aeronDirectoryName)
             // Aeron 드라이버 통신용 임시 디렉터리(aeron-*) — Archive 저널·스냅샷 디렉터리와는
             // 다른 자리다(그쪽은 archiveDir, 재시작 넘어 보존해야 해 절대 안 건드린다). 이
             // 드라이버 디렉터리는 프로세스가 죽으면 쓸모없는데 기본값이 안 지워 무한히 쌓인다(I10).
             .dirDeleteOnStart(true)
             .dirDeleteOnShutdown(true);
+        if (IdleStrategies.forDriver(mode) != null) {
+            context.senderIdleStrategy(IdleStrategies.forDriver(mode))
+                .receiverIdleStrategy(IdleStrategies.forDriver(mode));
+        }
+        return context;
     }
 
     @Bean(destroyMethod = "close")
