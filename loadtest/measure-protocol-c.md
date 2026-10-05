@@ -38,6 +38,8 @@ E4(허용 목록 밖 프로세스의 CPU 사용)는 분석에서 제외했다.
 | B 접수 완료(영속화 포함) | 받는 프로세스의 처리 시작부터 예약 승인과 저장 단계 통과까지 | V-P1 → V-P7 `OrderRequestConsumer.java:93/99` 반환 직후(DB 커밋 뒤) | W-P2 → W-P7 `AccountEventHandler.java:292/332` 승인 분기(저널 append 뒤) | 승인된 주문 |
 | C 매칭 입력 도착 | 접수 완료부터 매칭 프로세스의 처리 시작까지 | V-P7 → V-P9 `MatchingConsumer.java:119` | W-P8 `AccountEventHandler.java:294` 직후 → W-P11 `AeronOrderReceiver` `onFragment` | 승인된 주문 |
 | D 매칭 처리 | aggressor 주문의 매칭 처리 시작부터 첫 체결 이벤트를 내보내는 호출까지 | V-P9 → V-P10 `MatchingConsumer.java:196` 직전 | W-P11 → W-P14 `MatchingEventHandler.java:183` 직전 | aggressor 주문의 체결 |
+| M 주문 발행~체결 완료 | aggressor 주문의 발행 시각부터 그 주문의 첫 체결 결과가 나온 직후까지. 계좌 반영, DB 반영, 체결 전달은 포함하지 않는다 | V-P0 → V-P10m `MatchingConsumer.java:202` (`book.match()` 결과를 받은 직후, 로그·최근 체결가 Redis 저장·tradeId 발급보다 앞) | W-P0 → W-P14 `MatchingEventHandler.java:234` (`book.match()` 결과를 받은 직후, 새 시각 읽기 없음) | aggressor 주문의 첫 체결 |
+| D_match 매칭 계산만(v1) | 매칭 프로세스가 주문을 읽은 시각부터 첫 체결 결과가 나온 직후까지. v2의 D와 같은 정의 | V-P9 → V-P10m | (v2의 D) | aggressor 주문의 첫 체결 |
 | E 체결 후 계좌 반영 | 체결 이벤트를 내보낸 호출부터 계좌·보유 반영 완료까지 | V-P10 → V-P12 `SettlementConsumer.java:57-60` 반환 뒤 | W-P14 → W-P20 `AccountEventHandler.java:360` 직후 | 체결 한 건 |
 | F 접수~계좌 반영 전체 | aggressor 주문의 발행 시각부터 그 체결의 계좌 반영 완료까지 | V-P0(aggressor) → V-P12 | W-P0(aggressor) → W-P20 | 체결 한 건 |
 
@@ -46,6 +48,7 @@ E4(허용 목록 밖 프로세스의 CPU 사용)는 분석에서 제외했다.
 - 「접수됐다」의 세 이름: 판정 도달(v1 V-P5b, v2는 영속화 미포함 시각이 없고 `B_biz` = W-P7 − W-P6으로 대신함), 접수 완료(영속화 포함: V-P7, W-P7), 영속화 비용(v1 `b_commit` = V-P7 − V-P6, v2 `journal_append` = W-P5 − W-P4). 비교는 접수 완료 이름으로 하고 나머지 둘은 따로 싣는다.
 - 보조 단계(설계서 4-1절의 지점 사이 값, `api_send_cost`, `ring_publish`, `hop_to_journal`, `journal_append`, `hop_to_business`, `fill_transit` 등)와 생성기 지연 `G`는 모두 같은 표에 싣는다.
 - 한계: 계좌 → 매칭 방향 발신 큐는 따로 측정하지 않고 C 단계에 포함된다.
+- M(발행~체결 완료): v1 `MatchingConsumer`가 체결 결과를 받은 직후 시각을 한 번 더 읽는다(계측을 켰고 aggressor 주문의 첫 체결일 때만, 호가창·Redis·Kafka 호출은 바뀌지 않는다). 기존 V-P10은 그대로 두며, 그 시각은 최근 체결가 Redis 저장 뒤라서 v1의 D에는 그 저장이 들어 있다. M은 이 저장을 제외한다. 한계: v1은 최근 체결가 Redis 저장을 매칭 스레드와 같은 스레드에서 하고 v2는 별도 스레드에서 한다. 이 차이는 M에 들어 있지 않고 v1의 D(Redis 저장 포함)와 v2의 D의 차이로만 보인다. M의 시작 시각은 F와 같은 V-P0/W-P0이다.
 - 한계: v2의 구간 A와 `api_send_cost`에는 api의 전달 큐 대기 시간이 포함된다(v1의 A에는 Kafka 프로듀서 버퍼 대기가 포함된다).
 - 한계: 호가창 스냅샷은 v1이 이벤트마다 쓰고 v2는 종목별 마지막 상태를 100ms마다 쓴다. v2의 호가창 조회는 최대 약 100ms 늦게 반영되고 그 사이의 중간 상태는 건너뛴다. v2 매칭 스레드는 배치마다 종목당 한 번 상위 10단계를 계산한다.
 - 한계: 클라이언트가 전달 실패를 읽는 방법은 두 구현 모두 없다. v2는 실패 기록이 api 서버의 Redis에 남는다. 202를 준 뒤 api가 비정상 종료하면 v2의 전달 큐에 있던 주문은 사라질 수 있다(v1의 Kafka 프로듀서 버퍼에도 같은 창이 있고, 두 창의 크기는 측정하지 않았다).
