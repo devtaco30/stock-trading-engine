@@ -13,6 +13,9 @@ import com.flab.stocktradingengine.time.StageLatencyRegistry;
  *   <li>{@code D} = V-P10 − V-P9 (체결을 일으킨 주문의 첫 체결만. 호가창 매칭과 최근 체결가 Redis 저장 포함)</li>
  *   <li>{@code A@aggr} = V-P1 − V-P0, {@code B@aggr} = V-P7 − V-P1, {@code C@aggr} = V-P9 − V-P7 —
  *       같은 체결을 일으킨 주문 기준의 A, B, C. V-P0은 이벤트의 {@code orderAt}(api가 요청을 받은 시각)이다.</li>
+ *   <li>{@code M} = V-P10m − V-P0 (주문 발행부터 체결 완료까지. V-P10m은 {@code book.match()}가 체결 결과를 돌려준 직후이고
+ *       로그, 최근 체결가 Redis 저장, tradeId 발급보다 앞이다. 체결을 일으킨 주문의 첫 체결만)</li>
+ *   <li>{@code D_match} = V-P10m − V-P9 (매칭 계산만. v2의 {@code D}와 같은 정의이고 기존 {@code D}는 Redis 저장을 포함한다)</li>
  * </ul>
  * 접수 시각이 비어 있는 옛 메시지는 기록하지 않는다.
  */
@@ -26,6 +29,8 @@ final class MatchingSegmentStages {
     private final LatencyHistogram aAggr;
     private final LatencyHistogram bAggr;
     private final LatencyHistogram cAggr;
+    private final LatencyHistogram m;
+    private final LatencyHistogram dMatch;
 
     MatchingSegmentStages(StageLatencyRegistry registry) {
         this.enabled = registry.isEnabled();
@@ -34,6 +39,8 @@ final class MatchingSegmentStages {
         this.aAggr = registry.stage("A@aggr");
         this.bAggr = registry.stage("B@aggr");
         this.cAggr = registry.stage("C@aggr");
+        this.m = registry.stage("M");
+        this.dMatch = registry.stage("D_match");
     }
 
     boolean isEnabled() {
@@ -50,12 +57,14 @@ final class MatchingSegmentStages {
         }
     }
 
-    void recordFirstFill(OrderPlacedEvent aggressor, long matchReceivedAtNanos, long emittedAtNanos) {
+    void recordFirstFill(OrderPlacedEvent aggressor, long matchReceivedAtNanos, long matchedAtNanos, long emittedAtNanos) {
         if (!hasAcceptedTimes(aggressor)) {
             return;
         }
         long origin = EpochNanos.of(aggressor.orderAt());
         d.recordNanos(emittedAtNanos - matchReceivedAtNanos);
+        dMatch.recordNanos(matchedAtNanos - matchReceivedAtNanos);
+        m.recordNanos(matchedAtNanos - origin);
         aAggr.recordNanos(aggressor.receivedAtNanos() - origin);
         bAggr.recordNanos(aggressor.acceptedAtNanos() - aggressor.receivedAtNanos());
         cAggr.recordNanos(matchReceivedAtNanos - aggressor.acceptedAtNanos());

@@ -47,10 +47,14 @@ class MatchingSegmentStagesTest {
     private final Acknowledgment ack = mock(Acknowledgment.class);
 
     private MatchingConsumer consumer(StageLatencyRegistry registry) {
+        return consumer(registry, mock(LtpRedisRepository.class));
+    }
+
+    private MatchingConsumer consumer(StageLatencyRegistry registry, LtpRedisRepository ltpRepository) {
         when(ids.nextId()).thenReturn(9001L);
         MatchingConsumer consumer = new MatchingConsumer(
             kafkaTemplate, new OrderBookRegistry(), mock(OrderQueryService.class),
-            mock(LtpRedisRepository.class), mock(OrderbookRedisRepository.class), ids,
+            ltpRepository, mock(OrderbookRedisRepository.class), ids,
             new StockPartitionResolver(kafkaTemplate));
         consumer.setStageRegistry(registry);
         return consumer;
@@ -124,7 +128,7 @@ class MatchingSegmentStagesTest {
 
         Map<String, StageSnapshot> snapshots = registry.snapshotAndResetAll();
         assertThat(count(snapshots, "C")).isEqualTo(1L);
-        for (String stage : new String[] {"D", "A@aggr", "B@aggr", "C@aggr"}) {
+        for (String stage : new String[] {"D", "A@aggr", "B@aggr", "C@aggr", "M", "D_match"}) {
             assertThat(count(snapshots, stage)).as(stage).isZero();
         }
     }
@@ -142,7 +146,7 @@ class MatchingSegmentStagesTest {
 
         verify(kafkaTemplate, times(1)).send(eq("fills"), eq(STOCK), any(TradeFilledEvent.class));
         Map<String, StageSnapshot> snapshots = registry.snapshotAndResetAll();
-        for (String stage : new String[] {"C", "D", "A@aggr", "B@aggr", "C@aggr"}) {
+        for (String stage : new String[] {"C", "D", "A@aggr", "B@aggr", "C@aggr", "M", "D_match"}) {
             assertThat(count(snapshots, stage)).as(stage).isZero();
         }
     }
@@ -158,7 +162,71 @@ class MatchingSegmentStagesTest {
         ArgumentCaptor<Object> sent = ArgumentCaptor.forClass(Object.class);
         verify(kafkaTemplate).send(eq("fills"), eq(STOCK), sent.capture());
         assertThat(((TradeFilledEvent) sent.getValue()).emittedAtNanos()).isZero();
-        assertThat(count(registry.snapshotAndResetAll(), "C")).isZero();
+        Map<String, StageSnapshot> offSnapshots = registry.snapshotAndResetAll();
+        assertThat(count(offSnapshots, "C")).isZero();
+        assertThat(count(offSnapshots, "M")).isZero();
+        assertThat(count(offSnapshots, "D_match")).isZero();
         assertThat(List.of(ack)).isNotEmpty();
+    }
+
+    @Test
+    void 체결이_나면_발행부터_체결_완료_M과_매칭_계산만의_D_match가_한_건씩_기록되고_네_단계_합과_일치한다() {
+        StageLatencyRegistry registry = new StageLatencyRegistry(true);
+        MatchingConsumer consumer = consumer(registry);
+
+        consumer.consume(record(accepted(1L, 100L, OrderSide.SELL, 600)), ack);
+        consumer.consume(record(accepted(2L, 200L, OrderSide.BUY, 500)), ack);
+
+        Map<String, StageSnapshot> snapshots = registry.snapshotAndResetAll();
+        assertThat(count(snapshots, "M")).isEqualTo(1L);
+        assertThat(count(snapshots, "D_match")).isEqualTo(1L);
+        double partsMicros = snapshots.get("A@aggr").meanMicros() + snapshots.get("B@aggr").meanMicros()
+            + snapshots.get("C@aggr").meanMicros() + snapshots.get("D_match").meanMicros();
+        double wholeMicros = snapshots.get("M").meanMicros();
+        assertThat(Math.abs(partsMicros - wholeMicros) / wholeMicros).as("네 단계 합 %s, M %s", partsMicros, wholeMicros)
+            .isLessThanOrEqualTo(0.01);
+    }
+
+    @Test
+    void 최근_체결가_Redis_저장은_M과_D_match에_들어가지_않고_기존_D에는_들어간다() {
+        StageLatencyRegistry registry = new StageLatencyRegistry(true);
+        LtpRedisRepository slowLtp = mock(LtpRedisRepository.class);
+        org.mockito.Mockito.doAnswer(invocation -> {
+            Thread.sleep(20);
+            return null;
+        }).when(slowLtp).set(any(), any());
+        MatchingConsumer consumer = consumer(registry, slowLtp);
+
+        consumer.consume(record(accepted(1L, 100L, OrderSide.SELL, 600)), ack);
+        consumer.consume(record(accepted(2L, 200L, OrderSide.BUY, 500)), ack);
+
+        Map<String, StageSnapshot> snapshots = registry.snapshotAndResetAll();
+        assertThat(snapshots.get("D").meanMicros()).as("기존 D는 Redis 저장 20ms를 포함한다").isGreaterThanOrEqualTo(20_000.0);
+        assertThat(snapshots.get("D_match").meanMicros()).as("D_match는 매칭 계산만").isLessThan(10_000.0);
+        assertThat(snapshots.get("M").meanMicros()).as("M은 Redis 저장 앞에서 끝난다").isLessThan(
+            snapshots.get("A@aggr").meanMicros() + snapshots.get("B@aggr").meanMicros()
+                + snapshots.get("C@aggr").meanMicros() + 10_000.0);
+    }
+
+    @Test
+    void 한_주문이_체결을_세_건_내도_M은_첫_체결에서_한_건만_기록한다() {
+        StageLatencyRegistry registry = new StageLatencyRegistry(true);
+        MatchingConsumer consumer = consumer(registry);
+        Instant sellAt = microsAgo(900);
+        for (long orderId = 1; orderId <= 3; orderId++) {
+            long origin = EpochNanos.of(sellAt);
+            consumer.consume(record(new OrderPlacedEvent(orderId, 100L + orderId, STOCK, OrderSide.SELL,
+                new BigDecimal("70000"), 1, sellAt, origin + 50_000L, origin + 150_000L)), ack);
+        }
+        Instant buyAt = microsAgo(500);
+        long buyOrigin = EpochNanos.of(buyAt);
+
+        consumer.consume(record(new OrderPlacedEvent(9L, 200L, STOCK, OrderSide.BUY,
+            new BigDecimal("70000"), 3, buyAt, buyOrigin + 50_000L, buyOrigin + 150_000L)), ack);
+
+        verify(kafkaTemplate, times(3)).send(eq("fills"), eq(STOCK), any(TradeFilledEvent.class));
+        Map<String, StageSnapshot> snapshots = registry.snapshotAndResetAll();
+        assertThat(count(snapshots, "M")).isEqualTo(1L);
+        assertThat(count(snapshots, "D_match")).isEqualTo(1L);
     }
 }

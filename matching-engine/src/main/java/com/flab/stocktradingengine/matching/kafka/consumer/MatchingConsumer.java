@@ -198,6 +198,8 @@ public class MatchingConsumer implements ConsumerSeekAware {
             if (result.isEmpty()) break;
 
             FillResult fill = result.get();
+            // V-P10m: 체결 결과가 나온 직후. 로그·최근 체결가 Redis 저장·tradeId 발급보다 앞이라 v2의 매칭 계산 직후(W-P14)와 같은 뜻이다.
+            long matchedAtNanos = stages.isEnabled() && aggressor != null && firstFill ? EpochNanos.now() : 0L;
             log.info("[체결] 종목={} 매수주문={} 매도주문={} 수량={} 가격={}",
                 stockCode, fill.buyOrderId(), fill.sellOrderId(),
                 fill.filledQuantity(), fill.matchPrice());
@@ -216,7 +218,7 @@ public class MatchingConsumer implements ConsumerSeekAware {
             if (stages.isEnabled() && aggressor != null && firstFill && MatchingSegmentStages.hasAcceptedTimes(aggressor)) {
                 emittedAtNanos = EpochNanos.now();
                 aggressorOriginNanos = EpochNanos.of(aggressor.orderAt());
-                stages.recordFirstFill(aggressor, matchReceivedAtNanos, emittedAtNanos);
+                stages.recordFirstFill(aggressor, matchReceivedAtNanos, matchedAtNanos, emittedAtNanos);
             }
             firstFill = false;
             kafkaTemplate.send(KafkaTopics.fills(), stockCode,
