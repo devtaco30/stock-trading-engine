@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>v2 아키텍처 &amp; 구현 방향</title>
+<title>v2 아키텍처와 구현 방향</title>
 <style>
   :root{
     --bg:#f6f5f2; --panel:#ffffff; --ink:#1c2128; --ink2:#3b4350; --muted:#6b7382;
@@ -50,12 +50,6 @@
   .fig .fig-open{display:inline-block;margin:0 0 14px;font-size:12px;font-weight:700;color:#7cc0ff;text-decoration:none;border-bottom:1px solid rgba(124,192,255,.35);word-break:keep-all}
   .fig .fig-open:hover{border-bottom-color:#7cc0ff}
   .fig .fignote{color:#8f99a8;font-size:.85rem;margin:12px 0 0;line-height:1.6}
-  .figcards{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin:18px 0 0}
-  .figcard{background:#141b25;border:1px solid #2a3442;border-radius:12px;padding:12px 14px}
-  .figcard b{display:flex;align-items:center;gap:8px;color:#e8edf3;font-size:.92rem;font-weight:700;margin-bottom:6px}
-  .figcard b i{width:9px;height:9px;border-radius:50%;flex:none;display:block}
-  .figcard ul{margin:0;padding-left:16px}
-  .figcard li{color:#aeb6c2;font-size:.85rem;line-height:1.6;margin:4px 0}
   .note{background:#fbfaf7;border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:0 10px 10px 0;padding:12px 18px;margin:16px 0}
   .note.warn{border-left-color:#c2410c;background:#fdf5f0}
   .note b{font-size:.95rem}
@@ -79,7 +73,7 @@
 <body>
 <div class="wrap">
 
-<h1>v2 아키텍처 &amp; 구현 방향</h1>
+<h1>v2 아키텍처와 구현 방향</h1>
 <p class="sub">주문 처리 경로는 Aeron + Archive · 정산과 조회모델은 Kafka · 체결 fan-out · T+2 정산 왕복</p>
 
 <div class="note warn" style="border-left-width:4px">
@@ -90,7 +84,7 @@
     <li><strong>내구성은 Archive 기록으로 얻는다.</strong> 홉마다 Kafka를 거쳐 내구성을 사면 속도를 잃는다. 매칭 저널을 Archive로 정한 ADR-019의 방식을 주문 처리 경로 전체에 적용한 것이다.</li>
     <li><strong>주문 경로와 체결 경로의 목적지 계산이 같아진다.</strong> 두 경로가 모두 Aeron이고 같은 accountId 슬롯 표를 참조하므로, 같은 계좌의 주문과 체결이 같은 프로세스로 간다.</li>
   </ul>
-  <p style="margin:8px 0 0"><strong>대가</strong>는 돈이 지나는 경로의 내구성을 브로커에 기대지 못하고 Archive 기록·replay로 직접 관리한다는 것이다. 정산은 반대로 T+2짜리 비동기 durable 잡 전달이라 Kafka 프로듀서가 제공하는 것을 손으로 재구현할 이유가 없다(ADR-033). 계좌 상태를 DB 조회모델로 내보내는 경로는 <code>_v2_account_state_persistence.html</code>에 따로 있다.</p>
+  <p style="margin:8px 0 0"><strong>대가</strong>는 돈이 지나는 경로의 내구성을 브로커에 기대지 못하고 Archive 기록·replay로 직접 관리한다는 것이다. 정산은 반대로 T+2짜리 비동기 durable job 전달이라 Kafka 프로듀서가 제공하는 것을 손으로 재구현할 이유가 없다(ADR-033). 계좌 상태를 DB 조회모델로 내보내는 경로는 <code>_v2_account_state_persistence.html</code>에 따로 있다.</p>
 </div>
 
 <!-- ========== 1. 맥락 ========== -->
@@ -142,20 +136,6 @@
 <p class="ttl">주문 → 검증·예약 → 매칭 → 체결 fan-out → 계좌 반영 → 정산·조회모델</p>
 <a class="fig-open" href="_v2_arch_figs/f1.html" target="_blank" rel="noopener">이 도식 열기</a>
 <iframe class="fig-viewer" src="_v2_arch_figs/f1.html?theme=dark&amp;article=1" title="주문 1건의 접수·체결·계좌 반영 경로" loading="lazy"></iframe>
-<div class="figcards">
-<div class="figcard">
-<b><i style="background:#f5c46b"></i>계좌 프로세스의 이중 등장</b>
-<ul><li>같은 account-worker 앱이 주문을 받을 때와 체결을 받을 때 두 번 등장한다</li><li>같은 계좌를 같은 프로세스가 맡기 때문에 두 순간이 한곳에서 처리된다</li></ul>
-</div>
-<div class="figcard">
-<b><i style="background:#a78bfa"></i>주문 처리 경로의 전송 (Aeron)</b>
-<ul><li>보내는 쪽이 목적지를 계산하고 받는 쪽이 자기 Archive에 기록한다</li><li>프로세스가 죽으면 스냅샷이 가리키는 위치부터 다시 읽어 상태를 만든다</li></ul>
-</div>
-<div class="figcard">
-<b><i style="background:#34d399"></i>Kafka 잔존 구간</b>
-<ul><li>정산은 2영업일 뒤에 처리하는 느린 왕복이라 지연이 문제되지 않는다</li><li>조회모델 프로젝션도 주문 처리 경로 밖이라 같은 이유로 Kafka에 남겼다</li></ul>
-</div>
-</div>
 <p class="fignote">같은 <code>account-worker</code> 앱이 그림에 두 번 나온다. 왼쪽 것은 주문을 받아 잔고를 검증하고 예약하는 순간을 그린 것이고, 오른쪽에서 같은 앱이 체결을 받아 반영한다. 한 계좌를 한 프로세스가 맡기 때문에 두 순간 모두 한곳에서 처리된다.</p>
 </div>
 
@@ -170,20 +150,6 @@
 <p class="ttl">accountId → 슬롯(고정 개수 P) → 담당 프로세스</p>
 <a class="fig-open" href="_v2_arch_figs/f2.html" target="_blank" rel="noopener">이 도식 열기</a>
 <iframe class="fig-viewer" src="_v2_arch_figs/f2.html?theme=dark&amp;article=1" title="accountId의 담당 프로세스 결정 방법" loading="lazy"></iframe>
-<div class="figcards">
-<div class="figcard">
-<b><i style="background:#f5c46b"></i>고정 슬롯 개수</b>
-<ul><li>프로세스 수로 나누면 프로세스를 하나 늘릴 때마다 거의 모든 계좌의 담당 프로세스가 재배정된다</li><li>슬롯 수를 고정하면 계좌와 슬롯의 대응은 그대로이고 슬롯의 목적지만 갱신된다</li></ul>
-</div>
-<div class="figcard">
-<b><i style="background:#a78bfa"></i>murmur3 fmix64 해시</b>
-<ul><li>계좌번호가 Snowflake라 하위 비트에 순차 증가분이 들어 있다</li><li>그대로 나누면 특정 슬롯에만 계좌가 쌓인다</li></ul>
-</div>
-<div class="figcard">
-<b><i style="background:#34d399"></i>슬롯 표 기동 검증</b>
-<ul><li>표를 만들 때 슬롯 전부가 정확히 한 목적지에 대응하는지 검사한다</li><li>구멍이나 중복이 있으면 기동 자체를 멈춘다</li></ul>
-</div>
-</div>
 </div>
 
 <div class="note warn">
@@ -195,27 +161,13 @@
 <h2><span class="n">5</span>매칭 분배 (stockCode 슬롯)</h2>
 <p>예약을 통과한 주문은 계좌 프로세스가 매칭 프로세스로 Aeron으로 보낸다. 여기도 Aeron이라 보내는 쪽이 목적지를 정해야 하고, 설계상 방법은 §4와 같다. stockCode를 고정 개수 S의 슬롯으로 해싱하고, 슬롯을 매칭 프로세스에 대응시킨 표를 본다. 나누는 수를 프로세스 개수로 잡으면 안 되는 이유도 §4와 같다.</p>
 
-<p><strong>다만 지금 코드는 거기까지 가 있지 않는다.</strong> 계좌 프로세스는 <code>transport.matching-intake.channel</code> 설정값 하나로 Publication 하나를 열고 모든 주문을 그 목적지로 보낸다(<code>account-worker/.../config/MatchingOrderSenderConfig.java</code>). 종목별 슬롯 표는 아직 없다. 계좌 슬롯 표를 먼저 구현한 이유는 체결 fan-out(§6)이 계좌 슬롯 표를 필요로 해서다. 종목 슬롯 표는 ADR-031이 "같은 논리를 적용한다"로 남겨 둔 상태다.</p>
+<p><strong>다만 지금 코드는 거기까지 가 있지 않다.</strong> 계좌 프로세스는 <code>transport.matching-intake.channel</code> 설정값 하나로 Publication 하나를 열고 모든 주문을 그 목적지로 보낸다(<code>account-worker/.../config/MatchingOrderSenderConfig.java</code>). 종목별 슬롯 표는 아직 없다. 계좌 슬롯 표를 먼저 구현한 이유는 체결 fan-out(§6)이 계좌 슬롯 표를 필요로 해서다. 종목 슬롯 표는 ADR-031이 "같은 논리를 적용한다"로 남겨 둔 상태다.</p>
 
 <div class="fig fig-f3">
 <p class="cap">Figure 3</p>
 <p class="ttl">매칭 전달 — 현재 배선과 슬롯 표 설계</p>
 <a class="fig-open" href="_v2_arch_figs/f3.html" target="_blank" rel="noopener">이 도식 열기</a>
 <iframe class="fig-viewer" src="_v2_arch_figs/f3.html?theme=dark&amp;article=1" title="계좌 → 매칭 주문 전달 구간" loading="lazy"></iframe>
-<div class="figcards">
-<div class="figcard">
-<b><i style="background:#34d399"></i>현재 배선</b>
-<ul><li>계좌 프로세스는 설정값이 가리키는 목적지 하나로 Publication 을 연다</li><li>종목별 슬롯 표는 아직 없다</li></ul>
-</div>
-<div class="figcard">
-<b><i style="background:#f5c46b"></i>계좌 슬롯 표 선행</b>
-<ul><li>체결 fan-out 이 계좌 슬롯 표를 필요로 해서 그쪽을 먼저 구현했다</li><li>종목 슬롯 표는 같은 논리를 적용하는 일로 남아 있다</li></ul>
-</div>
-<div class="figcard">
-<b><i style="background:#a78bfa"></i>Aeron 자동 배정 부재</b>
-<ul><li>Kafka 는 브로커가 컨슈머 그룹을 관리해 파티션을 나눠 준다</li><li>Aeron 은 프로세스끼리 직접 보내는 전송이라 그런 조율자가 없다</li></ul>
-</div>
-</div>
 <p class="fignote">위 묶음이 현재 배선이다. 아래 묶음은 아직 코드에 없어서 화살표를 점선으로 그렸다.</p>
 </div>
 
@@ -235,32 +187,18 @@
 <h2><span class="n">6</span>체결 fan-out</h2>
 <p class="lead">매칭은 종목으로 나뉘어 있고 계좌 잔고를 갖고 있지 않다. 체결 결과는 매수자·매도자 <strong>두 계좌</strong>로 가야 하고, 그 두 계좌는 대개 다른 계좌 프로세스에 있다.</p>
 
-<p>매칭 코어가 체결을 내면 <code>AccountFillPublisher</code>가 tradeId를 발급하고 <code>FilledTrade</code> 하나를 만든다. <code>AccountDestinationResolver</code>로 매수·매도 계좌의 목적지를 구한 뒤, 목적지마다 <code>FillOutbox</code>에 큐잉한다. 인코딩과 Aeron <code>offer</code>는 그 endpoint 전용 스레드가 한다. 두 계좌가 같은 목적지면 큐에 한 번만 넣는다. 받는 계좌 프로세스가 그 스트림을 자기 Archive에 기록해 내구성을 얻는다.</p>
+<p>매칭 코어가 체결을 내면 <code>AccountFillPublisher</code>가 tradeId를 발급하고 <code>FilledTrade</code> 하나를 만든다. <code>AccountDestinationResolver</code>로 매수·매도 계좌의 목적지를 구한 뒤, 목적지마다 <code>FillOutbox</code>에 enqueue한다. 인코딩과 Aeron <code>offer</code>는 그 endpoint 전용 스레드가 한다. 두 계좌가 같은 목적지면 큐에 한 번만 넣는다. 받는 계좌 프로세스가 그 스트림을 자기 Archive에 기록해 내구성을 얻는다.</p>
 
 <div class="fig fig-f4">
 <p class="cap">Figure 4</p>
 <p class="ttl">체결 1건 → tradeId 발급 → 매수·매도 계좌의 목적지로 각각 전달</p>
 <a class="fig-open" href="_v2_arch_figs/f4.html" target="_blank" rel="noopener">이 도식 열기</a>
 <iframe class="fig-viewer" src="_v2_arch_figs/f4.html?theme=dark&amp;article=1" title="체결 1건의 매수·매도 계좌 분배 경로" loading="lazy"></iframe>
-<div class="figcards">
-<div class="figcard">
-<b><i style="background:#a78bfa"></i>슬롯 표 기반 목적지 계산</b>
-<ul><li>매칭은 어느 계좌가 어느 프로세스에 있는지 모른다</li><li>accountId로 목적지를 조회해 그 목적지로 보낸다</li></ul>
-</div>
-<div class="figcard">
-<b><i style="background:#f5c46b"></i>목적지별 FillOutbox</b>
-<ul><li>매칭 소비자 스레드는 큐잉만 하고 돌아온다</li><li>인코딩·발신·재시도는 endpoint 전용 스레드가 한다</li></ul>
-</div>
-<div class="figcard">
-<b><i style="background:#fb7185"></i>슬롯 무주인의 체결 유실</b>
-<ul><li>큐 용량 65,536까지는 매칭 스레드를 대기시켜 버리지 않는다</li><li>슬롯 주인이 없는 동안 도착한 체결은 로그만 남고 폐기된다</li></ul>
-</div>
-</div>
 </div>
 
 <div class="note">
   <b>체결 스트림 전달</b>
-  <p style="margin:6px 0 0">매칭은 종목으로 나뉘어 있어서 어느 계좌가 어느 프로세스에 있는지 모른다. 알 필요도 없다. 대신 accountId를 슬롯 표에 넣어 목적지 endpoint를 구하고 그리로 보낸다. 매칭 프로세스가 몇 대이고 계좌 프로세스가 몇 대인지 서로 알지 않아도 되는 이유다. 내구성은 받는 계좌 프로세스가 그 스트림을 <strong>자기 Archive에 기록</strong>해 얻는다. 계좌 프로세스가 죽었다 살아나면 스냅샷이 가리키는 위치부터 replay해 못 받은 구간을 채우고, tradeId 멱등이 겹친 구간의 중복 반영을 막는다.</p>
+  <p style="margin:6px 0 0">매칭은 종목으로 나뉘어 있어서 어느 계좌가 어느 프로세스에 있는지 모른다. 대신 accountId를 슬롯 표에 넣어 목적지 endpoint를 구하고 그리로 보낸다. 매칭 프로세스가 몇 대이고 계좌 프로세스가 몇 대인지 서로 알지 않아도 되는 이유다. 내구성은 받는 계좌 프로세스가 그 스트림을 <strong>자기 Archive에 기록</strong>해 얻는다. 계좌 프로세스가 죽었다 살아나면 스냅샷이 가리키는 위치부터 replay해 못 받은 구간을 채우고, tradeId 멱등이 겹친 구간의 중복 반영을 막는다.</p>
   <p style="margin:8px 0 0">매수용·매도용 메시지를 따로 만들지 않고 <strong>같은 <code>FilledTrade</code> 하나</strong>를 두 목적지로 보낸다. 받는 쪽은 매번 <code>publishBuyFill</code>과 <code>publishSellFill</code>을 둘 다 부르고, 자기가 소유하지 않은 계좌는 엔진이 <code>ACCOUNT_NOT_FOUND</code>로 걸러낸다. 메시지 종류가 하나로 줄어드는 대신, 소유하지 않은 계좌를 엔진이 걸러낸다는 성질에 기댄다.</p>
 </div>
 
@@ -278,13 +216,13 @@
 <h2><span class="n">7</span>T+2 정산 왕복</h2>
 <p class="lead">매수 체결에서 남은 미수금(unpaid)은 2영업일 뒤에 실제 현금으로 결제된다. 그 사이 미수금은 계좌 장부에만 있다. 이 절은 누가 T+2 시점을 관리하고 실제 잔고를 언제 차감하는지를 다룬다.</p>
 
-<p>얼핏 정산 앱이 체결 이벤트를 같이 받아 미수금을 스스로 계산하면 될 것 같다. 코드를 보면 그럴 수 없다.</p>
+<p>얼핏 정산 앱이 체결 이벤트를 같이 받아 미수금을 스스로 계산하면 될 것 같지만, 코드를 보면 그럴 수 없다.</p>
 
 <div class="note warn">
   <b>미수금 금액의 산출 주체</b>
-  <p style="margin:6px 0 0"><strong>1.</strong> 체결 데이터에는 증거금률도 매수·매도 구분도 들어 있지 않는다. 담긴 것은 tradeId·종목·주문번호·계좌번호·수량·체결가뿐이다(<code>core/.../codec/FilledTrade.java</code>). 미수금을 계산할 재료 자체가 없다.</p>
+  <p style="margin:6px 0 0"><strong>1.</strong> 체결 데이터에는 증거금률이 들어 있지 않다. 담긴 것은 tradeId·종목·주문번호·계좌번호·수량·체결가뿐이다(<code>core/.../codec/FilledTrade.java</code>). 미수금을 계산할 재료 자체가 없다.</p>
   <p style="margin:8px 0 0"><strong>2.</strong> 더 근본적으로, 미수금은 <code>체결액 × (1−증거금률)</code> 같은 단순식으로 나오지 않는다. 그 계좌의 예약 장부(주문가격·잔량)와 계좌별 증거금률에 기대어, 부분체결마다 예약 감소분의 차이로 나온다(<code>unpaidThis = 체결액 − 예약감소분</code>, <code>AccountState.java</code>). 이 값을 만드는 상태는 account-worker 안에만 있어서, 정산 앱이 따로 계산하면 account-worker가 쌓은 값과 다른 숫자가 나온다.</p>
-  <p style="margin:8px 0 0">부분체결이 반복되면 반올림 방향이 누적돼 원 단위가 달라진다는 것을 한 번 겪었고, 그 수정은 account-worker의 계산 안에 들어가 있다. 정산 앱이 따로 계산하는 경로에는 그 수정이 없다. 그러니 재계산의 문제는 고친 것이 되살아난다는 것보다, account-worker만 정확히 낼 수 있는 값을 밖에서 다시 계산하려다 다른 숫자가 나온다는 데 있다.</p>
+  <p style="margin:8px 0 0">부분체결이 반복되면 반올림 방향이 누적돼 원 단위가 달라진다는 것을 한 번 겪었고, 그 수정은 account-worker의 계산 안에 들어가 있다. 정산 앱이 따로 계산하는 경로에는 그 수정이 없다.</p>
   <p style="margin:8px 0 0">그래서 정산 앱은 금액을 계산하지 않는다. account-worker가 낸 값을 받아서 저장했다가, T+2가 되면 그대로 되돌려 보낸다.</p>
 </div>
 
@@ -295,20 +233,6 @@
 <p class="ttl">미수금 통지와 T+2 차감의 왕복</p>
 <a class="fig-open" href="_v2_arch_figs/f5.html" target="_blank" rel="noopener">이 도식 열기</a>
 <iframe class="fig-viewer" src="_v2_arch_figs/f5.html?theme=dark&amp;article=1" title="미수금 통지와 T+2 차감의 왕복" loading="lazy"></iframe>
-<div class="figcards">
-<div class="figcard">
-<b><i style="background:#f5c46b"></i>정산 앱의 미수금 재계산 금지</b>
-<ul><li>금액은 계좌 예약 장부에서만 나온다</li><li>정산 앱은 받은 숫자를 저장만 한다</li></ul>
-</div>
-<div class="figcard">
-<b><i style="background:#34d399"></i>정산 구간의 Kafka 유지</b>
-<ul><li>가는 길과 돌아오는 길 모두 Kafka다</li><li>2영업일 뒤 처리라 ms 지연이 문제되지 않는다</li></ul>
-</div>
-<div class="figcard">
-<b><i style="background:#a78bfa"></i>중복 도착 시 1회만 차감</b>
-<ul><li>차감 명령의 멱등 키는 tradeId다</li><li>계좌 엔진이 이미 반영한 건을 그 번호로 걸러낸다</li></ul>
-</div>
-</div>
 </div>
 
 <div class="note">
@@ -317,7 +241,7 @@
 </div>
 
 <h3>settlement-worker의 자체 DB</h3>
-<p>account-worker와 matching-worker에는 DB가 없다. 주문 처리 경로라 상태를 인메모리에 둔다. 정산은 성격이 다르다. 미수금은 2일 동안 재시작을 견뎌야 하고(유실되면 결제가 누락돼 잔고가 실제와 달라진다), µs 지연이 필요한 구간도 아니다. 그래서 정산 앱만 자체 DB에 미수금 테이블을 둔다. 이 구간이 Kafka로 남은 이유도 같다. 느린 비동기 durable 잡 전달은 Kafka 프로듀서가 이미 제공하는 것이고, Aeron으로 옮기면 그것을 손으로 다시 구현해야 한다(ADR-033).</p>
+<p>account-worker와 matching-worker에는 DB가 없다. 주문 처리 경로라 상태를 인메모리에 둔다. 정산에는 다른 조건이 걸린다. 미수금은 2일 동안 재시작을 견뎌야 하고(유실되면 결제가 누락돼 잔고가 실제와 달라진다), µs 지연이 필요한 구간도 아니다. 그래서 정산 앱만 자체 DB에 미수금 테이블을 둔다. 이 구간이 Kafka로 남은 이유도 같다. 느린 비동기 durable job 전달은 Kafka 프로듀서가 이미 제공하는 것이고, Aeron으로 옮기면 그것을 손으로 다시 구현해야 한다(ADR-033).</p>
 
 <!-- ========== 8. 스케일과 복구 ========== -->
 <h2><span class="n">8</span>재시작 복구와 슬롯 재배치</h2>
@@ -328,20 +252,6 @@
 <p class="ttl">재시작 복구와 슬롯 재배치</p>
 <a class="fig-open" href="_v2_arch_figs/f6.html" target="_blank" rel="noopener">이 도식 열기</a>
 <iframe class="fig-viewer" src="_v2_arch_figs/f6.html?theme=dark&amp;article=1" title="계좌 상태 복구 절차와 슬롯 재배치" loading="lazy"></iframe>
-<div class="figcards">
-<div class="figcard">
-<b><i style="background:#34d399"></i>재시작 복구 (구현됨)</b>
-<ul><li>스냅샷은 정상 종료 때와 입력 10,000건마다 저장된다</li><li>스냅샷 파일에는 journal 위치와 멱등 장부와 발급 카운터도 같이 들어 있다</li></ul>
-</div>
-<div class="figcard">
-<b><i style="background:#fb7185"></i>슬롯 이동 중 접수 중단</b>
-<ul><li>그 슬롯의 계좌는 절차가 끝날 때까지 주문을 받지 못한다</li><li>배포와 용량 변경을 장 마감 뒤에 한다는 전제다</li></ul>
-</div>
-<div class="figcard">
-<b><i style="background:#7cc0ff"></i>미구현 재배치 절차</b>
-<ul><li>예열과 드레인과 남은 구간 따라잡기를 거쳐 목적지를 바꾸는 무중단 절차</li><li>슬롯 표를 돌고 있는 프로세스에 온라인으로 반영하는 채널</li></ul>
-</div>
-</div>
 <p class="fignote">가운데 줄이 지금 코드에 들어가 있는 복구 단계다. 맨 아래 줄은 슬롯을 다른 프로세스로 옮길 때만 사람이 수행하는 절차라 예외 줄로 그렸다.</p>
 </div>
 
@@ -360,7 +270,7 @@
 
 <div class="note">
   <b>인메모리 상태의 내구성</b>
-  <p style="margin:6px 0 0">예전에는 계좌 상태를 담는 durable store가 없어서 재배치 자체가 불가능했다. 지금은 세 결정이 그 자리를 채우고 있다. <strong>ADR-025</strong>가 엔진마다 자기 입력을 Aeron Archive journal에 적고 그것으로 복구하게 정했고, <strong>ADR-030</strong>이 정상 종료 때 상태 전체와 journal 위치를 파일 하나로 저장하게 했고, <strong>ADR-034</strong>가 그 저장 시점을 입력 10,000건마다로 넓혔다. 10,000은 실측 처리량으로 재산정할 임시값이라고 코드에 적혀 있다. 남은 것은 장중 무중단 핸드오프와, 슬롯 표를 온라인으로 갱신하는 채널이다.</p>
+  <p style="margin:6px 0 0">예전에는 계좌 상태를 담는 durable store가 없어서 재배치 자체가 불가능했다. 지금은 세 가지가 갖춰져 있다. 엔진마다 자기 입력을 Aeron Archive journal에 적고 그것으로 복구한다(<strong>ADR-025</strong>). 정상 종료 때는 상태 전체와 journal 위치, 멱등 장부와 발급 카운터를 파일 하나에 저장하고(<strong>ADR-030</strong>), 그 저장을 입력 10,000건마다 반복한다(<strong>ADR-034</strong>). 10,000은 실측 처리량으로 재산정할 임시값이라고 코드에 적혀 있다. 남은 것은 장중 무중단 핸드오프와, 슬롯 표를 온라인으로 갱신하는 채널이다.</p>
 </div>
 
 <!-- ========== 9. 구현 방향 ========== -->
@@ -377,7 +287,7 @@
   <tr><td><strong>Cluster</strong></td><td>Raft 합의로 복제 상태머신과 스냅샷을 제공한다(HA). Coinbase 매칭 엔진이 이 위에서 돈다</td><td style="color:var(--red);font-weight:700">기각</td></tr>
 </table>
 </div>
-<p style="font-size:.92rem;color:var(--ink2)"><strong>Cluster 기각 · Archive 채택:</strong> Cluster의 <code>ClusteredService</code> 모델은 입력 순서 결정과 journal 역할을 Raft가 가져가므로, Disruptor 링버퍼로 순서를 직접 다루는 v2의 학습 목적과 겹친다. 스냅샷 기능만 떼어 쓰려 해도 <code>ClusteredService</code> 생명주기에 묶여 있어 그럴 수 없다는 것을 공식 문서로 확인했다. Archive는 다르다. 매칭 로직을 건드리지 않는 기록 층이라 같은 문제가 생기지 않는다. 그래서 journal과 replay 배관은 Archive에 맡겼다. 복구 흐름과 호가창 스냅샷은 Archive가 제공하지 않는 범위라 코드에 따로 있다. ADR-019는 이와 함께 "계좌 내구성은 Kafka 리플레이로"도 정했는데, 그 부분은 ADR-020이 대체했다. 지금 계좌 내구성은 Archive journal과 스냅샷에서 나온다.</p>
+<p style="font-size:.92rem;color:var(--ink2)"><strong>Cluster 기각 · Archive 채택:</strong> Cluster의 <code>ClusteredService</code> 모델은 입력 순서 결정과 journal 역할을 Raft가 가져가므로, Disruptor 링버퍼로 순서를 직접 다루는 v2의 학습 목적과 겹친다. 스냅샷 기능만 떼어 쓰려 해도 <code>ClusteredService</code> 생명주기에 묶여 있어 그럴 수 없다는 것을 공식 문서로 확인했다. Archive는 매칭 로직을 건드리지 않는 기록 층이라 같은 문제가 생기지 않는다. 그래서 journal과 replay 배관은 Archive에 맡겼다. 복구 흐름과 호가창 스냅샷은 Archive가 제공하지 않는 범위라 코드에 따로 있다. ADR-019는 이와 함께 "계좌 내구성은 Kafka 리플레이로"도 정했는데, 그 부분은 ADR-020이 대체했다. 지금 계좌 내구성은 Archive journal과 스냅샷에서 나온다.</p>
 
 <h3>계좌 앱이 체결을 받는 배선</h3>
 <p>계좌 앱은 매칭이 보낸 체결을 Aeron 체결 스트림(<code>AeronStreamIds.FILL</code>, 스트림 ID 6001)에서 받는다. 채널은 <code>transport.fill.channel</code> 설정값으로 정해지고, 프로세스를 따로 띄우는 실행 프로파일에서는 <code>aeron:udp?endpoint=localhost:20060</code>처럼 UDP endpoint를 준다. 기본값은 같은 머신 안에서 도는 <code>aeron:ipc</code>이다.</p>
@@ -389,16 +299,6 @@
 <p class="ttl">체결 수신 개시 순서</p>
 <a class="fig-open" href="_v2_arch_figs/f7.html" target="_blank" rel="noopener">이 도식 열기</a>
 <iframe class="fig-viewer" src="_v2_arch_figs/f7.html?theme=dark&amp;article=1" title="체결 수신 개시 순서" loading="lazy"></iframe>
-<div class="figcards">
-<div class="figcard">
-<b><i style="background:#a78bfa"></i>수신 개시 순서 강제</b>
-<ul><li>새로 붙은 구독자는 붙은 시점 이후 데이터만 받는다</li><li>세 빈이 서로를 파라미터로 받아 생성 순서를 강제한다</li></ul>
-</div>
-<div class="figcard">
-<b><i style="background:#fb7185"></i>Kafka 시절과의 차이</b>
-<ul><li>Kafka 에서는 저널에 적힌 것을 확인한 뒤 오프셋을 커밋해 유실 창을 막았다</li><li>Aeron Archive 에는 오프셋 커밋이 없어 이 순서와 스냅샷 위치가 그 자리를 대신한다</li></ul>
-</div>
-</div>
 </div>
 
 <pre><span class="c">// account-worker · AccountFillIntakeConfig — 세 빈이 서로를 파라미터로 받아 순서를 강제한다</span>
@@ -460,7 +360,7 @@
 
     String buyEndpoint = requireEndpoint(fill.buyAccountId());
     String sellEndpoint = requireEndpoint(fill.sellAccountId());
-    enqueue(buyEndpoint, trade);                  <span class="c">// FillOutbox 큐잉. 인코딩·offer는 전용 스레드</span>
+    enqueue(buyEndpoint, trade);                  <span class="c">// FillOutbox enqueue. 인코딩·offer는 전용 스레드</span>
     <span class="k">if</span> (!sellEndpoint.equals(buyEndpoint)) {      <span class="c">// 같은 목적지면 한 번만</span>
         enqueue(sellEndpoint, trade);
     }

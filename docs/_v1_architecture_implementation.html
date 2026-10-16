@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>v1 아키텍처 &amp; 구현 방향</title>
+<title>v1 아키텍처와 구현 방향</title>
 <style>
   :root{
     --bg:#f6f5f2; --panel:#ffffff; --ink:#1c2128; --ink2:#3b4350; --muted:#6b7382;
@@ -76,12 +76,12 @@
 <body>
 <div class="wrap">
 
-<h1>v1 아키텍처 &amp; 구현 방향</h1>
-<p class="sub">네 프로세스가 Kafka 세 토픽으로 이어지는 구조 · PostgreSQL 행 락으로 잔고를 지키는 방법 · 그 대가로 남는 처리량과 지연</p>
+<h1>v1 아키텍처와 구현 방향</h1>
+<p class="sub">네 프로세스가 Kafka 세 토픽으로 연결되는 구조 · DB 행 락으로 잔고를 지키는 방법 · 그 대가로 나오는 처리량과 지연</p>
 
 <!-- ========== 1. 맥락 ========== -->
 <h2><span class="n">1</span>이 문서의 범위</h2>
-<p class="lead">v1은 잔고를 PostgreSQL 행에 두고 그 행을 잠가서 지키는 주식 매매 엔진이다. 프로세스 사이의 전달은 Kafka가 맡는다.</p>
+<p class="lead">v1은 잔고를 DB 행에 두고 그 행을 잠가서 지키는 주식 매매 엔진이다. 프로세스 사이의 전달은 Kafka가 맡는다.</p>
 
 <p>주문 한 건이 접수돼 체결되고 계좌에 반영되기까지 지나는 순서는 <a href="_v1_order_fill_settlement_flow.html">주문 접수부터 체결 반영까지</a>에 이미 있다. 여기서는 그 순서를 만드는 틀을 다룬다. 프로세스가 몇 개이고 무엇을 나눠 맡는지, 잔고와 호가창은 각각 어디에 있는지, 같은 계좌·같은 종목에 동시에 손대는 것을 무엇이 막는지, 그리고 그 방법을 고른 대가로 처리량과 지연이 어떻게 나오는지를 다룬다.</p>
 
@@ -117,26 +117,26 @@
 
 <div class="fig fig-topic">
 <p class="cap">Figure 1</p>
-<p class="ttl">네 프로세스가 세 토픽으로 이어지는 구조</p>
+<p class="ttl">네 프로세스가 세 토픽으로 연결되는 구조</p>
 <a class="fig-open" href="_v1_arch_figs/fig1-process-topic.html" target="_blank" rel="noopener">이 도식 열기</a>
-<iframe class="fig-viewer" src="_v1_arch_figs/fig1-process-topic.html?theme=dark&amp;article=1" title="네 프로세스가 세 토픽으로 이어지는 구조" loading="lazy"></iframe>
-<p class="fignote">api가 order-requests를 발행하면 order-engine이 accounts 행을 잠가 검증하고, orders로 넘기면 matching-engine이 메모리 호가창에서 짝을 찾고, fills로 넘기면 settlement-engine이 holdings 행을 잠가 반영한다. 세 엔진이 겹친 카드로 그려진 건 Kafka 컨슈머 그룹이라 인스턴스를 여러 개 띄울 수 있다는 뜻이다 — 지금 로컬 실행은 인스턴스 하나씩이다.</p>
+<iframe class="fig-viewer" src="_v1_arch_figs/fig1-process-topic.html?theme=dark&amp;article=1" title="네 프로세스가 세 토픽으로 연결되는 구조" loading="lazy"></iframe>
+<p class="fignote">api가 order-requests를 발행하면 order-engine이 accounts 행을 잠가 검증하고, orders로 넘기면 matching-engine이 메모리 호가창에서 짝을 찾고, fills로 넘기면 settlement-engine이 holdings 행을 잠가 반영한다. 세 엔진이 겹친 카드로 그려진 것은 Kafka 컨슈머 그룹이라 인스턴스를 여러 개 띄울 수 있다는 뜻이다 — 지금 로컬 실행은 인스턴스 하나씩이다.</p>
 </div>
 
-<p>토픽마다 발행자가 하나로 고정돼 있다(코드 주석의 표현으로 "발행자가 토픽 소유"). 한 토픽에 여러 프로세스가 동시에 쓰는 경로가 없어서, 어느 이벤트가 어디서 왔는지 추적할 때 발행자를 찾아 헤맬 일이 없다.</p>
+<p>토픽마다 발행자가 하나로 고정돼 있다(코드 주석의 표현으로 "발행자가 토픽 소유"). 한 토픽에 여러 프로세스가 동시에 쓰는 경로가 없어서, 어느 이벤트가 어디서 왔는지 추적할 때 발행자를 찾을 필요가 없다.</p>
 <ul class="tight">
   <li><code>order-requests</code> — api만 발행, order-engine만 구독</li>
   <li><code>orders</code> — order-engine만 발행, matching-engine만 구독</li>
   <li><code>fills</code> — matching-engine만 발행, settlement-engine만 구독</li>
 </ul>
 
-<p>세 토픽의 파티션 키가 서로 다르다. <code>order-requests</code>는 계좌 번호(accountId)로 나뉘고, <code>orders</code>와 <code>fills</code>는 종목 코드(stockCode)로 나뉜다. 접수 단계는 계좌 기준으로 병렬화하고 매칭·체결 반영 단계는 종목 기준으로 병렬화한다는 뜻이다. 이 파티션 키가 §5의 동시성 통제와 맞물린다.</p>
+<p>세 토픽의 파티션 키가 서로 다르다. <code>order-requests</code>는 계좌 번호(accountId)로 나뉘고, <code>orders</code>와 <code>fills</code>는 종목 코드(stockCode)로 나뉜다. 접수 단계는 계좌 기준으로 병렬화하고 매칭·체결 반영 단계는 종목 기준으로 병렬화한다는 뜻이다. 이 파티션 키가 §5의 동시성 통제로 이어진다.</p>
 
 <p>로컬에서 띄울 때 DB는 프로파일로 고를 수 있지만(기본은 H2, <code>local</code> 프로파일은 PostgreSQL) Kafka는 두 경우 모두 필요하다. 네 프로세스 모두 기동 시 <code>localhost:9092</code>의 Kafka에 연결하고, DB 선택과 무관하게 Kafka가 없으면 뜨지 않는다.</p>
 
 <!-- ========== 4. 상태 위치 ========== -->
 <h2><span class="n">4</span>상태 저장 위치</h2>
-<p>계좌의 잔고와 보유 수량은 PostgreSQL의 <code>accounts</code>·<code>holdings</code> 테이블에만 있다. 어느 프로세스도 잔고를 메모리에 따로 들고 있지 않고, account 모듈의 서비스가 매번 그 행을 읽고 잠그고 고친다.</p>
+<p>계좌의 잔고와 보유 수량은 DB의 <code>accounts</code>·<code>holdings</code> 테이블에만 있다. 어느 프로세스도 잔고를 메모리에 따로 들고 있지 않고, account 모듈의 서비스가 매번 그 행을 읽고 잠그고 고친다.</p>
 
 <p>호가창은 다르다. matching-engine 프로세스의 메모리에 종목 코드별로 떠 있다 — <code>OrderBookRegistry</code>가 <code>ConcurrentHashMap&lt;String, OrderBook&gt;</code>로 종목 코드마다 하나씩 들고 있고, 그 안에서 매수·매도 호가는 <code>TreeMap</code>에 가격 순으로 쌓여 있다. DB에는 호가창 자체를 저장하는 테이블이 없다.</p>
 
@@ -148,7 +148,7 @@
 <p class="fignote">Redis는 잔고나 호가창의 원본을 담지 않고, 조회 API가 빠르게 읽도록 최근 체결가와 호가창을 따로 복사해 둔 캐시다.</p>
 </div>
 
-<p>Redis가 비어 있거나 죽어도 잔고·보유·호가창은 그대로 PostgreSQL과 matching-engine 메모리에 남아 있고, 조회 API만 느려지거나 빈 값을 돌려준다. 되돌릴 수 없는 상태와 조회용 사본을 서로 다른 곳에 둔 구조다.</p>
+<p>Redis가 비어 있거나 죽어도 잔고·보유·호가창은 그대로 DB와 matching-engine 메모리에 남아 있고, 조회 API만 느려지거나 빈 값을 돌려준다.</p>
 
 <h3>4-1 상태 복원</h3>
 <p>matching-engine이 재시작하거나 Kafka가 파티션을 새로 배정하면(스케일 아웃, 장애로 인한 인스턴스 교체) 그 시점에 메모리는 비어 있다. <code>MatchingConsumer</code>의 <code>ConsumerSeekAware.onPartitionsAssigned</code>에 PENDING 상태인 주문을 DB에서 시간순으로 다시 읽어 호가창을 채우는 경로(<code>loadAndMatch</code>)가 있다. 같은 주문이 중복으로 들어와도 <code>OrderBook.containsOrder()</code>로 걸러내므로, 설계상으로는 이미 메모리에 있는 주문을 두 번 넣지 않는다.</p>
@@ -161,11 +161,11 @@
 
 <!-- ========== 5. 동시성 통제 ========== -->
 <h2><span class="n">5</span>동시 요청 통제</h2>
-<p>같은 계좌나 같은 종목에 동시에 손대는 요청이 겹치면 잔고나 보유 수량이 실제와 다른 값으로 남을 수 있다. v1은 이 문제를 파티션 키가 만드는 직렬화와 PostgreSQL 행 락, 이 둘로 처리한다.</p>
+<p>같은 계좌나 같은 종목에 동시에 손대는 요청이 겹치면 잔고나 보유 수량이 실제와 다른 값으로 남을 수 있다. v1은 이 문제를 파티션 키가 만드는 직렬화와 DB 행 락, 이 둘로 처리한다.</p>
 
 <p>파티션 키가 하는 일부터 보면, <code>order-requests</code>는 accountId로 나뉘어서 같은 계좌의 요청은 항상 같은 파티션에 들어가고 order-engine의 같은 컨슈머 스레드가 순서대로 처리한다. 그 계좌의 요청끼리는 애초에 동시에 실행되지 않으니 서로 경합할 일이 없다. 다만 이건 <strong>같은 계좌 안에서만</strong> 유효하다. 계좌 A와 계좌 B의 요청은 서로 다른 파티션, 서로 다른 스레드에서 병렬로 돌 수 있고, 두 스레드가 같은 시각에 각자의 행을 건드릴 수 있다는 문제는 파티션 키만으로는 방지되지 않는다.</p>
 
-<p>그 나머지를 PostgreSQL의 비관적 락이 처리한다. 매수 주문을 접수할 때는 <code>accounts</code> 행을 잠그고 잔고와 예약 증거금을 확인한다. 매도 주문을 접수할 때와 체결을 반영할 때는 <code>holdings</code> 행을 잠그고 보유 수량을 확인·갱신한다. 계좌 잔고가 실제로 차감되는 유일한 경로인 상환 API도 <code>accounts</code> 행을 잠그고 출금한다.</p>
+<p>그 나머지를 DB의 비관적 락이 처리한다. 매수 주문을 접수할 때는 <code>accounts</code> 행을 잠그고 잔고와 예약 증거금을 확인한다. 매도 주문을 접수할 때와 체결을 반영할 때는 <code>holdings</code> 행을 잠그고 보유 수량을 확인·갱신한다. 계좌 잔고가 실제로 차감되는 유일한 경로인 상환 API도 <code>accounts</code> 행을 잠그고 출금한다.</p>
 
 <div class="fig fig-workflow">
 <p class="cap">Figure 3</p>
@@ -189,7 +189,7 @@
 <tr><td><code>fills</code></td><td>matching-engine</td><td>settlement-engine</td><td class="col-blue">50</td><td>stockCode</td></tr>
 </table>
 <p><code>order-requests</code>의 파티션 수 3은 계좌 병렬 처리 목표에 맞춰 정한 값이고, <code>orders</code>·<code>fills</code>의 50은 매칭 병렬 처리 목표에 맞춰 정한 값이다. 두 숫자가 다른 이유는 나누는 기준(accountId·stockCode)이 다르기 때문이다. 다만 파티션 수를 나중에 늘리면 같은 키라도 재해시로 다른 파티션에 배정돼 순서 보장이 깨진다. 그래서 코드 주석에 처음부터 넉넉하게 정해야 한다고 적어 뒀다.</p>
-<p>세 컨슈머 모두 처리를 끝낸 뒤에 오프셋을 커밋한다(<code>ack-mode: manual_immediate</code>). 이 설정과 §5의 세 멱등 판정 지점은 한 짝이다. 커밋을 먼저 하면 처리 중 죽었을 때 그 메시지를 영영 잃고, 멱등 판정이 없으면 다시 온 메시지가 두 번 반영된다.</p>
+<p>세 컨슈머 모두 처리를 끝낸 뒤에 오프셋을 커밋한다(<code>ack-mode: manual_immediate</code>). 이 설정과 §5의 세 멱등 판정 지점은 한 세트다. 커밋을 먼저 하면 처리 중 죽었을 때 그 메시지를 영영 잃고, 멱등 판정이 없으면 다시 온 메시지가 두 번 반영된다.</p>
 
 <!-- ========== 7. 대가 ========== -->
 <h2><span class="n">7</span>측정값과 한계</h2>
@@ -201,9 +201,9 @@
 <tr><td>order-requests 컨슈머 스레드·파티션</td><td>3개 → 9개</td></tr>
 <tr><td>처리량</td><td>초당 227.3건 → 384.6건 (1.7배)</td></tr>
 </table>
-<p>스레드와 파티션을 3배로 늘렸는데 처리량은 1.7배에 그친다. 그 이유가 §5의 구조에 있다. 파티션과 스레드를 늘리면 서로 다른 계좌의 요청을 더 많이 동시에 처리할 수 있지만, 주문 한 건이 PostgreSQL 행을 잠그고 예약 증거금 합계를 조회하고 저장하는 비용 자체는 줄지 않는다. 스레드를 늘려서 줄어드는 건 계좌 간 대기 시간이고, 계좌 한 건당 고정으로 드는 DB 비용은 스레드 수와 무관하게 남는다.</p>
+<p>스레드와 파티션을 3배로 늘렸는데 처리량은 1.7배에 그친다. 그 이유가 §5의 구조에 있다. 파티션과 스레드를 늘리면 서로 다른 계좌의 요청을 더 많이 동시에 처리할 수 있지만, 매수 주문 한 건이 accounts 행을 잠그고 예약 증거금 합계를 조회하고 저장하는 비용 자체는 줄지 않는다. 스레드를 늘려서 줄어드는 것은 계좌 간 대기 시간이고, 계좌 한 건당 드는 DB 비용은 스레드를 늘려도 그대로다.</p>
 
-<p>측정 조건과 원본 데이터는 <a href="_v1_v2_comparison.html">부하 측정 문서</a> §7과 <code>loadtest/evidence/</code>에 있다.</p>
+<p>측정 조건과 원본 데이터는 <a href="_v1_v2_comparison.html">두 구현 비교</a> §7과 <code>loadtest/evidence/</code>에 있다.</p>
 
 <!-- ========== 8. 정해진 것 / 열린 것 ========== -->
 <h2><span class="n">8</span>구현 완료 항목과 미결 항목</h2>
@@ -211,7 +211,7 @@
 <ul class="tight">
   <li><strong>프로세스 분리</strong> — api·order-engine·matching-engine·settlement-engine 네 개가 독립된 Spring Boot 앱이고, Kafka 세 토픽으로만 연결된다.</li>
   <li><strong>토픽 소유</strong> — 토픽마다 발행자가 하나로 고정되고, 파티션 키는 접수 단계에서 accountId, 매칭·체결 반영 단계에서 stockCode로 서로 다르다.</li>
-  <li><strong>잔고의 원본</strong> — 잔고·보유는 PostgreSQL 행 하나뿐이고, 매수 접수·출금은 accounts 행을, 매도 접수·체결 반영은 holdings 행을 잠가서 지킨다.</li>
+  <li><strong>잔고의 원본</strong> — 잔고·보유는 DB 행 하나뿐이고, 매수 접수·출금은 accounts 행을, 매도 접수·체결 반영은 holdings 행을 잠가서 지킨다.</li>
   <li><strong>중복 방어</strong> — order-engine은 requestId, matching-engine은 <code>OrderBook.containsOrder()</code>, settlement-engine은 tradeId로 같은 메시지의 재전달 여부를 판정한다.</li>
   <li><strong>호가창 복원</strong> — 재시작·리밸런스로 파티션을 새로 할당받으면 DB의 PENDING 주문을 다시 읽어 호가창을 채운다. 종목마다 파티션 번호를 계산해 할당받은 파티션에 속하는 것만 복원한다(§4, ADR-037).</li>
 </ul>
@@ -224,7 +224,7 @@
 
 <div class="concl">
   <b>정리</b>
-  <p style="margin:0">v1은 프로세스 네 개를 Kafka 세 토픽으로 잇는다. 접수는 accountId로, 매칭·체결 반영은 stockCode로 나눠 병렬화하고, 그 파티션 키가 만드는 직렬화 위에 PostgreSQL 행 락을 더해 동시 접근을 걸러낸다. 잔고·보유는 DB 행 하나가 원본이고 호가창만 matching-engine 메모리에 있다. 파티션이 바뀔 때는 종목마다 파티션 번호를 계산해 할당받은 파티션의 PENDING 주문만 DB에서 다시 채운다(§4). 그 대가는 주문 한 건마다 드는 DB 락·조회 비용이고, 스레드를 늘려도 그 비용은 줄지 않아 처리량이 늘어나는 폭이 제한된다.</p>
+  <p style="margin:0">v1은 프로세스 네 개를 Kafka 세 토픽으로 연결한다. 접수는 accountId로, 매칭·체결 반영은 stockCode로 나눠 병렬화하고, 그 파티션 키가 만드는 직렬화 위에 DB 행 락을 더해 동시 접근을 걸러낸다. 잔고·보유는 DB 행 하나가 원본이고 호가창만 matching-engine 메모리에 있다. 파티션이 바뀔 때는 종목마다 파티션 번호를 계산해 할당받은 파티션의 PENDING 주문만 DB에서 다시 채운다(§4). 그 대가는 주문 한 건마다 드는 DB 락·조회 비용이고, 스레드를 늘려도 그 비용은 줄지 않아 처리량이 늘어나는 폭이 제한된다.</p>
 </div>
 
 </div>
