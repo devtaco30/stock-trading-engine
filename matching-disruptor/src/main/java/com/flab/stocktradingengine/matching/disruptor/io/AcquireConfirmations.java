@@ -1,5 +1,7 @@
 package com.flab.stocktradingengine.matching.disruptor.io;
 
+import java.lang.System.Logger;
+import java.lang.System.Logger.Level;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.function.LongSupplier;
@@ -19,20 +21,37 @@ import java.util.function.LongSupplier;
  */
 public final class AcquireConfirmations {
 
-    private record Pending(int stockSlot, long journalPosition) {
+    private static final Logger log = System.getLogger(AcquireConfirmations.class.getName());
+
+    // 대기 항목이 이 시간보다 오래 남으면 경고한다(5초, 근거 없는 임의 값 — 앞서 잰 지연이 p99 3.7ms였으므로 훨씬 길게 잡았다).
+    private static final long STUCK_WARNING_AFTER_NANOS = 5_000_000_000L;
+    // 경고를 남기는 최소 간격(10초, 근거 없는 임의 값). 폴링 반복마다 남기지 않는다.
+    private static final long WARNING_INTERVAL_NANOS = 10_000_000_000L;
+
+    private record Pending(int stockSlot, long journalPosition, long enqueuedAtNanos) {
     }
 
     private final LongSupplier recordedPosition;
+    private final LongSupplier nanoClock;
     private final Queue<Pending> pending = new ConcurrentLinkedQueue<>();
+    private long lastWarningAtNanos;
+    private boolean warnedOnce;
+    private long warningsLogged;
 
     /** @param recordedPosition Archive가 지금까지 기록한 위치. 기록이 없거나 확인할 수 없으면 음수를 돌려준다. */
     public AcquireConfirmations(LongSupplier recordedPosition) {
+        this(recordedPosition, System::nanoTime);
+    }
+
+    /** 시각을 주입받는 생성자(시험용). */
+    public AcquireConfirmations(LongSupplier recordedPosition, LongSupplier nanoClock) {
         this.recordedPosition = recordedPosition;
+        this.nanoClock = nanoClock;
     }
 
     /** 저널 핸들러 thread가 받음 항목을 append한 직후 그 항목의 끝 위치와 함께 부른다. */
     public void awaitRecorded(int stockSlot, long journalPosition) {
-        pending.add(new Pending(stockSlot, journalPosition));
+        pending.add(new Pending(stockSlot, journalPosition, nanoClock.getAsLong()));
     }
 
     /**
@@ -54,6 +73,33 @@ public final class AcquireConfirmations {
             confirmed++;
             head = pending.peek();
         }
+        if (head != null) {
+            warnIfStuck(head, recorded);
+        }
         return confirmed;
+    }
+
+    /** 기록 위치를 읽을 수 없거나(음수) 대기 항목이 한도보다 오래 남았으면, 간격을 두고 경고한다. 확인을 부르는 thread 하나에서만 호출한다. */
+    private void warnIfStuck(Pending head, long recorded) {
+        long now = nanoClock.getAsLong();
+        boolean unreadable = recorded < 0;
+        boolean waitedTooLong = now - head.enqueuedAtNanos() > STUCK_WARNING_AFTER_NANOS;
+        if (!unreadable && !waitedTooLong) {
+            return;
+        }
+        if (warnedOnce && now - lastWarningAtNanos < WARNING_INTERVAL_NANOS) {
+            return;
+        }
+        warnedOnce = true;
+        lastWarningAtNanos = now;
+        warningsLogged++;
+        log.log(Level.WARNING, "[매칭] 종목 slot 받음 항목의 Archive 기록 확인이 끝나지 않음: 종목 slot=" + head.stockSlot()
+            + " 항목 끝 위치=" + head.journalPosition() + " Archive 기록 위치=" + recorded
+            + (unreadable ? "(읽을 수 없음)" : "") + " 기다린 시간(ms)=" + (now - head.enqueuedAtNanos()) / 1_000_000L);
+    }
+
+    /** 남긴 경고 횟수(시험·점검용). 확인을 부르는 thread에서 읽는다. */
+    public long warningsLogged() {
+        return warningsLogged;
     }
 }
