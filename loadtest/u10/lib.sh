@@ -110,6 +110,6 @@ check_owned_slots() {
     c0=$(echo "$s0" | tr ',' '\n' | grep -c .); c1=$(echo "$s1" | tr ',' '\n' | grep -c .)
     total=$((c0 + c1))
     unique=$(printf '%s,%s' "$s0" "$s1" | tr ',' '\n' | grep . | sort -u | wc -l | tr -d ' ')
-    if [ "$total" = 64 ] && [ "$unique" = 64 ]; then echo "통과: 두 매칭 shard의 담당 종목 slot이 겹치지 않고 합이 64개다 (shard 0 $c0개, shard 1 $c1개)"
-    else echo "실패: 담당 종목 slot 합 $total개, 서로 다른 값 $unique개 (shard 0 $c0개, shard 1 $c1개)"; OK=0; fi
+    if [ "$total" = 64 ] && [ "$unique" = 64 ]; then echo "통과: 두 매칭 shard의 담당 종목 slot이 겹치지 않고 합이 64개다 (shard 0 ${c0}개, shard 1 ${c1}개)"
+    else echo "실패: 담당 종목 slot 합 ${total}개, 서로 다른 값 ${unique}개 (shard 0 ${c0}개, shard 1 ${c1}개)"; OK=0; fi
 }
