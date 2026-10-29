@@ -9,7 +9,9 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.IntFunction;
 import java.util.function.IntPredicate;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -76,6 +78,11 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
     private final SlotEventRequests slotEventRequests;
     // 받음 요청을 남겼고 저널 기록 확인을 기다리는 종목 slot. 그 사이 회수되면 빠진다.
     private final java.util.Set<Integer> awaitingJournalConfirm = ConcurrentHashMap.newKeySet();
+    // 맵을 읽어 이동으로 받는 종목 slot인지 판단하는 함수와 이전 담당에게 호가창을 요청하는 쪽. 둘 다 null이면 이동 처리를 하지 않는다.
+    private final IntFunction<Optional<MatchingSlotTarget>> mapLookup;
+    private final MovedSlotRequests movedSlotRequests;
+    // 이동으로 받기로 하고 호가창 적재와 스냅샷 확정을 기다리는 종목 slot. 그 사이 회수되면 빠진다.
+    private final java.util.Set<Integer> awaitingLoad = ConcurrentHashMap.newKeySet();
 
     // test()가 주문마다 불린다. 배열 참조를 volatile로 통째로 교체해 박싱 없이 인덱스 조회만 한다.
     private volatile boolean[] ownedSlotFlags;
@@ -98,6 +105,21 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
     public KafkaMatchingShardAssignment(Consumer<String, String> consumer, Producer<Integer, String> mapProducer,
                                         Admin adminClient, int stockSlotCount, String ownOrderEndpoint,
                                         String assignmentTopic, String mapTopic, SlotEventRequests slotEventRequests) {
+        this(consumer, mapProducer, adminClient, stockSlotCount, ownOrderEndpoint, assignmentTopic, mapTopic,
+            slotEventRequests, null, null);
+    }
+
+    /**
+     * 이동으로 받는 종목 slot을 처리하는 구성. 배정 콜백이 맵({@code mapLookup})에서 그 종목 slot의 항목을 읽어 {@code 주소;moving}이면
+     * 이동으로 받는 것으로 본다.
+     */
+    public KafkaMatchingShardAssignment(Consumer<String, String> consumer, Producer<Integer, String> mapProducer,
+                                        Admin adminClient, int stockSlotCount, String ownOrderEndpoint,
+                                        String assignmentTopic, String mapTopic, SlotEventRequests slotEventRequests,
+                                        IntFunction<Optional<MatchingSlotTarget>> mapLookup,
+                                        MovedSlotRequests movedSlotRequests) {
+        this.mapLookup = mapLookup;
+        this.movedSlotRequests = movedSlotRequests;
         this.slotEventRequests = slotEventRequests;
         this.consumer = consumer;
         this.mapProducer = mapProducer;
@@ -207,6 +229,7 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
                     partitions.forEach(p -> updated[p.partition()] = false);
                     ownedSlotFlags = updated;
                     partitions.forEach(p -> awaitingJournalConfirm.remove(p.partition()));
+                    partitions.forEach(p -> awaitingLoad.remove(p.partition()));
                 }
                 if (slotEventRequests != null) {
                     partitions.forEach(p -> slotEventRequests.requestRelease(p.partition()));
@@ -218,25 +241,62 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
 
             @Override
             public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+                List<TopicPartition> firstAssigned = new java.util.ArrayList<>();
+                for (TopicPartition partition : partitions) {
+                    if (isMovedIn(partition.partition())) {
+                        // 이전 담당이 넘기는 중인 종목 slot이다. 맵은 호가창 적재가 끝날 때까지 이동 중으로 남기므로 자기 주소를
+                        // 올리지 않고, 호가창을 요청하며, 적재와 스냅샷 확정이 끝나기 전에는 담당 표시를 켜지 않는다.
+                        awaitingLoad.add(partition.partition());
+                        movedSlotRequests.requestHandover(partition.partition());
+                    } else {
+                        firstAssigned.add(partition);
+                    }
+                }
                 if (slotEventRequests == null) {
                     synchronized (KafkaMatchingShardAssignment.this) {
                         boolean[] updated = ownedSlotFlags.clone();
-                        partitions.forEach(p -> updated[p.partition()] = true);
+                        firstAssigned.forEach(p -> updated[p.partition()] = true);
                         ownedSlotFlags = updated;
                     }
                 } else {
-                    partitions.forEach(p -> {
+                    firstAssigned.forEach(p -> {
                         awaitingJournalConfirm.add(p.partition());
                         slotEventRequests.requestAcquire(p.partition());
                     });
                 }
-                if (!partitions.isEmpty()) {
-                    publishMapEntries(partitions, ownOrderEndpoint);
+                if (!firstAssigned.isEmpty()) {
+                    publishMapEntries(firstAssigned, ownOrderEndpoint);
                 }
-                log.log(Level.INFO, "[매칭] 담당 종목 slot 배정: 신규=" + slotNumbers(partitions)
-                    + " 전체 담당=" + currentSlotsSnapshot().size() + "개");
+                log.log(Level.INFO, "[매칭] 담당 종목 slot 배정: 신규=" + slotNumbers(firstAssigned) + " 이동으로 받는 중="
+                    + awaitingLoad + " 전체 담당=" + currentSlotsSnapshot().size() + "개");
             }
         };
+    }
+
+    /** 맵의 그 종목 slot 항목이 이동 중이면 이동으로 받는 것이다. 이동 중이 아닌 항목이나 항목 없음은 첫 배정으로 본다. */
+    private boolean isMovedIn(int stockSlot) {
+        if (mapLookup == null || movedSlotRequests == null) {
+            return false;
+        }
+        Optional<MatchingSlotTarget> entry = mapLookup.apply(stockSlot);
+        if (entry.isPresent() && !entry.get().moving() && !entry.get().endpoint().equals(ownOrderEndpoint)) {
+            // 이전 담당이 회수 콜백 없이 사라진 경우다. 장애 복구 범위라 이 단위에서 정하지 않고 첫 배정처럼 처리한다.
+            log.log(Level.WARNING, "[매칭] 맵에 다른 pod의 항목이 남은 채 종목 slot을 배정받음(장애 복구 범위): 종목 slot="
+                + stockSlot + " 항목=" + entry.get());
+        }
+        return entry.isPresent() && entry.get().moving();
+    }
+
+    /**
+     * 이동으로 받은 종목 slot의 호가창 적재와 스냅샷 확정이 끝났다는 신호. 이때 받음 요청을 남기고 저널 기록 확인이 오면
+     * ({@link #confirmAcquired}) 담당이 켜진다. 그 사이 회수된 종목 slot은 요청을 남기지 않는다.
+     */
+    public void acquireAfterLoad(int stockSlot) {
+        if (!awaitingLoad.remove(stockSlot)) {
+            return;
+        }
+        awaitingJournalConfirm.add(stockSlot);
+        slotEventRequests.requestAcquire(stockSlot);
     }
 
     private void publishMapEntries(Collection<TopicPartition> partitions, String value) {

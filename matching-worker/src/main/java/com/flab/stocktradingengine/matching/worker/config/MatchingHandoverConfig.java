@@ -23,6 +23,7 @@ import com.flab.stocktradingengine.matching.worker.coordination.HandoverEndpoint
 import com.flab.stocktradingengine.matching.worker.coordination.KafkaMatchingShardAssignment;
 import com.flab.stocktradingengine.matching.worker.coordination.MatchingSlotMapReader;
 import com.flab.stocktradingengine.matching.worker.handover.HandoverBookStore;
+import com.flab.stocktradingengine.matching.worker.handover.HandoverCoordinator;
 import com.flab.stocktradingengine.matching.worker.handover.HandoverReceiver;
 import com.flab.stocktradingengine.matching.worker.handover.HandoverRequester;
 import com.flab.stocktradingengine.matching.worker.handover.HandoverResponder;
@@ -104,14 +105,22 @@ public class MatchingHandoverConfig {
     }
 
     @Bean
+    public HandoverCoordinator handoverCoordinator(HandoverRequester requester) {
+        return new HandoverCoordinator(requester::request);
+    }
+
+    @Bean
     public SmartLifecycle handoverTransportLifecycle(
-            HandoverResponder responder, HandoverReceiver receiver, HandoverRequester requester) {
+            HandoverResponder responder, HandoverReceiver receiver, HandoverRequester requester,
+            HandoverCoordinator coordinator) {
         return new HandoverLifecycle(TRANSPORT_PHASE,
             () -> {
                 responder.start();
                 receiver.start();
+                coordinator.start();
             },
             () -> {
+                coordinator.close();
                 receiver.close();
                 responder.close();
                 requester.close();

@@ -24,6 +24,8 @@ import com.flab.stocktradingengine.aeron.StockSlotHasher;
 import com.flab.stocktradingengine.matching.disruptor.io.SlotEventListener;
 import com.flab.stocktradingengine.matching.disruptor.io.SlotEventRequests;
 import com.flab.stocktradingengine.matching.worker.coordination.KafkaMatchingShardAssignment;
+import com.flab.stocktradingengine.matching.worker.coordination.MatchingSlotMapReader;
+import com.flab.stocktradingengine.matching.worker.handover.HandoverCoordinator;
 import com.flab.stocktradingengine.matching.worker.handover.HandoverBookStore;
 import com.flab.stocktradingengine.matching.worker.lifecycle.KafkaMatchingShardAssignmentLifecycle;
 
@@ -80,6 +82,16 @@ public class MatchingShardOwnershipConfig {
             }
 
             @Override
+            public void onBooksLoadedDurable(long transferId, int stockSlot) {
+                // 이동으로 받은 종목 slot의 호가창 적재와 스냅샷 확정이 끝났다. 이제 받음 요청을 남기고 저널 기록 확인이 오면 담당이 켜진다.
+                // 이전 담당(X)에게 받았다고 알리는 일은 U16이 한다.
+                KafkaMatchingShardAssignment assignment = assignmentProvider.getIfAvailable();
+                if (assignment != null) {
+                    assignment.acquireAfterLoad(stockSlot);
+                }
+            }
+
+            @Override
             public void onSlotHandedOver(int stockSlot, List<byte[]> bookBytesPerStock) {
                 // 넘김 이벤트를 처리한 엔진 thread가 부른다. 요청이 오면 호가창 발신 thread가 이 바이트를 보낸다.
                 HandoverBookStore store = handoverBookStore.getIfAvailable();
@@ -109,7 +121,8 @@ public class MatchingShardOwnershipConfig {
             @Value("${matching-worker.instance-id:}") String instanceIdConfig,
             @Value("${transport.matching-intake.channel:" + MatchingOrderIntakeConfig.DEFAULT_INTAKE_CHANNEL + "}") String orderEndpoint,
             @Value("${matching-shard.coordination.session-timeout-ms:120000}") int sessionTimeoutMs,
-            SlotEventRequests slotEventRequests) {
+            SlotEventRequests slotEventRequests,
+            ObjectProvider<MatchingSlotMapReader> mapReader, ObjectProvider<HandoverCoordinator> handoverCoordinator) {
         String instanceId = resolveInstanceId(instanceIdConfig, orderEndpoint);
         log.info("[매칭] 담당 종목 slot 소스: Kafka 컨슈머 그룹 배정({}) — 신원={} 주문 입구={} session.timeout.ms={}",
             KafkaMatchingShardAssignment.GROUP_ID, instanceId, orderEndpoint, sessionTimeoutMs);
@@ -120,7 +133,8 @@ public class MatchingShardOwnershipConfig {
         Admin adminClient = Admin.create(adminProps(bootstrapServers));
         return new KafkaMatchingShardAssignment(
             consumer, mapProducer, adminClient, stockSlotHasher.stockSlotCount(), orderEndpoint,
-            KafkaMatchingShardAssignment.ASSIGNMENT_TOPIC, KafkaMatchingShardAssignment.MAP_TOPIC, slotEventRequests);
+            KafkaMatchingShardAssignment.ASSIGNMENT_TOPIC, KafkaMatchingShardAssignment.MAP_TOPIC, slotEventRequests,
+            slot -> mapReader.getObject().targetFor(slot), slot -> handoverCoordinator.getObject().requestHandover(slot));
     }
 
     @Bean
