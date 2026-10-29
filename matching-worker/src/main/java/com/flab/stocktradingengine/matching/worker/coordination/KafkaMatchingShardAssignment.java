@@ -178,9 +178,17 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
             .collect(Collectors.toUnmodifiableSet());
     }
 
-    public void start() {
+    /**
+     * 조정 토픽과 맵 토픽이 있는지 확인하고 없으면 만든다. 맵을 읽는 쪽({@link MatchingSlotMapReader})이 토픽이 생긴 뒤에 읽기 시작할
+     * 수 있도록 {@link #start}와 따로 부를 수 있다. 몇 번을 불러도 같다.
+     */
+    public void prepareTopics() {
         ensureAssignmentTopicPartitionCount();
         ensureMapTopicExists();
+    }
+
+    public void start() {
+        prepareTopics();
         running = true;
         pollThread = new Thread(this::pollLoop, "matching-shard-assignment-poll");
         pollThread.setDaemon(true);

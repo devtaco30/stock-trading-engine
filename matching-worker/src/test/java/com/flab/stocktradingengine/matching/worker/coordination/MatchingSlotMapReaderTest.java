@@ -55,6 +55,40 @@ class MatchingSlotMapReaderTest {
         assertThat(reader.targetFor(99)).isEmpty();
     }
 
+    @Test
+    void 읽는_thread가_예외로_끝나면_초기_읽기_대기가_실패로_끝난다() {
+        Consumer<Integer, String> failing = mock(Consumer.class);
+        TopicPartition partition = new TopicPartition(TOPIC, 0);
+        org.mockito.Mockito.when(failing.partitionsFor(TOPIC))
+            .thenReturn(List.of(new org.apache.kafka.common.PartitionInfo(TOPIC, 0, null, null, null)));
+        org.mockito.Mockito.when(failing.endOffsets(List.of(partition))).thenReturn(Map.of(partition, 10L));
+        org.mockito.Mockito.when(failing.poll(org.mockito.ArgumentMatchers.any(java.time.Duration.class)))
+            .thenThrow(new IllegalStateException("브로커 연결 실패"));
+        MatchingSlotMapReader failingReader = new MatchingSlotMapReader(failing, 64, TOPIC);
+
+        failingReader.start();
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> failingReader.awaitInitialCatchUp(java.time.Duration.ofSeconds(3)))
+            .isInstanceOf(IllegalStateException.class).hasMessageContaining("비정상 종료");
+    }
+
+    @Test
+    void 읽기를_정상으로_닫으면_초기_읽기_대기는_실패하지_않는다() {
+        Consumer<Integer, String> consumer = mock(Consumer.class);
+        TopicPartition partition = new TopicPartition(TOPIC, 0);
+        org.mockito.Mockito.when(consumer.partitionsFor(TOPIC))
+            .thenReturn(List.of(new org.apache.kafka.common.PartitionInfo(TOPIC, 0, null, null, null)));
+        org.mockito.Mockito.when(consumer.endOffsets(List.of(partition))).thenReturn(Map.of(partition, 0L));
+        org.mockito.Mockito.when(consumer.poll(org.mockito.ArgumentMatchers.any(java.time.Duration.class)))
+            .thenReturn(ConsumerRecords.empty());
+        org.mockito.Mockito.when(consumer.position(partition)).thenReturn(0L);
+        MatchingSlotMapReader okReader = new MatchingSlotMapReader(consumer, 64, TOPIC);
+
+        okReader.start();
+        okReader.awaitInitialCatchUp(java.time.Duration.ofSeconds(3));
+        okReader.close();
+    }
+
     @SafeVarargs
     private static ConsumerRecords<Integer, String> records(ConsumerRecord<Integer, String>... records) {
         return new ConsumerRecords<>(Map.of(new TopicPartition(TOPIC, 0), List.of(records)));

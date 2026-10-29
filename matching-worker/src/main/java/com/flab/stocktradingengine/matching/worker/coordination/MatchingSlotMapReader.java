@@ -36,6 +36,8 @@ public final class MatchingSlotMapReader {
     private volatile boolean running;
     private Thread pollThread;
     private final CountDownLatch initialCatchUpLatch = new CountDownLatch(1);
+    // 읽는 thread가 예외로 끝났으면 그 예외. 초기 읽기 대기가 이것을 보고 실패로 끝난다.
+    private volatile Throwable failure;
 
     public MatchingSlotMapReader(Consumer<Integer, String> consumer, int stockSlotCount, String mapTopic) {
         this.consumer = consumer;
@@ -71,6 +73,9 @@ public final class MatchingSlotMapReader {
             if (!initialCatchUpLatch.await(timeout.toMillis(), TimeUnit.MILLISECONDS)) {
                 throw new IllegalStateException(mapTopic + " 초기 읽기가 " + timeout + " 안에 끝나지 않았습니다");
             }
+            if (failure != null) {
+                throw new IllegalStateException(mapTopic + " 읽는 thread가 비정상 종료했습니다", failure);
+            }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException(mapTopic + " 초기 읽기 대기 중 인터럽트됨", e);
@@ -105,6 +110,9 @@ public final class MatchingSlotMapReader {
             }
         } catch (WakeupException e) {
             // close()가 poll을 깨운 것이다.
+        } catch (RuntimeException e) {
+            failure = e;
+            log.log(Level.ERROR, "[맵] " + mapTopic + " 읽는 thread가 예외로 끝남: " + e);
         } finally {
             initialCatchUpLatch.countDown();
         }

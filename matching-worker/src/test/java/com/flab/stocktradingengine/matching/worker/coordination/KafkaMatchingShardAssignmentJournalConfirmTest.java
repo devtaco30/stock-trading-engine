@@ -116,6 +116,25 @@ class KafkaMatchingShardAssignmentJournalConfirmTest {
         assertThat(legacy.test(3)).isTrue();
     }
 
+    @Test
+    void 토픽_준비는_여러_번_불러도_같고_시작도_준비를_거친다() {
+        org.apache.kafka.clients.admin.Admin admin = org.mockito.Mockito.mock(org.apache.kafka.clients.admin.Admin.class);
+        org.apache.kafka.clients.admin.DescribeTopicsResult described = org.mockito.Mockito.mock(org.apache.kafka.clients.admin.DescribeTopicsResult.class);
+        java.util.List<org.apache.kafka.common.TopicPartitionInfo> infos = java.util.stream.IntStream.range(0, STOCK_SLOT_COUNT)
+            .mapToObj(partition -> new org.apache.kafka.common.TopicPartitionInfo(partition, org.apache.kafka.common.Node.noNode(), List.of(), List.of()))
+            .toList();
+        org.mockito.Mockito.when(described.allTopicNames()).thenReturn(org.apache.kafka.common.KafkaFuture.completedFuture(
+            java.util.Map.of("assignment-topic", new org.apache.kafka.clients.admin.TopicDescription("assignment-topic", false, infos))));
+        org.mockito.Mockito.when(admin.describeTopics(org.mockito.ArgumentMatchers.anyCollection())).thenReturn(described);
+        KafkaMatchingShardAssignment prepared = new KafkaMatchingShardAssignment(mock(Consumer.class), mapProducer, admin,
+            STOCK_SLOT_COUNT, "order-endpoint", "assignment-topic", "map-topic", requests);
+
+        prepared.prepareTopics();
+        prepared.prepareTopics();
+
+        org.mockito.Mockito.verify(admin, org.mockito.Mockito.times(4)).describeTopics(org.mockito.ArgumentMatchers.anyCollection());
+    }
+
     private static List<TopicPartition> partitions(int... slots) {
         return java.util.Arrays.stream(slots).mapToObj(slot -> new TopicPartition(TOPIC, slot)).toList();
     }

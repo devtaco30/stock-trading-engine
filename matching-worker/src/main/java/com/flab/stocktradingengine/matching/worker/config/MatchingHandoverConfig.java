@@ -8,6 +8,7 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.bind.Bindable;
@@ -72,9 +73,12 @@ public class MatchingHandoverConfig {
     }
 
     @Bean
-    public SmartLifecycle matchingSlotMapReaderLifecycle(MatchingSlotMapReader reader) {
+    public SmartLifecycle matchingSlotMapReaderLifecycle(
+            MatchingSlotMapReader reader, ObjectProvider<KafkaMatchingShardAssignment> assignment) {
         return new HandoverLifecycle(MAP_READER_PHASE,
             () -> {
+                // 맵 토픽이 있어야 읽을 수 있다. 토픽 만들기는 배정 생명주기의 시작(-2)에서 하므로 읽기를 시작하기 전에 먼저 한다.
+                assignment.getObject().prepareTopics();
                 reader.start();
                 reader.awaitInitialCatchUp(Duration.ofSeconds(30));
             },
