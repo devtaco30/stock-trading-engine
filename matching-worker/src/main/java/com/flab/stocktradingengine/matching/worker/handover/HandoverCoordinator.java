@@ -146,8 +146,8 @@ public final class HandoverCoordinator implements MovedSlotRequests, AutoCloseab
         try {
             entry.sent = port.request(stockSlot).isPresent();
         } catch (RuntimeException e) {
-            log.log(Level.ERROR, "[호가창 이동] 요청 중 예외: 종목 slot=" + stockSlot + " 원인=" + e);
-            return;
+            // 추적에 넣지 않고 끝내면 재요청도 포기 처리도 없이 그 slot이 영영 담당 없이 남는다. 보내지 못한 것으로 두고 추적한다.
+            log.log(Level.ERROR, "[호가창 이동] 요청 중 예외(간격을 두고 다시 시도함): 종목 slot=" + stockSlot + " 원인=" + e);
         }
         if (!entry.sent) {
             log.log(Level.WARNING, "[호가창 이동] 요청을 보내지 못함(맵에 이동 중 항목이 없거나 전송 실패) — 간격을 두고 다시 시도: 종목 slot=" + stockSlot);

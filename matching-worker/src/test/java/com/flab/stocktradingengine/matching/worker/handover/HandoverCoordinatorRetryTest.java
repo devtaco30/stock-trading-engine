@@ -27,6 +27,8 @@ class HandoverCoordinatorRetryTest {
         final List<String> calls = new CopyOnWriteArrayList<>();
         final AtomicInteger resendCount = new AtomicInteger();
         final AtomicBoolean mapHasMovingEntry = new AtomicBoolean(true);
+        // true인 동안 request가 예외를 던진다(이전 담당 주소가 전송 풀에 없을 때 HandoverRequester.requireInPool이 던지는 경우).
+        final AtomicBoolean requestThrows = new AtomicBoolean(false);
         final Set<Integer> inFlight = ConcurrentHashMap.newKeySet();
         final List<Integer> cancelled = new CopyOnWriteArrayList<>();
         final long transferId = 77L;
@@ -34,6 +36,9 @@ class HandoverCoordinatorRetryTest {
         @Override
         public Optional<Long> request(int stockSlot) {
             calls.add("request:" + stockSlot);
+            if (requestThrows.get()) {
+                throw new IllegalStateException("이전 담당 주소가 풀에 없음");
+            }
             if (!mapHasMovingEntry.get()) {
                 return Optional.empty();
             }
@@ -131,6 +136,31 @@ class HandoverCoordinatorRetryTest {
         awaitUntil(() -> coordinator.failures() == 1);
 
         assertThat(port.resendCount.get()).isZero();
+    }
+
+    @Test
+    void 첫_요청이_예외를_던져도_추적을_이어가_간격을_두고_다시_시도해_보낸다() throws Exception {
+        FakePort port = new FakePort();
+        port.requestThrows.set(true);
+        start(port).requestHandover(5);
+        Thread.sleep(150);
+        assertThat(port.calls.size()).as("예외가 나도 요청 시도가 간격을 두고 반복된다").isBetween(2, 5);
+
+        port.requestThrows.set(false);
+        awaitUntil(() -> port.inFlight.contains(5));
+
+        assertThat(coordinator.failures()).isZero();
+    }
+
+    @Test
+    void 요청이_계속_예외를_던지면_포기_시간에_실패로_세고_취소한다() throws Exception {
+        FakePort port = new FakePort();
+        port.requestThrows.set(true);
+        start(port).requestHandover(5);
+
+        awaitUntil(() -> coordinator.failures() == 1);
+
+        assertThat(port.cancelled).containsExactly(5);
     }
 
     @Test
