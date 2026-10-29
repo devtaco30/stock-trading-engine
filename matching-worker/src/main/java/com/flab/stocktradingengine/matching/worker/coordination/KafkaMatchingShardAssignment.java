@@ -530,6 +530,9 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
                 }
             }
         }
+        // 호가창을 요청하는 중이면 이 종목 slot의 담당이 아님이 확실하다. 재시작 때 저널의 받음만 보고 담당으로 복원한 종목 slot이 그 사이 다른
+        // pod에 배정되었다가 이동해 오는 경우에, 엔진이 담당으로 알고 있으면 도착하는 적재를 거부하므로 요청하기 전에 넘김을 저널에 남긴다.
+        toRequest.forEach(slotEventRequests::requestRelease);
         toRequest.forEach(movedSlotRequests::requestHandover);
         toAcquire.forEach(slotEventRequests::requestAcquire);
         if (!firstAssigned.isEmpty()) {

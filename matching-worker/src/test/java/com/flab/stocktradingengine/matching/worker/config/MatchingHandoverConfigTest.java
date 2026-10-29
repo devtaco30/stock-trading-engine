@@ -57,6 +57,34 @@ class MatchingHandoverConfigTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void 재시작_규칙은_스냅샷과_저널로_복원한_담당_목록을_엔진에도_알린다() {
+        com.flab.stocktradingengine.matching.disruptor.engine.MatchingEngine engine =
+            mock(com.flab.stocktradingengine.matching.disruptor.engine.MatchingEngine.class);
+        com.flab.stocktradingengine.matching.worker.coordination.MatchingSlotMapReader reader =
+            mock(com.flab.stocktradingengine.matching.worker.coordination.MatchingSlotMapReader.class);
+        org.springframework.beans.factory.ObjectProvider<com.flab.stocktradingengine.matching.disruptor.engine.MatchingEngine> engineProvider =
+            mock(org.springframework.beans.factory.ObjectProvider.class);
+        org.springframework.beans.factory.ObjectProvider<java.util.Optional<com.flab.stocktradingengine.matching.worker.recovery.StoredMatchingSnapshot>> snapshotProvider =
+            mock(org.springframework.beans.factory.ObjectProvider.class);
+        org.springframework.beans.factory.ObjectProvider<java.util.List<com.flab.stocktradingengine.codec.JournaledOrder>> journalProvider =
+            mock(org.springframework.beans.factory.ObjectProvider.class);
+        org.mockito.Mockito.when(engineProvider.getIfAvailable()).thenReturn(engine);
+        org.mockito.Mockito.when(snapshotProvider.getIfAvailable(org.mockito.ArgumentMatchers.any()))
+            .thenReturn(java.util.Optional.empty());
+        // 저널에 받음만 있고 넘김이 없는 종목 slot 5
+        org.mockito.Mockito.when(journalProvider.getIfAvailable())
+            .thenReturn(java.util.List.of(com.flab.stocktradingengine.codec.JournaledOrder.slotAcquired(5)));
+
+        org.springframework.context.SmartLifecycle lifecycle = new MatchingHandoverConfig().handoverRestartRuleLifecycle(
+            reader, new HandoverBookStore(), engineProvider, snapshotProvider, journalProvider, 100L,
+            "aeron:udp?endpoint=localhost:20021");
+        lifecycle.start();
+
+        org.mockito.Mockito.verify(engine).seedAcquiredSlots(java.util.Set.of(5));
+    }
+
+    @Test
     void 넘김_통지는_보관소에_담고_다시_받으면_지운다() {
         contextRunner
             .withPropertyValues(

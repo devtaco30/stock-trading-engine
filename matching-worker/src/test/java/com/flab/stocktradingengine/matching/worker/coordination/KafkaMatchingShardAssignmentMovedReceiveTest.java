@@ -69,12 +69,15 @@ class KafkaMatchingShardAssignmentMovedReceiveTest {
     }
 
     @Test
-    void 이동으로_받는_종목_slot은_받음_요청을_남기지_않고_담당도_아니다() {
+    void 이동으로_받는_종목_slot은_받음_요청을_남기지_않고_담당도_아니다() throws Exception {
         mapEntry = Optional.of(new MatchingSlotTarget(PREVIOUS_OWNER, true));
 
         listener.onPartitionsAssigned(partitions(5));
 
-        assertThat(requests.drainTo(engine)).isZero();
+        // 호가창을 요청하기 전에 남기는 넘김 하나만 있고 받음 요청은 없다.
+        assertThat(requests.drainTo(engine)).isEqualTo(1);
+        awaitJournalSize(1);
+        assertThat(engine.journal().entries()).extracting(entry -> entry.type()).containsExactly(EventType.SLOT_RELEASED);
         assertThat(assignment.test(5)).isFalse();
     }
 
@@ -82,13 +85,14 @@ class KafkaMatchingShardAssignmentMovedReceiveTest {
     void 적재와_스냅샷_확정이_끝났다고_알리면_그때_받음_요청을_남기고_저널_기록_확인이_와야_담당이_된다() throws Exception {
         mapEntry = Optional.of(new MatchingSlotTarget(PREVIOUS_OWNER, true));
         listener.onPartitionsAssigned(partitions(5));
+        requests.drainTo(engine); // 호가창을 요청하기 전에 남긴 넘김
 
         assignment.acquireAfterLoad(5);
 
         assertThat(assignment.test(5)).isFalse();
         assertThat(requests.drainTo(engine)).isEqualTo(1);
-        awaitJournalSize(1);
-        assertThat(engine.journal().entries().get(0).type()).isEqualTo(EventType.SLOT_ACQUIRED);
+        awaitJournalSize(2);
+        assertThat(engine.journal().entries().get(1).type()).isEqualTo(EventType.SLOT_ACQUIRED);
         assignment.confirmAcquired(5);
         assertThat(assignment.test(5)).isTrue();
     }

@@ -45,6 +45,7 @@ class KafkaMatchingShardAssignmentDecisionTest {
         new MockProducer<>(true, new IntegerSerializer(), new StringSerializer());
     private final List<Integer> handoverRequested = new CopyOnWriteArrayList<>();
     private final List<Integer> handoverCancelled = new CopyOnWriteArrayList<>();
+    private final List<Integer> queuedWhenRequested = new CopyOnWriteArrayList<>();
     private final List<Integer> cleanedSlots = new CopyOnWriteArrayList<>();
     private final List<Runnable> deferredDecisions = new ArrayList<>();
     private final AtomicReference<Optional<MatchingSlotTarget>> mapEntry = new AtomicReference<>(Optional.empty());
@@ -68,6 +69,8 @@ class KafkaMatchingShardAssignmentDecisionTest {
         MovedSlotRequests movedSlotRequests = new MovedSlotRequests() {
             @Override
             public void requestHandover(int stockSlot) {
+                // 요청을 낼 때 이미 남아 있는 저널 요청(넘김) 수. 요청하기 전에 넘김이 남겨졌는지 본다.
+                queuedWhenRequested.add(requests.drainTo(engine));
                 handoverRequested.add(stockSlot);
             }
 
@@ -112,6 +115,18 @@ class KafkaMatchingShardAssignmentDecisionTest {
         assertThat(deferredDecisions).hasSize(1);
         assertThat(order).as("콜백 안에서는 맵도 따라잡기도 읽지 않는다").isEmpty();
         assertThat(handoverRequested).isEmpty();
+    }
+
+    @Test
+    void 이동으로_받는_것으로_판정하면_호가창을_요청하기_전에_그_종목_slot의_넘김을_저널에_남긴다() {
+        // 재시작 때 저널의 받음만 보고 담당으로 복원된 종목 slot이 실제로는 다른 pod에 배정된 뒤 이동해 오는 경우, 엔진이 담당으로 알고 있으면
+        // 도착하는 호가창 적재를 거부한다. 호가창을 요청하는 중이면 담당이 아님이 확실하므로 요청하기 전에 넘김을 남긴다.
+        mapEntry.set(Optional.of(new MatchingSlotTarget(PREVIOUS_OWNER, true)));
+
+        listener.onPartitionsAssigned(partitions(5));
+
+        assertThat(handoverRequested).containsExactly(5);
+        assertThat(queuedWhenRequested).as("요청을 내는 시점에 넘김 요청이 이미 하나 남아 있다").containsExactly(1);
     }
 
     @Test
@@ -177,9 +192,9 @@ class KafkaMatchingShardAssignmentDecisionTest {
         assertThat(handoverCancelled).containsExactly(5);
         assertThat(assignment.test(5)).isFalse();
         requests.drainTo(engine);
-        awaitJournal(2);
+        awaitJournal(3);
         assertThat(engine.journal().entries()).extracting(entry -> entry.type().name())
-            .containsExactly("SLOT_ACQUIRED", "SLOT_RELEASED");
+            .containsExactly("SLOT_RELEASED", "SLOT_ACQUIRED", "SLOT_RELEASED");
         assignment.confirmAcquired(5);
         assertThat(assignment.test(5)).as("회수된 뒤 늦게 온 기록 확인이 담당을 켜지 않는다").isFalse();
     }
