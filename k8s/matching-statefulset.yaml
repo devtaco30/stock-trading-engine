@@ -1,0 +1,48 @@
+# 매칭 워커 StatefulSet. pod 이름이 matching-0, matching-1, ... 이 되고, 사람이 정하는 값은 replicas 하나다.
+# pod 이름이 매칭 shard의 신원(Kafka group.instance.id)이고, 서버 번호(nodeId)는 그 이름 끝 순번 + 6으로 앱이 계산한다.
+# 이미지는 아직 만들지 않았다(저장소에 Dockerfile이 없다). image 값은 자리표시다.
+apiVersion: v1
+kind: Service
+metadata:
+  name: matching
+spec:
+  clusterIP: None
+  selector:
+    app: matching
+  ports:
+    - name: aeron-intake
+      port: 20020
+      protocol: UDP
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: matching
+spec:
+  serviceName: matching
+  replicas: 1
+  selector:
+    matchLabels:
+      app: matching
+  template:
+    metadata:
+      labels:
+        app: matching
+    spec:
+      containers:
+        - name: matching-worker
+          image: stock-trading-engine/matching-worker:latest
+          ports:
+            - containerPort: 20020
+              protocol: UDP
+          env:
+            # Spring 완화 바인딩: MATCHING_WORKER_INSTANCE_ID -> matching-worker.instance-id
+            - name: MATCHING_WORKER_INSTANCE_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: MATCHING_SHARD_COORDINATION_ENABLED
+              value: "true"
+            # $(변수)는 위에서 먼저 정의한 환경 변수만 치환된다. 그래서 신원 변수가 이 줄보다 앞에 있어야 한다.
+            - name: TRANSPORT_MATCHING_INTAKE_CHANNEL
+              value: "aeron:udp?endpoint=$(MATCHING_WORKER_INSTANCE_ID).matching:20020"
