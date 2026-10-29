@@ -2,11 +2,13 @@ package com.flab.stocktradingengine.matching.disruptor.handler;
 
 import java.lang.System.Logger;
 import java.lang.System.Logger.Level;
-import java.util.HashMap;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
 
 import com.lmax.disruptor.EventHandler;
@@ -214,15 +216,19 @@ public class MatchingEventHandler implements EventHandler<OrderEvent> {
             handedOverSlots.remove(stockSlot);
             return;
         }
-        Map<String, OrderBook> slotBooks = new HashMap<>();
+        Map<String, OrderBook> slotBooks = new TreeMap<>();
         for (Map.Entry<String, OrderBook> entry : books.entrySet()) {
             if (stockSlotHasher.slotFor(entry.getKey()) == stockSlot) {
                 slotBooks.put(entry.getKey(), entry.getValue());
             }
         }
         handedOverSlots.add(stockSlot);
-        byte[] bookBytes = snapshotCodec.encode(MatchingSnapshotFactory.capture(slotBooks, lastJournaledPosition));
-        slotEventListener.onSlotHandedOver(stockSlot, bookBytes);
+        List<byte[]> bookBytesPerStock = new ArrayList<>(slotBooks.size());
+        for (Map.Entry<String, OrderBook> entry : slotBooks.entrySet()) {
+            bookBytesPerStock.add(snapshotCodec.encode(
+                MatchingSnapshotFactory.capture(Map.of(entry.getKey(), entry.getValue()), lastJournaledPosition)));
+        }
+        slotEventListener.onSlotHandedOver(stockSlot, bookBytesPerStock);
     }
 
     /** 배치 끝에서 건드린 종목마다 한 번 알린다. 호가창이 없는 종목은 건너뛰고, listener 예외는 매칭을 멈추지 않게 삼킨다. */

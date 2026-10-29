@@ -1,5 +1,7 @@
 package com.flab.stocktradingengine.matching.disruptor.io;
 
+import java.util.List;
+
 /**
  * 종목 slot 받음·넘김 이벤트(U13)가 엔진 안에서 처리된 것을 바깥에 알리는 통지.
  *
@@ -21,8 +23,10 @@ public interface SlotEventListener {
     /**
      * 종목 slot의 넘김 이벤트에 도달해 그 종목 slot의 종목들을 넘기는 중으로 바꾼 직후 불린다.
      *
-     * @param bookBytes 그 종목 slot에 속한 종목들의 호가창을 이벤트 시점에 찍어 인코딩한 {@code MatchingSnapshot} 바이트
+     * @param bookBytesPerStock 그 종목 slot에 속한 종목마다 하나씩, 그 종목의 호가창을 이벤트 시점에 찍어 인코딩한
+     *     {@code MatchingSnapshot} 바이트(종목 하나만 담긴다). 종목코드 순서이고, 호가창이 있는 종목이 없으면 빈 목록이다.
+     *     종목 하나가 호가창 이동 응답 메시지 하나가 된다(11-6절).
      */
-    default void onSlotHandedOver(int stockSlot, byte[] bookBytes) {
+    default void onSlotHandedOver(int stockSlot, List<byte[]> bookBytesPerStock) {
     }
 }

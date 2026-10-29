@@ -54,7 +54,7 @@ class MatchingEngineSlotHandoverTest {
         throw new IllegalStateException("종목 slot이 다른 종목을 찾지 못했다");
     }
 
-    private record HandedOver(int stockSlot, byte[] bytes) {
+    private record HandedOver(int stockSlot, List<byte[]> bytesPerStock) {
     }
 
     @AfterEach
@@ -67,8 +67,8 @@ class MatchingEngineSlotHandoverTest {
     private void startEngine() {
         SlotEventListener listener = new SlotEventListener() {
             @Override
-            public void onSlotHandedOver(int stockSlot, byte[] bookBytes) {
-                handedOver.add(new HandedOver(stockSlot, bookBytes));
+            public void onSlotHandedOver(int stockSlot, List<byte[]> bookBytesPerStock) {
+                handedOver.add(new HandedOver(stockSlot, bookBytesPerStock));
                 handedOverLatch.countDown();
             }
         };
@@ -124,7 +124,8 @@ class MatchingEngineSlotHandoverTest {
 
         HandedOver sent = handedOver.get(0);
         assertEquals(movedSlot(), sent.stockSlot());
-        MatchingSnapshot decoded = codec.decode(sent.bytes());
+        assertEquals(1, sent.bytesPerStock().size(), "종목 하나가 바이트 하나다");
+        MatchingSnapshot decoded = codec.decode(sent.bytesPerStock().get(0));
         BookSnapshot book = decoded.booksByStock().get(MOVED_STOCK);
         assertEquals(2, book.restingOrders().size(), "매수 1(잔량 6)과 매도 3(잔량 7)이 남는다");
         assertEquals(6, book.restingOrders().stream().filter(o -> o.orderId() == 1L).findFirst().orElseThrow().quantity()
@@ -143,9 +144,41 @@ class MatchingEngineSlotHandoverTest {
         engine.publishPlace(5L, 200L, KEPT_STOCK, OrderSide.BUY, new BigDecimal("10000"), 10, Instant.now());
         awaitFill();
 
-        MatchingSnapshot decoded = codec.decode(handedOver.get(0).bytes());
+        assertEquals(1, handedOver.get(0).bytesPerStock().size());
+        MatchingSnapshot decoded = codec.decode(handedOver.get(0).bytesPerStock().get(0));
         assertNull(decoded.booksByStock().get(KEPT_STOCK), "옮기지 않는 종목은 바이트에 없다");
         assertEquals(1L, fills.get(0).sellOrderId(), "옮기지 않는 종목의 호가창은 계속 체결에 쓰인다");
+    }
+
+    @Test
+    void 같은_종목_slot의_종목이_둘이면_종목마다_바이트_하나씩_종목코드_순서로_나온다() throws Exception {
+        String second = stockInSameSlotAs(MOVED_STOCK);
+        startEngine();
+        engine.publishPlace(1L, 100L, MOVED_STOCK, OrderSide.BUY, new BigDecimal("10000"), 10, Instant.now());
+        engine.publishPlace(2L, 100L, second, OrderSide.BUY, new BigDecimal("9000"), 5, Instant.now());
+
+        engine.publishSlotReleased(movedSlot());
+        awaitHandedOver();
+
+        List<byte[]> bytesPerStock = handedOver.get(0).bytesPerStock();
+        assertEquals(2, bytesPerStock.size());
+        List<String> codes = new java.util.ArrayList<>();
+        for (byte[] bytes : bytesPerStock) {
+            MatchingSnapshot decoded = codec.decode(bytes);
+            assertEquals(1, decoded.booksByStock().size(), "바이트 하나에는 종목 하나만 담긴다");
+            codes.addAll(decoded.booksByStock().keySet());
+        }
+        assertEquals(java.util.stream.Stream.of(MOVED_STOCK, second).sorted().toList(), codes);
+    }
+
+    private static String stockInSameSlotAs(String stockCode) {
+        for (int code = 1; code < 100_000; code++) {
+            String candidate = String.format("%06d", code);
+            if (!candidate.equals(stockCode) && HASHER.slotFor(candidate) == HASHER.slotFor(stockCode)) {
+                return candidate;
+            }
+        }
+        throw new IllegalStateException("같은 종목 slot의 다른 종목을 찾지 못했다");
     }
 
     private void awaitHandedOver() throws InterruptedException {
