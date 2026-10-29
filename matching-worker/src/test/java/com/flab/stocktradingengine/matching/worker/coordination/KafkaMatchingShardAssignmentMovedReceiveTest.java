@@ -106,6 +106,21 @@ class KafkaMatchingShardAssignmentMovedReceiveTest {
     }
 
     @Test
+    void 맵의_이동_중_항목이_자기_주소이면_이동이_아니라_재시작으로_보고_평상시_값으로_되돌린다() {
+        mapEntry = Optional.of(new MatchingSlotTarget(OWN, true));
+
+        listener.onPartitionsAssigned(partitions(5));
+
+        assertThat(handoverRequested).isEmpty();
+        assertThat(mapProducer.history()).hasSize(1);
+        assertThat(mapProducer.history().get(0).value()).isEqualTo(OWN);
+        assertThat(requests.drainTo(engine)).isEqualTo(1);
+        assertThat(assignment.test(5)).isFalse();
+        assignment.confirmAcquired(5);
+        assertThat(assignment.test(5)).isTrue();
+    }
+
+    @Test
     void 호가창을_기다리는_종목_slot이_회수되면_늦게_온_적재_완료는_받음_요청을_남기지_않는다() {
         mapEntry = Optional.of(new MatchingSlotTarget(PREVIOUS_OWNER, true));
         listener.onPartitionsAssigned(partitions(5));

@@ -292,6 +292,11 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
             log.log(Level.WARNING, "[매칭] 맵에 다른 pod의 항목이 남은 채 종목 slot을 배정받음(장애 복구 범위): 종목 slot="
                 + stockSlot + " 항목=" + entry.get());
         }
+        if (entry.isPresent() && entry.get().moving() && entry.get().endpoint().equals(ownOrderEndpoint)) {
+            // 이전 담당이 자기 자신이다. 이동이 아니라 이 shard가 재시작했거나 넘겼던 종목 slot을 되돌려 받는 것이므로 요청할 상대가 없다.
+            // 저널과 스냅샷으로 복원한 호가창을 그대로 쓰고, 받음 항목이 저널에 기록되면 담당을 켜며 맵은 평상시 값으로 되돌린다.
+            return false;
+        }
         return entry.isPresent() && entry.get().moving();
     }
 
