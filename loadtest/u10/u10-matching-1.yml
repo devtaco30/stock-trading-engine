@@ -3,6 +3,10 @@ matching-shard:
   coordination:
     enabled: true
     session-timeout-ms: 30000
+  handover:
+    endpoints:
+      - aeron:udp?endpoint=localhost:20020
+      - aeron:udp?endpoint=localhost:20021
 matching-worker:
   instance-id: matching-worker-1   # 서버 번호 = 끝 순번 1 + 6
 transport:
