@@ -27,6 +27,7 @@ import com.flab.stocktradingengine.matching.disruptor.engine.MatchingEngine;
 import com.flab.stocktradingengine.matching.disruptor.io.SlotEventRequests;
 import com.flab.stocktradingengine.matching.worker.coordination.HandoverEndpointPool;
 import com.flab.stocktradingengine.matching.worker.coordination.KafkaMatchingShardAssignment;
+import com.flab.stocktradingengine.matching.worker.coordination.StuckHandoverReporter;
 import com.flab.stocktradingengine.matching.worker.coordination.MapCatchUpWaiter;
 import com.flab.stocktradingengine.matching.worker.coordination.MapSync;
 import com.flab.stocktradingengine.matching.worker.coordination.MatchingSlotMapReader;
@@ -225,6 +226,62 @@ public class MatchingHandoverConfig {
         // 기본값은 Jack이 정한 값: 응답이 오지 않으면 1초마다 같은 요청을 다시 보내고, 처음 요청부터 5초가 지나면 실패로 본다.
         // 포기 뒤 다시 요청하는 간격 기본값 30초는 근거 없는 임의 값이다(미측정). X가 일시적으로 응답하지 못하는 시간을 측정한 뒤 정한다.
         return new HandoverCoordinator(requester, retryIntervalMillis, responseTimeoutMillis, abandonedRetryIntervalMillis);
+    }
+
+    /**
+     * 이동이 정한 시간 넘게 멈춘 종목 slot을 찾아 ERROR 신호로 남기고 조회할 수 있게 한다. 대기 상태를 가진 담당 배정이 있을 때만 만든다.
+     * 값은 모두 근거 없는 임의 값이다(미측정): 30초 넘게 머물면 멈춘 것으로 보고, 같은 종목 slot의 신호는 60초에 한 번, 5초마다 확인한다.
+     */
+    @Bean(destroyMethod = "close")
+    public StuckHandoverReporterRunner stuckHandoverReporter(
+            ObjectProvider<KafkaMatchingShardAssignment> assignment, ObjectProvider<HandoverCoordinator> coordinator,
+            @Value("${matching-shard.handover.stuck-threshold-ms:30000}") long thresholdMillis,
+            @Value("${matching-shard.handover.stuck-repeat-ms:60000}") long repeatMillis,
+            @Value("${matching-shard.handover.stuck-check-interval-ms:5000}") long checkIntervalMillis) {
+        StuckHandoverReporter reporter = new StuckHandoverReporter(
+            () -> {
+                KafkaMatchingShardAssignment current = assignment.getIfAvailable();
+                return current == null ? java.util.Set.of() : current.slotsWaitingForMove();
+            },
+            () -> {
+                HandoverCoordinator current = coordinator.getIfAvailable();
+                return current == null ? 0L : current.failures();
+            },
+            System::currentTimeMillis, thresholdMillis, repeatMillis);
+        return new StuckHandoverReporterRunner(reporter, checkIntervalMillis);
+    }
+
+    /** 멈춤 신호를 정한 간격마다 확인하는 예약 실행. 신호 조회는 {@link #stuckHandoverSlots}로 한다. */
+    public static final class StuckHandoverReporterRunner implements AutoCloseable {
+        private final StuckHandoverReporter reporter;
+        private final java.util.concurrent.ScheduledExecutorService executor =
+            java.util.concurrent.Executors.newSingleThreadScheduledExecutor(runnable -> {
+                Thread thread = new Thread(runnable, "stuck-handover-reporter");
+                thread.setDaemon(true);
+                return thread;
+            });
+
+        StuckHandoverReporterRunner(StuckHandoverReporter reporter, long checkIntervalMillis) {
+            this.reporter = reporter;
+            executor.scheduleWithFixedDelay(() -> {
+                try {
+                    reporter.check();
+                } catch (RuntimeException e) {
+                    System.getLogger(StuckHandoverReporterRunner.class.getName())
+                        .log(System.Logger.Level.ERROR, "[호가창 이동] 멈춤 확인 중 예외(계속함): " + e);
+                }
+            }, checkIntervalMillis, checkIntervalMillis, java.util.concurrent.TimeUnit.MILLISECONDS);
+        }
+
+        /** 정한 시간 넘게 이동이 멈춘 종목 slot. */
+        public java.util.Set<Integer> stuckHandoverSlots() {
+            return reporter.stuckHandoverSlots();
+        }
+
+        @Override
+        public void close() {
+            executor.shutdownNow();
+        }
     }
 
     @Bean

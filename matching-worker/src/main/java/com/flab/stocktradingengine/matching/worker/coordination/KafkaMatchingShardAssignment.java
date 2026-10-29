@@ -366,6 +366,16 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
         return awaitingDecision.size() + awaitingLoad.size() + abandonedMapWrites.size();
     }
 
+    /** 지금 이동 중 어느 대기 상태에든 있는 종목 slot(판정, 호가창 적재, 받음 기록 확인, 맵 전환, 포기한 맵 쓰기). 멈춤 신호가 머문 시간을 센다. */
+    public Set<Integer> slotsWaitingForMove() {
+        Set<Integer> waiting = new java.util.HashSet<>(awaitingDecision);
+        waiting.addAll(awaitingLoad);
+        waiting.addAll(movedInAcquiring);
+        waiting.addAll(awaitingMapSwitch);
+        waiting.addAll(abandonedMapWrites);
+        return waiting;
+    }
+
     /** 그 종목 slot이 이동으로 받기로 하고 호가창 적재와 스냅샷 확정을 기다리는 중인지. */
     public boolean isAwaitingLoad(int stockSlot) {
         return awaitingLoad.contains(stockSlot);

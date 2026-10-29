@@ -53,6 +53,7 @@ class MatchingHandoverConfigTest {
                 assertThat(pool.peers()).containsExactly("aeron:udp?endpoint=localhost:20020");
                 assertThat(context).hasSingleBean(HandoverResponder.class);
                 assertThat(context).hasSingleBean(HandoverBookStore.class);
+                assertThat(context).hasSingleBean(MatchingHandoverConfig.StuckHandoverReporterRunner.class);
             });
     }
 
