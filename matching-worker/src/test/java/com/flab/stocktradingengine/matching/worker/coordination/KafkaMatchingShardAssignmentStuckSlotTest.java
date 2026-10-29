@@ -159,6 +159,45 @@ class KafkaMatchingShardAssignmentStuckSlotTest {
     }
 
     @Test
+    void 맵_전환_쓰기를_포기하면_담당은_켜졌어도_멈춘_개수에_센다() throws Exception {
+        ThrowingProducer producer = new ThrowingProducer(0);
+        producer.alwaysThrowForSlot = 5;
+        build(producer, () -> true);
+        assignment.setMapWriteRetryMillis(10L);
+        listener.onPartitionsAssigned(partitions(5));
+        assignment.acquireAfterLoad(5);
+        assignment.confirmAcquired(5);
+
+        long deadline = System.nanoTime() + 3_000_000_000L;
+        while (assignment.stuckSlotCount() == 0 && System.nanoTime() < deadline) {
+            Thread.sleep(5);
+        }
+
+        assertThat(assignment.test(5)).as("담당 표시는 켜졌다").isTrue();
+        assertThat(assignment.stuckSlotCount()).as("맵이 이전 담당의 이동 중 값으로 남은 종목 slot을 센다").isEqualTo(1);
+    }
+
+    @Test
+    void 포기한_맵_전환_쓰기의_종목_slot이_회수되면_멈춘_개수에서_빠진다() throws Exception {
+        ThrowingProducer producer = new ThrowingProducer(0);
+        producer.alwaysThrowForSlot = 5;
+        build(producer, () -> true);
+        assignment.setMapWriteRetryMillis(10L);
+        listener.onPartitionsAssigned(partitions(5));
+        assignment.acquireAfterLoad(5);
+        assignment.confirmAcquired(5);
+        long deadline = System.nanoTime() + 3_000_000_000L;
+        while (assignment.stuckSlotCount() == 0 && System.nanoTime() < deadline) {
+            Thread.sleep(5);
+        }
+        producer.alwaysThrowForSlot = null;
+
+        listener.onPartitionsRevoked(partitions(5));
+
+        assertThat(assignment.stuckSlotCount()).isZero();
+    }
+
+    @Test
     void 맵_읽기가_따라오지_못해_판정하지_못하면_종목_slot_번호가_담긴_ERROR_로그를_남기고_멈춘_개수에_센다() {
         build(new MockProducer<>(true, new IntegerSerializer(), new StringSerializer()), () -> false);
 

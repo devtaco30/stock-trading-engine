@@ -92,6 +92,8 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
     private final java.util.Set<Integer> awaitingLoad = ConcurrentHashMap.newKeySet();
     // 적재가 끝나 담당 표시가 켜지기를 기다리는, 이동으로 받은 종목 slot. 켜진 직후 맵을 자기 주소의 평상시 값으로 바꾼다(U16a).
     private final java.util.Set<Integer> awaitingMapSwitch = ConcurrentHashMap.newKeySet();
+    // 맵 쓰기를 포기해 맵이 그 종목 slot의 실제 상태와 어긋난 채 남은 것. 회수되거나 그 종목 slot의 쓰기가 성공하면 빠진다.
+    private final java.util.Set<Integer> abandonedMapWrites = ConcurrentHashMap.newKeySet();
     // 종목 slot별 맵 쓰기 세대. 회수될 때마다 올려, 다시 보내려던 옛 쓰기가 나중에 이동 중 표시를 덮어쓰지 못하게 한다.
     private final java.util.concurrent.atomic.AtomicIntegerArray mapWriteGeneration;
     // 보내는 호출이 예외를 던지는 쓰기를 포기하기까지의 시도 횟수. 근거 없는 임의 값이다.
@@ -265,6 +267,7 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
                     }
                     try {
                         mapProducer.send(new ProducerRecord<>(mapTopic, write.stockSlot(), write.value())).get();
+                        abandonedMapWrites.remove(write.stockSlot());
                         write.done().complete(null);
                         break;
                     } catch (ExecutionException e) {
@@ -278,6 +281,7 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
                         if (runtimeFailures >= MAP_WRITE_RUNTIME_ATTEMPTS) {
                             log.log(Level.ERROR, "[매칭] 맵 쓰기가 예외로 " + runtimeFailures + "번 실패해 포기함 — 맵이 이전 값으로 남아 이 종목 slot의 주문이 보관만 될 수 있음: 종목 slot="
                                 + write.stockSlot() + " 값=" + write.value() + " 원인=" + e);
+                            abandonedMapWrites.add(write.stockSlot());
                             write.done().completeExceptionally(e);
                             break;
                         }
@@ -316,9 +320,9 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
         return Set.copyOf(awaitingLoad);
     }
 
-    /** 이동으로 받는 도중 판정이나 호가창 적재를 기다리며 담당이 켜지지 않은 종목 slot의 수. 포기한 이동은 자동으로 풀리지 않으므로 0이 아니면 확인이 필요하다. */
+    /** 이동으로 받는 도중 판정이나 호가창 적재를 기다리며 담당이 켜지지 않은 종목 slot과, 맵 쓰기를 포기해 맵이 실제 상태와 어긋난 종목 slot의 수. 포기한 이동은 자동으로 풀리지 않으므로 0이 아니면 확인이 필요하다. */
     public int stuckSlotCount() {
-        return awaitingDecision.size() + awaitingLoad.size();
+        return awaitingDecision.size() + awaitingLoad.size() + abandonedMapWrites.size();
     }
 
     /** 그 종목 slot이 이동으로 받기로 하고 호가창 적재와 스냅샷 확정을 기다리는 중인지. */
@@ -392,6 +396,7 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
                 int slot = partition.partition();
                 updated[slot] = false;
                 mapWriteGeneration.incrementAndGet(slot);
+                abandonedMapWrites.remove(slot);
                 boolean wasDeciding = awaitingDecision.remove(slot);
                 boolean wasLoading = awaitingLoad.remove(slot);
                 boolean wasAcquiringMovedIn = movedInAcquiring.remove(slot);

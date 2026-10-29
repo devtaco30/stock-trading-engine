@@ -91,9 +91,10 @@ public final class HandoverReceiver implements AutoCloseable {
         Optional<List<byte[]>> complete = assembler.accept(message);
         if (complete.isPresent()) {
             if (!requester.finish(message.stockSlot(), message.transferId())) {
-                // 번호를 확인한 뒤 완성되기 전에 취소되었다. 담당이 아닌 종목 slot에 낡은 호가창이 올라가지 않게 적재를 요청하지 않는다.
+                // 번호를 확인한 뒤 완성되기 전에 취소되었거나 새 이동 번호로 바뀌었다. 담당이 아닌 종목 slot에 낡은 호가창이 올라가지 않게 적재를
+                // 요청하지 않는다.
                 discardedMessages.incrementAndGet();
-                log.log(Level.WARNING, "[호가창 이동] 완성 직전에 취소되어 적재를 요청하지 않음: 이동 번호=" + message.transferId()
+                log.log(Level.WARNING, "[호가창 이동] 완성 직전에 취소되었거나 새 이동 번호로 바뀌어 적재를 요청하지 않음: 이동 번호=" + message.transferId()
                     + " 종목 slot=" + message.stockSlot());
                 return;
             }
