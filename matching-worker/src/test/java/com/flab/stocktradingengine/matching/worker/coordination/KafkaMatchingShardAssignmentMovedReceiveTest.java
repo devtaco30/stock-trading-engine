@@ -121,6 +121,38 @@ class KafkaMatchingShardAssignmentMovedReceiveTest {
     }
 
     @Test
+    void 정상_종료가_맵에_남긴_값을_같은_shard가_재시작해_받으면_자기_호가창을_그대로_쓰고_담당이_켜진다() {
+        // 정상 종료: 컨슈머가 닫히며 맡은 종목 slot 전체에 회수 콜백이 불린다. 그 값이 실제로 맵에 올라간 값이다.
+        listener.onPartitionsRevoked(partitions(5, 6));
+        String leftInMap = mapProducer.history().get(0).value();
+        assertThat(leftInMap).isEqualTo(new MatchingSlotTarget(OWN, true).encode());
+
+        // 같은 shard(같은 주소)가 재시작해 읽은 맵 항목이 그 값이다.
+        mapProducer.clear();
+        mapEntry = Optional.of(MatchingSlotTarget.parse(leftInMap));
+        MatchingEngine restarted = new MatchingEngine(1024, (stockCode, fill) -> { });
+        restarted.start();
+        try {
+            SlotEventRequests restartedRequests = new SlotEventRequests();
+            KafkaMatchingShardAssignment restartedAssignment = new KafkaMatchingShardAssignment(mock(Consumer.class),
+                mapProducer, mock(Admin.class), 64, OWN, "assignment-topic", "map-topic", restartedRequests,
+                slot -> mapEntry, handoverRequested::add);
+
+            restartedAssignment.rebalanceListener().onPartitionsAssigned(partitions(5, 6));
+
+            assertThat(handoverRequested).as("자기 자신의 응답을 기다리면 안 된다").isEmpty();
+            assertThat(mapProducer.history()).extracting(record -> record.value()).containsOnly(OWN);
+            assertThat(restartedRequests.drainTo(restarted)).isEqualTo(2);
+            restartedAssignment.confirmAcquired(5);
+            restartedAssignment.confirmAcquired(6);
+            assertThat(restartedAssignment.test(5)).isTrue();
+            assertThat(restartedAssignment.test(6)).isTrue();
+        } finally {
+            restarted.shutdown();
+        }
+    }
+
+    @Test
     void 호가창을_기다리는_종목_slot이_회수되면_늦게_온_적재_완료는_받음_요청을_남기지_않는다() {
         mapEntry = Optional.of(new MatchingSlotTarget(PREVIOUS_OWNER, true));
         listener.onPartitionsAssigned(partitions(5));
