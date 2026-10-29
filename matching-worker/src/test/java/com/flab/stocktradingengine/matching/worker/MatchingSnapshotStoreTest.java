@@ -10,6 +10,7 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -97,6 +98,36 @@ class MatchingSnapshotStoreTest {
     }
 
     @Test
+    void 맡은_종목_slot_목록을_넣어_만든_스냅샷을_읽으면_같은_목록이_나온다() {
+        MatchingSnapshotStore store = store();
+        Set<Integer> ownedStockSlots = Set.of(0, 5, 31, 63);
+        store.write(42L, Map.of(0, 777L), ownedStockSlots, new MatchingSnapshot(Map.of(), 100L));
+
+        Optional<StoredMatchingSnapshot> found = store.read();
+
+        assertThat(found).isPresent();
+        assertThat(found.get().ownedStockSlots()).isEqualTo(ownedStockSlots);
+        assertThat(found.get().orderIntakePosition()).isEqualTo(Map.of(0, 777L));
+        assertThat(found.get().snapshot().journalPosition()).isEqualTo(100L);
+    }
+
+    @Test
+    void 버전_1_파일은_읽지_않고_형식_예외로_시작을_중단한다() throws Exception {
+        MatchingSnapshotStore store = store();
+        store.write(1L, Map.of(0, 10L), new MatchingSnapshot(Map.of(), 100L));
+        File snapshotFile = new File(archiveDir.toFile(), "matching-snapshot.dat");
+        try (RandomAccessFile raf = new RandomAccessFile(snapshotFile, "rw")) {
+            raf.seek(0);
+            raf.writeByte(1);
+        }
+
+        assertThatThrownBy(store::read)
+            .isInstanceOf(MatchingSnapshotFormatException.class)
+            .hasMessageContaining("읽은 버전=1")
+            .hasMessageContaining("기대 버전=2");
+    }
+
+    @Test
     void 형식_번호가_다른_파일을_읽으면_예외가_나고_메시지에_경로와_버전이_담긴다() throws Exception {
         MatchingSnapshotStore store = store();
         store.write(1L, Map.of(0, 10L), new MatchingSnapshot(Map.of(), 100L));
@@ -111,6 +142,6 @@ class MatchingSnapshotStoreTest {
             .isInstanceOf(MatchingSnapshotFormatException.class)
             .hasMessageContaining(snapshotFile.getPath())
             .hasMessageContaining("읽은 버전=9")
-            .hasMessageContaining("기대 버전=1");
+            .hasMessageContaining("기대 버전=2");
     }
 }

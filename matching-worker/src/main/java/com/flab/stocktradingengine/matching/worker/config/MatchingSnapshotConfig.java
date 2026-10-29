@@ -2,12 +2,17 @@ package com.flab.stocktradingengine.matching.worker.config;
 
 import java.io.File;
 import java.util.Optional;
+import java.util.Set;
+import java.util.function.IntPredicate;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.SmartLifecycle;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import com.flab.stocktradingengine.aeron.StockSlotHasher;
 import com.flab.stocktradingengine.matching.disruptor.engine.MatchingEngine;
 import com.flab.stocktradingengine.matching.worker.lifecycle.MatchingSnapshotLifecycle;
 import com.flab.stocktradingengine.matching.worker.lifecycle.MatchingSnapshotWriterLifecycle;
@@ -30,8 +35,15 @@ import com.flab.stocktradingengine.matching.worker.recovery.StoredMatchingSnapsh
 public class MatchingSnapshotConfig {
 
     @Bean
-    public MatchingSnapshotStore matchingSnapshotStore(File matchingArchiveDir) {
-        return new MatchingSnapshotStore(matchingArchiveDir);
+    public MatchingSnapshotStore matchingSnapshotStore(
+            File matchingArchiveDir, IntPredicate ownedSlots, StockSlotHasher stockSlotHasher) {
+        int stockSlotCount = stockSlotHasher.stockSlotCount();
+        return new MatchingSnapshotStore(matchingArchiveDir, () -> ownedStockSlotsOf(ownedSlots, stockSlotCount));
+    }
+
+    /** 담당 판정을 종목 slot 번호 집합으로 바꾼다. 스냅샷 파일에 맡은 종목 slot 목록으로 적힌다. */
+    static Set<Integer> ownedStockSlotsOf(IntPredicate ownedSlots, int stockSlotCount) {
+        return IntStream.range(0, stockSlotCount).filter(ownedSlots).boxed().collect(Collectors.toUnmodifiableSet());
     }
 
     @Bean

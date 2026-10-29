@@ -13,6 +13,9 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.TreeSet;
+import java.util.function.Supplier;
 
 import com.flab.stocktradingengine.matching.disruptor.snapshot.MatchingSnapshot;
 import com.flab.stocktradingengine.matching.disruptor.snapshot.MatchingSnapshotCodec;
@@ -37,33 +40,48 @@ import com.flab.stocktradingengine.matching.worker.lifecycle.MatchingEngineLifec
  * §4) 여기서 실제로 디스크까지 박아둔다. 정상 종료 경로({@link MatchingSnapshotLifecycle}의 stop)도
  * 이 메서드를 그대로 쓰므로 종료가 그만큼(디스크에 박힐 때까지) 느려지는 게 의도한 대가다.</p>
  *
- * <h3>파일 레이아웃 (버전 1, I2 U1)</h3>
+ * <h3>파일 레이아웃 (버전 2)</h3>
  * <pre>
- * [version:1 = 1][recordingId:8][orderIntakeSourceCount:4]
+ * [version:1 = 2][recordingId:8][orderIntakeSourceCount:4]
  *   [(sessionId:4)(position:8)] × orderIntakeSourceCount
+ *   [ownedSlotCount:4][slot:4] × ownedSlotCount
  *   [MatchingSnapshotCodec가 인코딩한 스냅샷 바이트...]
  * </pre>
- * <p>이전(무버전, I6까지의 {@code [recordingId:8][스냅샷 바이트...]}) 파일을 읽으면 첫 바이트가
- * 1과 다르게 나와(옛 recordingId의 최상위 바이트) {@link MatchingSnapshotFormatException}이 난다 —
- * 의도한 동작이다, 클래스 javadoc·그 예외 클래스 javadoc 참고.</p>
+ * <p>맡은 종목 slot 목록(버전 2에서 추가)이 없는 버전 1 파일과 이전(무버전, I6까지의
+ * {@code [recordingId:8][스냅샷 바이트...]}) 파일은 읽지 않고 {@link MatchingSnapshotFormatException}으로
+ * 시작을 중단한다. 목록을 추정해서 읽으면 같은 종목의 호가창이 두 매칭 shard에 생길 수 있어서다.</p>
+ *
+ * <p>목록은 생성자에 준 {@code ownedStockSlotsSupplier}에서 쓰는 시점에 읽는다. 목록을 직접 주는
+ * {@code write} 오버로드도 있다.</p>
  */
 public class MatchingSnapshotStore {
 
     private static final String FILE_NAME = "matching-snapshot.dat";
     private static final String TEMP_FILE_NAME = "matching-snapshot.dat.tmp";
-    private static final byte FORMAT_VERSION = 1;
+    private static final byte FORMAT_VERSION = 2;
 
     private final File file;
     private final File tempFile;
     private final MatchingSnapshotCodec codec = new MatchingSnapshotCodec();
+    private final Supplier<Set<Integer>> ownedStockSlotsSupplier;
 
     public MatchingSnapshotStore(File archiveDir) {
+        this(archiveDir, Set::of);
+    }
+
+    public MatchingSnapshotStore(File archiveDir, Supplier<Set<Integer>> ownedStockSlotsSupplier) {
         this.file = new File(archiveDir, FILE_NAME);
         this.tempFile = new File(archiveDir, TEMP_FILE_NAME);
+        this.ownedStockSlotsSupplier = ownedStockSlotsSupplier;
     }
 
     public void write(long recordingId, Map<Integer, Long> orderIntakePositions, MatchingSnapshot snapshot) {
-        write(recordingId, orderIntakePositions, codec.encode(snapshot));
+        write(recordingId, orderIntakePositions, ownedStockSlotsSupplier.get(), snapshot);
+    }
+
+    public void write(long recordingId, Map<Integer, Long> orderIntakePositions,
+                      Set<Integer> ownedStockSlots, MatchingSnapshot snapshot) {
+        write(recordingId, orderIntakePositions, ownedStockSlots, codec.encode(snapshot));
     }
 
     /**
@@ -72,10 +90,17 @@ public class MatchingSnapshotStore {
      * 계약과 맞물림, account-worker {@code AccountSnapshotStore}와 같은 결).
      */
     public void write(long recordingId, Map<Integer, Long> orderIntakePositions, byte[] snapshotBytes) {
+        write(recordingId, orderIntakePositions, ownedStockSlotsSupplier.get(), snapshotBytes);
+    }
+
+    public void write(long recordingId, Map<Integer, Long> orderIntakePositions,
+                      Set<Integer> ownedStockSlots, byte[] snapshotBytes) {
         int sourceCount = orderIntakePositions.size();
         int sourcesBytes = sourceCount * (Integer.BYTES + Long.BYTES);
+        int ownedSlotCount = ownedStockSlots.size();
+        int ownedSlotsBytes = Integer.BYTES + ownedSlotCount * Integer.BYTES;
         ByteBuffer payload = ByteBuffer.allocate(
-            Byte.BYTES + Long.BYTES + Integer.BYTES + sourcesBytes + snapshotBytes.length);
+            Byte.BYTES + Long.BYTES + Integer.BYTES + sourcesBytes + ownedSlotsBytes + snapshotBytes.length);
         payload.put(FORMAT_VERSION);
         payload.putLong(recordingId);
         payload.putInt(sourceCount);
@@ -83,6 +108,10 @@ public class MatchingSnapshotStore {
             payload.putInt(sessionId);
             payload.putLong(position);
         });
+        payload.putInt(ownedSlotCount);
+        for (int slot : new TreeSet<>(ownedStockSlots)) {
+            payload.putInt(slot);
+        }
         payload.put(snapshotBytes);
         payload.flip();
 
@@ -121,10 +150,16 @@ public class MatchingSnapshotStore {
                 long position = buffer.getLong();
                 orderIntakePositions.put(sessionId, position);
             }
-            int headerBytes = Byte.BYTES + Long.BYTES + Integer.BYTES + sourceCount * (Integer.BYTES + Long.BYTES);
+            int ownedSlotCount = buffer.getInt();
+            Set<Integer> ownedStockSlots = new TreeSet<>();
+            for (int i = 0; i < ownedSlotCount; i++) {
+                ownedStockSlots.add(buffer.getInt());
+            }
+            int headerBytes = Byte.BYTES + Long.BYTES + Integer.BYTES + sourceCount * (Integer.BYTES + Long.BYTES)
+                + Integer.BYTES + ownedSlotCount * Integer.BYTES;
             byte[] snapshotBytes = Arrays.copyOfRange(payload, headerBytes, payload.length);
             MatchingSnapshot snapshot = codec.decode(snapshotBytes);
-            return Optional.of(new StoredMatchingSnapshot(recordingId, orderIntakePositions, snapshot));
+            return Optional.of(new StoredMatchingSnapshot(recordingId, orderIntakePositions, Set.copyOf(ownedStockSlots), snapshot));
         } catch (IOException e) {
             throw new UncheckedIOException("매칭 스냅샷 파일 읽기 실패: " + file, e);
         }
