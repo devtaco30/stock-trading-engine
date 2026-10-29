@@ -94,6 +94,8 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
     private final java.util.Set<Integer> awaitingMapSwitch = ConcurrentHashMap.newKeySet();
     // 종목 slot별 맵 쓰기 세대. 회수될 때마다 올려, 다시 보내려던 옛 쓰기가 나중에 이동 중 표시를 덮어쓰지 못하게 한다.
     private final java.util.concurrent.atomic.AtomicIntegerArray mapWriteGeneration;
+    // 보내는 호출이 예외를 던지는 쓰기를 포기하기까지의 시도 횟수. 근거 없는 임의 값이다.
+    private static final int MAP_WRITE_RUNTIME_ATTEMPTS = 5;
     private volatile long mapWriteRetryMillis = 1_000L;
     // 콜백(회수·첫 배정)이 자기 맵 쓰기의 완료를 기다리는 한도. 넘기면 ERROR 로그를 남기고 콜백은 돌아간다(쓰기 thread는 계속 재시도한다).
     // 콜백은 Kafka poll 안에서 불리므로 오래 막히면 max.poll.interval.ms를 넘겨 그룹에서 쫓겨날 수 있다(11-8절 마감 D).
@@ -254,6 +256,7 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
             } catch (InterruptedException e) {
                 return;
             }
+            int runtimeFailures = 0;
             try {
                 while (true) {
                     if (mapWriteGeneration.get(write.stockSlot()) != write.generation()) {
@@ -269,8 +272,15 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
                             + " 원인=" + e.getCause());
                         Thread.sleep(mapWriteRetryMillis);
                     } catch (RuntimeException e) {
-                        // 보내는 호출 자체가 던진 예외도 같은 간격으로 다시 보낸다. 담당 표시를 켠 뒤의 쓰기가 사라지면 맵이 이전 담당의 이동 중
-                        // 값으로 남아 이 종목 slot의 주문이 보관만 된다.
+                        // 보내는 호출 자체가 던진 예외도 같은 간격으로 다시 보내되 횟수에 상한을 둔다. 쓰기 thread가 하나라 입력 문제로 영구히
+                        // 실패하는 쓰기 하나가 뒤의 모든 종목 slot의 쓰기를 막기 때문이다. 상한 5회는 근거 없는 임의 값이다.
+                        runtimeFailures++;
+                        if (runtimeFailures >= MAP_WRITE_RUNTIME_ATTEMPTS) {
+                            log.log(Level.ERROR, "[매칭] 맵 쓰기가 예외로 " + runtimeFailures + "번 실패해 포기함 — 맵이 이전 값으로 남아 이 종목 slot의 주문이 보관만 될 수 있음: 종목 slot="
+                                + write.stockSlot() + " 값=" + write.value() + " 원인=" + e);
+                            write.done().completeExceptionally(e);
+                            break;
+                        }
                         log.log(Level.ERROR, "[매칭] 맵 쓰기가 예외로 끝나 다시 보냄: 종목 slot=" + write.stockSlot() + " 값=" + write.value()
                             + " 원인=" + e);
                         Thread.sleep(mapWriteRetryMillis);

@@ -41,6 +41,8 @@ class KafkaMatchingShardAssignmentStuckSlotTest {
     /** 보내는 호출 자체가 예외를 던지는 producer(재시도하지 않는 RuntimeException 경로). */
     private static final class ThrowingProducer extends MockProducer<Integer, String> {
         private final java.util.concurrent.atomic.AtomicInteger failuresLeft;
+        // 정해지면 이 종목 slot의 쓰기만 항상 예외를 던진다(입력 문제로 영구히 실패하는 쓰기).
+        volatile Integer alwaysThrowForSlot;
 
         ThrowingProducer() {
             this(Integer.MAX_VALUE);
@@ -53,6 +55,9 @@ class KafkaMatchingShardAssignmentStuckSlotTest {
 
         @Override
         public synchronized Future<RecordMetadata> send(ProducerRecord<Integer, String> record) {
+            if (alwaysThrowForSlot != null && alwaysThrowForSlot.equals(record.key())) {
+                throw new IllegalStateException("이 쓰기는 영구히 실패");
+            }
             if (failuresLeft.getAndDecrement() > 0) {
                 throw new IllegalStateException("직렬화 실패 흉내");
             }
@@ -130,6 +135,27 @@ class KafkaMatchingShardAssignmentStuckSlotTest {
         assertThat(producer.history()).hasSize(1);
         assertThat(producer.history().get(0).value()).isEqualTo(OWN);
         assertThat(errors).isNotEmpty();
+    }
+
+    @Test
+    void 한_쓰기가_계속_예외를_던져도_뒤의_종목_slot의_쓰기는_나간다() throws Exception {
+        ThrowingProducer producer = new ThrowingProducer(0);
+        producer.alwaysThrowForSlot = 5;
+        build(producer, () -> true);
+        assignment.setMapWriteRetryMillis(10L);
+        listener.onPartitionsAssigned(partitions(5, 6));
+        assignment.acquireAfterLoad(5);
+        assignment.acquireAfterLoad(6);
+
+        assignment.confirmAcquired(5);
+        assignment.confirmAcquired(6);
+
+        long deadline = System.nanoTime() + 3_000_000_000L;
+        while (producer.history().stream().noneMatch(record -> record.key() == 6) && System.nanoTime() < deadline) {
+            Thread.sleep(5);
+        }
+        assertThat(producer.history()).anyMatch(record -> record.key() == 6);
+        assertThat(errors.stream().anyMatch(record -> record.getMessage().contains("포기"))).isTrue();
     }
 
     @Test
