@@ -35,6 +35,8 @@ public final class HandoverReceiver implements AutoCloseable {
 
     private final HandoverRequester requester;
     private final HandoverLoadSink loadSink;
+    // 적재 요청을 낸 직후 회수가 끼었을 때 낡은 사본을 지우도록 정리를 요청하는 곳.
+    private final java.util.function.IntConsumer cleanupSink;
     private final Subscription subscription;
     private final HandoverAssembler assembler = new HandoverAssembler();
     private final AtomicBoolean running = new AtomicBoolean(false);
@@ -44,6 +46,12 @@ public final class HandoverReceiver implements AutoCloseable {
     private Thread thread;
 
     public HandoverReceiver(Aeron aeron, String ownChannel, HandoverRequester requester, HandoverLoadSink loadSink) {
+        this(aeron, ownChannel, requester, loadSink, stockSlot -> { });
+    }
+
+    public HandoverReceiver(Aeron aeron, String ownChannel, HandoverRequester requester, HandoverLoadSink loadSink,
+                            java.util.function.IntConsumer cleanupSink) {
+        this.cleanupSink = cleanupSink;
         this.requester = requester;
         this.loadSink = loadSink;
         this.subscription = aeron.addSubscription(ownChannel, AeronStreamIds.ORDER_BOOK_RESPONSE);
@@ -90,6 +98,7 @@ public final class HandoverReceiver implements AutoCloseable {
         }
         Optional<List<byte[]>> complete = assembler.accept(message);
         if (complete.isPresent()) {
+            int cancelGenerationBefore = requester.cancelGeneration(message.stockSlot());
             if (!requester.finish(message.stockSlot(), message.transferId())) {
                 // 번호를 확인한 뒤 완성되기 전에 취소되었거나 새 이동 번호로 바뀌었다. 담당이 아닌 종목 slot에 낡은 호가창이 올라가지 않게 적재를
                 // 요청하지 않는다.
@@ -101,6 +110,13 @@ public final class HandoverReceiver implements AutoCloseable {
             log.log(Level.INFO, "[호가창 이동] 응답 완성: 이동 번호=" + message.transferId() + " 종목 slot=" + message.stockSlot()
                 + " 종목 수=" + complete.get().size());
             loadSink.onAssembled(message.transferId(), message.stockSlot(), complete.get());
+            if (requester.cancelGeneration(message.stockSlot()) != cancelGenerationBefore) {
+                // 적재를 요청하는 동안 그 종목 slot이 회수되었다. 회수 쪽의 정리 요청이 적재 요청보다 먼저 들어갔다면 낡은 사본이 담당 아닌
+                // 종목 slot에 올라가므로, 요청 queue의 순서상 적재 뒤에 들어가는 정리를 한 번 더 요청한다.
+                log.log(Level.WARNING, "[호가창 이동] 적재를 요청하는 동안 회수되어 낡은 사본을 지우도록 정리를 다시 요청함: 이동 번호="
+                    + message.transferId() + " 종목 slot=" + message.stockSlot());
+                cleanupSink.accept(message.stockSlot());
+            }
         }
     }
 

@@ -205,7 +205,7 @@ public class MatchingHandoverConfig {
     public HandoverReceiver handoverReceiver(
             Aeron aeron, HandoverRequester requester, SlotEventRequests slotEventRequests,
             @Value("${transport.matching-intake.channel:" + MatchingOrderIntakeConfig.DEFAULT_INTAKE_CHANNEL + "}") String ownChannel) {
-        return new HandoverReceiver(aeron, ownChannel, requester, slotEventRequests::requestLoad);
+        return new HandoverReceiver(aeron, ownChannel, requester, slotEventRequests::requestLoad, slotEventRequests::requestCleanup);
     }
 
     @Bean

@@ -42,6 +42,9 @@ class HandoverTransportIntegrationTest {
     private HandoverRequester zRequester;
     private HandoverReceiver zReceiver;
     private final List<Assembled> assembled = new CopyOnWriteArrayList<>();
+    private final List<Integer> cleanedSlots = new CopyOnWriteArrayList<>();
+    // 적재 요청을 낸 직후 실행할 동작. 시험이 그 사이에 회수가 끼는 순서를 만든다.
+    private volatile Runnable loadHook = () -> { };
     private final AtomicReference<Optional<MatchingSlotTarget>> zMapEntry =
         new AtomicReference<>(Optional.of(new MatchingSlotTarget(X_CHANNEL, true)));
 
@@ -62,7 +65,10 @@ class HandoverTransportIntegrationTest {
         HandoverEndpointPool zPool = new HandoverEndpointPool(poolEndpoints, Z_CHANNEL);
         zRequester = new HandoverRequester(aeron, Z_CHANNEL, zPool, zMap, 6L);
         zReceiver = new HandoverReceiver(aeron, Z_CHANNEL, zRequester,
-            (transferId, stockSlot, bodies) -> assembled.add(new Assembled(transferId, stockSlot, bodies)));
+            (transferId, stockSlot, bodies) -> {
+                assembled.add(new Assembled(transferId, stockSlot, bodies));
+                loadHook.run();
+            }, cleanedSlots::add);
         xResponder.start();
         zReceiver.start();
         awaitUntil(() -> zRequester.peerConnected(X_CHANNEL)); // 연결 확인이 있으므로 첫 요청 전에 연결을 기다린다
@@ -183,6 +189,29 @@ class HandoverTransportIntegrationTest {
         } finally {
             requester.close();
         }
+    }
+
+    @Test
+    void 적재_요청을_낸_직후_회수가_끼면_낡은_사본을_지우는_정리를_한_번_더_요청한다() {
+        xStore.put(SLOT, List.of(bytes(1, 300)));
+        loadHook = () -> zRequester.cancel(SLOT); // loadSink가 요청 queue에 넣은 뒤 정리 요청보다 먼저 일어난 회수와 같은 순서
+
+        zRequester.request(SLOT).orElseThrow();
+        awaitAssembled(1);
+        awaitUntil(() -> !cleanedSlots.isEmpty());
+
+        assertThat(cleanedSlots).as("적재 뒤에 들어가는 정리 요청이 낡은 사본을 지운다").containsExactly(SLOT);
+    }
+
+    @Test
+    void 회수가_끼지_않으면_정리를_요청하지_않는다() throws Exception {
+        xStore.put(SLOT, List.of(bytes(1, 300)));
+
+        zRequester.request(SLOT).orElseThrow();
+        awaitAssembled(1);
+        Thread.sleep(200);
+
+        assertThat(cleanedSlots).isEmpty();
     }
 
     @Test
