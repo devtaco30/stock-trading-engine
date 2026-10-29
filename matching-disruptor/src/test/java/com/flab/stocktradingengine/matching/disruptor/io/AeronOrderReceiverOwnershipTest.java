@@ -90,6 +90,19 @@ class AeronOrderReceiverOwnershipTest {
         assertEquals(notOwned.accountId(), notOwnedOrders.get(0).accountId());
     }
 
+    @Test
+    void 담당이_아닌_주문을_거부해도_그_주문의_위치는_엔진의_반영_위치에_남는다() throws Exception {
+        deliver(place(7L, NOT_OWNED_STOCK, OrderSide.BUY));
+
+        long deadline = System.nanoTime() + 3_000_000_000L;
+        while (engine.lastAppliedOrderIntakePositions().isEmpty() && System.nanoTime() < deadline) {
+            Thread.sleep(5);
+        }
+
+        assertEquals(1, engine.lastAppliedOrderIntakePositions().size(), "거부한 주문의 발행자 위치가 반영되어야 한다");
+        assertTrue(filledStockCodes.isEmpty());
+    }
+
     private JournaledOrder place(long orderId, String stockCode, OrderSide side) {
         return new JournaledOrder(EventType.PLACE, orderId, 100L + orderId, stockCode, side,
             new BigDecimal("70000"), 10, Instant.parse("2026-10-29T00:00:00Z"));

@@ -114,6 +114,16 @@ public class MatchingEventHandler implements EventHandler<OrderEvent> {
 
     @Override
     public void onEvent(OrderEvent event, long sequence, boolean endOfBatch) {
+        if (event.isPositionOnly()) {
+            // 거부한 주문의 위치만 반영한다. 호가창과 스냅샷 주기 계산(appliedSeq)은 건드리지 않는다.
+            lastAppliedOrderIntakePositions.put(event.getSourceSessionId(), event.getSourcePosition());
+            lastJournaledPosition = event.getJournaledPosition();
+            event.clear();
+            if (endOfBatch) {
+                notifyBooksChanged();
+            }
+            return;
+        }
         if (stages.isEnabled()) {
             long businessStartedAtNanos = EpochNanos.now();
             event.setBusinessStartedAtNanos(businessStartedAtNanos);

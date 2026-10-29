@@ -35,6 +35,11 @@ public class JournalEventHandler implements EventHandler<OrderEvent> {
 
     @Override
     public void onEvent(OrderEvent event, long sequence, boolean endOfBatch) {
+        if (event.isPositionOnly()) {
+            // 위치만 담은 이벤트는 저널에 기록하지 않는다(11-10절). 매칭 핸들러가 읽을 저널 위치만 채운다.
+            event.setJournaledPosition(journal.position());
+            return;
+        }
         // JournaledOrder(core.wire)는 OrderEvent(매칭 코어 전용 가변 슬롯)를 모르므로 여기서 직접 옮겨 담는다.
         journal.append(new JournaledOrder(
             event.getType(), event.getOrderId(), event.getAccountId(), event.getStockCode(),

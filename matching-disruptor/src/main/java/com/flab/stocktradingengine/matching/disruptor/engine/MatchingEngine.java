@@ -306,6 +306,21 @@ public class MatchingEngine {
         }
     }
 
+    /**
+     * 담당이 아니라 접수하지 않은 주문의 위치만 링버퍼에 발행한다(11-4절 3항). 엔진 thread가 이 이벤트로
+     * 발행자별 반영 위치만 앞으로 나아가게 한다. 호가창은 건드리지 않고 저널에는 기록하지 않는다.
+     * 발행자는 주문 수신 폴링 thread 하나뿐이라 단일 프로듀서 전제가 유지된다.
+     */
+    public void publishPositionOnly(int sourceSessionId, long sourcePosition) {
+        long sequence = ringBuffer.next();
+        try {
+            OrderEvent event = ringBuffer.get(sequence);
+            event.setPositionOnly(sourcePosition, sourceSessionId);
+        } finally {
+            ringBuffer.publish(sequence);
+        }
+    }
+
     /** 수신 폴링 스레드가 W-P11을 찍을지 정하는 데 쓴다. */
     public boolean stagesEnabled() {
         return stages.isEnabled();

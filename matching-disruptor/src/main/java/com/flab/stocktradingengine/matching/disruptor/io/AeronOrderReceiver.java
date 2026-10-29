@@ -109,13 +109,15 @@ public final class AeronOrderReceiver implements AutoCloseable {
         long matchReceivedAtNanos = engine.stagesEnabled() ? EpochNanos.now() : 0L;
         JournaledOrder order = codec.decode(buffer, offset);
         if (order.type() == EventType.PLACE) {
+            long sourcePosition = header != null ? header.position() : 0L;
+            int sourceSessionId = header != null ? header.sessionId() : 0;
             int stockSlot = stockSlotHasher.slotFor(order.stockCode());
             if (!ownedSlots.test(stockSlot)) {
                 notOwnedOrderListener.onNotOwned(order);
+                // 접수하지 않은 주문도 이 발행자의 위치는 앞으로 나아가야 한다(11-4절 3항).
+                engine.publishPositionOnly(sourceSessionId, sourcePosition);
                 return;
             }
-            long sourcePosition = header != null ? header.position() : 0L;
-            int sourceSessionId = header != null ? header.sessionId() : 0;
             engine.publishPlace(
                 order.orderId(), order.accountId(), order.stockCode(),
                 order.side(), order.price(), order.quantity(), order.orderAt(),

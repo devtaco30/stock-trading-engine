@@ -45,6 +45,8 @@ public class OrderEvent {
     private long matchReceivedAtNanos;
     private long ringClaimedAtNanos;
     private long businessStartedAtNanos;
+    // 거부한 주문의 위치만 담은 이벤트인지(11-4절 3항). true면 type은 null이고 sourcePosition·sourceSessionId만 의미가 있다.
+    private boolean positionOnly;
 
     /**
      * 주문 접수 명령으로 슬롯을 채운다. sourcePosition·sourceSessionId 를 모르는 발행자(저널 replay,
@@ -96,6 +98,16 @@ public class OrderEvent {
         this.businessStartedAtNanos = businessStartedAtNanos;
     }
 
+    /**
+     * 위치만 담은 이벤트로 슬롯을 채운다. 담당이 아니라 접수하지 않은 주문도 그 발행자의 반영 위치를 앞으로
+     * 나아가게 해야, 재시작 때 같은 주문이 녹화에서 다시 읽히지 않는다. 호가창과 저널은 건드리지 않는다.
+     */
+    public void setPositionOnly(long sourcePosition, int sourceSessionId) {
+        this.positionOnly = true;
+        this.sourcePosition = sourcePosition;
+        this.sourceSessionId = sourceSessionId;
+    }
+
     /** 주문 취소 명령으로 슬롯을 채운다. 취소는 orderId·stockCode 만 필요하다. */
     public void setCancel(long orderId, String stockCode) {
         this.type = EventType.CANCEL;
@@ -125,6 +137,11 @@ public class OrderEvent {
         this.matchReceivedAtNanos = 0L;
         this.ringClaimedAtNanos = 0L;
         this.businessStartedAtNanos = 0L;
+        this.positionOnly = false;
+    }
+
+    public boolean isPositionOnly() {
+        return positionOnly;
     }
 
     public void setJournaledPosition(long journaledPosition) {
