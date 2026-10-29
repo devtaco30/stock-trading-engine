@@ -3,9 +3,11 @@ package com.flab.stocktradingengine.matching.worker.config;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.IntPredicate;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.SmartLifecycle;
@@ -13,6 +15,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 import com.flab.stocktradingengine.aeron.AeronStreamIds;
+import com.flab.stocktradingengine.aeron.StockSlotHasher;
 import com.flab.stocktradingengine.codec.JournaledOrder;
 import com.flab.stocktradingengine.matching.disruptor.engine.MatchingEngine;
 import com.flab.stocktradingengine.matching.disruptor.io.AeronOrderReceiver;
@@ -172,6 +175,24 @@ public class MatchingOrderIntakeConfig {
             .orElse(Map.of());
         MatchingOrderIntakeReplayer replayer = new MatchingOrderIntakeReplayer(aeronArchive);
         return replayer.readFrom(intakeChannel, AeronStreamIds.MATCHING_INTAKE, orderIntakePositions);
+    }
+
+    /**
+     * 복구 입력(주문 입구 녹화)에서 담당이 아닌 종목 slot의 주문을 제외한다. 녹화는 담당 확인보다 앞선
+     * Aeron 계층에서 일어나 담당 아닌 주문도 들어 있으므로, 그대로 엔진에 적용하면 담당 밖 종목의
+     * 호가창이 만들어진다. 순서는 그대로 두며, 저널은 이미 접수한 주문이라 걸러내지 않는다.
+     * Archive 없이 시험하도록 정적 메서드로 뺐다.
+     */
+    static List<JournaledOrder> filterOwnedEntries(
+            List<JournaledOrder> entries, IntPredicate ownedSlots, StockSlotHasher stockSlotHasher) {
+        List<JournaledOrder> owned = new ArrayList<>(entries.size());
+        for (JournaledOrder entry : entries) {
+            int stockSlot = stockSlotHasher.slotFor(entry.stockCode());
+            if (ownedSlots.test(stockSlot)) {
+                owned.add(entry);
+            }
+        }
+        return owned;
     }
 
     /**
