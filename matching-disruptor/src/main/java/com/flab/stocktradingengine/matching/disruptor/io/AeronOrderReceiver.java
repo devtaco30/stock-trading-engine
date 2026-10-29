@@ -129,9 +129,10 @@ public final class AeronOrderReceiver implements AutoCloseable {
                 order.side(), order.price(), order.quantity(), order.orderAt(),
                 sourcePosition, sourceSessionId,
                 order.originNanos(), order.receivedAtNanos(), order.acceptedAtNanos(), matchReceivedAtNanos);
-        } else {
+        } else if (order.type() == EventType.CANCEL) {
             engine.publishCancel(order.orderId(), order.stockCode());
         }
+        // 종목 slot 받음·넘김은 저널에만 기록되는 항목이라 인테이크 와이어로 받아도 엔진에 넣지 않는다.
     }
 
     /** 폴링 스레드를 멈추고 종료를 기다린다. */

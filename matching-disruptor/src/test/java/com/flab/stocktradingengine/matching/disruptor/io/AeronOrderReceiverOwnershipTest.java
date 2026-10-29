@@ -103,6 +103,18 @@ class AeronOrderReceiverOwnershipTest {
         assertTrue(filledStockCodes.isEmpty());
     }
 
+    @Test
+    void 인테이크_와이어로_온_종목_slot_항목은_엔진에_들어가지_않는다() throws Exception {
+        deliver(JournaledOrder.slotAcquired(5));
+        deliver(JournaledOrder.slotReleased(5));
+        deliver(place(1L, OWNED_STOCK, OrderSide.SELL));
+        deliver(place(2L, OWNED_STOCK, OrderSide.BUY));
+
+        awaitFills(1);
+
+        assertEquals(2, engine.journal().entries().size(), "저널에는 주문 두 건만 있어야 한다(받음·넘김은 와이어로 받지 않는다)");
+    }
+
     private JournaledOrder place(long orderId, String stockCode, OrderSide side) {
         return new JournaledOrder(EventType.PLACE, orderId, 100L + orderId, stockCode, side,
             new BigDecimal("70000"), 10, Instant.parse("2026-10-29T00:00:00Z"));

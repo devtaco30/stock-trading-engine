@@ -25,7 +25,9 @@ import com.flab.stocktradingengine.trading.entity.OrderSide;
  *         [quantity:4][orderAtEpochSecond:8][orderAtNano:4]
  *         [originNanos:8][receivedAtNanos:8][acceptedAtNanos:8][stockCode:4+N]
  * CANCEL: [type:1][orderId:8][stockCode:4+N]
+ * SLOT_ACQUIRED, SLOT_RELEASED: [type:1][stockSlot:4]
  * </pre>
+ * <p>SLOT_* 항목은 저널에만 기록된다. type 순번이 2·3이라 PLACE(0)·CANCEL(1)의 바이트 배치는 그대로다.</p>
  *
  * <h3>가정·한계 (블로그 감)</h3>
  * <ul>
@@ -49,6 +51,11 @@ public final class OrderCodec {
 
         buffer.putByte(position, (byte) order.type().ordinal());
         position += Byte.BYTES;
+        if (order.type() == EventType.SLOT_ACQUIRED || order.type() == EventType.SLOT_RELEASED) {
+            buffer.putInt(position, order.stockSlot());
+            position += Integer.BYTES;
+            return position - offset;
+        }
         buffer.putLong(position, order.orderId());
         position += Long.BYTES;
 
@@ -95,6 +102,9 @@ public final class OrderCodec {
 
         EventType type = EventType.values()[buffer.getByte(position)];
         position += Byte.BYTES;
+        if (type == EventType.SLOT_ACQUIRED || type == EventType.SLOT_RELEASED) {
+            return new JournaledOrder(type, 0L, 0L, null, null, null, 0, null, 0L, 0L, 0L, buffer.getInt(position));
+        }
         long orderId = buffer.getLong(position);
         position += Long.BYTES;
 

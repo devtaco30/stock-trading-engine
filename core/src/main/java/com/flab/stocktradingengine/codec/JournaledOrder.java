@@ -25,8 +25,29 @@ public record JournaledOrder(
     Instant orderAt,
     long originNanos,
     long receivedAtNanos,
-    long acceptedAtNanos
+    long acceptedAtNanos,
+    int stockSlot
 ) {
+
+    /** stockSlot을 지정하지 않는 호출부용 생성자 — 주문 항목(PLACE·CANCEL)은 종목 slot 번호를 담지 않는다(0). */
+    public JournaledOrder(
+        EventType type, long orderId, long accountId, String stockCode,
+        OrderSide side, BigDecimal price, int quantity, Instant orderAt,
+        long originNanos, long receivedAtNanos, long acceptedAtNanos
+    ) {
+        this(type, orderId, accountId, stockCode, side, price, quantity, orderAt,
+            originNanos, receivedAtNanos, acceptedAtNanos, 0);
+    }
+
+    /** 종목 slot을 받았다는 저널 항목. */
+    public static JournaledOrder slotAcquired(int stockSlot) {
+        return new JournaledOrder(EventType.SLOT_ACQUIRED, 0L, 0L, null, null, null, 0, null, 0L, 0L, 0L, stockSlot);
+    }
+
+    /** 종목 slot을 넘겼다는 저널 항목. */
+    public static JournaledOrder slotReleased(int stockSlot) {
+        return new JournaledOrder(EventType.SLOT_RELEASED, 0L, 0L, null, null, null, 0, null, 0L, 0L, 0L, stockSlot);
+    }
 
     /** 구간 측정 시각 필드를 지정하지 않는 기존 호출부용 생성자 — 세 필드는 0이다. */
     public JournaledOrder(
