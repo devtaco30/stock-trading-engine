@@ -95,6 +95,10 @@ public class MatchingEventHandler implements EventHandler<OrderEvent> {
     private final Queue<PendingLoad> loadsAwaitingDurable = new ConcurrentLinkedQueue<>();
     // 강제 스냅샷 재시도 이벤트를 링버퍼에 넣어 두었고 엔진 thread가 아직 처리하지 않았는지.
     private final AtomicBoolean forceSnapshotRetryQueued = new AtomicBoolean();
+    // 거부된 강제 스냅샷을 다시 찍는 간격(10ms, 근거 없는 임의 값 — 스냅샷 쓰기 하나가 fsync까지 수 ms~수십 ms 걸릴 수 있어 그 정도로 둔다).
+    private static final long FORCE_SNAPSHOT_RETRY_INTERVAL_NANOS = 10_000_000L;
+    // 강제 스냅샷을 마지막으로 시도한 시각. 엔진 thread가 쓰고 수신 thread가 읽는다.
+    private volatile long lastForcedSnapshotAttemptNanos = System.nanoTime();
 
     private static final class PendingLoad {
         private final long transferId;
@@ -176,8 +180,9 @@ public class MatchingEventHandler implements EventHandler<OrderEvent> {
             } else if (event.isSlotCleanup()) {
                 handleSlotCleanup(event);
             } else {
-                forceSnapshotRetryQueued.set(false);
+                // 시도를 끝내고 시각을 갱신한 뒤에 표시를 푼다. 먼저 풀면 시도 중에 수신 thread가 간격이 지난 것으로 보고 한 번 더 발행한다.
                 retryRejectedForcedSnapshots();
+                forceSnapshotRetryQueued.set(false);
             }
             event.clear();
             if (endOfBatch) {
@@ -325,6 +330,7 @@ public class MatchingEventHandler implements EventHandler<OrderEvent> {
         handedOverSlots.remove(event.getStockSlot());
         appliedSeq++;
         boolean offered = offerSnapshot();
+        lastForcedSnapshotAttemptNanos = System.nanoTime();
         loadsAwaitingDurable.add(new PendingLoad(event.getTransferId(), event.getStockSlot(), offered ? appliedSeq : -1L));
         if (!offered) {
             log.log(Level.WARNING, "[매칭] 적재 뒤 강제 스냅샷이 거부됨(쓰기 큐 가득): 이동 번호=" + event.getTransferId());
@@ -350,7 +356,9 @@ public class MatchingEventHandler implements EventHandler<OrderEvent> {
             return;
         }
         appliedSeq++;
-        if (offerSnapshot()) {
+        boolean offered = offerSnapshot();
+        lastForcedSnapshotAttemptNanos = System.nanoTime();
+        if (offered) {
             for (PendingLoad pending : loadsAwaitingDurable) {
                 if (pending.appliedSeq < 0) {
                     pending.appliedSeq = appliedSeq;
@@ -371,7 +379,15 @@ public class MatchingEventHandler implements EventHandler<OrderEvent> {
 
     /** 거부된 강제 스냅샷을 다시 찍는 이벤트를 아직 링버퍼에 넣지 않았다면 넣을 권리를 얻는다. */
     public boolean claimForceSnapshotRetry() {
-        return hasLoadAwaitingSnapshot() && forceSnapshotRetryQueued.compareAndSet(false, true);
+        if (!hasLoadAwaitingSnapshot()) {
+            return false;
+        }
+        // 쓰기 큐가 차 있는 동안 수신 thread의 반복마다 재시도 이벤트를 발행하면 엔진 thread가 매번 스냅샷 전체를 인코딩해 바쁘게 돈다.
+        // 마지막 시도(적재 때의 첫 시도나 직전 재시도) 뒤 일정 간격이 지나야 다시 발행한다.
+        if (System.nanoTime() - lastForcedSnapshotAttemptNanos < FORCE_SNAPSHOT_RETRY_INTERVAL_NANOS) {
+            return false;
+        }
+        return forceSnapshotRetryQueued.compareAndSet(false, true);
     }
 
     /**

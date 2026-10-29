@@ -148,12 +148,35 @@ class MatchingEngineBookLoadTest {
         assertTrue(durableNotices.isEmpty());
 
         sink.acceptOffers.set(true);
-        engine.pollLoadCompletions(); // 거부된 적재가 남아 있으면 강제 스냅샷 재시도 이벤트를 발행한다
+        // 재시도는 간격을 두고 발행되므로 수신 thread의 반복처럼 계속 폴링한다.
+        long deadline = System.nanoTime() + 3_000_000_000L;
+        while (sink.offers.isEmpty() && System.nanoTime() < deadline) {
+            engine.pollLoadCompletions();
+            Thread.sleep(1);
+        }
         awaitSnapshotOffer(1);
         sink.durable.set(sink.offers.get(0).appliedSeq());
         engine.pollLoadCompletions();
 
         assertEquals(List.of(TRANSFER_ID), durableNotices);
+    }
+
+    @Test
+    void 스냅샷이_계속_거부되어도_재시도는_간격을_두고_발행되어_바쁘게_돌지_않는다() throws Exception {
+        sink.acceptOffers.set(false);
+        startEngine();
+        engine.publishBookLoad(TRANSFER_ID, HASHER.slotFor(STOCK), List.of(sourceBookBytes()));
+        awaitOfferAttempts(1);
+
+        // 수신 thread가 반복마다 부르는 것처럼 300ms 동안 쉬지 않고 폴링한다.
+        long end = System.nanoTime() + 300_000_000L;
+        while (System.nanoTime() < end) {
+            engine.pollLoadCompletions();
+        }
+
+        long attempts = sink.attempts.get();
+        assertTrue(attempts >= 2, "한 번은 재시도해야 한다: " + attempts);
+        assertTrue(attempts <= 60, "재시도 간격(10ms)이 없으면 수천 번 돈다. 300ms 동안 시도 횟수=" + attempts);
     }
 
     @Test
