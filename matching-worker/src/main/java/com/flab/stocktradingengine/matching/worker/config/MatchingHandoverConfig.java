@@ -103,7 +103,10 @@ public class MatchingHandoverConfig {
     @Bean(destroyMethod = "close")
     public MapSyncResources matchingMapSync(
             MatchingSlotMapReader reader, @Value("${spring.kafka.bootstrap-servers}") String bootstrapServers,
-            @Value("${matching-shard.coordination.map-decision-timeout-ms:10000}") long timeoutMillis) {
+            @Value("${matching-shard.coordination.map-decision-timeout-ms:10000}") long timeoutMillis,
+            // 따라오지 못한 판정이 연속 이만큼이면 읽기를 다시 시작한다. 기본값 3번과 읽기 재시작 간격 5초는 근거 없는 임의 값이다(미측정).
+            @Value("${matching-shard.coordination.map-catch-up-failure-limit:3}") int catchUpFailureLimit,
+            @Value("${matching-shard.coordination.map-reader-restart-ms:5000}") long readerRestartMillis) {
         org.apache.kafka.clients.admin.Admin admin = org.apache.kafka.clients.admin.Admin.create(
             java.util.Map.of(org.apache.kafka.clients.admin.AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers));
         org.apache.kafka.common.TopicPartition partition = new org.apache.kafka.common.TopicPartition(
@@ -119,7 +122,10 @@ public class MatchingHandoverConfig {
                 throw new IllegalStateException("맵 토픽 끝 위치 조회 중 인터럽트됨", e);
             }
         };
-        return new MapSyncResources(new MapCatchUpWaiter(endOffset, () -> reader.consumedOffset(0), timeoutMillis), admin, reader::isHealthy);
+        MapCatchUpWaiter waiter = new MapCatchUpWaiter(endOffset, () -> reader.consumedOffset(0), timeoutMillis);
+        reader.setRestartIntervalMillis(readerRestartMillis);
+        waiter.onRepeatedFailure(catchUpFailureLimit, () -> reader.requestRestart("끝 위치를 따라오지 못한 판정이 연속 " + catchUpFailureLimit + "번"));
+        return new MapSyncResources(waiter, admin, reader::isHealthy);
     }
 
     /** 판정 대기 장치와 그것이 쓰는 Admin을 같이 닫기 위한 묶음. */

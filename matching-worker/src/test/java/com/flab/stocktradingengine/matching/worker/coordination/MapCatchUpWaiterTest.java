@@ -48,4 +48,27 @@ class MapCatchUpWaiterTest {
 
         assertThat(waiter.awaitCaughtUp()).isFalse();
     }
+
+    @Test
+    void 따라오지_못한_판정이_연속_N번이면_읽기를_다시_시작하도록_알리고_성공하면_횟수를_처음부터_센다() {
+        AtomicLong consumed = new AtomicLong(3);
+        java.util.concurrent.atomic.AtomicInteger restarts = new java.util.concurrent.atomic.AtomicInteger();
+        MapCatchUpWaiter waiter = new MapCatchUpWaiter(() -> 10L, consumed::get, 20L);
+        waiter.onRepeatedFailure(3, restarts::incrementAndGet);
+
+        waiter.awaitCaughtUp();
+        waiter.awaitCaughtUp();
+        assertThat(restarts.get()).isZero();
+        waiter.awaitCaughtUp();
+        assertThat(restarts.get()).as("연속 세 번째 실패에서 알린다").isEqualTo(1);
+
+        consumed.set(10); // 따라왔다
+        assertThat(waiter.awaitCaughtUp()).isTrue();
+        consumed.set(3);
+        waiter.awaitCaughtUp();
+        waiter.awaitCaughtUp();
+        assertThat(restarts.get()).as("성공이 끼어 횟수가 처음부터 다시 센다").isEqualTo(1);
+        waiter.awaitCaughtUp();
+        assertThat(restarts.get()).isEqualTo(2);
+    }
 }

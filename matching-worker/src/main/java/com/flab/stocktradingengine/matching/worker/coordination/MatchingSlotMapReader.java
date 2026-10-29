@@ -39,6 +39,7 @@ public final class MatchingSlotMapReader {
     private final CountDownLatch initialCatchUpLatch = new CountDownLatch(1);
     // 읽는 thread가 예외로 끝났으면 그 예외. 초기 읽기 대기가 이것을 보고 실패로 끝난다.
     private volatile Throwable failure;
+    private volatile boolean restartRequested;
     // 읽기가 예외로 멈춘 뒤 다시 시작하기까지의 간격. 근거 없는 임의 값이다.
     private volatile long restartIntervalMillis = 5_000L;
     // 파티션마다 읽어 반영한 다음 위치. 읽는 thread가 poll마다 갱신하고 다른 thread가 따라왔는지 볼 때 읽는다.
@@ -110,6 +111,15 @@ public final class MatchingSlotMapReader {
         this.restartIntervalMillis = millis;
     }
 
+    /**
+     * 읽기를 다시 시작하게 한다. 읽기 thread가 다음 반복에서 예외로 멈춘 것과 같은 경로(낡은 값 차단, 간격 뒤 다시 시작)를 탄다. consumer를
+     * 새로 만들지는 않는다. 끝 위치를 따라오지 못하는 정지를 판정 쪽이 알아챘을 때 부른다.
+     */
+    public void requestRestart(String reason) {
+        log.log(Level.ERROR, "[맵] " + mapTopic + " 읽기 재시작 요청: " + reason);
+        restartRequested = true;
+    }
+
     /** 읽기가 정상인지. 예외로 멈춘 뒤 다시 읽기에 성공하기 전에는 false이고, 이때 {@link #targetFor}는 낡은 값을 돌려주지 않는다. */
     public boolean isHealthy() {
         return failure == null;
@@ -162,6 +172,10 @@ public final class MatchingSlotMapReader {
         try {
             while (running) {
                 try {
+                    if (restartRequested) {
+                        restartRequested = false;
+                        throw new IllegalStateException("재시작 요청을 받음");
+                    }
                     ConsumerRecords<Integer, String> records = consumer.poll(Duration.ofMillis(500));
                     if (!records.isEmpty()) {
                         applyRecords(records);

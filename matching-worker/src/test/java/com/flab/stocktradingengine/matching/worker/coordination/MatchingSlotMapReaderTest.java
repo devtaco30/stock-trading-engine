@@ -125,6 +125,31 @@ class MatchingSlotMapReaderTest {
         flakyReader.close();
     }
 
+    @Test
+    void 다시_시작을_요청하면_멈춘_상태가_되었다가_간격이_지나_정상으로_돌아온다() throws Exception {
+        Consumer<Integer, String> consumer = mock(Consumer.class);
+        TopicPartition partition = new TopicPartition(TOPIC, 0);
+        org.mockito.Mockito.when(consumer.partitionsFor(TOPIC))
+            .thenReturn(List.of(new org.apache.kafka.common.PartitionInfo(TOPIC, 0, null, null, null)));
+        org.mockito.Mockito.when(consumer.endOffsets(List.of(partition))).thenReturn(Map.of(partition, 0L));
+        org.mockito.Mockito.when(consumer.position(partition)).thenReturn(0L);
+        org.mockito.Mockito.when(consumer.poll(org.mockito.ArgumentMatchers.any(java.time.Duration.class)))
+            .thenReturn(ConsumerRecords.empty());
+        MatchingSlotMapReader quietReader = new MatchingSlotMapReader(consumer, 64, TOPIC);
+        quietReader.setRestartIntervalMillis(300L);
+        quietReader.applyRecords(records(record(3, X + ";moving")));
+        quietReader.start();
+        awaitUntil(quietReader::isHealthy);
+
+        quietReader.requestRestart("끝 위치를 따라오지 못함");
+
+        awaitUntil(() -> !quietReader.isHealthy());
+        assertThat(quietReader.targetFor(3)).isEmpty();
+        awaitUntil(quietReader::isHealthy);
+        assertThat(quietReader.targetFor(3)).isPresent();
+        quietReader.close();
+    }
+
     private static void awaitUntil(java.util.function.BooleanSupplier condition) throws InterruptedException {
         long deadline = System.nanoTime() + 3_000_000_000L;
         while (!condition.getAsBoolean() && System.nanoTime() < deadline) {
