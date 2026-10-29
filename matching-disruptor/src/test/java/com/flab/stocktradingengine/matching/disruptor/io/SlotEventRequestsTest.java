@@ -84,9 +84,11 @@ class SlotEventRequestsTest {
         zReceiveThread.join();
 
         requests.drainTo(engine);
+        // 적재 직후 간격 안이면 강제 스냅샷은 재시도 이벤트가 찍는다. 수신 thread의 반복처럼 계속 확인한다.
         long deadline = System.nanoTime() + 3_000_000_000L;
         while (offeredSeqs.isEmpty() && System.nanoTime() < deadline) {
-            Thread.sleep(5);
+            requests.drainTo(engine);
+            Thread.sleep(2);
         }
         assertEquals(1, offeredSeqs.size(), "적재 뒤 강제 스냅샷이 찍혀야 한다");
         durable.set(offeredSeqs.get(0));

@@ -219,6 +219,105 @@ class MatchingEngineBookLoadTest {
     }
 
     @Test
+    void 종목_slot_32개_적재가_연달아_와도_강제_스냅샷은_모아서_몇_번만_찍고_거부되지_않으며_완료_알림은_확정_뒤에_나간다() throws Exception {
+        QueueSimSink simSink = new QueueSimSink();
+        List<long[]> noticeSnapshots = new CopyOnWriteArrayList<>();
+        SlotEventListener listener = new SlotEventListener() {
+            @Override
+            public void onBooksLoadedDurable(long transferId, int stockSlot) {
+                durableNotices.add(transferId);
+                noticeSnapshots.add(new long[] {simSink.durable.get(), simSink.firstOfferedSeq.get()});
+            }
+        };
+        engine = new MatchingEngine(1024, new BlockingWaitStrategy(), (stockCode, fill) -> fills.add(fill), journal,
+            simSink, true, new com.flab.stocktradingengine.time.StageLatencyRegistry(false), HASHER, listener);
+        engine.start();
+        List<String> stocks = stocksInDistinctSlots(32);
+
+        // 수신 thread의 반복처럼, 적재 요청을 발행하는 thread가 같은 반복에서 완료 확인도 한다.
+        for (int i = 0; i < stocks.size(); i++) {
+            engine.publishBookLoad(1_000L + i, HASHER.slotFor(stocks.get(i)), List.of(singleStockBytes(stocks.get(i), 100L + i)));
+            engine.pollLoadCompletions();
+        }
+        long deadline = System.nanoTime() + 5_000_000_000L;
+        while (durableNotices.size() < stocks.size() && System.nanoTime() < deadline) {
+            engine.pollLoadCompletions();
+            Thread.sleep(1);
+        }
+
+        assertEquals(32, durableNotices.size(), "32개 적재 모두 완료가 알려진다");
+        assertTrue(simSink.attempts.get() <= 8, "강제 스냅샷 시도가 종목 slot 수(32)보다 훨씬 적어야 한다: " + simSink.attempts.get());
+        assertEquals(0, simSink.rejections.get(), "쓰기 큐(용량 4)가 넘치도록 연달아 찍으면 안 된다");
+        for (long[] atNotice : noticeSnapshots) {
+            assertTrue(atNotice[0] >= atNotice[1] && atNotice[1] > 0,
+                "완료 알림은 스냅샷이 디스크에 확정된 뒤에만 나간다: 알림 시점 확정 위치=" + atNotice[0] + " 첫 시도 위치=" + atNotice[1]);
+        }
+    }
+
+    private List<String> stocksInDistinctSlots(int count) {
+        List<String> stocks = new ArrayList<>();
+        java.util.Set<Integer> used = new java.util.HashSet<>();
+        for (int code = 1; stocks.size() < count && code < 10_000; code++) {
+            String candidate = String.format("%06d", code);
+            if (used.add(HASHER.slotFor(candidate))) {
+                stocks.add(candidate);
+            }
+        }
+        return stocks;
+    }
+
+    /** 종목 하나에 미체결 매수 주문 하나가 든 호가창 바이트. */
+    private byte[] singleStockBytes(String stock, long orderId) {
+        com.flab.stocktradingengine.matching.disruptor.snapshot.RestingOrder resting =
+            new com.flab.stocktradingengine.matching.disruptor.snapshot.RestingOrder(
+                orderId, 100L, OrderSide.BUY, new BigDecimal("10000"), 10, System.currentTimeMillis(), 0, false);
+        return codec.encode(new MatchingSnapshot(
+            Map.of(stock, new com.flab.stocktradingengine.matching.disruptor.snapshot.BookSnapshot(List.of(resting), Map.of())), 0L));
+    }
+
+    /** 쓰기 큐(용량 4)와 느린 쓰기 thread(스냅샷 하나에 5ms)를 흉내 내는 sink. 큐가 차면 offer가 false다. */
+    private static final class QueueSimSink implements MatchingSnapshotSink {
+        final AtomicLong attempts = new AtomicLong();
+        final AtomicLong rejections = new AtomicLong();
+        final AtomicLong durable = new AtomicLong();
+        final AtomicLong firstOfferedSeq = new AtomicLong();
+        private final java.util.concurrent.LinkedBlockingQueue<Long> queue = new java.util.concurrent.LinkedBlockingQueue<>();
+
+        QueueSimSink() {
+            Thread writer = new Thread(() -> {
+                try {
+                    while (true) {
+                        long appliedSeq = queue.take();
+                        Thread.sleep(5);
+                        durable.set(appliedSeq);
+                    }
+                } catch (InterruptedException e) {
+                    // 시험 종료
+                }
+            }, "queue-sim-writer");
+            writer.setDaemon(true);
+            writer.start();
+        }
+
+        @Override
+        public boolean offer(byte[] snapshotBytes, Map<Integer, Long> orderIntakePositions, long appliedSeq) {
+            attempts.incrementAndGet();
+            if (queue.size() >= 4) {
+                rejections.incrementAndGet();
+                return false;
+            }
+            firstOfferedSeq.compareAndSet(0L, appliedSeq);
+            queue.add(appliedSeq);
+            return true;
+        }
+
+        @Override
+        public long durableSeq() {
+            return durable.get();
+        }
+    }
+
+    @Test
     void 넘겼던_종목_slot을_다시_적재하면_그_종목의_주문이_다시_반영된다() throws Exception {
         startEngine();
         int slot = HASHER.slotFor(STOCK);

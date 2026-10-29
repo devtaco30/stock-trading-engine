@@ -329,11 +329,27 @@ public class MatchingEventHandler implements EventHandler<OrderEvent> {
         }
         handedOverSlots.remove(event.getStockSlot());
         appliedSeq++;
-        boolean offered = offerSnapshot();
-        lastForcedSnapshotAttemptNanos = System.nanoTime();
-        loadsAwaitingDurable.add(new PendingLoad(event.getTransferId(), event.getStockSlot(), offered ? appliedSeq : -1L));
-        if (!offered) {
-            log.log(Level.WARNING, "[매칭] 적재 뒤 강제 스냅샷이 거부됨(쓰기 큐 가득): 이동 번호=" + event.getTransferId());
+        // 적재가 연달아 올 때마다 보드 전체를 인코딩해 스냅샷을 찍으면 종목 slot 수에 비례해 비용이 반복되고 쓰기 큐가 넘친다. 마지막 시도 뒤
+        // 간격이 지났으면 지금 찍고(이때까지 보류된 적재 전부가 이 스냅샷으로 확정된다), 아니면 보류만 해 두었다가 재시도 이벤트가 하나로
+        // 묶어 찍는다.
+        loadsAwaitingDurable.add(new PendingLoad(event.getTransferId(), event.getStockSlot(), -1L));
+        if (System.nanoTime() - lastForcedSnapshotAttemptNanos >= FORCE_SNAPSHOT_RETRY_INTERVAL_NANOS) {
+            boolean offered = offerSnapshot();
+            lastForcedSnapshotAttemptNanos = System.nanoTime();
+            if (offered) {
+                stampPendingLoads();
+            } else {
+                log.log(Level.WARNING, "[매칭] 적재 뒤 강제 스냅샷이 거부됨(쓰기 큐 가득): 이동 번호=" + event.getTransferId());
+            }
+        }
+    }
+
+    /** 방금 받아 들여진 스냅샷의 순번을 아직 확정 대기 순번이 없는 적재 전부에 붙인다. */
+    private void stampPendingLoads() {
+        for (PendingLoad pending : loadsAwaitingDurable) {
+            if (pending.appliedSeq < 0) {
+                pending.appliedSeq = appliedSeq;
+            }
         }
     }
 
@@ -348,22 +364,14 @@ public class MatchingEventHandler implements EventHandler<OrderEvent> {
     }
 
     private void retryRejectedForcedSnapshots() {
-        boolean anyRejected = false;
-        for (PendingLoad pending : loadsAwaitingDurable) {
-            anyRejected |= pending.appliedSeq < 0;
-        }
-        if (!anyRejected) {
+        if (!hasLoadAwaitingSnapshot()) {
             return;
         }
         appliedSeq++;
         boolean offered = offerSnapshot();
         lastForcedSnapshotAttemptNanos = System.nanoTime();
         if (offered) {
-            for (PendingLoad pending : loadsAwaitingDurable) {
-                if (pending.appliedSeq < 0) {
-                    pending.appliedSeq = appliedSeq;
-                }
-            }
+            stampPendingLoads();
         }
     }
 
