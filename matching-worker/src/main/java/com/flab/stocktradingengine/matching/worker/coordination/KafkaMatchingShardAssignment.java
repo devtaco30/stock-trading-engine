@@ -95,6 +95,9 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
     // 종목 slot별 맵 쓰기 세대. 회수될 때마다 올려, 다시 보내려던 옛 쓰기가 나중에 이동 중 표시를 덮어쓰지 못하게 한다.
     private final java.util.concurrent.atomic.AtomicIntegerArray mapWriteGeneration;
     private volatile long mapWriteRetryMillis = 1_000L;
+    // 콜백(회수·첫 배정)이 자기 맵 쓰기의 완료를 기다리는 한도. 넘기면 ERROR 로그를 남기고 콜백은 돌아간다(쓰기 thread는 계속 재시도한다).
+    // 콜백은 Kafka poll 안에서 불리므로 오래 막히면 max.poll.interval.ms를 넘겨 그룹에서 쫓겨날 수 있다(11-8절 마감 D).
+    private volatile long mapWriteDeadlineMillis = 30_000L;
     // 맵 쓰기는 전부 이 queue로 보내 쓰기 전용 thread 하나가 넣은 순서대로 처리한다. 순서가 queue 순서로 고정되고, 세대 확인은 그 thread가
     // 쓰기 직전에 한다. 호출 thread(Kafka 콜백, 주문 수신 thread)는 브로커 응답을 기다리지 않거나(기다려야 하면 완료 future로 기다린다) 락 안에서
     // send하지 않는다.
@@ -273,6 +276,14 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
                 write.done().completeExceptionally(e);
             }
         }
+    }
+
+    /**
+     * 콜백이 맵 쓰기 완료를 기다리는 한도(설정 {@code matching-shard.rebalance.map-write-deadline-ms}, 기본 30초는 근거 없는 임의 값이며
+     * max.poll.interval.ms 기본값 300초보다 충분히 작게 잡았다).
+     */
+    public void setMapWriteDeadlineMillis(long millis) {
+        this.mapWriteDeadlineMillis = millis;
     }
 
     /** 패키지 가시성 — 시험이 다시 보내기 간격을 줄인다. */
@@ -522,9 +533,15 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
         for (TopicPartition partition : partitions) {
             writes.add(enqueueMapWrite(partition.partition(), value, mapWriteGeneration.get(partition.partition())));
         }
+        // 모든 쓰기의 완료를 기다리는 총 시간에 한도를 둔다. 넘기면 콜백은 돌아가고 쓰기 thread가 queue 순서대로 계속 재시도한다.
+        long deadline = System.nanoTime() + mapWriteDeadlineMillis * 1_000_000L;
         for (java.util.concurrent.CompletableFuture<Void> write : writes) {
             try {
-                write.get();
+                write.get(Math.max(0L, deadline - System.nanoTime()), java.util.concurrent.TimeUnit.NANOSECONDS);
+            } catch (java.util.concurrent.TimeoutException e) {
+                log.log(Level.ERROR, "[매칭] 맵 쓰기 완료를 " + mapWriteDeadlineMillis + "ms 안에 확인하지 못해 콜백을 돌려보냄 — 쓰기는 계속 재시도한다: 값="
+                    + value);
+                return;
             } catch (ExecutionException e) {
                 throw new IllegalStateException(mapTopic + " 발행 실패: 값=" + value, e);
             } catch (InterruptedException e) {

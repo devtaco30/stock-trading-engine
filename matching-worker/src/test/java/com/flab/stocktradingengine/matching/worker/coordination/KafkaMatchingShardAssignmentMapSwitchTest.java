@@ -170,6 +170,31 @@ class KafkaMatchingShardAssignmentMapSwitchTest {
     }
 
     @Test
+    void 브로커가_응답하지_않아도_회수_콜백은_한도_안에_돌아오고_나중에_밀린_쓰기는_순서대로_나가되_세대가_바뀐_쓰기는_나가지_않는다() throws Exception {
+        assignment.setMapWriteDeadlineMillis(200L);
+        listener.onPartitionsAssigned(partitions(5, 6));
+        assignment.acquireAfterLoad(5);
+        assignment.acquireAfterLoad(6);
+        assignment.confirmAcquired(5);
+        awaitHistory(1); // 종목 slot 5의 평상시 값이 나가 브로커 응답을 기다린다
+        assignment.confirmAcquired(6); // 종목 slot 6의 평상시 값은 앞 쓰기 뒤에 queue에서 기다린다
+
+        long startedAt = System.nanoTime();
+        listener.onPartitionsRevoked(partitions(6));
+        long elapsedMillis = (System.nanoTime() - startedAt) / 1_000_000L;
+
+        assertThat(elapsedMillis).as("응답이 없어도 회수 콜백은 한도(200ms) 근처에서 돌아온다").isLessThan(1_500L);
+        mapProducer.completeNext(); // 브로커가 살아남: 종목 slot 5의 쓰기가 끝난다
+        awaitHistory(2);
+        mapProducer.completeNext();
+        Thread.sleep(200);
+
+        assertThat(mapProducer.history()).extracting(record -> record.key() + "=" + record.value())
+            .as("밀린 쓰기는 queue 순서로 나가고, 회수로 세대가 바뀐 종목 slot 6의 옛 평상시 값은 나가지 않는다")
+            .containsExactly("5=" + OWN, "6=" + OWN + ";moving");
+    }
+
+    @Test
     void 첫_배정_종목_slot은_담당이_켜져도_맵을_다시_쓰지_않는다() {
         KafkaMatchingShardAssignment first = new KafkaMatchingShardAssignment(mock(Consumer.class),
             new MockProducer<>(true, new IntegerSerializer(), new StringSerializer()), mock(Admin.class), 64, OWN,

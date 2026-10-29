@@ -134,7 +134,8 @@ public class MatchingShardOwnershipConfig {
             @Value("${matching-shard.coordination.session-timeout-ms:120000}") int sessionTimeoutMs,
             SlotEventRequests slotEventRequests,
             ObjectProvider<MatchingSlotMapReader> mapReader, ObjectProvider<HandoverCoordinator> handoverCoordinator,
-            ObjectProvider<MapSync> mapSync) {
+            ObjectProvider<MapSync> mapSync,
+            @Value("${matching-shard.rebalance.map-write-deadline-ms:30000}") long mapWriteDeadlineMillis) {
         String instanceId = resolveInstanceId(instanceIdConfig, orderEndpoint);
         log.info("[매칭] 담당 종목 slot 소스: Kafka 컨슈머 그룹 배정({}) — 신원={} 주문 입구={} session.timeout.ms={}",
             KafkaMatchingShardAssignment.GROUP_ID, instanceId, orderEndpoint, sessionTimeoutMs);
@@ -143,7 +144,7 @@ public class MatchingShardOwnershipConfig {
         Consumer<String, String> consumer = new KafkaConsumer<>(consumerProps);
         Producer<Integer, String> mapProducer = buildMapProducer(bootstrapServers);
         Admin adminClient = Admin.create(adminProps(bootstrapServers));
-        return new KafkaMatchingShardAssignment(
+        KafkaMatchingShardAssignment assignment = new KafkaMatchingShardAssignment(
             consumer, mapProducer, adminClient, stockSlotHasher.stockSlotCount(), orderEndpoint,
             KafkaMatchingShardAssignment.ASSIGNMENT_TOPIC, KafkaMatchingShardAssignment.MAP_TOPIC, slotEventRequests,
             slot -> mapReader.getObject().targetFor(slot), new MovedSlotRequests() {
@@ -161,6 +162,8 @@ public class MatchingShardOwnershipConfig {
                 thread.setDaemon(true);
                 return thread;
             }));
+        assignment.setMapWriteDeadlineMillis(mapWriteDeadlineMillis);
+        return assignment;
     }
 
     @Bean
