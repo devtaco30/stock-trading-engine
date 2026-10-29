@@ -24,7 +24,7 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import com.flab.stocktradingengine.account.disruptor.snapshot.AccountStateSnapshot;
 import com.flab.stocktradingengine.account.disruptor.snapshot.TradeIdGenerationSnapshot;
 import com.flab.stocktradingengine.account.worker.coordination.MatchingDestinationResolver;
-import com.flab.stocktradingengine.account.worker.coordination.MatchingSlotTarget;
+import com.flab.stocktradingengine.aeron.MatchingSlotTarget;
 import com.flab.stocktradingengine.account.worker.recovery.AccountSnapshotStore;
 import com.flab.stocktradingengine.account.worker.recovery.StoredAccountSnapshot;
 import com.flab.stocktradingengine.aeron.AeronStreamIds;

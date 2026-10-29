@@ -21,7 +21,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import com.flab.stocktradingengine.account.worker.coordination.MatchingDestinationMisconfiguredException;
-import com.flab.stocktradingengine.account.worker.coordination.MatchingSlotTarget;
+import com.flab.stocktradingengine.aeron.MatchingSlotTarget;
 import com.flab.stocktradingengine.account.worker.coordination.MatchingTargetLookup;
 import com.flab.stocktradingengine.aeron.StockSlotHasher;
 import com.flab.stocktradingengine.codec.EventType;

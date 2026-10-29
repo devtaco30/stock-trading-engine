@@ -20,7 +20,7 @@ import com.flab.stocktradingengine.support.IdleStrategies;
 import com.flab.stocktradingengine.account.disruptor.io.MatchingOrderSender;
 import com.flab.stocktradingengine.account.worker.config.MatchingOrderSenderConfig;
 import com.flab.stocktradingengine.account.worker.coordination.MatchingDestinationMisconfiguredException;
-import com.flab.stocktradingengine.account.worker.coordination.MatchingSlotTarget;
+import com.flab.stocktradingengine.aeron.MatchingSlotTarget;
 import com.flab.stocktradingengine.account.worker.coordination.MatchingTargetLookup;
 import com.flab.stocktradingengine.account.worker.coordination.MatchingTargetView;
 import com.flab.stocktradingengine.aeron.StockSlotHasher;

@@ -17,6 +17,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
 
+import com.flab.stocktradingengine.aeron.MatchingSlotTarget;
 import com.flab.stocktradingengine.aeron.StockSlotHasher;
 
 /**
