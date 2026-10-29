@@ -268,6 +268,16 @@ public class MatchingEventHandler implements EventHandler<OrderEvent> {
         slotEventListener.onSlotHandedOver(stockSlot, bookBytesPerStock);
     }
 
+    /** 넘기는 중인 종목 slot의 사본. 복구가 앞 단계에서 만든 목록을 다음 단계의 핸들러로 이어 줄 때 쓴다. 엔진이 시작되기 전에만 부른다. */
+    public Set<Integer> handedOverSlotsSnapshot() {
+        return Set.copyOf(handedOverSlots);
+    }
+
+    /** 복구가 이미 알아낸 넘기는 중인 종목 slot을 이 핸들러에 더한다. 엔진이 시작되기 전에만 부른다. */
+    public void seedHandedOverSlots(Set<Integer> stockSlots) {
+        handedOverSlots.addAll(stockSlots);
+    }
+
     /** 배치 끝에서 건드린 종목마다 한 번 알린다. 호가창이 없는 종목은 건너뛰고, listener 예외는 매칭을 멈추지 않게 삼킨다. */
     private void notifyBooksChanged() {
         for (String touched : touchedInBatch) {

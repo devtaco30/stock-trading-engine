@@ -85,6 +85,7 @@ public class MatchingEngine {
     // 라이브 배선에 쓴 것과 같은 인스턴스를 들고 있어야 lastAppliedOrderIntakePositions()가 실제
     // 소비자 스레드가 반영한 값을 읽는다(account-disruptor AccountEngine.businessHandler와 같은 이유).
     private final MatchingEventHandler matchingEventHandler;
+    private final StockSlotHasher stockSlotHasher;
     private RingBuffer<OrderEvent> ringBuffer;
     private final MatchingSegmentStages stages;
 
@@ -118,6 +119,7 @@ public class MatchingEngine {
                           MatchingSnapshotSink snapshotSink, boolean snapshotTriggerEnabled, StageLatencyRegistry stageRegistry,
                           StockSlotHasher stockSlotHasher, SlotEventListener slotEventListener) {
         this.stages = new MatchingSegmentStages(stageRegistry);
+        this.stockSlotHasher = stockSlotHasher;
         this.journal = journal;
         ThreadFactory threadFactory = DaemonThreadFactory.INSTANCE;
         this.disruptor = new Disruptor<>(
@@ -216,16 +218,17 @@ public class MatchingEngine {
      */
     public void recover(Iterable<JournaledOrder> entries) {
         requireNotStarted();
-        MatchingEventHandler recoveryHandler = new MatchingEventHandler(books, NO_OP_LISTENER);
+        // 넘김 항목도 살아 있는 핸들러와 같게 다룬다. 넘긴 뒤 같은 종목 slot에 온 이벤트는 반영하지 않고, 그 목록을 복구가 끝난
+        // 뒤의 살아 있는 핸들러와 다음 복구 단계로 이어 준다.
+        MatchingEventHandler recoveryHandler = new MatchingEventHandler(books, NO_OP_LISTENER, NO_OP_SNAPSHOT_SINK, false,
+            MatchingSegmentStages.DISABLED, stockSlotHasher, SlotEventListener.NO_OP);
+        recoveryHandler.seedHandedOverSlots(matchingEventHandler.handedOverSlotsSnapshot());
         OrderEvent scratch = new OrderEvent();
         for (JournaledOrder order : entries) {
-            if (order.type() == EventType.SLOT_ACQUIRED || order.type() == EventType.SLOT_RELEASED) {
-                // 종목 slot 받음·넘김은 호가창을 바꾸지 않는다. 담당 목록을 복원하는 쪽이 따로 읽는다.
-                continue;
-            }
             applyToScratch(scratch, order);
             recoveryHandler.onEvent(scratch, 0L, false);
         }
+        matchingEventHandler.seedHandedOverSlots(recoveryHandler.handedOverSlotsSnapshot());
     }
 
     /**
@@ -255,6 +258,7 @@ public class MatchingEngine {
             case PLACE -> event.setPlace(order.orderId(), order.accountId(), order.stockCode(),
                 order.side(), order.price(), order.quantity(), order.orderAt());
             case CANCEL -> event.setCancel(order.orderId(), order.stockCode());
+            case SLOT_ACQUIRED, SLOT_RELEASED -> event.setSlotEvent(order.type(), order.stockSlot());
         }
     }
 
