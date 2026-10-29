@@ -162,10 +162,14 @@ class OrderResultCatchUpReplayerTest {
             .controlRequestChannel(controlRequestChannel)
             .controlResponseChannel("aeron:udp?endpoint=localhost:0"));
 
+        // 이 launch가 시작하는 recording을 이전 launch가 남긴 recording과 구분하려고, 시작하기 전에 카탈로그에 있던
+        // 가장 큰 recordingId를 적어 둔다. publication이 연결돼도 새 recording의 카탈로그 항목은 조금 뒤에 생길 수 있어서,
+        // 「가장 늦게 시작한 recording」만 고르면 그 사이에는 멈춘 옛 recording이 골라진다(위치가 영영 늘지 않는다).
+        long maxRecordingIdBefore = maxRecordingId(archive);
         archive.startRecording(CHANNEL, STREAM_ID, SourceLocation.LOCAL);
         ExclusivePublication publication = aeron.addExclusivePublication(CHANNEL, STREAM_ID);
         awaitConnected(publication);
-        long recordingId = awaitRecordingId(archive);
+        long recordingId = awaitRecordingId(archive, maxRecordingIdBefore);
 
         return new Run(archivingMediaDriver, aeron, archive, publication, recordingId);
     }
@@ -180,7 +184,19 @@ class OrderResultCatchUpReplayerTest {
         }
     }
 
-    private long awaitRecordingId(AeronArchive archive) {
+    private long maxRecordingId(AeronArchive archive) {
+        long[] max = {-1L};
+        archive.listRecordingsForUri(0, 100, CHANNEL, STREAM_ID,
+            (controlSessionId, correlationId, recordingId, startTimestamp, stopTimestamp,
+             startPosition, stopPosition, initialTermId, segmentFileLength, termBufferLength,
+             mtuLength, sessionId, streamId, strippedChannel, originalChannel, sourceIdentity) -> {
+                max[0] = Math.max(max[0], recordingId);
+            });
+        return max[0];
+    }
+
+    /** {@code afterRecordingId}보다 큰 recordingId 중 가장 늦게 시작한 recording을 카탈로그에 나타날 때까지 기다린다. */
+    private long awaitRecordingId(AeronArchive archive, long afterRecordingId) {
         long deadline = System.nanoTime() + TIMEOUT_NANOS;
         long[] found = {-1L};
         long[] latestStartTimestamp = {Long.MIN_VALUE};
@@ -191,7 +207,7 @@ class OrderResultCatchUpReplayerTest {
                 (controlSessionId, correlationId, recordingId, startTimestamp, stopTimestamp,
                  startPosition, stopPosition, initialTermId, segmentFileLength, termBufferLength,
                  mtuLength, sessionId, streamId, strippedChannel, originalChannel, sourceIdentity) -> {
-                    if (startTimestamp > latestStartTimestamp[0]) {
+                    if (recordingId > afterRecordingId && startTimestamp > latestStartTimestamp[0]) {
                         latestStartTimestamp[0] = startTimestamp;
                         found[0] = recordingId;
                     }
