@@ -100,6 +100,9 @@ warn=all_ts(logdir+'/matching-1.log',r'적재 뒤 강제 스냅샷이 거부됨'
 if warn: print("FORCED_SNAPSHOT_REJECTED_WARN count=%d first_to_last_ms=%d" % (len(warn), max(warn)-min(warn)))
 PY
 
+# 이동 한 건의 단계별 시간(종목 slot별 최소·중앙·최대)
+python3 loadtest/u10/handover-steps.py "$WORK/map-history.txt" "$LOG_DIR/matching-1.log"
+
 stop_pids
 A=$(dump_account); D0=$(dump_matching /tmp/u10/matching-0); D1=$(dump_matching /tmp/u10/matching-1)
 echo "--- 매칭 pod 0 스냅샷(요약)"; echo "$D0" | cut -c1-90

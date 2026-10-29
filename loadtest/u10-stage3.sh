@@ -111,6 +111,9 @@ else:
 PY
 
 # 4. 정상 종료 → 스냅샷 판독
+# 이동 한 건의 단계별 시간(종목 slot별 최소·중앙·최대)
+python3 loadtest/u10/handover-steps.py "$WORK/map-history.txt" "$LOG_DIR/matching-1.log"
+
 stop_pids
 A=$(dump_account)
 D0=$(dump_matching /tmp/u10/matching-0); D1=$(dump_matching /tmp/u10/matching-1)
