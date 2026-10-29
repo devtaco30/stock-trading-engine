@@ -280,6 +280,16 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
         this.mapWriteRetryMillis = millis;
     }
 
+    /** 배정을 받았고 이동으로 받는지 첫 배정인지 판정을 기다리는 종목 slot의 사본(점검용). */
+    public Set<Integer> slotsAwaitingDecision() {
+        return Set.copyOf(awaitingDecision);
+    }
+
+    /** 이동으로 받기로 하고 이전 담당의 호가창 적재와 스냅샷 확정을 기다리는 종목 slot의 사본(점검용). */
+    public Set<Integer> slotsAwaitingLoad() {
+        return Set.copyOf(awaitingLoad);
+    }
+
     public Set<Integer> currentSlotsSnapshot() {
         boolean[] flags = ownedSlotFlags;
         return IntStream.range(0, flags.length).filter(slot -> flags[slot]).boxed()
