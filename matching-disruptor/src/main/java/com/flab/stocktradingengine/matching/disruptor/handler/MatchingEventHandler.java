@@ -313,6 +313,10 @@ public class MatchingEventHandler implements EventHandler<OrderEvent> {
      * 차서 거부되면 appliedSeq -1로 남겨 재시도 이벤트가 다시 찍게 한다.
      */
     private void handleBookLoad(OrderEvent event) {
+        // 그 종목 slot의 기존 호가창을 먼저 비운다. restoreInto는 이미 있는 호가창 위에 주문을 더하므로, 같은 종목 slot을 되받을 때
+        // 비우지 않으면 주문이 두 번 쌓인다(11-14절).
+        int loadedSlot = event.getStockSlot();
+        books.keySet().removeIf(stockCode -> stockSlotHasher.slotFor(stockCode) == loadedSlot);
         for (byte[] bytes : event.getBookBytes()) {
             MatchingSnapshotRestorer.restoreInto(books, snapshotCodec.decode(bytes));
         }

@@ -83,6 +83,17 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
     private final MovedSlotRequests movedSlotRequests;
     // 이동으로 받기로 하고 호가창 적재와 스냅샷 확정을 기다리는 종목 slot. 그 사이 회수되면 빠진다.
     private final java.util.Set<Integer> awaitingLoad = ConcurrentHashMap.newKeySet();
+    // 적재가 끝나 담당 표시가 켜지기를 기다리는, 이동으로 받은 종목 slot. 켜진 직후 맵을 자기 주소의 평상시 값으로 바꾼다(U16a).
+    private final java.util.Set<Integer> awaitingMapSwitch = ConcurrentHashMap.newKeySet();
+    // 종목 slot별 맵 쓰기 세대. 회수될 때마다 올려, 다시 보내려던 옛 쓰기가 나중에 이동 중 표시를 덮어쓰지 못하게 한다.
+    private final java.util.concurrent.atomic.AtomicIntegerArray mapWriteGeneration;
+    private volatile long mapWriteRetryMillis = 1_000L;
+    private final java.util.concurrent.ScheduledExecutorService mapWriteRetryExecutor =
+        java.util.concurrent.Executors.newSingleThreadScheduledExecutor(runnable -> {
+            Thread thread = new Thread(runnable, "matching-shard-map-write-retry");
+            thread.setDaemon(true);
+            return thread;
+        });
 
     // test()가 주문마다 불린다. 배열 참조를 volatile로 통째로 교체해 박싱 없이 인덱스 조회만 한다.
     private volatile boolean[] ownedSlotFlags;
@@ -129,6 +140,7 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
         this.assignmentTopic = assignmentTopic;
         this.mapTopic = mapTopic;
         this.ownedSlotFlags = new boolean[stockSlotCount];
+        this.mapWriteGeneration = new java.util.concurrent.atomic.AtomicIntegerArray(stockSlotCount);
     }
 
     /**
@@ -162,6 +174,8 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
      * 켜지 않는다.
      */
     public void confirmAcquired(int stockSlot) {
+        boolean switchMapAfterAcquire;
+        int generation;
         synchronized (this) {
             if (!awaitingJournalConfirm.remove(stockSlot)) {
                 return;
@@ -169,7 +183,41 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
             boolean[] updated = ownedSlotFlags.clone();
             updated[stockSlot] = true;
             ownedSlotFlags = updated;
+            switchMapAfterAcquire = awaitingMapSwitch.remove(stockSlot);
+            generation = mapWriteGeneration.get(stockSlot);
         }
+        if (switchMapAfterAcquire) {
+            sendOwnEndpointAsync(stockSlot, generation);
+        }
+    }
+
+    /**
+     * 이동으로 받은 종목 slot의 맵을 자기 주소의 평상시 값으로 바꾸는 쓰기를 브로커 응답을 기다리지 않고 보낸다(호출 thread는
+     * 받음 항목의 기록 확인을 폴링하는 thread다). 실패하면 ERROR 로그를 남기고 {@code mapWriteRetryMillis} 뒤에 다시 보낸다.
+     * 그 사이 회수되어 세대가 바뀌었으면 보내지 않는다.
+     */
+    private void sendOwnEndpointAsync(int stockSlot, int generation) {
+        if (mapWriteGeneration.get(stockSlot) != generation) {
+            return;
+        }
+        mapProducer.send(new ProducerRecord<>(mapTopic, stockSlot, new MatchingSlotTarget(ownOrderEndpoint, false).encode()),
+            (metadata, exception) -> {
+                if (exception == null) {
+                    return;
+                }
+                log.log(Level.ERROR, "[매칭] 맵 전환 쓰기 실패, 다시 보냄: 종목 slot=" + stockSlot + " 원인=" + exception);
+                try {
+                    mapWriteRetryExecutor.schedule(() -> sendOwnEndpointAsync(stockSlot, generation),
+                        mapWriteRetryMillis, java.util.concurrent.TimeUnit.MILLISECONDS);
+                } catch (java.util.concurrent.RejectedExecutionException e) {
+                    // close() 뒤라 다시 보내지 않는다.
+                }
+            });
+    }
+
+    /** 패키지 가시성 — 시험이 다시 보내기 간격을 줄인다. */
+    void setMapWriteRetryMillis(long millis) {
+        this.mapWriteRetryMillis = millis;
     }
 
     public Set<Integer> currentSlotsSnapshot() {
@@ -196,6 +244,7 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
     }
 
     public void close() {
+        mapWriteRetryExecutor.shutdownNow();
         running = false;
         consumer.wakeup();
         try {
@@ -238,6 +287,8 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
                     ownedSlotFlags = updated;
                     partitions.forEach(p -> awaitingJournalConfirm.remove(p.partition()));
                     partitions.forEach(p -> awaitingLoad.remove(p.partition()));
+                    partitions.forEach(p -> awaitingMapSwitch.remove(p.partition()));
+                    partitions.forEach(p -> mapWriteGeneration.incrementAndGet(p.partition()));
                 }
                 if (slotEventRequests != null) {
                     partitions.forEach(p -> slotEventRequests.requestRelease(p.partition()));
@@ -308,6 +359,7 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
         if (!awaitingLoad.remove(stockSlot)) {
             return;
         }
+        awaitingMapSwitch.add(stockSlot);
         awaitingJournalConfirm.add(stockSlot);
         slotEventRequests.requestAcquire(stockSlot);
     }

@@ -157,6 +157,45 @@ class MatchingEngineBookLoadTest {
     }
 
     @Test
+    void 이미_호가창이_있는_종목_slot에_적재해도_주문이_두_번_쌓이지_않는다() throws Exception {
+        startEngine();
+        // 이 shard에 같은 종목의 호가창이 이미 있다(매수 1, 잔량 10). 적재하는 호가창에서는 매수 1의 잔량이 6이다.
+        engine.publishPlace(1L, 100L, STOCK, OrderSide.BUY, new BigDecimal("10000"), 10, Instant.now());
+
+        engine.publishBookLoad(TRANSFER_ID, HASHER.slotFor(STOCK), List.of(sourceBookBytes()));
+        engine.publishPlace(3L, 300L, STOCK, OrderSide.SELL, new BigDecimal("10000"), 30, Instant.now());
+        awaitFill();
+        Thread.sleep(100);
+
+        int filledAgainstBuyOne = fills.stream().filter(fill -> fill.buyOrderId() == 1L)
+            .mapToInt(FillResult::filledQuantity).sum();
+        assertEquals(6, filledAgainstBuyOne, "기존 호가창을 비우고 적재했으면 잔량 6만 체결된다(두 번 쌓이면 16)");
+    }
+
+    @Test
+    void 적재는_다른_종목_slot의_호가창을_비우지_않는다() throws Exception {
+        startEngine();
+        String otherSlotStock = stockInOtherSlot();
+        engine.publishPlace(11L, 100L, otherSlotStock, OrderSide.BUY, new BigDecimal("10000"), 10, Instant.now());
+
+        engine.publishBookLoad(TRANSFER_ID, HASHER.slotFor(STOCK), List.of(sourceBookBytes()));
+        engine.publishPlace(12L, 300L, otherSlotStock, OrderSide.SELL, new BigDecimal("10000"), 10, Instant.now());
+        awaitFill();
+
+        assertEquals(11L, fills.get(0).buyOrderId());
+    }
+
+    private static String stockInOtherSlot() {
+        for (int code = 1; code < 1000; code++) {
+            String candidate = String.format("%06d", code);
+            if (HASHER.slotFor(candidate) != HASHER.slotFor(STOCK)) {
+                return candidate;
+            }
+        }
+        throw new IllegalStateException("종목 slot이 다른 종목을 찾지 못했다");
+    }
+
+    @Test
     void 넘겼던_종목_slot을_다시_적재하면_그_종목의_주문이_다시_반영된다() throws Exception {
         startEngine();
         int slot = HASHER.slotFor(STOCK);
