@@ -2,8 +2,10 @@ package com.flab.stocktradingengine.matching.disruptor.handler;
 
 import com.lmax.disruptor.EventHandler;
 
+import com.flab.stocktradingengine.codec.EventType;
 import com.flab.stocktradingengine.codec.JournaledOrder;
 import com.flab.stocktradingengine.matching.disruptor.engine.OrderEvent;
+import com.flab.stocktradingengine.matching.disruptor.io.SlotEventListener;
 import com.flab.stocktradingengine.matching.disruptor.journal.Journal;
 
 /**
@@ -28,9 +30,15 @@ import com.flab.stocktradingengine.matching.disruptor.journal.Journal;
 public class JournalEventHandler implements EventHandler<OrderEvent> {
 
     private final Journal journal;
+    private final SlotEventListener slotEventListener;
 
     public JournalEventHandler(Journal journal) {
+        this(journal, SlotEventListener.NO_OP);
+    }
+
+    public JournalEventHandler(Journal journal, SlotEventListener slotEventListener) {
         this.journal = journal;
+        this.slotEventListener = slotEventListener;
     }
 
     @Override
@@ -38,6 +46,19 @@ public class JournalEventHandler implements EventHandler<OrderEvent> {
         if (event.isPositionOnly()) {
             // 위치만 담은 이벤트는 저널에 기록하지 않는다(11-10절). 매칭 핸들러가 읽을 저널 위치만 채운다.
             event.setJournaledPosition(journal.position());
+            return;
+        }
+        if (event.isSlotEvent()) {
+            // 종목 slot 받음·넘김은 주문과 같은 저널 스트림에 같은 순서로 기록한다(11-12절). 받음은 기록한 직후 알려,
+            // 주문 접수를 켜는 쪽이 저널에 남은 것을 확인한 뒤에 켜게 한다.
+            if (event.getType() == EventType.SLOT_ACQUIRED) {
+                journal.append(JournaledOrder.slotAcquired(event.getStockSlot()));
+                event.setJournaledPosition(journal.position());
+                slotEventListener.onSlotAcquiredJournaled(event.getStockSlot());
+            } else {
+                journal.append(JournaledOrder.slotReleased(event.getStockSlot()));
+                event.setJournaledPosition(journal.position());
+            }
             return;
         }
         // JournaledOrder(core.wire)는 OrderEvent(매칭 코어 전용 가변 슬롯)를 모르므로 여기서 직접 옮겨 담는다.

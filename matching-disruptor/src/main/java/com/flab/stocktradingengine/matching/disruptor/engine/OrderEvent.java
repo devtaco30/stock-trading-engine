@@ -47,6 +47,8 @@ public class OrderEvent {
     private long businessStartedAtNanos;
     // 거부한 주문의 위치만 담은 이벤트인지(11-4절 3항). true면 type은 null이고 sourcePosition·sourceSessionId만 의미가 있다.
     private boolean positionOnly;
+    // 종목 slot 받음·넘김 이벤트(U13)의 종목 slot 번호. type이 SLOT_ACQUIRED·SLOT_RELEASED일 때만 의미가 있다.
+    private int stockSlot;
 
     /**
      * 주문 접수 명령으로 슬롯을 채운다. sourcePosition·sourceSessionId 를 모르는 발행자(저널 replay,
@@ -108,6 +110,12 @@ public class OrderEvent {
         this.sourceSessionId = sourceSessionId;
     }
 
+    /** 종목 slot 받음·넘김 이벤트로 슬롯을 채운다. 호가창은 넘김 이벤트에서만 건드린다. */
+    public void setSlotEvent(EventType slotEventType, int stockSlot) {
+        this.type = slotEventType;
+        this.stockSlot = stockSlot;
+    }
+
     /** 주문 취소 명령으로 슬롯을 채운다. 취소는 orderId·stockCode 만 필요하다. */
     public void setCancel(long orderId, String stockCode) {
         this.type = EventType.CANCEL;
@@ -138,6 +146,15 @@ public class OrderEvent {
         this.ringClaimedAtNanos = 0L;
         this.businessStartedAtNanos = 0L;
         this.positionOnly = false;
+        this.stockSlot = 0;
+    }
+
+    public boolean isSlotEvent() {
+        return type == EventType.SLOT_ACQUIRED || type == EventType.SLOT_RELEASED;
+    }
+
+    public int getStockSlot() {
+        return stockSlot;
     }
 
     public boolean isPositionOnly() {

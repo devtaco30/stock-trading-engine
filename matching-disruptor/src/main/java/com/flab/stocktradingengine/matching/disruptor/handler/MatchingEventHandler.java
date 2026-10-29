@@ -2,6 +2,7 @@ package com.flab.stocktradingengine.matching.disruptor.handler;
 
 import java.lang.System.Logger;
 import java.lang.System.Logger.Level;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
@@ -10,6 +11,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import com.lmax.disruptor.EventHandler;
 
+import com.flab.stocktradingengine.aeron.StockSlotHasher;
 import com.flab.stocktradingengine.trading.matching.FillResult;
 import com.flab.stocktradingengine.trading.matching.OrderBook;
 import com.flab.stocktradingengine.trading.matching.OrderEntry;
@@ -19,6 +21,7 @@ import com.flab.stocktradingengine.matching.disruptor.engine.MatchingSegmentStag
 import com.flab.stocktradingengine.matching.disruptor.engine.OrderEvent;
 import com.flab.stocktradingengine.matching.disruptor.io.MatchListener;
 import com.flab.stocktradingengine.matching.disruptor.io.MatchingSnapshotSink;
+import com.flab.stocktradingengine.matching.disruptor.io.SlotEventListener;
 import com.flab.stocktradingengine.matching.disruptor.snapshot.MatchingSnapshot;
 import com.flab.stocktradingengine.matching.disruptor.snapshot.MatchingSnapshotCodec;
 import com.flab.stocktradingengine.matching.disruptor.snapshot.MatchingSnapshotFactory;
@@ -62,6 +65,8 @@ public class MatchingEventHandler implements EventHandler<OrderEvent> {
     // 저널 N건마다 러닝 중 스냅샷을 찍는다(I6 D1) — 계좌(AccountEventHandler)와 같은 임시값.
     // 매칭은 이벤트 성격이 달라(주문 유입) 빈도가 다를 수 있어 실측 재산정을 후속으로 남긴다.
     private static final long SNAPSHOT_INTERVAL_JOURNAL_ENTRIES = 10_000L;
+    // 종목 slot 개수 기본값(matching-shard.stock-slot-count의 기본값과 같다). 종목 slot을 모르는 기존 구성이 쓴다.
+    private static final int DEFAULT_STOCK_SLOT_COUNT = 64;
 
     // 종목코드 → 호가창. 단일 스레드만 접근하므로 일반 HashMap 으로 충분하다.
     // MatchingEngine 이 필드로 들고 있다가 넘겨준다 — recover(2c-2)가 새 핸들러 인스턴스로
@@ -73,6 +78,11 @@ public class MatchingEventHandler implements EventHandler<OrderEvent> {
     private final MatchingSnapshotSink snapshotSink;
     private final boolean snapshotTriggerEnabled;
     private final MatchingSnapshotCodec snapshotCodec = new MatchingSnapshotCodec();
+    private final StockSlotHasher stockSlotHasher;
+    private final SlotEventListener slotEventListener;
+    // 넘김 이벤트에 도달해 넘기는 중인 종목 slot. 이 slot의 종목은 이후 PLACE·CANCEL을 호가창에 반영하지 않는다(U13).
+    // 이 스레드만 접근한다. 비어 있으면 주문마다 종목 slot을 계산하지 않는다.
+    private final Set<Integer> handedOverSlots = new HashSet<>();
 
     // JournalEventHandler가 슬롯에 실어준 값(I6 U1) — 이 핸들러(소비자 스레드)만 읽는다.
     private long lastJournaledPosition;
@@ -105,6 +115,17 @@ public class MatchingEventHandler implements EventHandler<OrderEvent> {
     public MatchingEventHandler(Map<String, OrderBook> books, MatchListener listener,
                                 MatchingSnapshotSink snapshotSink, boolean snapshotTriggerEnabled,
                                 MatchingSegmentStages stages) {
+        this(books, listener, snapshotSink, snapshotTriggerEnabled, stages,
+            new StockSlotHasher(DEFAULT_STOCK_SLOT_COUNT), SlotEventListener.NO_OP);
+    }
+
+    /** 종목 slot 받음·넘김 이벤트(U13)를 처리하는 데 쓰는 종목 slot 변환기와 통지를 함께 받는다. */
+    public MatchingEventHandler(Map<String, OrderBook> books, MatchListener listener,
+                                MatchingSnapshotSink snapshotSink, boolean snapshotTriggerEnabled,
+                                MatchingSegmentStages stages,
+                                StockSlotHasher stockSlotHasher, SlotEventListener slotEventListener) {
+        this.stockSlotHasher = stockSlotHasher;
+        this.slotEventListener = slotEventListener;
         this.stages = stages;
         this.books = books;
         this.listener = listener;
@@ -124,6 +145,16 @@ public class MatchingEventHandler implements EventHandler<OrderEvent> {
             }
             return;
         }
+        if (event.isSlotEvent()) {
+            lastJournaledPosition = event.getJournaledPosition();
+            handleSlotEvent(event);
+            event.clear();
+            if (endOfBatch) {
+                notifyBooksChanged();
+            }
+            completeApplied();
+            return;
+        }
         if (stages.isEnabled()) {
             long businessStartedAtNanos = EpochNanos.now();
             event.setBusinessStartedAtNanos(businessStartedAtNanos);
@@ -131,8 +162,12 @@ public class MatchingEventHandler implements EventHandler<OrderEvent> {
         }
         lastJournaledPosition = event.getJournaledPosition();
         String stockCode = event.getStockCode();   // 아래 finally 에서 슬롯을 비우기 전에 읽어 둔다
+        boolean handedOver = isHandedOver(stockCode);
         try {
-            if (event.getType() == EventType.PLACE) {
+            if (handedOver) {
+                log.log(Level.WARNING, "[매칭] 넘기는 중인 종목 slot의 이벤트를 호가창에 반영하지 않음: type=" + event.getType()
+                    + " orderId=" + event.getOrderId() + " 종목=" + stockCode);
+            } else if (event.getType() == EventType.PLACE) {
                 handlePlace(event);
             } else if (event.getType() == EventType.CANCEL) {
                 handleCancel(event);
@@ -146,16 +181,48 @@ public class MatchingEventHandler implements EventHandler<OrderEvent> {
             // 슬롯 재사용 대비: 이 핸들러가 마지막 소비자이므로 처리 후 비운다.
             event.clear();
         }
-        if (stockCode != null) {
+        if (stockCode != null && !handedOver) {
             touchedInBatch.add(stockCode);
         }
         if (endOfBatch) {
             notifyBooksChanged();
         }
+        completeApplied();
+    }
+
+    /** 저널 적용 순번을 올리고, N건째면 러닝 중 스냅샷을 찍는다. 위치만 담은 이벤트는 이 경로를 지나지 않는다. */
+    private void completeApplied() {
         appliedSeq++;
         if (snapshotTriggerEnabled && appliedSeq % SNAPSHOT_INTERVAL_JOURNAL_ENTRIES == 0) {
             takeSnapshot();
         }
+    }
+
+    private boolean isHandedOver(String stockCode) {
+        return !handedOverSlots.isEmpty() && stockCode != null
+            && handedOverSlots.contains(stockSlotHasher.slotFor(stockCode));
+    }
+
+    /**
+     * 받음은 그 종목 slot을 넘기는 중 목록에서 뺀다(다시 받은 종목 slot은 주문을 반영한다). 넘김은 그 종목 slot에 속한
+     * 종목들의 호가창을 이 시점의 모습 그대로 찍어 인코딩하고, 넘기는 중 목록에 넣은 뒤 바이트를 통지한다.
+     * 호가창 자체를 지우는 일은 하지 않는다(넘기기가 끝난 뒤의 일).
+     */
+    private void handleSlotEvent(OrderEvent event) {
+        int stockSlot = event.getStockSlot();
+        if (event.getType() == EventType.SLOT_ACQUIRED) {
+            handedOverSlots.remove(stockSlot);
+            return;
+        }
+        Map<String, OrderBook> slotBooks = new HashMap<>();
+        for (Map.Entry<String, OrderBook> entry : books.entrySet()) {
+            if (stockSlotHasher.slotFor(entry.getKey()) == stockSlot) {
+                slotBooks.put(entry.getKey(), entry.getValue());
+            }
+        }
+        handedOverSlots.add(stockSlot);
+        byte[] bookBytes = snapshotCodec.encode(MatchingSnapshotFactory.capture(slotBooks, lastJournaledPosition));
+        slotEventListener.onSlotHandedOver(stockSlot, bookBytes);
     }
 
     /** 배치 끝에서 건드린 종목마다 한 번 알린다. 호가창이 없는 종목은 건너뛰고, listener 예외는 매칭을 멈추지 않게 삼킨다. */

@@ -15,12 +15,15 @@ import com.lmax.disruptor.dsl.Disruptor;
 import com.lmax.disruptor.dsl.ProducerType;
 import com.lmax.disruptor.util.DaemonThreadFactory;
 
+import com.flab.stocktradingengine.aeron.StockSlotHasher;
+import com.flab.stocktradingengine.codec.EventType;
 import com.flab.stocktradingengine.codec.JournaledOrder;
 import com.flab.stocktradingengine.matching.disruptor.handler.JournalEventHandler;
 import com.flab.stocktradingengine.matching.disruptor.handler.MatchingEventHandler;
 import com.flab.stocktradingengine.matching.disruptor.handler.MatchingExceptionHandler;
 import com.flab.stocktradingengine.matching.disruptor.io.MatchListener;
 import com.flab.stocktradingengine.matching.disruptor.io.MatchingSnapshotSink;
+import com.flab.stocktradingengine.matching.disruptor.io.SlotEventListener;
 import com.flab.stocktradingengine.matching.disruptor.journal.InMemoryJournal;
 import com.flab.stocktradingengine.matching.disruptor.journal.Journal;
 import com.flab.stocktradingengine.matching.disruptor.snapshot.MatchingSnapshot;
@@ -50,6 +53,9 @@ import com.flab.stocktradingengine.trading.matching.OrderEntry;
  * 대기 전략별 처리량 비교는 이후 단위에서 다룬다.</p>
  */
 public class MatchingEngine {
+
+    // 종목 slot 개수의 기본값. matching-worker의 matching-shard.stock-slot-count 기본값과 같다.
+    private static final int DEFAULT_STOCK_SLOT_COUNT = 64;
 
     private static final MatchListener NO_OP_LISTENER = (stockCode, fill) -> {};
 
@@ -97,6 +103,20 @@ public class MatchingEngine {
     /** 구간 분해 측정용 — 단계별 지연 등록부를 받는다(꺼진 등록부면 기존 동작과 같다). */
     public MatchingEngine(int bufferSize, WaitStrategy waitStrategy, MatchListener listener, Journal journal,
                           MatchingSnapshotSink snapshotSink, boolean snapshotTriggerEnabled, StageLatencyRegistry stageRegistry) {
+        this(bufferSize, waitStrategy, listener, journal, snapshotSink, snapshotTriggerEnabled, stageRegistry,
+            new StockSlotHasher(DEFAULT_STOCK_SLOT_COUNT), SlotEventListener.NO_OP);
+    }
+
+    /** 종목 slot 받음·넘김 이벤트(U13)를 처리하는 통지와 종목코드→종목 slot 변환기를 함께 받는다. */
+    public MatchingEngine(int bufferSize, WaitStrategy waitStrategy, MatchListener listener, Journal journal,
+                          StockSlotHasher stockSlotHasher, SlotEventListener slotEventListener) {
+        this(bufferSize, waitStrategy, listener, journal, NO_OP_SNAPSHOT_SINK, false, new StageLatencyRegistry(false),
+            stockSlotHasher, slotEventListener);
+    }
+
+    public MatchingEngine(int bufferSize, WaitStrategy waitStrategy, MatchListener listener, Journal journal,
+                          MatchingSnapshotSink snapshotSink, boolean snapshotTriggerEnabled, StageLatencyRegistry stageRegistry,
+                          StockSlotHasher stockSlotHasher, SlotEventListener slotEventListener) {
         this.stages = new MatchingSegmentStages(stageRegistry);
         this.journal = journal;
         ThreadFactory threadFactory = DaemonThreadFactory.INSTANCE;
@@ -111,8 +131,9 @@ public class MatchingEngine {
         // handleEventsWith 배선 전에 설정해야 이후 등록되는 모든 핸들러에 적용된다.
         this.disruptor.setDefaultExceptionHandler(new MatchingExceptionHandler());
         // 저널러가 먼저 기록 → 매처가 그 뒤에 매칭 (SequenceBarrier 로 게이팅)
-        this.matchingEventHandler = new MatchingEventHandler(books, listener, snapshotSink, snapshotTriggerEnabled, stages);
-        this.disruptor.handleEventsWith(new JournalEventHandler(journal)).then(matchingEventHandler);
+        this.matchingEventHandler = new MatchingEventHandler(books, listener, snapshotSink, snapshotTriggerEnabled, stages,
+            stockSlotHasher, slotEventListener);
+        this.disruptor.handleEventsWith(new JournalEventHandler(journal, slotEventListener)).then(matchingEventHandler);
     }
 
     /** 단계 측정 등록부를 받고 러닝 중 스냅샷 없이 생성한다 — 테스트·측정용. */
@@ -198,6 +219,10 @@ public class MatchingEngine {
         MatchingEventHandler recoveryHandler = new MatchingEventHandler(books, NO_OP_LISTENER);
         OrderEvent scratch = new OrderEvent();
         for (JournaledOrder order : entries) {
+            if (order.type() == EventType.SLOT_ACQUIRED || order.type() == EventType.SLOT_RELEASED) {
+                // 종목 slot 받음·넘김은 호가창을 바꾸지 않는다. 담당 목록을 복원하는 쪽이 따로 읽는다.
+                continue;
+            }
             applyToScratch(scratch, order);
             recoveryHandler.onEvent(scratch, 0L, false);
         }
@@ -316,6 +341,32 @@ public class MatchingEngine {
         try {
             OrderEvent event = ringBuffer.get(sequence);
             event.setPositionOnly(sourcePosition, sourceSessionId);
+        } finally {
+            ringBuffer.publish(sequence);
+        }
+    }
+
+    /**
+     * 종목 slot을 받았다는 이벤트를 링버퍼에 발행한다. 주문과 같은 프로듀서 thread에서만 불러야 한다
+     * ({@code ProducerType.SINGLE}). 저널에 기록되면 {@link SlotEventListener#onSlotAcquiredJournaled}가 불린다.
+     */
+    public void publishSlotAcquired(int stockSlot) {
+        publishSlotEvent(EventType.SLOT_ACQUIRED, stockSlot);
+    }
+
+    /**
+     * 종목 slot을 넘긴다는 이벤트를 링버퍼에 발행한다. 매칭 핸들러가 이 이벤트에 도달하면 그 종목 slot의 호가창 바이트를
+     * {@link SlotEventListener#onSlotHandedOver}로 내보내고 이후 그 종목 slot의 주문을 반영하지 않는다.
+     */
+    public void publishSlotReleased(int stockSlot) {
+        publishSlotEvent(EventType.SLOT_RELEASED, stockSlot);
+    }
+
+    private void publishSlotEvent(EventType slotEventType, int stockSlot) {
+        long sequence = ringBuffer.next();
+        try {
+            OrderEvent event = ringBuffer.get(sequence);
+            event.setSlotEvent(slotEventType, stockSlot);
         } finally {
             ringBuffer.publish(sequence);
         }
