@@ -41,5 +41,6 @@ check "종목 Y 주문이 담당 매칭 shard의 호가창에 있다" "$YS" "$Y"
 check "종목 X 주문이 다른 매칭 shard에는 없다" "$OTHER_X" "$X" 0
 check "종목 Y 주문이 다른 매칭 shard에는 없다" "$OTHER_Y" "$Y" 0
 
+report_send_failures
 [ "$OK" = 1 ] && RESULT=0
 exit "$RESULT"

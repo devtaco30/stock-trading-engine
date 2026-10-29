@@ -69,5 +69,6 @@ resting() { # <매칭 shard 번호> <종목>
 expect "종목 X는 전량 체결돼 담당 매칭 shard 호가창에 남은 주문이 없다" "0" "$(resting "$XS" "$X")"
 expect "종목 Y는 전량 체결돼 담당 매칭 shard 호가창에 남은 주문이 없다" "0" "$(resting "$YS" "$Y")"
 
+report_send_failures
 [ "$OK" = 1 ] && RESULT=0
 exit "$RESULT"

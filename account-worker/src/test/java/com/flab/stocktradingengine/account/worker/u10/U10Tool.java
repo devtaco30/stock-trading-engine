@@ -1,6 +1,7 @@
 package com.flab.stocktradingengine.account.worker.u10;
 
 import java.io.File;
+import java.io.PrintStream;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -13,6 +14,7 @@ import java.util.TreeMap;
 
 import org.agrona.CloseHelper;
 import org.agrona.concurrent.UnsafeBuffer;
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -86,28 +88,13 @@ public final class U10Tool {
     }
 
     private static void pick(String bootstrap, int stockSlotCount) {
-        Properties props = new Properties();
-        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrap);
-        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, IntegerDeserializer.class.getName());
-        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         Map<Integer, MatchingSlotTarget> targets = new HashMap<>();
-        try (KafkaConsumer<Integer, String> consumer = new KafkaConsumer<>(props)) {
-            List<PartitionInfo> infos = consumer.partitionsFor(MatchingDestinationResolver.MAP_TOPIC, Duration.ofSeconds(10));
-            List<TopicPartition> partitions = new ArrayList<>();
-            for (PartitionInfo info : infos) {
-                partitions.add(new TopicPartition(MatchingDestinationResolver.MAP_TOPIC, info.partition()));
-            }
-            consumer.assign(partitions);
-            consumer.seekToBeginning(partitions);
-            Map<TopicPartition, Long> ends = consumer.endOffsets(partitions);
-            long deadline = System.currentTimeMillis() + 10_000L;
-            while (System.currentTimeMillis() < deadline && !reachedEnds(consumer, partitions, ends)) {
-                for (ConsumerRecord<Integer, String> record : consumer.poll(Duration.ofMillis(200))) {
-                    if (record.value() == null) {
-                        targets.remove(record.key());
-                    } else {
-                        targets.put(record.key(), MatchingSlotTarget.parse(record.value()));
-                    }
+        try (KafkaConsumer<Integer, String> consumer = new KafkaConsumer<>(mapConsumerProperties(bootstrap))) {
+            for (MapRecord record : readMapTopic(consumer, MAP_READ_TIMEOUT_MILLIS, System.err)) {
+                if (record.value() == null) {
+                    targets.remove(record.slot());
+                } else {
+                    targets.put(record.slot(), MatchingSlotTarget.parse(record.value()));
                 }
             }
         }
@@ -135,42 +122,63 @@ public final class U10Tool {
     }
 
 
-    private record MapRecord(int slot, long timestamp, String timestampType, String value) {
+    static final long MAP_READ_TIMEOUT_MILLIS = 10_000L;
+
+    record MapRecord(int slot, long timestamp, String timestampType, String value) {
     }
 
-    private static List<MapRecord> readMapRecords(String bootstrap) {
+    private static Properties mapConsumerProperties(String bootstrap) {
         Properties props = new Properties();
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrap);
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, IntegerDeserializer.class.getName());
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+        return props;
+    }
+
+    private static List<MapRecord> readMapRecords(String bootstrap) {
+        try (KafkaConsumer<Integer, String> consumer = new KafkaConsumer<>(mapConsumerProperties(bootstrap))) {
+            return readMapTopic(consumer, MAP_READ_TIMEOUT_MILLIS, System.err);
+        }
+    }
+
+    /**
+     * 맵 토픽을 처음부터 읽어 기록을 순서대로 돌려준다. 제한 시간 안에 읽기 시작 시점의 끝까지 닿지 못하면 부분 결과를 돌려주되
+     * {@code err}에 WARN_PARTIAL_MAP_READ 줄을 남긴다(부분 결과가 이동이 안 된 것처럼 보이지 않게 스크립트가 이 줄을 찾는다).
+     */
+    static List<MapRecord> readMapTopic(Consumer<Integer, String> consumer, long timeoutMillis, PrintStream err) {
         List<MapRecord> records = new ArrayList<>();
-        try (KafkaConsumer<Integer, String> consumer = new KafkaConsumer<>(props)) {
-            List<PartitionInfo> infos = consumer.partitionsFor(MatchingDestinationResolver.MAP_TOPIC, Duration.ofSeconds(10));
-            if (infos == null || infos.isEmpty()) {
-                return records;
+        List<PartitionInfo> infos = consumer.partitionsFor(MatchingDestinationResolver.MAP_TOPIC, Duration.ofSeconds(10));
+        if (infos == null || infos.isEmpty()) {
+            return records;
+        }
+        List<TopicPartition> partitions = new ArrayList<>();
+        for (PartitionInfo info : infos) {
+            partitions.add(new TopicPartition(MatchingDestinationResolver.MAP_TOPIC, info.partition()));
+        }
+        consumer.assign(partitions);
+        consumer.seekToBeginning(partitions);
+        Map<TopicPartition, Long> ends = consumer.endOffsets(partitions);
+        long deadline = System.currentTimeMillis() + timeoutMillis;
+        while (System.currentTimeMillis() < deadline && !reachedEnds(consumer, partitions, ends)) {
+            for (ConsumerRecord<Integer, String> record : consumer.poll(Duration.ofMillis(200))) {
+                records.add(new MapRecord(record.key(), record.timestamp(), record.timestampType().name, record.value()));
             }
-            List<TopicPartition> partitions = new ArrayList<>();
-            for (PartitionInfo info : infos) {
-                partitions.add(new TopicPartition(MatchingDestinationResolver.MAP_TOPIC, info.partition()));
-            }
-            consumer.assign(partitions);
-            consumer.seekToBeginning(partitions);
-            Map<TopicPartition, Long> ends = consumer.endOffsets(partitions);
-            long deadline = System.currentTimeMillis() + 10_000L;
-            while (System.currentTimeMillis() < deadline && !reachedEnds(consumer, partitions, ends)) {
-                for (ConsumerRecord<Integer, String> record : consumer.poll(Duration.ofMillis(200))) {
-                    records.add(new MapRecord(record.key(), record.timestamp(), record.timestampType().name, record.value()));
-                }
-            }
-            if (!reachedEnds(consumer, partitions, ends)) {
-                // 10초 안에 맵 토픽의 끝까지 읽지 못했다. 부분 결과를 그대로 쓰면 이동이 안 된 것처럼 보일 수 있어 표준 오류에 경고를 남긴다.
-                System.err.println("WARN_PARTIAL_MAP_READ 10초 안에 " + MatchingDestinationResolver.MAP_TOPIC + "의 끝까지 읽지 못했다: 읽은 기록 "
-                    + records.size() + "건");
-            }
+        }
+        if (!reachedEnds(consumer, partitions, ends)) {
+            err.println("WARN_PARTIAL_MAP_READ " + timeoutMillis + "ms 안에 " + MatchingDestinationResolver.MAP_TOPIC
+                + "의 끝까지 읽지 못했다: 읽은 기록 " + records.size() + "건");
         }
         return records;
     }
 
+    static List<String> slotLines(int stockSlotCount, String... stockCodes) {
+        StockSlotHasher hasher = new StockSlotHasher(stockSlotCount);
+        List<String> lines = new ArrayList<>();
+        for (String stockCode : stockCodes) {
+            lines.add("SLOT " + stockCode + "=" + hasher.slotFor(stockCode));
+        }
+        return lines;
+    }
 
     private static void codesMany(int stockSlotCount, int splitSlot, int count) {
         StockSlotHasher hasher = new StockSlotHasher(stockSlotCount);
@@ -182,6 +190,26 @@ public final class U10Tool {
             }
         }
         System.out.println("HIGH=" + String.join(",", picked));
+    }
+
+    /** send-bulk의 종목 코드 목록과 선택 옵션 {@code --sentinel-buy=<계좌>:<가격>}(종목마다 매도 N건 뒤에 같은 Publication으로 보낼 표지 매수). */
+    record BulkTargets(List<String> stockCodes, long sentinelAccountId, long sentinelPrice) {
+    }
+
+    static BulkTargets parseBulkTargets(String[] args, int firstStockIndex) {
+        List<String> stockCodes = new ArrayList<>();
+        long sentinelAccountId = 0L;
+        long sentinelPrice = 0L;
+        for (int index = firstStockIndex; index < args.length; index++) {
+            if (args[index].startsWith("--sentinel-buy=")) {
+                String[] parts = args[index].substring("--sentinel-buy=".length()).split(":");
+                sentinelAccountId = Long.parseLong(parts[0]);
+                sentinelPrice = Long.parseLong(parts[1]);
+            } else {
+                stockCodes.add(args[index]);
+            }
+        }
+        return new BulkTargets(stockCodes, sentinelAccountId, sentinelPrice);
     }
 
     private static void sendBulk(String[] args) throws Exception {
@@ -210,8 +238,8 @@ public final class U10Tool {
             UnsafeBuffer buffer = new UnsafeBuffer(new byte[256]);
             long started = System.currentTimeMillis();
             int sent = 0;
-            for (int stockIndex = 7; stockIndex < args.length; stockIndex++) {
-                String stockCode = args[stockIndex];
+            BulkTargets targets = parseBulkTargets(args, 7);
+            for (String stockCode : targets.stockCodes()) {
                 for (int i = 0; i < perStock; i++) {
                     DecodedAccountOrder order = new DecodedAccountOrder(side, accountId, stockCode,
                         BigDecimal.valueOf(firstPrice + i), 1, prefix + "-" + stockCode + "-" + i, EpochNanos.now());
@@ -226,6 +254,21 @@ public final class U10Tool {
                         Thread.sleep(1);
                     }
                     sent++;
+                }
+                if (targets.sentinelAccountId() != 0L) {
+                    // 같은 Publication으로 이 종목의 매도 N건 바로 뒤에 보내므로, 이 매수가 체결되면 앞선 N건이 호가창에 들어간 것이다.
+                    DecodedAccountOrder sentinel = new DecodedAccountOrder(OrderSide.BUY, targets.sentinelAccountId(), stockCode,
+                        BigDecimal.valueOf(targets.sentinelPrice()), 1, prefix + "-sentinel-" + stockCode, EpochNanos.now());
+                    int sentinelLength = codec.encode(buffer, 0, sentinel);
+                    long sentinelDeadline = System.currentTimeMillis() + 30_000L;
+                    while (publication.offer(buffer, 0, sentinelLength) < 0) {
+                        if (System.currentTimeMillis() > sentinelDeadline) {
+                            System.out.println("OFFER_FAILED sentinel sent=" + sent);
+                            System.exit(3);
+                        }
+                        Thread.sleep(1);
+                    }
+                    System.out.println("SENTINEL " + stockCode);
                 }
             }
             System.out.println("SENT_BULK " + sent + " elapsedMs=" + (System.currentTimeMillis() - started));
@@ -273,10 +316,7 @@ public final class U10Tool {
     }
 
     private static void slotOf(int stockSlotCount, String[] stockCodes) {
-        StockSlotHasher hasher = new StockSlotHasher(stockSlotCount);
-        for (String stockCode : stockCodes) {
-            System.out.println("SLOT " + stockCode + "=" + hasher.slotFor(stockCode));
-        }
+        slotLines(stockSlotCount, stockCodes).forEach(System.out::println);
     }
 
     private static void mapHistory(String bootstrap) {
@@ -285,7 +325,7 @@ public final class U10Tool {
         }
     }
 
-    private static boolean reachedEnds(KafkaConsumer<Integer, String> consumer, List<TopicPartition> partitions,
+    private static boolean reachedEnds(Consumer<Integer, String> consumer, List<TopicPartition> partitions,
                                        Map<TopicPartition, Long> ends) {
         for (TopicPartition partition : partitions) {
             if (consumer.position(partition) < ends.get(partition)) {

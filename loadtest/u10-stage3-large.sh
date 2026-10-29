@@ -11,6 +11,7 @@ source loadtest/u10/lib.sh
 trap cleanup EXIT
 
 N=${1:?종목당 대기 매도 주문 수를 인자로 준다}
+[ "$N" -ge 2 ] || { echo "종목당 대기 매도 주문은 2건 이상이어야 한다(표지 매수와 이동 뒤 매수가 각각 1건씩 체결된다)" >&2; exit 1; }
 MOVING_STOCKS=3
 OK=1
 expect() { # <설명> <기대> <실제>
@@ -46,20 +47,16 @@ for stock in $STOCKS; do SEED_ARGS+=(--account-worker.seed-accounts[1].holdings.
 start_account "${SEED_ARGS[@]}"
 
 # 대기 매도 주문을 대량으로 쌓는다.
-BULK=$(tool send-bulk aeron:udp?endpoint=localhost:20040 90002 SELL 20000 "$N" u10-big $STOCKS | grep -E "^(SENT_BULK|OFFER_FAILED|NOT_CONNECTED)" | tail -1)
+BULK=$(tool send-bulk aeron:udp?endpoint=localhost:20040 90002 SELL 20000 "$N" u10-big $STOCKS --sentinel-buy=90001:20000 | grep -E "^(SENT_BULK|OFFER_FAILED|NOT_CONNECTED)" | tail -1)
 echo "$BULK"
 echo "$BULK" | grep -q "^SENT_BULK" || { fail "대량 매도 주문을 보내지 못했다: $BULK"; exit 1; }
-# 이동 전에 호가창에 N건이 모두 들어갔는지 확인한다. 종목마다 가장 싼 매도 1건(20,000원)을 사는 표지 매수를 보내고, 그 체결이 계좌 로그에
-# 나타나기를 기다린다. 같은 종목의 주문은 한 줄로 도착 순서대로 처리되므로 표지 매수가 체결됐다면 앞서 보낸 N건이 모두 호가창에 들어간 것이다.
-for stock in $STOCKS; do send_order 90001 "$stock" BUY 20000 1 "u10-big-sentinel-$stock"; done
-FILLED=0
-for _ in $(seq 1 300); do
-    FILLED=$(grep -c "체결 반영: accountId=90001 " "$LOG_DIR/account.log" || true)
-    [ "$FILLED" -ge "$MOVING_STOCKS" ] && break
-    sleep 2
-done
+# 이동 전에 호가창에 매도 N건이 모두 들어갔는지 확인한다. send-bulk가 종목마다 매도 N건 바로 뒤에 같은 Publication으로 표지 매수(20,000원 1주)를
+# 보냈으므로(Aeron은 한 Publication 안의 도착 순서를 지킨다), 그 체결이 계좌 로그에 applied=true로 나타났다면 앞선 N건이 호가창에 들어간 것이다.
+# 표지가 매도 1건을 사가므로 이동하는 호가창은 종목마다 N-1건이다.
+FILLED=$(wait_for_applied_fills "$LOG_DIR/account.log" 90001 "$MOVING_STOCKS" 300 2)
 expect "이동 전에 종목마다 대기 매도 ${N}건이 호가창에 들어갔다(표지 매수 체결 ${MOVING_STOCKS}건)" "$MOVING_STOCKS" "$FILLED"
 [ "$FILLED" -ge "$MOVING_STOCKS" ] || { fail "이동 전에 호가창이 다 차지 않았다(600초 상한)"; exit 1; }
+echo "이동하는 호가창: 종목마다 $((N - 1))건"
 
 # pod 1 합류 → 이동이 끝날 때까지 대기
 start_app matching-1 "$MATCHING_JAR" loadtest/u10/u10-matching-1.yml

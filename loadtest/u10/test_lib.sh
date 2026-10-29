@@ -20,6 +20,18 @@ check "OFFER_FAILED와 NOT_CONNECTED를 실패로 센다" "2" "$(send_failure_co
 FAKE_TOOL_OUTPUT=""; send_order 1 000001 BUY 1 1 d > /dev/null
 check "출력이 비어도 실패로 센다" "3" "$(send_failure_count)"
 
+# wait_for_applied_fills <로그> <계좌> <기대 건수> <시도 횟수> <간격 초>: applied=true인 체결 반영 줄만 센다
+FILLS_LOG="$WORK/account.log"
+cat > "$FILLS_LOG" <<'LOG'
+INFO [계좌 워커] 체결 반영: accountId=90001 orderId=1 tradeId=10 applied=true
+INFO [계좌 워커] 체결 반영: accountId=90001 orderId=1 tradeId=10 applied=false
+INFO [계좌 워커] 체결 반영: accountId=90002 orderId=2 tradeId=10 applied=true
+INFO [계좌 워커] 체결 반영: accountId=90001 orderId=3 tradeId=11 applied=true
+LOG
+check "applied=false와 다른 계좌의 줄은 세지 않는다" "2" "$(wait_for_applied_fills "$FILLS_LOG" 90001 3 3 0.05)"
+echo 'INFO [계좌 워커] 체결 반영: accountId=90001 orderId=4 tradeId=12 applied=true' >> "$FILLS_LOG"
+check "기대 건수에 닿으면 바로 그 건수를 돌려준다" "3" "$(wait_for_applied_fills "$FILLS_LOG" 90001 3 3 0.05)"
+
 rm -rf "$WORK"
 echo "통과 ${PASS}건, 실패 ${FAIL}건"
 [ "$FAIL" = 0 ]

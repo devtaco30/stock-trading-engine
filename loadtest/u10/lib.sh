@@ -104,6 +104,18 @@ send_order() { # <계좌> <종목> <BUY|SELL> <가격> <수량> <requestId>
     case "$result" in SENT*) ;; *) echo "$6: ${result:-출력 없음}" >> "$WORK/send-failures";; esac
 }
 
+# wait_for_applied_fills <계좌 로그> <계좌 번호> <기대 건수> <시도 횟수> <간격 초> — 그 계좌의 「체결 반영」 줄 중 applied=true만 세어
+# 기대 건수에 닿으면 바로, 못 닿으면 시도를 모두 쓴 뒤 센 건수를 출력한다. applied=false는 같은 체결이 중복 도착한 것이라 세지 않는다.
+wait_for_applied_fills() {
+    local log="$1" account="$2" expected="$3" attempts="$4" interval="$5" count=0 _
+    for _ in $(seq 1 "$attempts"); do
+        count=$(grep -c "체결 반영: accountId=${account} .*applied=true" "$log" || true)
+        [ "$count" -ge "$expected" ] && break
+        sleep "$interval"
+    done
+    echo "$count"
+}
+
 send_failure_count() { if [ -f "$WORK/send-failures" ]; then grep -c . "$WORK/send-failures"; else echo 0; fi; }
 
 report_send_failures() {
