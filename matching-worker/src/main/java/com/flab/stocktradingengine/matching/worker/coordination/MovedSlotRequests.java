@@ -5,4 +5,8 @@ package com.flab.stocktradingengine.matching.worker.coordination;
 public interface MovedSlotRequests {
 
     void requestHandover(int stockSlot);
+
+    /** 진행 중이던 요청을 취소한다. 그 요청의 응답은 버려진다. 이동으로 받는 도중 종목 slot이 회수되었을 때 부른다. */
+    default void cancelHandover(int stockSlot) {
+    }
 }

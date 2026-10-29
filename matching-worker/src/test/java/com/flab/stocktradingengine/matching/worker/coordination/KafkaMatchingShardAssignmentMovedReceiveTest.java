@@ -106,22 +106,23 @@ class KafkaMatchingShardAssignmentMovedReceiveTest {
     }
 
     @Test
-    void 맵의_이동_중_항목이_자기_주소이면_이동이_아니라_재시작으로_보고_평상시_값으로_되돌린다() {
+    void 맵의_이동_중_항목이_자기_주소이면_이동이_아니라_재시작으로_보고_담당이_켜진_뒤에_평상시_값으로_되돌린다() throws Exception {
         mapEntry = Optional.of(new MatchingSlotTarget(OWN, true));
 
         listener.onPartitionsAssigned(partitions(5));
 
         assertThat(handoverRequested).isEmpty();
-        assertThat(mapProducer.history()).hasSize(1);
-        assertThat(mapProducer.history().get(0).value()).isEqualTo(OWN);
+        assertThat(mapProducer.history()).as("담당이 켜지기 전에는 평상시 값을 올리지 않는다(담당이 꺼진 동안 맵만 평상시이면 주문이 거부 회신으로 돌아온다)").isEmpty();
         assertThat(requests.drainTo(engine)).isEqualTo(1);
         assertThat(assignment.test(5)).isFalse();
         assignment.confirmAcquired(5);
         assertThat(assignment.test(5)).isTrue();
+        awaitHistory(1);
+        assertThat(mapProducer.history().get(0).value()).isEqualTo(OWN);
     }
 
     @Test
-    void 정상_종료가_맵에_남긴_값을_같은_shard가_재시작해_받으면_자기_호가창을_그대로_쓰고_담당이_켜진다() {
+    void 정상_종료가_맵에_남긴_값을_같은_shard가_재시작해_받으면_자기_호가창을_그대로_쓰고_담당이_켜진다() throws Exception {
         // 정상 종료: 컨슈머가 닫히며 맡은 종목 slot 전체에 회수 콜백이 불린다. 그 값이 실제로 맵에 올라간 값이다.
         listener.onPartitionsRevoked(partitions(5, 6));
         String leftInMap = mapProducer.history().get(0).value();
@@ -141,12 +142,13 @@ class KafkaMatchingShardAssignmentMovedReceiveTest {
             restartedAssignment.rebalanceListener().onPartitionsAssigned(partitions(5, 6));
 
             assertThat(handoverRequested).as("자기 자신의 응답을 기다리면 안 된다").isEmpty();
-            assertThat(mapProducer.history()).extracting(record -> record.value()).containsOnly(OWN);
             assertThat(restartedRequests.drainTo(restarted)).isEqualTo(2);
             restartedAssignment.confirmAcquired(5);
             restartedAssignment.confirmAcquired(6);
             assertThat(restartedAssignment.test(5)).isTrue();
             assertThat(restartedAssignment.test(6)).isTrue();
+            awaitHistory(2);
+            assertThat(mapProducer.history()).extracting(record -> record.value()).containsOnly(OWN);
         } finally {
             restarted.shutdown();
         }
@@ -166,6 +168,14 @@ class KafkaMatchingShardAssignmentMovedReceiveTest {
 
     private static List<TopicPartition> partitions(int... slots) {
         return java.util.Arrays.stream(slots).mapToObj(slot -> new TopicPartition("assignment-topic", slot)).toList();
+    }
+
+    private void awaitHistory(int size) throws InterruptedException {
+        long deadline = System.nanoTime() + 3_000_000_000L;
+        while (mapProducer.history().size() < size && System.nanoTime() < deadline) {
+            Thread.sleep(5);
+        }
+        assertThat(mapProducer.history()).hasSizeGreaterThanOrEqualTo(size);
     }
 
     private void awaitJournalSize(int size) throws InterruptedException {

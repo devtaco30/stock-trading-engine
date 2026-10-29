@@ -27,6 +27,8 @@ import com.flab.stocktradingengine.matching.disruptor.engine.MatchingEngine;
 import com.flab.stocktradingengine.matching.disruptor.io.SlotEventRequests;
 import com.flab.stocktradingengine.matching.worker.coordination.HandoverEndpointPool;
 import com.flab.stocktradingengine.matching.worker.coordination.KafkaMatchingShardAssignment;
+import com.flab.stocktradingengine.matching.worker.coordination.MapCatchUpWaiter;
+import com.flab.stocktradingengine.matching.worker.coordination.MapSync;
 import com.flab.stocktradingengine.matching.worker.coordination.MatchingSlotMapReader;
 import com.flab.stocktradingengine.matching.worker.handover.HandoverBookStore;
 import com.flab.stocktradingengine.matching.worker.handover.HandoverCleanupTrigger;
@@ -91,6 +93,53 @@ public class MatchingHandoverConfig {
         HandoverCleanupTrigger trigger = new HandoverCleanupTrigger(ownChannel, store, slotEventRequests::requestCleanup);
         reader.addListener(trigger::onMapChange);
         return trigger;
+    }
+
+    /**
+     * 배정 콜백이 이동으로 받는지 판정하기 전에 맵 읽기가 맵 토픽의 끝까지 따라오기를 기다리는 장치. 기다리는 한도는
+     * {@code matching-shard.coordination.map-decision-timeout-ms}(기본 10초, 근거 없는 임의 값)이다.
+     */
+    @Bean(destroyMethod = "close")
+    public MapSyncResources matchingMapSync(
+            MatchingSlotMapReader reader, @Value("${spring.kafka.bootstrap-servers}") String bootstrapServers,
+            @Value("${matching-shard.coordination.map-decision-timeout-ms:10000}") long timeoutMillis) {
+        org.apache.kafka.clients.admin.Admin admin = org.apache.kafka.clients.admin.Admin.create(
+            java.util.Map.of(org.apache.kafka.clients.admin.AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers));
+        org.apache.kafka.common.TopicPartition partition = new org.apache.kafka.common.TopicPartition(
+            KafkaMatchingShardAssignment.MAP_TOPIC, 0);
+        java.util.function.LongSupplier endOffset = () -> {
+            try {
+                return admin.listOffsets(java.util.Map.of(partition, org.apache.kafka.clients.admin.OffsetSpec.latest()))
+                    .partitionResult(partition).get().offset();
+            } catch (java.util.concurrent.ExecutionException e) {
+                throw new IllegalStateException("맵 토픽 끝 위치 조회 실패", e);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException("맵 토픽 끝 위치 조회 중 인터럽트됨", e);
+            }
+        };
+        return new MapSyncResources(new MapCatchUpWaiter(endOffset, () -> reader.consumedOffset(0), timeoutMillis), admin);
+    }
+
+    /** 판정 대기 장치와 그것이 쓰는 Admin을 같이 닫기 위한 묶음. */
+    public static final class MapSyncResources implements AutoCloseable, MapSync {
+        private final MapSync delegate;
+        private final org.apache.kafka.clients.admin.Admin admin;
+
+        MapSyncResources(MapSync delegate, org.apache.kafka.clients.admin.Admin admin) {
+            this.delegate = delegate;
+            this.admin = admin;
+        }
+
+        @Override
+        public boolean awaitCaughtUp() {
+            return delegate.awaitCaughtUp();
+        }
+
+        @Override
+        public void close() {
+            admin.close();
+        }
     }
 
     @Bean
@@ -159,7 +208,7 @@ public class MatchingHandoverConfig {
 
     @Bean
     public HandoverCoordinator handoverCoordinator(HandoverRequester requester) {
-        return new HandoverCoordinator(requester::request);
+        return new HandoverCoordinator(requester::request, requester::cancel);
     }
 
     @Bean

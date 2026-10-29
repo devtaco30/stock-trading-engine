@@ -81,6 +81,13 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
     // 맵을 읽어 이동으로 받는 종목 slot인지 판단하는 함수와 이전 담당에게 호가창을 요청하는 쪽. 둘 다 null이면 이동 처리를 하지 않는다.
     private final IntFunction<Optional<MatchingSlotTarget>> mapLookup;
     private final MovedSlotRequests movedSlotRequests;
+    // 맵 읽기가 맵 토픽의 끝까지 따라올 때까지 기다리는 함수와 판정을 맡는 executor. mapSync가 null이면 기다리지 않고, executor가 null이면 콜백 thread에서 바로 판정한다.
+    private final MapSync mapSync;
+    private final java.util.concurrent.Executor decisionExecutor;
+    // 배정을 받았고 이동으로 받는지 첫 배정인지 판정을 기다리는 종목 slot. 그 사이 회수되면 빠진다.
+    private final java.util.Set<Integer> awaitingDecision = ConcurrentHashMap.newKeySet();
+    // 이동으로 받는 종목 slot 중 호가창 적재가 끝나 받음 요청을 남겼고 담당이 켜지기를 기다리는 것. 그 사이 회수되면 맵을 쓰지 않는다.
+    private final java.util.Set<Integer> movedInAcquiring = ConcurrentHashMap.newKeySet();
     // 이동으로 받기로 하고 호가창 적재와 스냅샷 확정을 기다리는 종목 slot. 그 사이 회수되면 빠진다.
     private final java.util.Set<Integer> awaitingLoad = ConcurrentHashMap.newKeySet();
     // 적재가 끝나 담당 표시가 켜지기를 기다리는, 이동으로 받은 종목 slot. 켜진 직후 맵을 자기 주소의 평상시 값으로 바꾼다(U16a).
@@ -131,6 +138,24 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
                                         String assignmentTopic, String mapTopic, SlotEventRequests slotEventRequests,
                                         IntFunction<Optional<MatchingSlotTarget>> mapLookup,
                                         MovedSlotRequests movedSlotRequests) {
+        this(consumer, mapProducer, adminClient, stockSlotCount, ownOrderEndpoint, assignmentTopic, mapTopic,
+            slotEventRequests, mapLookup, movedSlotRequests, null, null);
+    }
+
+    /**
+     * @param mapSync 판정 전에 맵 읽기가 맵 토픽의 끝까지 따라올 때까지 기다리는 함수. 시간 안에 못 따라오면 false를 돌려주고, 그러면 첫
+     *     배정으로 가정하지 않고 담당을 켜지 않은 채 ERROR 로그를 남긴다. null이면 기다리지 않는다.
+     * @param decisionExecutor 판정을 실행할 executor. 배정 콜백은 판정 요청만 남기고 돌아간다(콜백 시간 상한에 들어가지 않는다).
+     *     null이면 콜백 thread에서 바로 판정한다.
+     */
+    public KafkaMatchingShardAssignment(Consumer<String, String> consumer, Producer<Integer, String> mapProducer,
+                                        Admin adminClient, int stockSlotCount, String ownOrderEndpoint,
+                                        String assignmentTopic, String mapTopic, SlotEventRequests slotEventRequests,
+                                        IntFunction<Optional<MatchingSlotTarget>> mapLookup,
+                                        MovedSlotRequests movedSlotRequests, MapSync mapSync,
+                                        java.util.concurrent.Executor decisionExecutor) {
+        this.mapSync = mapSync;
+        this.decisionExecutor = decisionExecutor;
         this.mapLookup = mapLookup;
         this.movedSlotRequests = movedSlotRequests;
         this.slotEventRequests = slotEventRequests;
@@ -186,6 +211,7 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
             updated[stockSlot] = true;
             ownedSlotFlags = updated;
             switchMapAfterAcquire = awaitingMapSwitch.remove(stockSlot);
+            movedInAcquiring.remove(stockSlot);
             generation = mapWriteGeneration.get(stockSlot);
         }
         if (switchMapAfterAcquire) {
@@ -309,85 +335,160 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
         }
     }
 
-    /**
-     * 회수된 종목 slot은 맵 토픽에 이 매칭 shard의 주소에 이동 중 표시를 붙인 값({@code 주소;moving})으로 올리고
-     * (지우지 않는다. 새 담당이 이전 담당의 주소를 맵에서 알아야 한다, 10-2절 수정본), 배정된 종목 slot은 이 매칭 shard의 주문 입구 주소로
-     * 올린다. 회수 쪽 발행을 동기로({@code get()}) 하는 이유는, 새 담당의 주소 발행보다 이 이동 중 표시가 나중에
-     * 브로커에 써져 새 값을 지우는 순서 역전을 막기 위해서다. 협력 방식에서는 두 콜백이 옮겨지는
-     * 종목 slot만 받는다.
-     */
     ConsumerRebalanceListener rebalanceListener() {
         return new ConsumerRebalanceListener() {
             @Override
             public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+                List<TopicPartition> writeMoving = new java.util.ArrayList<>();
+                List<Integer> cancel = new java.util.ArrayList<>();
+                List<Integer> cleanup = new java.util.ArrayList<>();
+                List<Integer> release = new java.util.ArrayList<>();
                 synchronized (KafkaMatchingShardAssignment.this) {
                     boolean[] updated = ownedSlotFlags.clone();
-                    partitions.forEach(p -> updated[p.partition()] = false);
+                    for (TopicPartition partition : partitions) {
+                        int slot = partition.partition();
+                        updated[slot] = false;
+                        mapWriteGeneration.incrementAndGet(slot);
+                        boolean wasDeciding = awaitingDecision.remove(slot);
+                        boolean wasLoading = awaitingLoad.remove(slot);
+                        boolean wasAcquiringMovedIn = movedInAcquiring.remove(slot);
+                        awaitingJournalConfirm.remove(slot);
+                        awaitingMapSwitch.remove(slot);
+                        if (wasDeciding) {
+                            continue; // 판정 전에 회수되었다. 한 일이 없다.
+                        }
+                        if (wasLoading || wasAcquiringMovedIn) {
+                            // 이동으로 받는 도중 담당이 되기 전에 회수되었다. 맵은 이전 담당의 「주소;moving」 그대로 두어 다음 담당이 이전 담당에게
+                            // 요청하게 한다(자기 주소의 이동 중 값으로 덮으면 호가창 없는 이 shard에 요청이 간다). 진행 중이던 요청의 응답은 버리고,
+                            // 적재가 끝나 있었다면 그 호가창은 복사본이므로 정리로 지운다. 받음 항목을 이미 요청했다면 저널이 맞도록 넘김 항목도 남긴다.
+                            cancel.add(slot);
+                            cleanup.add(slot);
+                            if (wasAcquiringMovedIn) {
+                                release.add(slot);
+                            }
+                        } else {
+                            release.add(slot);
+                            writeMoving.add(partition);
+                        }
+                    }
                     ownedSlotFlags = updated;
-                    partitions.forEach(p -> awaitingJournalConfirm.remove(p.partition()));
-                    partitions.forEach(p -> awaitingLoad.remove(p.partition()));
-                    partitions.forEach(p -> awaitingMapSwitch.remove(p.partition()));
-                    partitions.forEach(p -> mapWriteGeneration.incrementAndGet(p.partition()));
+                }
+                if (movedSlotRequests != null) {
+                    cancel.forEach(movedSlotRequests::cancelHandover);
                 }
                 if (slotEventRequests != null) {
-                    partitions.forEach(p -> slotEventRequests.requestRelease(p.partition()));
+                    cleanup.forEach(slotEventRequests::requestCleanup);
+                    release.forEach(slotEventRequests::requestRelease);
                 }
-                publishMapEntries(partitions, new MatchingSlotTarget(ownOrderEndpoint, true).encode());
+                publishMapEntries(writeMoving, new MatchingSlotTarget(ownOrderEndpoint, true).encode());
                 log.log(Level.WARNING, "[매칭] 담당 종목 slot 회수: " + slotNumbers(partitions)
-                    + " 남은 담당=" + currentSlotsSnapshot().size() + "개");
+                    + " 맵에 이동 중 표시=" + slotNumbers(writeMoving) + " 남은 담당=" + currentSlotsSnapshot().size() + "개");
             }
 
             @Override
             public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
-                List<TopicPartition> firstAssigned = new java.util.ArrayList<>();
-                for (TopicPartition partition : partitions) {
-                    if (isMovedIn(partition.partition())) {
-                        // 이전 담당이 넘기는 중인 종목 slot이다. 맵은 호가창 적재가 끝날 때까지 이동 중으로 남기므로 자기 주소를
-                        // 올리지 않고, 호가창을 요청하며, 적재와 스냅샷 확정이 끝나기 전에는 담당 표시를 켜지 않는다.
-                        awaitingLoad.add(partition.partition());
-                        movedSlotRequests.requestHandover(partition.partition());
-                    } else {
-                        firstAssigned.add(partition);
-                    }
+                List<Integer> slots = partitions.stream().map(TopicPartition::partition).toList();
+                if (mapLookup == null || movedSlotRequests == null || slotEventRequests == null) {
+                    assignWithoutMoveSupport(partitions);
+                    return;
                 }
-                if (slotEventRequests == null) {
-                    synchronized (KafkaMatchingShardAssignment.this) {
-                        boolean[] updated = ownedSlotFlags.clone();
-                        firstAssigned.forEach(p -> updated[p.partition()] = true);
-                        ownedSlotFlags = updated;
-                    }
+                // 판정은 맵 읽기가 맵 토픽의 끝까지 따라온 뒤에 한다. 이전 담당의 이동 중 값이 아직 읽는 쪽에 도착하지 않았는데 항목 없음으로
+                // 보고 첫 배정으로 가정하면 빈 호가창으로 담당을 켜고 평상시 값을 올려 이전 담당이 진짜 호가창을 지우게 된다. 콜백은 판정 요청만
+                // 남기고 돌아간다.
+                awaitingDecision.addAll(slots);
+                Runnable decision = () -> decide(slots);
+                if (decisionExecutor == null) {
+                    decision.run();
                 } else {
-                    firstAssigned.forEach(p -> {
-                        awaitingJournalConfirm.add(p.partition());
-                        slotEventRequests.requestAcquire(p.partition());
-                    });
+                    decisionExecutor.execute(decision);
                 }
-                if (!firstAssigned.isEmpty()) {
-                    publishMapEntries(firstAssigned, ownOrderEndpoint);
-                }
-                log.log(Level.INFO, "[매칭] 담당 종목 slot 배정: 신규=" + slotNumbers(firstAssigned) + " 이동으로 받는 중="
-                    + awaitingLoad + " 전체 담당=" + currentSlotsSnapshot().size() + "개");
             }
         };
     }
 
-    /** 맵의 그 종목 slot 항목이 이동 중이면 이동으로 받는 것이다. 이동 중이 아닌 항목이나 항목 없음은 첫 배정으로 본다. */
-    private boolean isMovedIn(int stockSlot) {
-        if (mapLookup == null || movedSlotRequests == null) {
-            return false;
+    /** 이동 처리를 쓰지 않는 구성(요청 통로나 맵 읽기를 받지 않은 구성)의 배정: 모든 종목 slot을 첫 배정으로 본다. */
+    private void assignWithoutMoveSupport(Collection<TopicPartition> partitions) {
+        if (slotEventRequests == null) {
+            synchronized (this) {
+                boolean[] updated = ownedSlotFlags.clone();
+                partitions.forEach(p -> updated[p.partition()] = true);
+                ownedSlotFlags = updated;
+            }
+        } else {
+            partitions.forEach(p -> {
+                awaitingJournalConfirm.add(p.partition());
+                slotEventRequests.requestAcquire(p.partition());
+            });
         }
+        if (!partitions.isEmpty()) {
+            publishMapEntries(partitions, ownOrderEndpoint);
+        }
+        log.log(Level.INFO, "[매칭] 담당 종목 slot 배정: 신규=" + slotNumbers(partitions) + " 전체 담당=" + currentSlotsSnapshot().size() + "개");
+    }
+
+    private enum Kind { MOVED_IN, SELF_RESTART, FIRST }
+
+    /** 판정 thread에서 돈다. 맵 읽기가 따라온 뒤 종목 slot마다 이동으로 받는지, 재시작인지, 첫 배정인지 가른다. */
+    private void decide(List<Integer> slots) {
+        if (mapSync != null && !mapSync.awaitCaughtUp()) {
+            log.log(Level.ERROR, "[매칭] 맵 읽기가 시간 안에 맵 토픽의 끝까지 따라오지 못해 이동으로 받는지 판정하지 못함 — "
+                + "첫 배정으로 가정하지 않고 담당을 켜지 않은 채 둔다: 종목 slot=" + slots);
+            return;
+        }
+        List<Integer> toRequest = new java.util.ArrayList<>();
+        List<Integer> toAcquire = new java.util.ArrayList<>();
+        List<TopicPartition> firstAssigned = new java.util.ArrayList<>();
+        synchronized (this) {
+            for (int slot : slots) {
+                if (!awaitingDecision.remove(slot)) {
+                    continue; // 판정 전에 회수되었다.
+                }
+                switch (classify(slot)) {
+                    case MOVED_IN -> {
+                        // 이전 담당이 넘기는 중인 종목 slot이다. 맵은 호가창 적재가 끝날 때까지 이동 중으로 남기므로 자기 주소를 올리지 않고,
+                        // 호가창을 요청하며, 적재와 스냅샷 확정이 끝나기 전에는 담당 표시를 켜지 않는다.
+                        awaitingLoad.add(slot);
+                        toRequest.add(slot);
+                    }
+                    case SELF_RESTART -> {
+                        // 이전 담당이 자기 자신이다(재시작). 복원한 호가창을 그대로 쓰고, 담당이 켜진 뒤에 맵을 평상시 값으로 되돌린다.
+                        awaitingMapSwitch.add(slot);
+                        awaitingJournalConfirm.add(slot);
+                        toAcquire.add(slot);
+                    }
+                    case FIRST -> {
+                        awaitingJournalConfirm.add(slot);
+                        toAcquire.add(slot);
+                        firstAssigned.add(new TopicPartition(assignmentTopic, slot));
+                    }
+                }
+            }
+        }
+        toRequest.forEach(movedSlotRequests::requestHandover);
+        toAcquire.forEach(slotEventRequests::requestAcquire);
+        if (!firstAssigned.isEmpty()) {
+            publishMapEntries(firstAssigned, ownOrderEndpoint);
+        }
+        log.log(Level.INFO, "[매칭] 담당 종목 slot 배정 판정: 이동으로 받는 중=" + toRequest + " 재시작=" + toAcquire
+            + " 전체 담당=" + currentSlotsSnapshot().size() + "개");
+    }
+
+    /** 맵의 그 종목 slot 항목으로 가른다. 이동 중이 아닌 다른 pod의 항목이나 항목 없음은 첫 배정으로 본다. */
+    private Kind classify(int stockSlot) {
         Optional<MatchingSlotTarget> entry = mapLookup.apply(stockSlot);
-        if (entry.isPresent() && !entry.get().moving() && !entry.get().endpoint().equals(ownOrderEndpoint)) {
+        if (entry.isEmpty()) {
+            return Kind.FIRST;
+        }
+        MatchingSlotTarget target = entry.get();
+        if (target.moving()) {
+            return target.endpoint().equals(ownOrderEndpoint) ? Kind.SELF_RESTART : Kind.MOVED_IN;
+        }
+        if (!target.endpoint().equals(ownOrderEndpoint)) {
             // 이전 담당이 회수 콜백 없이 사라진 경우다. 장애 복구 범위라 이 단위에서 정하지 않고 첫 배정처럼 처리한다.
             log.log(Level.WARNING, "[매칭] 맵에 다른 pod의 항목이 남은 채 종목 slot을 배정받음(장애 복구 범위): 종목 slot="
-                + stockSlot + " 항목=" + entry.get());
+                + stockSlot + " 항목=" + target);
         }
-        if (entry.isPresent() && entry.get().moving() && entry.get().endpoint().equals(ownOrderEndpoint)) {
-            // 이전 담당이 자기 자신이다. 이동이 아니라 이 shard가 재시작했거나 넘겼던 종목 slot을 되돌려 받는 것이므로 요청할 상대가 없다.
-            // 저널과 스냅샷으로 복원한 호가창을 그대로 쓰고, 받음 항목이 저널에 기록되면 담당을 켜며 맵은 평상시 값으로 되돌린다.
-            return false;
-        }
-        return entry.isPresent() && entry.get().moving();
+        return Kind.FIRST;
     }
 
     /**
@@ -395,18 +496,17 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
      * ({@link #confirmAcquired}) 담당이 켜진다. 그 사이 회수된 종목 slot은 요청을 남기지 않는다.
      */
     public void acquireAfterLoad(int stockSlot) {
-        if (!awaitingLoad.remove(stockSlot)) {
-            return;
+        synchronized (this) {
+            if (!awaitingLoad.remove(stockSlot)) {
+                return;
+            }
+            movedInAcquiring.add(stockSlot);
+            awaitingMapSwitch.add(stockSlot);
+            awaitingJournalConfirm.add(stockSlot);
         }
-        awaitingMapSwitch.add(stockSlot);
-        awaitingJournalConfirm.add(stockSlot);
         slotEventRequests.requestAcquire(stockSlot);
     }
 
-    /**
-     * 종목 slot마다 같은 값을 맵에 쓰고 쓰기가 끝날 때까지 기다린다(회수 콜백과 첫 배정). 세대는 이 호출이 보는 현재 세대다 — 회수는
-     * 세대를 먼저 올린 뒤 부르므로 이 쓰기는 회수 직후에 보내진다.
-     */
     private void publishMapEntries(Collection<TopicPartition> partitions, String value) {
         List<java.util.concurrent.CompletableFuture<Void>> writes = new java.util.ArrayList<>();
         for (TopicPartition partition : partitions) {

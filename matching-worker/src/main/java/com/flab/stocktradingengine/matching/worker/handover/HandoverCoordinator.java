@@ -21,6 +21,7 @@ public final class HandoverCoordinator implements MovedSlotRequests, AutoCloseab
     private static final long CLOSE_JOIN_TIMEOUT_MILLIS = 1000L;
 
     private final IntFunction<Optional<Long>> requestFunction;
+    private final java.util.function.IntConsumer cancelFunction;
     private final BlockingQueue<Integer> slots = new LinkedBlockingQueue<>();
 
     private volatile boolean running;
@@ -28,7 +29,18 @@ public final class HandoverCoordinator implements MovedSlotRequests, AutoCloseab
 
     /** @param requestFunction 종목 slot의 호가창을 요청하고, 요청을 보냈으면 이동 번호를 돌려주는 함수(실제 구현은 {@code HandoverRequester#request}) */
     public HandoverCoordinator(IntFunction<Optional<Long>> requestFunction) {
+        this(requestFunction, stockSlot -> { });
+    }
+
+    /** @param cancelFunction 종목 slot의 진행 중 요청을 취소하는 함수(실제 구현은 {@code HandoverRequester#cancel}) */
+    public HandoverCoordinator(IntFunction<Optional<Long>> requestFunction, java.util.function.IntConsumer cancelFunction) {
         this.requestFunction = requestFunction;
+        this.cancelFunction = cancelFunction;
+    }
+
+    @Override
+    public void cancelHandover(int stockSlot) {
+        cancelFunction.accept(stockSlot);
     }
 
     @Override

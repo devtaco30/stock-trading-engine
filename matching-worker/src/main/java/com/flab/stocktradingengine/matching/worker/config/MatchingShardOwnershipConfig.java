@@ -24,7 +24,9 @@ import com.flab.stocktradingengine.aeron.StockSlotHasher;
 import com.flab.stocktradingengine.matching.disruptor.io.SlotEventListener;
 import com.flab.stocktradingengine.matching.disruptor.io.SlotEventRequests;
 import com.flab.stocktradingengine.matching.worker.coordination.KafkaMatchingShardAssignment;
+import com.flab.stocktradingengine.matching.worker.coordination.MapSync;
 import com.flab.stocktradingengine.matching.worker.coordination.MatchingSlotMapReader;
+import com.flab.stocktradingengine.matching.worker.coordination.MovedSlotRequests;
 import com.flab.stocktradingengine.matching.worker.handover.HandoverCoordinator;
 import com.flab.stocktradingengine.matching.worker.handover.HandoverBookStore;
 import com.flab.stocktradingengine.matching.worker.lifecycle.KafkaMatchingShardAssignmentLifecycle;
@@ -131,7 +133,8 @@ public class MatchingShardOwnershipConfig {
             @Value("${transport.matching-intake.channel:" + MatchingOrderIntakeConfig.DEFAULT_INTAKE_CHANNEL + "}") String orderEndpoint,
             @Value("${matching-shard.coordination.session-timeout-ms:120000}") int sessionTimeoutMs,
             SlotEventRequests slotEventRequests,
-            ObjectProvider<MatchingSlotMapReader> mapReader, ObjectProvider<HandoverCoordinator> handoverCoordinator) {
+            ObjectProvider<MatchingSlotMapReader> mapReader, ObjectProvider<HandoverCoordinator> handoverCoordinator,
+            ObjectProvider<MapSync> mapSync) {
         String instanceId = resolveInstanceId(instanceIdConfig, orderEndpoint);
         log.info("[매칭] 담당 종목 slot 소스: Kafka 컨슈머 그룹 배정({}) — 신원={} 주문 입구={} session.timeout.ms={}",
             KafkaMatchingShardAssignment.GROUP_ID, instanceId, orderEndpoint, sessionTimeoutMs);
@@ -143,7 +146,21 @@ public class MatchingShardOwnershipConfig {
         return new KafkaMatchingShardAssignment(
             consumer, mapProducer, adminClient, stockSlotHasher.stockSlotCount(), orderEndpoint,
             KafkaMatchingShardAssignment.ASSIGNMENT_TOPIC, KafkaMatchingShardAssignment.MAP_TOPIC, slotEventRequests,
-            slot -> mapReader.getObject().targetFor(slot), slot -> handoverCoordinator.getObject().requestHandover(slot));
+            slot -> mapReader.getObject().targetFor(slot), new MovedSlotRequests() {
+                @Override
+                public void requestHandover(int stockSlot) {
+                    handoverCoordinator.getObject().requestHandover(stockSlot);
+                }
+
+                @Override
+                public void cancelHandover(int stockSlot) {
+                    handoverCoordinator.getObject().cancelHandover(stockSlot);
+                }
+            }, mapSync.getIfAvailable(), java.util.concurrent.Executors.newSingleThreadExecutor(runnable -> {
+                Thread thread = new Thread(runnable, "matching-shard-assignment-decision");
+                thread.setDaemon(true);
+                return thread;
+            }));
     }
 
     @Bean

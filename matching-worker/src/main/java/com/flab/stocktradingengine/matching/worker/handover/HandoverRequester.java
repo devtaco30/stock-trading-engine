@@ -79,6 +79,11 @@ public final class HandoverRequester implements AutoCloseable {
         return Optional.ofNullable(currentTransferBySlot.get(stockSlot));
     }
 
+    /** 이 종목 slot에서 진행 중인 요청을 취소한다. 이후 도착하는 그 요청의 응답은 번호가 달라 버려진다. */
+    public void cancel(int stockSlot) {
+        currentTransferBySlot.remove(stockSlot);
+    }
+
     /** 적재 요청을 낸 이동을 끝난 것으로 기록한다. */
     void finish(int stockSlot, long transferId) {
         currentTransferBySlot.remove(stockSlot, transferId);

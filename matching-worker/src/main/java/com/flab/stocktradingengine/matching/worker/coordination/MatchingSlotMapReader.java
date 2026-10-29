@@ -39,6 +39,8 @@ public final class MatchingSlotMapReader {
     private final CountDownLatch initialCatchUpLatch = new CountDownLatch(1);
     // 읽는 thread가 예외로 끝났으면 그 예외. 초기 읽기 대기가 이것을 보고 실패로 끝난다.
     private volatile Throwable failure;
+    // 파티션마다 읽어 반영한 다음 위치. 읽는 thread가 poll마다 갱신하고 다른 thread가 따라왔는지 볼 때 읽는다.
+    private volatile java.util.concurrent.atomic.AtomicLongArray consumedOffsets = new java.util.concurrent.atomic.AtomicLongArray(1);
     private final List<MapChangeListener> listeners = new CopyOnWriteArrayList<>();
 
     public MatchingSlotMapReader(Consumer<Integer, String> consumer, int stockSlotCount, String mapTopic) {
@@ -52,6 +54,12 @@ public final class MatchingSlotMapReader {
     public interface MapChangeListener {
 
         void onChange(int stockSlot, Optional<MatchingSlotTarget> target);
+    }
+
+    /** 그 파티션에서 읽어 반영한 다음 위치(시작 전에는 0). */
+    public long consumedOffset(int partition) {
+        java.util.concurrent.atomic.AtomicLongArray offsets = consumedOffsets;
+        return partition >= 0 && partition < offsets.length() ? offsets.get(partition) : 0L;
     }
 
     public void addListener(MapChangeListener listener) {
@@ -98,6 +106,7 @@ public final class MatchingSlotMapReader {
         List<PartitionInfo> partitionInfos = awaitPartitions();
         List<TopicPartition> partitions = partitionInfos.stream()
             .map(info -> new TopicPartition(mapTopic, info.partition())).toList();
+        consumedOffsets = new java.util.concurrent.atomic.AtomicLongArray(partitions.size());
         consumer.assign(partitions);
         consumer.seekToBeginning(partitions);
         Map<TopicPartition, Long> endOffsets = consumer.endOffsets(partitions);
@@ -142,6 +151,9 @@ public final class MatchingSlotMapReader {
                 ConsumerRecords<Integer, String> records = consumer.poll(Duration.ofMillis(500));
                 if (!records.isEmpty()) {
                     applyRecords(records);
+                }
+                for (TopicPartition partition : partitions) {
+                    consumedOffsets.set(partition.partition(), consumer.position(partition));
                 }
                 if (!caughtUp && isCaughtUp(partitions, endOffsets)) {
                     caughtUp = true;
