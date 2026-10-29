@@ -258,6 +258,25 @@ class MatchingEngineBookLoadTest {
     }
 
     @Test
+    void 시작_전에_담당으로_표시한_종목_slot에_도착한_적재는_호가창을_바꾸지_않는다() throws Exception {
+        engine = new MatchingEngine(1024, new BlockingWaitStrategy(), (stockCode, fill) -> fills.add(fill), journal,
+            sink, true, new com.flab.stocktradingengine.time.StageLatencyRegistry(false), HASHER, new SlotEventListener() { });
+        int slot = HASHER.slotFor(STOCK);
+        engine.seedAcquiredSlots(java.util.Set.of(slot)); // 재시작 때 스냅샷과 저널에서 복원한 담당 목록
+        engine.start();
+        engine.publishPlace(1L, 100L, STOCK, OrderSide.BUY, new BigDecimal("10000"), 10, Instant.now());
+
+        engine.publishBookLoad(TRANSFER_ID, slot, List.of(sourceBookBytes()));
+        engine.publishPlace(3L, 300L, STOCK, OrderSide.SELL, new BigDecimal("10000"), 30, Instant.now());
+        awaitFill();
+        Thread.sleep(100);
+
+        int filledAgainstBuyOne = fills.stream().filter(fill -> fill.buyOrderId() == 1L)
+            .mapToInt(FillResult::filledQuantity).sum();
+        assertEquals(10, filledAgainstBuyOne, "적용되었다면 적재한 호가창의 잔량 6만 체결된다");
+    }
+
+    @Test
     void 적재는_다른_종목_slot의_호가창을_비우지_않는다() throws Exception {
         startEngine();
         String otherSlotStock = stockInOtherSlot();

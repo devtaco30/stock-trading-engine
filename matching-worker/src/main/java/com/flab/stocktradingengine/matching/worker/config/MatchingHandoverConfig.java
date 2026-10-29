@@ -178,6 +178,8 @@ public class MatchingHandoverConfig {
                 Set<Integer> snapshotSlots = loadedSnapshot.getIfAvailable(Optional::empty)
                     .map(StoredMatchingSnapshot::ownedStockSlots).orElse(Set.of());
                 Set<Integer> ownedSlots = OwnedStockSlotRestorer.restoreFromJournal(snapshotSlots, journalEntries);
+                // 엔진도 같은 목록을 알아야 담당 중인 종목 slot에 도착한 낡은 호가창 적재를 막는다(스냅샷 이전에 받은 종목 slot 포함).
+                matchingEngine.seedAcquiredSlots(ownedSlots);
                 rule.applyWhenMapReady(() -> reader.awaitInitialCatchUp(Duration.ofMillis(timeoutMillis)), matchingEngine, ownedSlots);
             },
             () -> { });

@@ -311,6 +311,15 @@ public class MatchingEngine {
         return encoded;
     }
 
+    /**
+     * 재시작 때 스냅샷과 저널에서 복원한 담당 종목 slot을 엔진에 알린다. 이 종목 slot에 도착하는 호가창 적재는 적용하지 않는다.
+     * 시작 전 복구 단계에서만 부른다.
+     */
+    public void seedAcquiredSlots(Set<Integer> stockSlots) {
+        requireNotStarted();
+        matchingEventHandler.seedAcquiredSlots(stockSlots);
+    }
+
     /** 그 종목 slot을 넘기는 중으로 표시한다. 시작 전 복구 단계에서만 부른다. */
     public void markSlotHandedOver(int stockSlot) {
         requireNotStarted();
