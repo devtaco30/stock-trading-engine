@@ -1,8 +1,11 @@
 package com.flab.stocktradingengine.account.worker.config;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.NoneNestedConditions;
 import org.springframework.context.SmartLifecycle;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Conditional;
 import org.springframework.context.annotation.Configuration;
 
 import com.flab.stocktradingengine.account.worker.lifecycle.AeronMatchingOrderSenderLifecycle;
@@ -29,7 +32,23 @@ public class MatchingOrderSenderConfig {
     // Unit 1). 스트림 ID는 core AeronStreamIds.MATCHING_INTAKE로 matching-worker와 공유한다.
     static final String DEFAULT_MATCHING_CHANNEL = "aeron:ipc";
 
+    /**
+     * 매칭 pod 주소 풀({@code matching-shard-routing.endpoints})이 없을 때만 참이다. 풀이 있으면
+     * {@link MatchingShardRoutingConfig}가 주소별 Publication과 sender를 대신 만든다.
+     */
+    static class PoolNotConfigured extends NoneNestedConditions {
+
+        PoolNotConfigured() {
+            super(ConfigurationPhase.REGISTER_BEAN);
+        }
+
+        @ConditionalOnProperty(prefix = "matching-shard-routing", name = "endpoints[0]")
+        static class PoolConfigured {
+        }
+    }
+
     @Bean(destroyMethod = "close")
+    @Conditional(PoolNotConfigured.class)
     public Publication matchingOrderPublication(
             Aeron aeron,
             @Value("${transport.matching-intake.channel:" + DEFAULT_MATCHING_CHANNEL + "}") String matchingIntakeChannel) {
@@ -42,6 +61,7 @@ public class MatchingOrderSenderConfig {
      * {@code start()}·{@code close()}(publisher 스레드 제어) 때문에 구현 클래스가 필요하다.
      */
     @Bean
+    @Conditional(PoolNotConfigured.class)
     public AeronMatchingOrderSender matchingOrderSender(Publication matchingOrderPublication) {
         return new AeronMatchingOrderSender(matchingOrderPublication);
     }

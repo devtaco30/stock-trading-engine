@@ -40,7 +40,7 @@ import com.flab.stocktradingengine.aeron.StockSlotHasher;
  * 값은 표에 두고, 그 종목 slot을 조회하는 sender thread에서
  * {@link MatchingDestinationMisconfiguredException}을 던진다.</p>
  */
-public final class MatchingDestinationResolver {
+public final class MatchingDestinationResolver implements MatchingTargetLookup {
 
     private static final Logger log = System.getLogger(MatchingDestinationResolver.class.getName());
 
@@ -50,7 +50,11 @@ public final class MatchingDestinationResolver {
     private final StockSlotHasher stockSlotHasher;
     private final Set<String> addressPool;
 
-    private volatile MatchingSlotTarget[] slotToTargets;
+    /** 표와 그 표를 읽는 view를 한 객체로 묶어 한 번에 교체한다 — sender thread의 매 회차 호출이 객체를 새로 만들지 않는다. */
+    private record TableState(MatchingSlotTarget[] table, MatchingTargetView view) {
+    }
+
+    private volatile TableState tableState;
     private volatile boolean running;
     private Thread pollThread;
     private final CountDownLatch initialCatchUpLatch = new CountDownLatch(1);
@@ -66,7 +70,7 @@ public final class MatchingDestinationResolver {
         this.consumer = consumer;
         this.stockSlotHasher = stockSlotHasher;
         this.addressPool = Set.copyOf(addressPool);
-        this.slotToTargets = new MatchingSlotTarget[stockSlotHasher.stockSlotCount()];
+        this.tableState = newTableState(new MatchingSlotTarget[stockSlotHasher.stockSlotCount()]);
     }
 
     /** 담당 pod의 주소. 이동 중인 종목 slot도 주소는 돌려준다 — 보낼지 보관할지는 호출한 쪽이 {@link #targetFor}로 판단한다. */
@@ -75,8 +79,21 @@ public final class MatchingDestinationResolver {
     }
 
     public Optional<MatchingSlotTarget> targetFor(String stockCode) {
+        return view().targetFor(stockCode);
+    }
+
+    /** 지금 표의 모습을 고정해 돌려준다. 이 view로 조회하는 동안 갱신이 있어도 view의 내용은 그대로다. */
+    @Override
+    public MatchingTargetView view() {
+        return tableState.view();
+    }
+
+    private TableState newTableState(MatchingSlotTarget[] table) {
+        return new TableState(table, stockCode -> targetIn(table, stockCode));
+    }
+
+    private Optional<MatchingSlotTarget> targetIn(MatchingSlotTarget[] table, String stockCode) {
         int slot = stockSlotHasher.slotFor(stockCode);
-        MatchingSlotTarget[] table = slotToTargets;
         if (slot < 0 || slot >= table.length) {
             return Optional.empty();
         }
@@ -94,7 +111,7 @@ public final class MatchingDestinationResolver {
 
     /** 테스트용 — 지금 표의 참조를 그대로 돌려준다. 읽은 뒤에는 바뀌지 않는다(갱신은 새 배열로 교체). */
     MatchingSlotTarget[] snapshot() {
-        return slotToTargets;
+        return tableState.table();
     }
 
     public void start() {
@@ -177,7 +194,7 @@ public final class MatchingDestinationResolver {
     }
 
     private void applyRecords(ConsumerRecords<Integer, String> records) {
-        MatchingSlotTarget[] updated = slotToTargets.clone();
+        MatchingSlotTarget[] updated = tableState.table().clone();
         for (ConsumerRecord<Integer, String> record : records) {
             int slot = record.key();
             if (slot < 0 || slot >= updated.length) {
@@ -200,7 +217,7 @@ public final class MatchingDestinationResolver {
                 updated[slot] = null;
             }
         }
-        slotToTargets = updated;
+        tableState = newTableState(updated);
         log.log(Level.INFO, "[목적지] " + MAP_TOPIC + " " + records.count() + "건 반영");
     }
 }

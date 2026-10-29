@@ -3,7 +3,11 @@ package com.flab.stocktradingengine.account.worker.messaging;
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.time.Instant;
+import java.util.ArrayDeque;
+import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicIntegerArray;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.agrona.concurrent.BackoffIdleStrategy;
@@ -14,6 +18,11 @@ import org.agrona.concurrent.UnsafeBuffer;
 import com.flab.stocktradingengine.support.IdleStrategies;
 import com.flab.stocktradingengine.account.disruptor.io.MatchingOrderSender;
 import com.flab.stocktradingengine.account.worker.config.MatchingOrderSenderConfig;
+import com.flab.stocktradingengine.account.worker.coordination.MatchingDestinationMisconfiguredException;
+import com.flab.stocktradingengine.account.worker.coordination.MatchingSlotTarget;
+import com.flab.stocktradingengine.account.worker.coordination.MatchingTargetLookup;
+import com.flab.stocktradingengine.account.worker.coordination.MatchingTargetView;
+import com.flab.stocktradingengine.aeron.StockSlotHasher;
 import com.flab.stocktradingengine.codec.EventType;
 import com.flab.stocktradingengine.codec.JournaledOrder;
 import com.flab.stocktradingengine.codec.OrderCodec;
@@ -60,8 +69,20 @@ import lombok.extern.slf4j.Slf4j;
  * <p>코어는 시간을 모르므로 주문 시각(orderAt)은 {@link #forwardPlace}에서(placement 시각, 가장자리)
  * {@link Instant#now()}로 직접 찍어 큐에 넣는다(Clock 주입 금지).</p>
  *
- * <p>범위는 인프로세스까지다 — 실제 두 프로세스(account-worker↔matching-worker) 연결과
- * accountId/stockCode 라우팅은 C5-4에서 다룬다.</p>
+ * <h3>종목 slot으로 담당 매칭 pod를 고른다(매칭 샤딩 U9)</h3>
+ * <p>{@link #publisherThread}는 queue 1개에서 꺼낸 주문의 종목코드로 {@link MatchingTargetLookup}에게
+ * 담당 pod의 주소를 묻고, 주소 풀에서 만들어 둔 그 주소의 {@link Publication}으로 offer한다. 담당이
+ * 없거나(첫 배정 전·pod가 죽음) 맵에 「이동 중」 표시가 있으면 주문을 그 종목 slot의 보관 목록에
+ * 두고 다음 주문으로 넘어간다 — 다른 종목 slot의 주문은 막히지 않는다. 담당이 생기면 그 종목 slot의
+ * 목록을 먼저 비운 뒤에 새 주문을 보내 순서를 유지한다. 보관 목록은 종목 slot마다 「재전송 대기
+ * 목록(앞)」과 「신규 보관 목록(뒤)」으로 나뉜다. 매칭 pod가 담당이 아니라며 거부 회신으로 돌려보낸
+ * 주문({@link #acceptRejectedOrder})은 재전송 대기 목록에 도착 순서대로 붙고 비울 때 먼저 나간다.
+ * 보관 목록은 이 스레드만 만지고, 계좌 엔진 스레드는 개수 배열({@link #hasHoldingRoom})만 읽는다.</p>
+ *
+ * <p>queue가 1개라 한 pod의 Publication이 막히면 뒤의 다른 pod행 주문도 못 나간다(설계서 3-3절의
+ * 시작 구조). 그 재시도 사이마다 거부 회신 입구를 비워 서로를 기다리는 순환을 끊는다(11-2절).
+ * 풀 설정이 없는 기존 실행은 항상 같은 담당과 Publication 1개를 가진 조회로 표현해 같은 코드가
+ * 그대로 지난다.</p>
  */
 @Slf4j
 public class AeronMatchingOrderSender implements MatchingOrderSender, AutoCloseable {
@@ -71,7 +92,21 @@ public class AeronMatchingOrderSender implements MatchingOrderSender, AutoClosea
     static final int OUTBOX_CAPACITY = 65536;
     private static final long CLOSE_DRAIN_TIMEOUT_MILLIS = 5000L;
 
-    private final Publication matchingOrderPublication;
+    // 풀 설정이 없는 기존 실행(Publication 1개)을 같은 경로로 처리하기 위한 고정 담당.
+    private static final String SINGLE_ENDPOINT = "single";
+    static final int REJECTED_INBOX_CAPACITY = 65536;
+
+    private final MatchingTargetLookup targetLookup;
+    private final Map<String, Publication> publicationsByEndpoint;
+    private final StockSlotHasher stockSlotHasher;
+    private final int holdingCapacityPerSlot;
+    // 종목 slot별 보관 중인 주문 개수. 보관 목록은 publisherThread만 만지고 개수만 계좌 엔진 스레드가 읽는다.
+    private final AtomicIntegerArray holdingCounts;
+    private final SlotHold[] slotHolds;
+    // 거부 회신을 받는 poll 스레드(생산자 하나)가 넣고 publisherThread(소비자 하나)가 꺼낸다.
+    private final OneToOneConcurrentArrayQueue<JournaledOrder> rejectedInbox = new OneToOneConcurrentArrayQueue<>(REJECTED_INBOX_CAPACITY);
+    private final IdleStrategy rejectedEnqueueIdleStrategy = new BackoffIdleStrategy();
+    private int heldOrderTotal;
     private final OrderCodec codec = new OrderCodec();
     private final OneToOneConcurrentArrayQueue<JournaledOrder> outbox = new OneToOneConcurrentArrayQueue<>(OUTBOX_CAPACITY);
     private final IdleStrategy enqueueIdleStrategy = new BackoffIdleStrategy();
@@ -94,8 +129,57 @@ public class AeronMatchingOrderSender implements MatchingOrderSender, AutoClosea
      * 전략을 주입받는다. 큐가 가득 찼을 때와 offer가 실패했을 때만 쓰는 나머지 두 전략은 바꾸지 않는다.
      */
     public AeronMatchingOrderSender(Publication matchingOrderPublication, IdleStrategy pollIdleStrategy) {
-        this.matchingOrderPublication = matchingOrderPublication;
+        this(() -> stockCode -> Optional.of(new MatchingSlotTarget(SINGLE_ENDPOINT, false)),
+            Map.of(SINGLE_ENDPOINT, matchingOrderPublication), new StockSlotHasher(1), Integer.MAX_VALUE, pollIdleStrategy);
+    }
+
+    public AeronMatchingOrderSender(MatchingTargetLookup targetLookup, Map<String, Publication> publicationsByEndpoint,
+                                    StockSlotHasher stockSlotHasher, int holdingCapacityPerSlot) {
+        this(targetLookup, publicationsByEndpoint, stockSlotHasher, holdingCapacityPerSlot, IdleStrategies.forThread());
+    }
+
+    /**
+     * @param publicationsByEndpoint 주소 풀의 주소마다 미리 열어 둔 Publication(아직 뜨지 않은 pod의 것은 연결 전 상태)
+     * @param holdingCapacityPerSlot 종목 slot 하나의 보관 목록에 둘 수 있는 주문 수. 이 수에 이르면 {@link #hasHoldingRoom}이 false
+     */
+    public AeronMatchingOrderSender(MatchingTargetLookup targetLookup, Map<String, Publication> publicationsByEndpoint,
+                                    StockSlotHasher stockSlotHasher, int holdingCapacityPerSlot, IdleStrategy pollIdleStrategy) {
+        this.targetLookup = targetLookup;
+        this.publicationsByEndpoint = Map.copyOf(publicationsByEndpoint);
+        this.stockSlotHasher = stockSlotHasher;
+        this.holdingCapacityPerSlot = holdingCapacityPerSlot;
+        this.holdingCounts = new AtomicIntegerArray(stockSlotHasher.stockSlotCount());
+        this.slotHolds = new SlotHold[stockSlotHasher.stockSlotCount()];
         this.pollIdleStrategy = pollIdleStrategy;
+    }
+
+    /** 이 종목 slot의 보관 목록에 새 주문을 더 받을 여유가 있는가. 계좌 엔진 스레드가 접수 전에 부른다. */
+    public boolean hasHoldingRoom(String stockCode) {
+        int slot = stockSlotHasher.slotFor(stockCode);
+        return holdingCounts.get(slot) < holdingCapacityPerSlot;
+    }
+
+    /** 테스트용 — 이 종목 slot의 보관 목록에 있는 주문 수(재전송 대기 + 신규). */
+    int holdingCount(String stockCode) {
+        return holdingCounts.get(stockSlotHasher.slotFor(stockCode));
+    }
+
+    /** 테스트용 — 아직 보관 목록으로 옮기지 않은 거부 회신 주문 수. */
+    int rejectedInboxSize() {
+        return rejectedInbox.size();
+    }
+
+    /**
+     * 매칭 pod가 담당이 아니라며 돌려보낸 주문을 받는다. 거부 회신을 읽는 poll 스레드 하나만 부른다
+     * (1:1 queue의 생산자). 가득 차면 버리지 않고 기다린다(설계서 11-2절 가).
+     */
+    public void acceptRejectedOrder(JournaledOrder order) {
+        throwIfFatal();
+        rejectedEnqueueIdleStrategy.reset();
+        while (!rejectedInbox.offer(order)) {
+            throwIfFatal();
+            rejectedEnqueueIdleStrategy.idle();
+        }
     }
 
     /**
@@ -144,21 +228,98 @@ public class AeronMatchingOrderSender implements MatchingOrderSender, AutoClosea
 
     private void publishLoop() {
         while (running.get() || !outbox.isEmpty()) {
+            // 한 회차의 모든 판단(보낼지·보관할지·보관 목록을 비울지)에 같은 view를 쓴다(설계서 11-1절).
+            MatchingTargetView view = targetLookup.view();
+            drainRejectedInbox();
+            boolean flushed = flushAvailableHolds(view);
             JournaledOrder order = outbox.poll();
             if (order != null) {
-                publish(order);
+                route(view, order);
             }
-            pollIdleStrategy.idle(order != null ? 1 : 0);
+            pollIdleStrategy.idle(order != null || flushed ? 1 : 0);
+        }
+    }
+
+    private void route(MatchingTargetView view, JournaledOrder order) {
+        MatchingSlotTarget target = findTarget(view, order.stockCode());
+        if (target == null || target.moving()) {
+            hold(order, false);
+            return;
+        }
+        publish(target.endpoint(), order);
+    }
+
+    /** 담당이 생긴 종목 slot의 보관 목록을 비운다. 재전송 대기 목록을 먼저, 신규 보관 목록을 그다음에 보낸다. */
+    private boolean flushAvailableHolds(MatchingTargetView view) {
+        if (heldOrderTotal == 0) {
+            return false;
+        }
+        boolean flushed = false;
+        for (int slot = 0; slot < slotHolds.length; slot++) {
+            SlotHold hold = slotHolds[slot];
+            if (hold == null || hold.isEmpty()) {
+                continue;
+            }
+            MatchingSlotTarget target = findTarget(view, hold.peekFirst().stockCode());
+            if (target == null || target.moving()) {
+                continue;
+            }
+            JournaledOrder held;
+            while ((held = hold.pollFirst()) != null) {
+                publish(target.endpoint(), held);
+                heldOrderTotal--;
+                holdingCounts.decrementAndGet(slot);
+            }
+            flushed = true;
+        }
+        return flushed;
+    }
+
+    private void hold(JournaledOrder order, boolean retransmit) {
+        int slot = stockSlotHasher.slotFor(order.stockCode());
+        SlotHold hold = slotHolds[slot];
+        if (hold == null) {
+            hold = new SlotHold();
+            slotHolds[slot] = hold;
+        }
+        if (retransmit) {
+            hold.retransmit.addLast(order);
+        } else {
+            hold.fresh.addLast(order);
+        }
+        heldOrderTotal++;
+        holdingCounts.incrementAndGet(slot);
+    }
+
+    private void drainRejectedInbox() {
+        rejectedInbox.drain(order -> hold(order, true));
+    }
+
+    private MatchingSlotTarget findTarget(MatchingTargetView view, String stockCode) {
+        try {
+            return view.targetFor(stockCode).orElse(null);
+        } catch (MatchingDestinationMisconfiguredException e) {
+            IllegalStateException error = new IllegalStateException(
+                "매칭 담당 주소가 설정과 어긋납니다: 계좌 엔진을 멈춥니다 — " + e.getMessage(), e);
+            fatalError.set(error);
+            throw error;
         }
     }
 
     /** 전용 스레드에서만 돈다 — 여기서 블로킹 재시도해도 계좌 로직 스레드를 막지 않는다. */
-    private void publish(JournaledOrder order) {
+    private void publish(String endpoint, JournaledOrder order) {
+        Publication publication = publicationsByEndpoint.get(endpoint);
+        if (publication == null) {
+            IllegalStateException error = new IllegalStateException(
+                "주소 풀에 Publication이 없는 주소입니다: " + endpoint + " — 계좌 엔진을 멈춥니다");
+            fatalError.set(error);
+            throw error;
+        }
         int length = codec.encode(encodeBuffer, 0, order);
 
         offerIdleStrategy.reset();
         long result;
-        while ((result = matchingOrderPublication.offer(encodeBuffer, 0, length)) < 0) {
+        while ((result = publication.offer(encodeBuffer, 0, length)) < 0) {
             if (result == Publication.CLOSED || result == Publication.MAX_POSITION_EXCEEDED) {
                 IllegalStateException error = new IllegalStateException(
                     "매칭 발행 스트림이 복구 불가 상태입니다(offer 결과=" + result
@@ -166,7 +327,28 @@ public class AeronMatchingOrderSender implements MatchingOrderSender, AutoClosea
                 fatalError.set(error);
                 throw error;
             }
+            // 이 재시도에 묶여 있어도 거부 회신 입구는 계속 비운다 — 매칭 pod가 주문을 못 읽어 거부 회신을
+            // 못 내보내는 순환 대기를 끊는다(설계서 11-2절).
+            drainRejectedInbox();
             offerIdleStrategy.idle();
+        }
+    }
+
+    /** 종목 slot 하나의 보관 목록. 재전송 대기 목록이 신규 보관 목록보다 앞에 나간다. */
+    private static final class SlotHold {
+        final ArrayDeque<JournaledOrder> retransmit = new ArrayDeque<>();
+        final ArrayDeque<JournaledOrder> fresh = new ArrayDeque<>();
+
+        boolean isEmpty() {
+            return retransmit.isEmpty() && fresh.isEmpty();
+        }
+
+        JournaledOrder peekFirst() {
+            return retransmit.isEmpty() ? fresh.peekFirst() : retransmit.peekFirst();
+        }
+
+        JournaledOrder pollFirst() {
+            return retransmit.isEmpty() ? fresh.pollFirst() : retransmit.pollFirst();
         }
     }
 
@@ -200,6 +382,13 @@ public class AeronMatchingOrderSender implements MatchingOrderSender, AutoClosea
         if (publisherThread.isAlive()) {
             int remaining = outbox.size() + 1;
             log.error("[계좌] 매칭 발신 드레인이 타임아웃 안에 끝나지 않았습니다 — 유실 가능한 주문 {}건 남음", remaining);
+        }
+        int heldRemaining = 0;
+        for (int slot = 0; slot < holdingCounts.length(); slot++) {
+            heldRemaining += holdingCounts.get(slot);
+        }
+        if (heldRemaining > 0 && !publisherThread.isAlive()) {
+            log.error("[계좌] 담당 매칭 pod를 찾지 못해 보관 중이던 주문 {}건이 종료와 함께 사라집니다", heldRemaining);
         }
     }
 }
