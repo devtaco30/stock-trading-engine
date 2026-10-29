@@ -23,6 +23,7 @@ build_jars
 
 # 종목 선택(Kafka 없이 계산): 두 pod가 나누면 종목 slot 32 이상이 pod 1로 옮겨 간다는 기대를 쓴다.
 CODES=$(tool codes 64 32 | tail -1); echo "$CODES"
+XSLOT=$(echo "$CODES" | sed -n 's/.*XSLOT=\([0-9]*\) .*/\1/p')
 X=$(echo "$CODES" | sed -n 's/.*X=\([0-9]*\) .*/\1/p'); Y=$(echo "$CODES" | sed -n 's/.* Y=\([0-9]*\) .*/\1/p')
 [ -n "$X" ] && [ -n "$Y" ] || { fail "종목을 고르지 못했다"; exit 1; }
 
@@ -75,7 +76,12 @@ sleep 6
 #                            「이동 중 0, 32개씩」이 된 시각(마지막 slot이 pod 1 담당으로 바뀐 기록의 브로커 기록 시각).
 #   REVOKE_TO_RECEIVE_MS_LOG: matching-0 로그의 「담당 종목 slot 회수」 줄 ~ matching-1 로그의 「이동으로 받는 중」 줄(로그 시각만).
 # 모두 이 컴퓨터 한 대의 값이며 일반화하지 않는다.
-tool map-history localhost:9092 | awk -F'\t' 'NF >= 3 && $1 ~ /^[0-9]+$/ && $2 ~ /^[0-9]+$/' > "$WORK/map-history.txt" || true
+tool map-history localhost:9092 > "$WORK/map-history.raw" || true
+grep -q WARN_PARTIAL_MAP_READ "$WORK/map-history.raw" && { echo "실패: 맵 기록을 끝까지 읽지 못했다(부분 결과)"; OK=0; }
+awk -F'\t' 'NF >= 3 && $1 ~ /^[0-9]+$/ && $2 ~ /^[0-9]+$/' "$WORK/map-history.raw" > "$WORK/map-history.txt"
+# 이동 완료를 맵 개수(32/32)로만 판정하면 협력 배정이 반대쪽 slot을 옮겨도 통과하므로, 체결을 기대한 종목 X의 slot이 실제로 pod 0에서 pod 1로 바뀌었는지 맵 기록으로 단언한다.
+python3 loadtest/u10/assert-moved.py "$WORK/map-history.txt" "$XSLOT" aeron:udp?endpoint=localhost:20020 aeron:udp?endpoint=localhost:20021
+expect "종목 X의 slot이 맵 기록으로 pod 0에서 pod 1로 바뀌었다" "0" "$?"
 python3 - "$WORK/map-history.txt" "$LOG_DIR" <<'PY'
 import sys,re,datetime
 rows=[l.rstrip('\n').split('\t') for l in open(sys.argv[1]) if l.strip()]
@@ -113,6 +119,7 @@ PY
 # 4. 정상 종료 → 스냅샷 판독
 # 이동 한 건의 단계별 시간(종목 slot별 최소·중앙·최대)
 python3 loadtest/u10/handover-steps.py "$WORK/map-history.txt" "$LOG_DIR/matching-1.log"
+expect "단계별 시간이 이동한 slot 전부에 대해 계산됐다" "0" "$?"
 
 stop_pids
 A=$(dump_account)
@@ -155,5 +162,6 @@ expect "이동하지 않은 종목 Y의 호가창은 한쪽 pod에만 있다" "1
 echo "--- 호가창 이동 관련 로그(matching-0, matching-1, account 중 앞부분)"
 grep -hE "호가창 이동|handover|Handover" "$LOG_DIR"/matching-*.log | cut -c1-200 | head -20
 
+report_send_failures
 [ "$OK" = 1 ] && RESULT=0
 exit "$RESULT"

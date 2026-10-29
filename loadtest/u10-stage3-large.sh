@@ -4,7 +4,7 @@ set -uo pipefail
 # U10 3단계 변형 — 호가창을 키운다. 사용: loadtest/u10-stage3-large.sh <종목당 대기 매도 주문 수>
 # stage3와 같은 시나리오(pod 0만 → 대기 매도 쌓기 → pod 1 합류·이동 → 반대쪽 매수 체결 → 정상 종료 스냅샷)인데,
 # 이동하는 종목 slot의 종목 3개에 대기 매도 주문을 종목마다 N건씩(가격 20,000, 20,001, …, 수량 1) 쌓는다.
-# 이동 뒤 매수 계좌가 종목마다 가장 싼 매도 1건(20,000원 1주)을 사서, 호가창이 통째로 옮겨졌다면 종목마다 N-1건이 남는다.
+# 이동 전 표지 매수(20,000원 1주)와 이동 뒤 매수(20,001원 1주)가 종목마다 매도 1건씩 사서, 호가창이 통째로 옮겨졌다면 종목마다 N-2건이 남는다.
 # 종료 코드 0이면 통과, 그 밖이면 실패다. 로컬 한 대의 값이며 일반화하지 않는다.
 cd "$(dirname "$0")/.."
 source loadtest/u10/lib.sh
@@ -49,9 +49,17 @@ start_account "${SEED_ARGS[@]}"
 BULK=$(tool send-bulk aeron:udp?endpoint=localhost:20040 90002 SELL 20000 "$N" u10-big $STOCKS | grep -E "^(SENT_BULK|OFFER_FAILED|NOT_CONNECTED)" | tail -1)
 echo "$BULK"
 echo "$BULK" | grep -q "^SENT_BULK" || { fail "대량 매도 주문을 보내지 못했다: $BULK"; exit 1; }
-# 계좌 엔진과 매칭이 처리할 시간 — 주문 수에 비례해 기다린다(상한 120초).
-WAIT=$(( 5 + N * MOVING_STOCKS / 300 )); [ "$WAIT" -gt 120 ] && WAIT=120
-echo "처리 대기 ${WAIT}초"; sleep "$WAIT"
+# 이동 전에 호가창에 N건이 모두 들어갔는지 확인한다. 종목마다 가장 싼 매도 1건(20,000원)을 사는 표지 매수를 보내고, 그 체결이 계좌 로그에
+# 나타나기를 기다린다. 같은 종목의 주문은 한 줄로 도착 순서대로 처리되므로 표지 매수가 체결됐다면 앞서 보낸 N건이 모두 호가창에 들어간 것이다.
+for stock in $STOCKS; do send_order 90001 "$stock" BUY 20000 1 "u10-big-sentinel-$stock"; done
+FILLED=0
+for _ in $(seq 1 300); do
+    FILLED=$(grep -c "체결 반영: accountId=90001 " "$LOG_DIR/account.log" || true)
+    [ "$FILLED" -ge "$MOVING_STOCKS" ] && break
+    sleep 2
+done
+expect "이동 전에 종목마다 대기 매도 ${N}건이 호가창에 들어갔다(표지 매수 체결 ${MOVING_STOCKS}건)" "$MOVING_STOCKS" "$FILLED"
+[ "$FILLED" -ge "$MOVING_STOCKS" ] || { fail "이동 전에 호가창이 다 차지 않았다(600초 상한)"; exit 1; }
 
 # pod 1 합류 → 이동이 끝날 때까지 대기
 start_app matching-1 "$MATCHING_JAR" loadtest/u10/u10-matching-1.yml
@@ -64,11 +72,21 @@ done
 echo "pod 1 합류 뒤: $STATE"
 expect "pod 1 합류 뒤 이동이 끝나 두 pod가 32개씩 맡는다" "1" "$DONE"
 
-# 이동 뒤 매수: 종목마다 가장 싼 매도 1건(20,000원 1주)
-for stock in $STOCKS; do send_order 90001 "$stock" BUY 20000 1 "u10-big-buy-$stock"; done
+# 이동 뒤 매수: 표지 매수가 20,000원 매도를 이미 사갔으므로 종목마다 그다음으로 싼 매도 1건(20,001원 1주)
+for stock in $STOCKS; do send_order 90001 "$stock" BUY 20001 1 "u10-big-buy-$stock"; done
 sleep 8
 
-tool map-history localhost:9092 | awk -F'\t' 'NF >= 3 && $1 ~ /^[0-9]+$/ && $2 ~ /^[0-9]+$/' > "$WORK/map-history.txt" || true
+tool map-history localhost:9092 > "$WORK/map-history.raw" || true
+grep -q WARN_PARTIAL_MAP_READ "$WORK/map-history.raw" && { echo "실패: 맵 기록을 끝까지 읽지 못했다(부분 결과)"; OK=0; }
+awk -F'\t' 'NF >= 3 && $1 ~ /^[0-9]+$/ && $2 ~ /^[0-9]+$/' "$WORK/map-history.raw" > "$WORK/map-history.txt"
+# 이동 완료를 맵 개수(32/32)로만 판정하면 협력 배정이 반대쪽 slot을 옮겨도 통과하므로, 호가창을 쌓은 종목 세 개의 slot이 실제로 pod 0에서 pod 1로 바뀌었는지 맵 기록으로 단언한다.
+tool slot-of 64 $STOCKS | grep '^SLOT ' | while read -r _ pair; do
+    stock_code="${pair%%=*}"; stock_slot="${pair##*=}"
+    python3 loadtest/u10/assert-moved.py "$WORK/map-history.txt" "$stock_slot" aeron:udp?endpoint=localhost:20020 aeron:udp?endpoint=localhost:20021 > "$WORK/moved-$stock_code.txt"; echo $? > "$WORK/moved-$stock_code.rc"
+done
+for stock in $STOCKS; do
+    expect "종목 ${stock}의 slot이 맵 기록으로 pod 0에서 pod 1로 바뀌었다" "0" "$(cat "$WORK/moved-$stock.rc" 2>/dev/null || echo 없음)"
+done
 python3 - "$WORK/map-history.txt" "$LOG_DIR" <<'PY'
 import sys,re,datetime
 rows=[l.rstrip('\n').split('\t') for l in open(sys.argv[1]) if l.strip()]
@@ -102,6 +120,7 @@ PY
 
 # 이동 한 건의 단계별 시간(종목 slot별 최소·중앙·최대)
 python3 loadtest/u10/handover-steps.py "$WORK/map-history.txt" "$LOG_DIR/matching-1.log"
+expect "단계별 시간이 이동한 slot 전부에 대해 계산됐다" "0" "$?"
 
 stop_pids
 A=$(dump_account); D0=$(dump_matching /tmp/u10/matching-0); D1=$(dump_matching /tmp/u10/matching-1)
@@ -123,12 +142,13 @@ book_pods() {
     echo "$n"
 }
 for stock in $STOCKS; do
-    expect "종목 $stock 이동 뒤 한 건이 체결되고 호가창에 N-1건이 남는다" "$((N - 1))" "$(resting_total "$stock")"
+    expect "종목 $stock 이동 전 표지 매수와 이동 뒤 매수로 두 건이 체결되고 호가창에 N-2건이 남는다" "$((N - 2))" "$(resting_total "$stock")"
     expect "종목 $stock 호가창은 한쪽 pod에만 있다" "1" "$(book_pods "$stock")"
 done
 BUYER=$(echo "$A" | grep "ACCOUNT id=90001 " || true)
 TRADES=$(echo "$BUYER" | sed -n 's/.* tradeIds=\(.*\)$/\1/p' | tr ',' '\n' | grep . | sort -u | wc -l | tr -d ' ')
-expect "매수 계좌에 반영된 체결이 종목 수만큼이고 tradeId가 모두 다르다" "$MOVING_STOCKS" "$TRADES"
+expect "매수 계좌에 반영된 체결이 종목마다 두 건이고 tradeId가 모두 다르다" "$((MOVING_STOCKS * 2))" "$TRADES"
 
+report_send_failures
 [ "$OK" = 1 ] && RESULT=0
 exit "$RESULT"

@@ -57,6 +57,7 @@ import io.aeron.driver.ThreadingMode;
  *       {@code ASSIGNED 배정된 수/전체 MOVING 이동 중인 수 ENDPOINTS 주소=개수,...}를 출력한다.</li>
  *   <li>{@code map-history <kafkaBootstrap>} — 맵 토픽의 모든 기록을 {@code slot<TAB>CreateTime(ms)<TAB>값} 줄로 출력한다.</li>
  *   <li>{@code dump-account <archiveDir>} — 계좌 워커가 정상 종료할 때 쓴 스냅샷을 줄 단위로 출력한다. 스냅샷이 없으면 종료 코드 2.</li>
+ *   <li>{@code slot-of <종목 slot 수> <종목 코드...>} — 종목 코드마다 「SLOT 코드=slot」 한 줄을 출력한다.</li>
  * </ul>
  */
 public final class U10Tool {
@@ -76,6 +77,7 @@ public final class U10Tool {
             case "send-bulk" -> sendBulk(args);
             case "assigned" -> assigned(args[1], Integer.parseInt(args[2]));
             case "map-history" -> mapHistory(args[1]);
+            case "slot-of" -> slotOf(Integer.parseInt(args[1]), java.util.Arrays.copyOfRange(args, 2, args.length));
             default -> {
                 System.err.println("알 수 없는 하위 명령: " + args[0]);
                 System.exit(1);
@@ -133,7 +135,7 @@ public final class U10Tool {
     }
 
 
-    private record MapRecord(int slot, long timestamp, String value) {
+    private record MapRecord(int slot, long timestamp, String timestampType, String value) {
     }
 
     private static List<MapRecord> readMapRecords(String bootstrap) {
@@ -157,8 +159,13 @@ public final class U10Tool {
             long deadline = System.currentTimeMillis() + 10_000L;
             while (System.currentTimeMillis() < deadline && !reachedEnds(consumer, partitions, ends)) {
                 for (ConsumerRecord<Integer, String> record : consumer.poll(Duration.ofMillis(200))) {
-                    records.add(new MapRecord(record.key(), record.timestamp(), record.value()));
+                    records.add(new MapRecord(record.key(), record.timestamp(), record.timestampType().name, record.value()));
                 }
+            }
+            if (!reachedEnds(consumer, partitions, ends)) {
+                // 10초 안에 맵 토픽의 끝까지 읽지 못했다. 부분 결과를 그대로 쓰면 이동이 안 된 것처럼 보일 수 있어 표준 오류에 경고를 남긴다.
+                System.err.println("WARN_PARTIAL_MAP_READ 10초 안에 " + MatchingDestinationResolver.MAP_TOPIC + "의 끝까지 읽지 못했다: 읽은 기록 "
+                    + records.size() + "건");
             }
         }
         return records;
@@ -265,9 +272,16 @@ public final class U10Tool {
         System.out.println("ASSIGNED " + steady + "/" + stockSlotCount + " MOVING " + moving + " ENDPOINTS " + perEndpoint);
     }
 
+    private static void slotOf(int stockSlotCount, String[] stockCodes) {
+        StockSlotHasher hasher = new StockSlotHasher(stockSlotCount);
+        for (String stockCode : stockCodes) {
+            System.out.println("SLOT " + stockCode + "=" + hasher.slotFor(stockCode));
+        }
+    }
+
     private static void mapHistory(String bootstrap) {
         for (MapRecord record : readMapRecords(bootstrap)) {
-            System.out.println(record.slot() + "\t" + record.timestamp() + "\t" + record.value());
+            System.out.println(record.slot() + "\t" + record.timestamp() + "\t" + record.value() + "\t" + record.timestampType());
         }
     }
 

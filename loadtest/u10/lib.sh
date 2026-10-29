@@ -48,6 +48,7 @@ start_kafka() {
         docker exec "$KAFKA_NAME" /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list > /dev/null 2>&1 && break
         sleep 1
     done
+    echo "Kafka 브로커 버전: $(docker exec "$KAFKA_NAME" /opt/kafka/bin/kafka-topics.sh --version 2>/dev/null | tail -1) (이미지 apache/kafka:latest, 고정하지 않음)"
 }
 
 build_jars() {
@@ -95,8 +96,21 @@ start_account() {
     grep -q "Started AccountWorkerApplication" "$LOG_DIR/account.log" || { fail "계좌 워커가 기동하지 않았다(로그 $LOG_DIR/account.log)"; exit 1; }
 }
 
+# 발신 결과가 「SENT」로 시작하지 않으면 실패로 보고 $WORK/send-failures에 한 줄 적는다(subshell에서 불러도 집계된다).
 send_order() { # <계좌> <종목> <BUY|SELL> <가격> <수량> <requestId>
-    tool send aeron:udp?endpoint=localhost:20040 "$1" "$2" "$3" "$4" "$5" "$6" | tail -1
+    local result
+    result=$(tool send aeron:udp?endpoint=localhost:20040 "$1" "$2" "$3" "$4" "$5" "$6" | tail -1)
+    echo "$result"
+    case "$result" in SENT*) ;; *) echo "$6: ${result:-출력 없음}" >> "$WORK/send-failures";; esac
+}
+
+send_failure_count() { if [ -f "$WORK/send-failures" ]; then grep -c . "$WORK/send-failures"; else echo 0; fi; }
+
+report_send_failures() {
+    local count
+    count=$(send_failure_count)
+    echo "주문 발신 실패 ${count}건"
+    [ "$count" = 0 ] || { cat "$WORK/send-failures"; OK=0; }
 }
 
 dump_matching() { ./gradlew --offline -q :matching-worker:u10MatchingDump -Pu10Args="$1" 2>&1; }
