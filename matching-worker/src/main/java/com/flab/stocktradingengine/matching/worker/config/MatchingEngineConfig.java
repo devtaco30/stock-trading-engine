@@ -2,9 +2,11 @@ package com.flab.stocktradingengine.matching.worker.config;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.function.LongSupplier;
 
 import org.springframework.context.SmartLifecycle;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -19,6 +21,8 @@ import com.flab.stocktradingengine.matching.disruptor.journal.Journal;
 import com.flab.stocktradingengine.matching.worker.lifecycle.MatchingEngineLifecycle;
 import com.flab.stocktradingengine.matching.worker.recovery.StoredMatchingSnapshot;
 import com.lmax.disruptor.BlockingWaitStrategy;
+
+import io.aeron.archive.client.AeronArchive;
 
 @Configuration
 public class MatchingEngineConfig {
@@ -54,11 +58,14 @@ public class MatchingEngineConfig {
             Optional<StoredMatchingSnapshot> matchingLoadedSnapshot, List<JournaledOrder> matchingJournalRecoveredEntries,
             List<JournaledOrder> matchingOrderIntakeReplayedEntries,
             ObjectProvider<StageLatencyRegistry> matchingStageLatencyRegistry,
-            ObjectProvider<StockSlotHasher> stockSlotHasher, ObjectProvider<SlotEventListener> slotEventListener) {
+            ObjectProvider<StockSlotHasher> stockSlotHasher, ObjectProvider<SlotEventListener> slotEventListener,
+            ObjectProvider<AeronArchive> aeronArchive,
+            @Qualifier("matchingJournalRecordingId") ObjectProvider<Long> matchingJournalRecordingId) {
         MatchingEngine engine = new MatchingEngine(BUFFER_SIZE, new BlockingWaitStrategy(), listener, journal,
             matchingSnapshotWriter, true, matchingStageLatencyRegistry.getIfAvailable(() -> new StageLatencyRegistry(false)),
             stockSlotHasher.getIfAvailable(() -> new StockSlotHasher(MatchingShardOwnershipConfig.DEFAULT_STOCK_SLOT_COUNT)),
-            slotEventListener.getIfAvailable(() -> SlotEventListener.NO_OP));
+            slotEventListener.getIfAvailable(() -> SlotEventListener.NO_OP),
+            archiveRecordedPosition(aeronArchive, matchingJournalRecordingId));
         matchingLoadedSnapshot.ifPresent(stored -> {
             engine.restore(stored.snapshot());
             engine.seedOrderIntakePositions(stored.orderIntakePosition());
@@ -66,6 +73,19 @@ public class MatchingEngineConfig {
         engine.recover(matchingJournalRecoveredEntries);
         engine.recover(matchingOrderIntakeReplayedEntries);
         return engine;
+    }
+
+    /**
+     * 받음 항목의 담당 켜기를 Archive 기록 위치 확인 뒤로 미루는 데 쓰는 값. 저널 녹화 위치를 읽는 Archive 클라이언트 호출은
+     * 주문 수신 thread 하나에서만 한다({@link MatchingEngine#pollLoadCompletions}). Archive 없는 구성이면 null이라 바로 켠다.
+     */
+    private static LongSupplier archiveRecordedPosition(ObjectProvider<AeronArchive> aeronArchive, ObjectProvider<Long> recordingId) {
+        AeronArchive archive = aeronArchive.getIfAvailable();
+        Long journalRecordingId = recordingId.getIfAvailable();
+        if (archive == null || journalRecordingId == null) {
+            return null;
+        }
+        return () -> archive.getRecordingPosition(journalRecordingId);
     }
 
     @Bean

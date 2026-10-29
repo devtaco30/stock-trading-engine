@@ -5,6 +5,7 @@ import com.lmax.disruptor.EventHandler;
 import com.flab.stocktradingengine.codec.EventType;
 import com.flab.stocktradingengine.codec.JournaledOrder;
 import com.flab.stocktradingengine.matching.disruptor.engine.OrderEvent;
+import com.flab.stocktradingengine.matching.disruptor.io.AcquireConfirmations;
 import com.flab.stocktradingengine.matching.disruptor.io.SlotEventListener;
 import com.flab.stocktradingengine.matching.disruptor.journal.Journal;
 
@@ -31,14 +32,23 @@ public class JournalEventHandler implements EventHandler<OrderEvent> {
 
     private final Journal journal;
     private final SlotEventListener slotEventListener;
+    private final AcquireConfirmations acquireConfirmations;
 
     public JournalEventHandler(Journal journal) {
         this(journal, SlotEventListener.NO_OP);
     }
 
     public JournalEventHandler(Journal journal, SlotEventListener slotEventListener) {
+        this(journal, slotEventListener, null);
+    }
+
+    /**
+     * @param acquireConfirmations 받음 항목의 Archive 기록 확인 대기열. null이면 append 직후 바로 통지한다(Archive 없는 구성).
+     */
+    public JournalEventHandler(Journal journal, SlotEventListener slotEventListener, AcquireConfirmations acquireConfirmations) {
         this.journal = journal;
         this.slotEventListener = slotEventListener;
+        this.acquireConfirmations = acquireConfirmations;
     }
 
     @Override
@@ -59,7 +69,12 @@ public class JournalEventHandler implements EventHandler<OrderEvent> {
             if (event.getType() == EventType.SLOT_ACQUIRED) {
                 journal.append(JournaledOrder.slotAcquired(event.getStockSlot()));
                 event.setJournaledPosition(journal.position());
-                slotEventListener.onSlotAcquiredJournaled(event.getStockSlot());
+                if (acquireConfirmations == null) {
+                    slotEventListener.onSlotAcquiredJournaled(event.getStockSlot());
+                } else {
+                    // 여기서 Archive를 기다리지 않는다. 기록 위치 확인은 주문 수신 thread가 폴링한다.
+                    acquireConfirmations.awaitRecorded(event.getStockSlot(), journal.position());
+                }
             } else {
                 journal.append(JournaledOrder.slotReleased(event.getStockSlot()));
                 event.setJournaledPosition(journal.position());

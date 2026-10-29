@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
+import java.util.function.LongSupplier;
 
 import com.lmax.disruptor.BlockingWaitStrategy;
 import com.lmax.disruptor.RingBuffer;
@@ -22,6 +23,7 @@ import com.flab.stocktradingengine.codec.JournaledOrder;
 import com.flab.stocktradingengine.matching.disruptor.handler.JournalEventHandler;
 import com.flab.stocktradingengine.matching.disruptor.handler.MatchingEventHandler;
 import com.flab.stocktradingengine.matching.disruptor.handler.MatchingExceptionHandler;
+import com.flab.stocktradingengine.matching.disruptor.io.AcquireConfirmations;
 import com.flab.stocktradingengine.matching.disruptor.io.MatchListener;
 import com.flab.stocktradingengine.matching.disruptor.io.MatchingSnapshotSink;
 import com.flab.stocktradingengine.matching.disruptor.io.SlotEventListener;
@@ -86,6 +88,8 @@ public class MatchingEngine {
     // 소비자 스레드가 반영한 값을 읽는다(account-disruptor AccountEngine.businessHandler와 같은 이유).
     private final MatchingEventHandler matchingEventHandler;
     private final StockSlotHasher stockSlotHasher;
+    private final SlotEventListener slotEventListener;
+    private final AcquireConfirmations acquireConfirmations;
     private RingBuffer<OrderEvent> ringBuffer;
     private final MatchingSegmentStages stages;
 
@@ -118,6 +122,20 @@ public class MatchingEngine {
     public MatchingEngine(int bufferSize, WaitStrategy waitStrategy, MatchListener listener, Journal journal,
                           MatchingSnapshotSink snapshotSink, boolean snapshotTriggerEnabled, StageLatencyRegistry stageRegistry,
                           StockSlotHasher stockSlotHasher, SlotEventListener slotEventListener) {
+        this(bufferSize, waitStrategy, listener, journal, snapshotSink, snapshotTriggerEnabled, stageRegistry,
+            stockSlotHasher, slotEventListener, null);
+    }
+
+    /**
+     * @param archiveRecordedPosition Archive가 저널 녹화에 지금까지 기록한 위치. 주면 받음 항목의 담당 켜기를 Archive 기록 위치가
+     *     항목 끝 위치에 닿은 뒤로 미룬다({@link #pollLoadCompletions}를 부르는 thread가 확인한다). null이면 append 직후 바로 켠다.
+     */
+    public MatchingEngine(int bufferSize, WaitStrategy waitStrategy, MatchListener listener, Journal journal,
+                          MatchingSnapshotSink snapshotSink, boolean snapshotTriggerEnabled, StageLatencyRegistry stageRegistry,
+                          StockSlotHasher stockSlotHasher, SlotEventListener slotEventListener,
+                          LongSupplier archiveRecordedPosition) {
+        this.slotEventListener = slotEventListener;
+        this.acquireConfirmations = archiveRecordedPosition == null ? null : new AcquireConfirmations(archiveRecordedPosition);
         this.stages = new MatchingSegmentStages(stageRegistry);
         this.stockSlotHasher = stockSlotHasher;
         this.journal = journal;
@@ -135,7 +153,7 @@ public class MatchingEngine {
         // 저널러가 먼저 기록 → 매처가 그 뒤에 매칭 (SequenceBarrier 로 게이팅)
         this.matchingEventHandler = new MatchingEventHandler(books, listener, snapshotSink, snapshotTriggerEnabled, stages,
             stockSlotHasher, slotEventListener);
-        this.disruptor.handleEventsWith(new JournalEventHandler(journal, slotEventListener)).then(matchingEventHandler);
+        this.disruptor.handleEventsWith(new JournalEventHandler(journal, slotEventListener, acquireConfirmations)).then(matchingEventHandler);
     }
 
     /** 단계 측정 등록부를 받고 러닝 중 스냅샷 없이 생성한다 — 테스트·측정용. */
@@ -369,6 +387,9 @@ public class MatchingEngine {
      */
     public int pollLoadCompletions() {
         int handled = matchingEventHandler.notifyDurableLoads();
+        if (acquireConfirmations != null) {
+            handled += acquireConfirmations.confirmRecorded(slotEventListener);
+        }
         if (matchingEventHandler.claimForceSnapshotRetry()) {
             long sequence = ringBuffer.next();
             try {
