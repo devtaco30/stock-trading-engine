@@ -5,7 +5,10 @@ import org.springframework.context.SmartLifecycle;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import com.flab.stocktradingengine.account.worker.lifecycle.MatchingSendMetricsReporterLifecycle;
 import com.flab.stocktradingengine.account.worker.lifecycle.MetricsReporterLifecycle;
+import com.flab.stocktradingengine.account.worker.messaging.AeronMatchingOrderSender;
+import com.flab.stocktradingengine.account.worker.messaging.MatchingSendMetricsReporter;
 import com.flab.stocktradingengine.account.worker.listener.MetricsAccountResultListener;
 
 /**
@@ -23,5 +26,12 @@ public class MetricsReporterConfig {
     @ConditionalOnProperty(prefix = "account-worker.metrics", name = "enabled", havingValue = "true")
     public SmartLifecycle metricsReporterLifecycle(MetricsAccountResultListener listener) {
         return new MetricsReporterLifecycle(listener);
+    }
+
+    /** 매칭행 발신 계측(queue 쌓임·기다림·재시도)을 같은 스위치로 1초마다 로그에 낸다(설계서 3-6절). */
+    @Bean
+    @ConditionalOnProperty(prefix = "account-worker.metrics", name = "enabled", havingValue = "true")
+    public SmartLifecycle matchingSendMetricsReporterLifecycle(AeronMatchingOrderSender matchingOrderSender) {
+        return new MatchingSendMetricsReporterLifecycle(new MatchingSendMetricsReporter(matchingOrderSender));
     }
 }

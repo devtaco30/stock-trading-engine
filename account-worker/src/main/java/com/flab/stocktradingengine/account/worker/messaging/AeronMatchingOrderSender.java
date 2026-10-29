@@ -9,6 +9,7 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicIntegerArray;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.LongAdder;
 
 import org.agrona.concurrent.BackoffIdleStrategy;
 import org.agrona.concurrent.IdleStrategy;
@@ -107,6 +108,10 @@ public class AeronMatchingOrderSender implements MatchingOrderSender, AutoClosea
     private final OneToOneConcurrentArrayQueue<JournaledOrder> rejectedInbox = new OneToOneConcurrentArrayQueue<>(REJECTED_INBOX_CAPACITY);
     private final IdleStrategy rejectedEnqueueIdleStrategy = new BackoffIdleStrategy();
     private int heldOrderTotal;
+    // 계측(설계서 3-6절) — 계좌 엔진 스레드와 publisherThread가 올리고 리포터 스레드가 읽는다.
+    private final LongAdder enqueueWaitCount = new LongAdder();
+    private final LongAdder enqueueWaitNanos = new LongAdder();
+    private final LongAdder offerRetryCount = new LongAdder();
     private final OrderCodec codec = new OrderCodec();
     private final OneToOneConcurrentArrayQueue<JournaledOrder> outbox = new OneToOneConcurrentArrayQueue<>(OUTBOX_CAPACITY);
     private final IdleStrategy enqueueIdleStrategy = new BackoffIdleStrategy();
@@ -202,11 +207,23 @@ public class AeronMatchingOrderSender implements MatchingOrderSender, AutoClosea
             EventType.PLACE, orderId, accountId, stockCode, side, price, quantity, Instant.now(),
             originNanos, receivedAtNanos, acceptedAtNanos);
 
+        if (outbox.offer(order)) {
+            return;
+        }
+        // queue가 가득 차 기다린다 — 기다린 횟수와 시간을 센다.
+        long waitStartNanos = System.nanoTime();
         enqueueIdleStrategy.reset();
         while (!outbox.offer(order)) {
             throwIfFatal();
             enqueueIdleStrategy.idle();
         }
+        enqueueWaitNanos.add(System.nanoTime() - waitStartNanos);
+        enqueueWaitCount.increment();
+    }
+
+    /** 매칭행 발신에서 센 값의 지금 모습. 리포터 스레드가 읽는다. */
+    public MatchingSendMetrics metrics() {
+        return new MatchingSendMetrics(outbox.size(), enqueueWaitCount.sum(), enqueueWaitNanos.sum(), offerRetryCount.sum());
     }
 
     private void throwIfFatal() {
@@ -327,6 +344,7 @@ public class AeronMatchingOrderSender implements MatchingOrderSender, AutoClosea
                 fatalError.set(error);
                 throw error;
             }
+            offerRetryCount.increment();
             // 이 재시도에 묶여 있어도 거부 회신 입구는 계속 비운다 — 매칭 pod가 주문을 못 읽어 거부 회신을
             // 못 내보내는 순환 대기를 끊는다(설계서 11-2절).
             drainRejectedInbox();
