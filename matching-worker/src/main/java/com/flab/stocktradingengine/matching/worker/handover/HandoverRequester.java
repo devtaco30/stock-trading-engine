@@ -93,9 +93,12 @@ public final class HandoverRequester implements AutoCloseable, HandoverRequestPo
     }
 
     @Override
-    public boolean hasMovingEntry(int stockSlot) {
+    public MapEntryState mapEntryState(int stockSlot) {
         Optional<MatchingSlotTarget> target = mapLookup.apply(stockSlot);
-        return target.isPresent() && target.get().moving();
+        if (target.isEmpty()) {
+            return MapEntryState.UNKNOWN;
+        }
+        return target.get().moving() ? MapEntryState.MOVING : MapEntryState.NOT_MOVING;
     }
 
     /** 이 종목 slot에서 지금 진행 중인 요청의 이동 번호. 없으면 빈 값. */

@@ -7,7 +7,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
 import org.junit.jupiter.api.AfterEach;
@@ -27,7 +26,7 @@ class HandoverCoordinatorAbandonedRetryTest {
         final List<Long> requestedTransferIds = new CopyOnWriteArrayList<>();
         final AtomicLong nextTransferId = new AtomicLong(100L);
         final Set<Integer> inFlight = ConcurrentHashMap.newKeySet();
-        final AtomicBoolean movingEntry = new AtomicBoolean(true);
+        volatile HandoverRequestPort.MapEntryState mapState = HandoverRequestPort.MapEntryState.MOVING;
 
         @Override
         public Optional<Long> request(int stockSlot) {
@@ -53,8 +52,8 @@ class HandoverCoordinatorAbandonedRetryTest {
         }
 
         @Override
-        public boolean hasMovingEntry(int stockSlot) {
-            return movingEntry.get();
+        public MapEntryState mapEntryState(int stockSlot) {
+            return mapState;
         }
     }
 
@@ -140,11 +139,25 @@ class HandoverCoordinatorAbandonedRetryTest {
         FakePort port = new FakePort();
         start(port).requestHandover(5);
         awaitUntil(() -> coordinator.failures() == 1);
-        port.movingEntry.set(false);
+        port.mapState = HandoverRequestPort.MapEntryState.NOT_MOVING;
 
         Thread.sleep(ABANDONED_RETRY_MILLIS + 300);
 
         assertThat(port.requestedTransferIds).hasSize(1);
+    }
+
+    @Test
+    void 재요청_시각에_맵_항목이_아직_읽히지_않았으면_중단하지_않고_다음_간격에_다시_확인해_요청한다() throws Exception {
+        FakePort port = new FakePort();
+        start(port).requestHandover(5);
+        awaitUntil(() -> coordinator.failures() == 1);
+        port.mapState = HandoverRequestPort.MapEntryState.UNKNOWN;
+        Thread.sleep(ABANDONED_RETRY_MILLIS + 200); // 첫 재요청 시각이 지나도 보류한다
+        assertThat(port.requestedTransferIds).hasSize(1);
+
+        port.mapState = HandoverRequestPort.MapEntryState.MOVING; // 맵 읽기가 따라왔다
+
+        awaitUntil(() -> port.requestedTransferIds.size() >= 2);
     }
 
     private static void awaitUntil(java.util.function.BooleanSupplier condition) throws InterruptedException {

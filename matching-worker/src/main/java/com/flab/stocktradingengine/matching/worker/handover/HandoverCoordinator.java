@@ -223,8 +223,15 @@ public final class HandoverCoordinator implements MovedSlotRequests, AutoCloseab
                     log.log(Level.INFO, "[호가창 이동] 호가창 적재를 더 기다리지 않는 종목 slot이라 다시 요청하지 않음: 종목 slot=" + stockSlot);
                     continue;
                 }
-                if (!port.hasMovingEntry(stockSlot)) {
-                    log.log(Level.ERROR, "[호가창 이동] 맵에 이전 담당의 이동 중 항목이 없어 다시 요청하지 않음 — 종목 slot의 담당이 켜지지 않은 채 남아 있을 수 있음: 종목 slot="
+                HandoverRequestPort.MapEntryState mapState = port.mapEntryState(stockSlot);
+                if (mapState == HandoverRequestPort.MapEntryState.UNKNOWN) {
+                    // 맵 읽기가 늦어 항목이 아직 보이지 않을 수 있다. 중단하지 않고 다음 간격에 다시 본다.
+                    log.log(Level.WARNING, "[호가창 이동] 맵에서 항목을 아직 읽지 못해 다음 간격에 다시 확인함: 종목 slot=" + stockSlot);
+                    abandoned.put(stockSlot, System.nanoTime() + abandonedRetryIntervalNanos);
+                    continue;
+                }
+                if (mapState == HandoverRequestPort.MapEntryState.NOT_MOVING) {
+                    log.log(Level.ERROR, "[호가창 이동] 맵의 항목이 더 이상 이전 담당의 이동 중 값이 아니라 다시 요청하지 않음 — 다른 pod가 담당을 바꿨을 수 있음: 종목 slot="
                         + stockSlot);
                     continue;
                 }
