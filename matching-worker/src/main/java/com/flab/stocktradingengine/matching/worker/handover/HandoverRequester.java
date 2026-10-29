@@ -140,10 +140,13 @@ public final class HandoverRequester implements AutoCloseable, HandoverRequestPo
         this.abandonedTransferListener = listener;
     }
 
-    /** 적재 요청을 낸 이동을 끝난 것으로 기록한다. */
-    void finish(int stockSlot, long transferId) {
-        currentTransferBySlot.remove(stockSlot, transferId);
-        sentBySlot.remove(stockSlot);
+    /** 적재 요청을 낼 이동을 끝난 것으로 기록한다. 그 사이 취소되었거나 다른 번호로 바뀌었으면 false이고, 이때는 적재를 요청하지 않는다. */
+    boolean finish(int stockSlot, long transferId) {
+        boolean wasCurrent = currentTransferBySlot.remove(stockSlot, transferId);
+        if (wasCurrent) {
+            sentBySlot.remove(stockSlot);
+        }
+        return wasCurrent;
     }
 
     @Override

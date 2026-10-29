@@ -150,6 +150,22 @@ class HandoverTransportIntegrationTest {
     }
 
     @Test
+    void 취소된_요청은_완료로_처리되지_않아_조립이_끝나도_적재를_요청하지_않는다() {
+        long transferId = zRequester.request(SLOT).orElseThrow();
+        zRequester.cancel(SLOT); // 수신 thread가 번호를 확인한 뒤 취소가 끼어든 순서
+
+        assertThat(zRequester.finish(SLOT, transferId)).as("취소된 이동은 완료로 받아들이지 않는다").isFalse();
+    }
+
+    @Test
+    void 진행_중인_요청은_한_번만_완료로_처리된다() {
+        long transferId = zRequester.request(SLOT).orElseThrow();
+
+        assertThat(zRequester.finish(SLOT, transferId)).isTrue();
+        assertThat(zRequester.finish(SLOT, transferId)).isFalse();
+    }
+
+    @Test
     void 보낼_종목이_하나도_없는_종목_slot도_빈_목록으로_완료된다() {
         xStore.put(SLOT, List.of());
 
