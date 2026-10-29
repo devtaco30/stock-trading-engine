@@ -45,4 +45,27 @@ class HandoverEndpointPoolTest {
         assertThatThrownBy(() -> new HandoverEndpointPool(List.of(SELF, SELF), SELF))
             .isInstanceOf(IllegalStateException.class).hasMessageContaining("두 번");
     }
+
+    @Test
+    void 조정_모드에서_풀이_비어_있으면_필요한_키를_알리며_기동을_막는다() {
+        assertThatThrownBy(() -> HandoverEndpointPool.requireForCoordination(List.of(), SELF))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("matching-shard.handover.endpoints");
+    }
+
+    @Test
+    void 조정_모드에서_풀에_자기_주소가_없으면_필요한_키를_알리며_기동을_막는다() {
+        assertThatThrownBy(() -> HandoverEndpointPool.requireForCoordination(List.of(PEER), SELF))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("matching-shard.handover.endpoints")
+            .hasMessageContaining("transport.matching-intake.channel")
+            .hasMessageContaining(SELF);
+    }
+
+    @Test
+    void 조정_모드에서_자기_주소가_풀에_있으면_통과한다() {
+        HandoverEndpointPool pool = HandoverEndpointPool.requireForCoordination(List.of(SELF, PEER), SELF);
+
+        assertThat(pool.peers()).containsExactly(PEER);
+    }
 }

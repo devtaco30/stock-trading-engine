@@ -14,6 +14,22 @@ public final class HandoverEndpointPool {
 
     public static final int MAX_ENDPOINTS = 8;
 
+    /**
+     * 조정 모드에서 쓰는 생성. 풀이 비어 있거나 자기 주소가 풀에 없으면 기동을 막는다. 그대로 두면 다른 pod가 합류해 종목 slot이
+     * 옮겨 가는 순간에야 「풀에 없는 주소」 예외가 종목 slot마다 나고 배정이 조용히 멈춘다.
+     */
+    public static HandoverEndpointPool requireForCoordination(List<String> configuredEndpoints, String ownEndpoint) {
+        if (configuredEndpoints.isEmpty()) {
+            throw new IllegalStateException("조정 모드(matching-shard.coordination.enabled=true)에는 matching-shard.handover.endpoints가 필요하다 — "
+                + "이 매칭 shard들의 주문 입구 주소(transport.matching-intake.channel 값)를 모두 적는다. 지금은 비어 있다");
+        }
+        if (!configuredEndpoints.contains(ownEndpoint)) {
+            throw new IllegalStateException("matching-shard.handover.endpoints에 이 매칭 shard의 주문 입구 주소가 없다 — "
+                + "transport.matching-intake.channel 값 " + ownEndpoint + "을(를) 목록에 넣어야 한다. 현재 목록=" + configuredEndpoints);
+        }
+        return new HandoverEndpointPool(configuredEndpoints, ownEndpoint);
+    }
+
     private final Set<String> endpoints;
     private final String ownEndpoint;
 

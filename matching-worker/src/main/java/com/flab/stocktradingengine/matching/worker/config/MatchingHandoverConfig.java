@@ -64,7 +64,7 @@ public class MatchingHandoverConfig {
             @Value("${transport.matching-intake.channel:" + MatchingOrderIntakeConfig.DEFAULT_INTAKE_CHANNEL + "}") String ownChannel) {
         List<String> endpoints = Binder.get(environment)
             .bind("matching-shard.handover.endpoints", Bindable.listOf(String.class)).orElse(List.of());
-        return new HandoverEndpointPool(endpoints, ownChannel);
+        return HandoverEndpointPool.requireForCoordination(endpoints, ownChannel);
     }
 
     @Bean

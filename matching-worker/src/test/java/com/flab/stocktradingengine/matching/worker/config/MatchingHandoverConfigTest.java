@@ -99,6 +99,35 @@ class MatchingHandoverConfigTest {
             });
     }
 
+    @Test
+    void 조정_모드에서_호가창_이동_주소_풀이_비어_있으면_기동이_실패하고_메시지에_필요한_키가_있다() {
+        contextRunner
+            .withPropertyValues(
+                "matching-shard.coordination.enabled=true",
+                "spring.kafka.bootstrap-servers=localhost:9092",
+                "matching-worker.instance-id=matching-1",
+                "transport.matching-intake.channel=aeron:udp?endpoint=localhost:20021")
+            .run(context -> {
+                assertThat(context).hasFailed();
+                assertThat(context.getStartupFailure()).hasStackTraceContaining("matching-shard.handover.endpoints");
+            });
+    }
+
+    @Test
+    void 조정_모드에서_풀에_자기_주소가_없으면_기동이_실패한다() {
+        contextRunner
+            .withPropertyValues(
+                "matching-shard.coordination.enabled=true",
+                "spring.kafka.bootstrap-servers=localhost:9092",
+                "matching-worker.instance-id=matching-1",
+                "transport.matching-intake.channel=aeron:udp?endpoint=localhost:20021",
+                "matching-shard.handover.endpoints[0]=aeron:udp?endpoint=localhost:20020")
+            .run(context -> {
+                assertThat(context).hasFailed();
+                assertThat(context.getStartupFailure()).hasStackTraceContaining("matching-shard.handover.endpoints");
+            });
+    }
+
     private static LifecycleProcessor noOpProcessor() {
         return new LifecycleProcessor() {
             @Override
