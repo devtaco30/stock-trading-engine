@@ -237,6 +237,28 @@ class MatchingDestinationResolverTest {
     }
 
     @Test
+    void 맵_토픽의_파티션_목록이_비어_있으면_기동을_중단한다() {
+        SleepingMockConsumer emptyConsumer = new SleepingMockConsumer();
+        emptyConsumer.updatePartitions(MAP_TOPIC, List.of());
+        MatchingDestinationResolver emptyResolver = new MatchingDestinationResolver(emptyConsumer, stockSlotHasher, ADDRESS_POOL);
+
+        IllegalStateException failure = assertThrows(IllegalStateException.class, emptyResolver::start);
+
+        assertTrue(failure.getMessage().contains(MAP_TOPIC));
+        emptyResolver.close();
+    }
+
+    @Test
+    void 맵_토픽을_모르는_컨슈머가_null을_돌려줘도_기동을_중단한다() {
+        SleepingMockConsumer unknownConsumer = new SleepingMockConsumer();
+        MatchingDestinationResolver unknownResolver = new MatchingDestinationResolver(unknownConsumer, stockSlotHasher, ADDRESS_POOL);
+
+        assertThrows(IllegalStateException.class, unknownResolver::start);
+
+        unknownResolver.close();
+    }
+
+    @Test
     void 한_번에_받은_변경_둘은_읽는_쪽에_섞여_보이지_않고_이미_읽은_표는_바뀌지_않는다() throws Exception {
         String firstStock = "005930";
         String secondStock = stockInDifferentSlot(firstStock);

@@ -119,6 +119,12 @@ public final class MatchingDestinationResolver implements MatchingTargetLookup {
 
     public void start() {
         List<PartitionInfo> partitionInfos = consumer.partitionsFor(MAP_TOPIC);
+        if (partitionInfos == null || partitionInfos.isEmpty()) {
+            // 맵 토픽이 아직 없거나 파티션이 없다. 빈 목록으로 읽기를 시작하면 첫 poll에서 「다 읽었다」로 판정돼
+            // 배정을 하나도 모른 채 주문 접수가 열린다 — 기동을 중단한다.
+            throw new IllegalStateException(MAP_TOPIC + "의 파티션을 찾지 못했습니다(토픽이 없거나 파티션이 없음) — "
+                + "매칭 shard가 맵 토픽을 만든 뒤에 계좌 shard를 기동해야 합니다");
+        }
         List<TopicPartition> partitions = partitionInfos.stream()
             .map(info -> new TopicPartition(MAP_TOPIC, info.partition()))
             .toList();
