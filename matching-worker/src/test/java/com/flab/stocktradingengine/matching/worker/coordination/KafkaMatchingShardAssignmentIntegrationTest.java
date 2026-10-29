@@ -171,6 +171,8 @@ class KafkaMatchingShardAssignmentIntegrationTest {
             admin.removeMembersFromConsumerGroup(groupId,
                 new RemoveMembersFromConsumerGroupOptions(List.of(new MemberToRemove("m2")))).all().get();
         }
+        // 그룹에서 빠진 둘째의 consumer가 계속 poll하면 곧바로 다시 가입해 일부 종목 slot을 되가져간다. 떠난 멤버는 멈춘 것으로 만든다.
+        second.close();
 
         awaitSlotCount(first, STOCK_SLOT_COUNT);
     }
