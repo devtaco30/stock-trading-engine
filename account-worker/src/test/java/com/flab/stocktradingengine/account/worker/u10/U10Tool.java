@@ -49,6 +49,10 @@ import io.aeron.driver.ThreadingMode;
  *       계좌 워커 주문 입구(스트림 4004)에 주문 한 건을 보낸다. 연결이 안 되면 종료 코드 3.</li>
  *   <li>{@code codes <stockSlotCount> <splitSlot>} — 종목 slot이 splitSlot 이상인 종목코드 X와 미만인 종목코드 Y를 출력한다
  *       (Kafka 없이 계산만 한다).</li>
+ *   <li>{@code codes-many <stockSlotCount> <splitSlot> <count>} — 종목 slot이 splitSlot 이상인 종목코드 count개를
+ *       {@code HIGH=a,b,c}로 출력한다.</li>
+ *   <li>{@code send-bulk <channel> <accountId> <BUY|SELL> <firstPrice> <perStock> <requestIdPrefix> <stockCode...>} —
+ *       종목마다 perStock건을 가격 firstPrice, firstPrice+1, …로 한 연결에서 보낸다(수량 1).</li>
  *   <li>{@code assigned <kafkaBootstrap> <stockSlotCount>} — 맵 토픽의 종목 slot별 마지막 값을 읽어
  *       {@code ASSIGNED 배정된 수/전체 MOVING 이동 중인 수 ENDPOINTS 주소=개수,...}를 출력한다.</li>
  *   <li>{@code map-history <kafkaBootstrap>} — 맵 토픽의 모든 기록을 {@code slot<TAB>CreateTime(ms)<TAB>값} 줄로 출력한다.</li>
@@ -68,6 +72,8 @@ public final class U10Tool {
             case "send" -> send(args);
             case "dump-account" -> dumpAccount(new File(args[1]));
             case "codes" -> codes(Integer.parseInt(args[1]), Integer.parseInt(args[2]));
+            case "codes-many" -> codesMany(Integer.parseInt(args[1]), Integer.parseInt(args[2]), Integer.parseInt(args[3]));
+            case "send-bulk" -> sendBulk(args);
             case "assigned" -> assigned(args[1], Integer.parseInt(args[2]));
             case "map-history" -> mapHistory(args[1]);
             default -> {
@@ -156,6 +162,71 @@ public final class U10Tool {
             }
         }
         return records;
+    }
+
+
+    private static void codesMany(int stockSlotCount, int splitSlot, int count) {
+        StockSlotHasher hasher = new StockSlotHasher(stockSlotCount);
+        List<String> picked = new ArrayList<>();
+        for (int number = 1; number <= 999_999 && picked.size() < count; number++) {
+            String code = String.format("%06d", number);
+            if (hasher.slotFor(code) >= splitSlot) {
+                picked.add(code);
+            }
+        }
+        System.out.println("HIGH=" + String.join(",", picked));
+    }
+
+    private static void sendBulk(String[] args) throws Exception {
+        String channel = args[1];
+        long accountId = Long.parseLong(args[2]);
+        OrderSide side = OrderSide.valueOf(args[3]);
+        long firstPrice = Long.parseLong(args[4]);
+        int perStock = Integer.parseInt(args[5]);
+        String prefix = args[6];
+        MediaDriver driver = MediaDriver.launchEmbedded(new MediaDriver.Context()
+            .aeronDirectoryName(CommonContext.generateRandomDirName())
+            .dirDeleteOnStart(true)
+            .threadingMode(ThreadingMode.SHARED));
+        Aeron aeron = Aeron.connect(new Aeron.Context().aeronDirectoryName(driver.aeronDirectoryName()));
+        try {
+            Publication publication = aeron.addPublication(channel, AeronStreamIds.ACCOUNT_INTAKE);
+            long connectDeadline = System.currentTimeMillis() + CONNECT_TIMEOUT_MILLIS;
+            while (!publication.isConnected() && System.currentTimeMillis() < connectDeadline) {
+                Thread.sleep(20);
+            }
+            if (!publication.isConnected()) {
+                System.out.println("NOT_CONNECTED " + channel);
+                System.exit(3);
+            }
+            AccountOrderCodec codec = new AccountOrderCodec();
+            UnsafeBuffer buffer = new UnsafeBuffer(new byte[256]);
+            long started = System.currentTimeMillis();
+            int sent = 0;
+            for (int stockIndex = 7; stockIndex < args.length; stockIndex++) {
+                String stockCode = args[stockIndex];
+                for (int i = 0; i < perStock; i++) {
+                    DecodedAccountOrder order = new DecodedAccountOrder(side, accountId, stockCode,
+                        BigDecimal.valueOf(firstPrice + i), 1, prefix + "-" + stockCode + "-" + i, EpochNanos.now());
+                    int length = codec.encode(buffer, 0, order);
+                    long deadline = System.currentTimeMillis() + 30_000L;
+                    long result;
+                    while ((result = publication.offer(buffer, 0, length)) < 0) {
+                        if (System.currentTimeMillis() > deadline) {
+                            System.out.println("OFFER_FAILED " + result + " sent=" + sent);
+                            System.exit(3);
+                        }
+                        Thread.sleep(1);
+                    }
+                    sent++;
+                }
+            }
+            System.out.println("SENT_BULK " + sent + " elapsedMs=" + (System.currentTimeMillis() - started));
+            Thread.sleep(500);
+        } finally {
+            CloseHelper.quietClose(aeron);
+            CloseHelper.quietClose(driver);
+        }
     }
 
     private static void codes(int stockSlotCount, int splitSlot) {
