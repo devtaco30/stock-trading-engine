@@ -311,6 +311,11 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
         return awaitingDecision.size() + awaitingLoad.size();
     }
 
+    /** 그 종목 slot이 이동으로 받기로 하고 호가창 적재와 스냅샷 확정을 기다리는 중인지. */
+    public boolean isAwaitingLoad(int stockSlot) {
+        return awaitingLoad.contains(stockSlot);
+    }
+
     public Set<Integer> currentSlotsSnapshot() {
         boolean[] flags = ownedSlotFlags;
         return IntStream.range(0, flags.length).filter(slot -> flags[slot]).boxed()

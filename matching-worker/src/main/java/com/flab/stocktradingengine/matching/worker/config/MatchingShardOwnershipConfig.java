@@ -145,13 +145,17 @@ public class MatchingShardOwnershipConfig {
         Consumer<String, String> consumer = new KafkaConsumer<>(consumerProps);
         Producer<Integer, String> mapProducer = buildMapProducer(bootstrapServers);
         Admin adminClient = Admin.create(adminProps(bootstrapServers));
+        java.util.concurrent.atomic.AtomicReference<KafkaMatchingShardAssignment> assignmentRef = new java.util.concurrent.atomic.AtomicReference<>();
         KafkaMatchingShardAssignment assignment = new KafkaMatchingShardAssignment(
             consumer, mapProducer, adminClient, stockSlotHasher.stockSlotCount(), orderEndpoint,
             KafkaMatchingShardAssignment.ASSIGNMENT_TOPIC, KafkaMatchingShardAssignment.MAP_TOPIC, slotEventRequests,
             slot -> mapReader.getObject().targetFor(slot), new MovedSlotRequests() {
                 @Override
                 public void requestHandover(int stockSlot) {
-                    handoverCoordinator.getObject().requestHandover(stockSlot);
+                    HandoverCoordinator coordinator = handoverCoordinator.getObject();
+                    // 재요청 직전에 그 종목 slot이 아직 호가창 적재를 기다리는지 확인하게 한다. 같은 값을 다시 정해도 같다.
+                    coordinator.setStillAwaitingLoad(slot -> assignmentRef.get().isAwaitingLoad(slot));
+                    coordinator.requestHandover(stockSlot);
                 }
 
                 @Override
@@ -163,6 +167,7 @@ public class MatchingShardOwnershipConfig {
                 thread.setDaemon(true);
                 return thread;
             }));
+        assignmentRef.set(assignment);
         assignment.setMapWriteDeadlineMillis(mapWriteDeadlineMillis);
         return assignment;
     }

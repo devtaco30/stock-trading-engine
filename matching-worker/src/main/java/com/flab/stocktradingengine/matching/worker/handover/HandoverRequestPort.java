@@ -14,6 +14,11 @@ public interface HandoverRequestPort {
     /** 그 종목 slot의 요청이 아직 진행 중인지(응답이 완성되어 끝나지도, 취소되지도 않았는지). */
     boolean inFlight(int stockSlot);
 
+    /** 맵에 그 종목 slot의 이전 담당 이동 중 항목이 있는지. 없으면 더 요청할 이유가 없다. */
+    default boolean hasMovingEntry(int stockSlot) {
+        return true;
+    }
+
     /** 진행 중인 요청을 취소한다. 이후 도착하는 그 요청의 응답은 버려진다. */
     void cancel(int stockSlot);
 }
