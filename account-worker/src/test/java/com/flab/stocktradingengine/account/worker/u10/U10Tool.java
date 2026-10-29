@@ -183,7 +183,7 @@ public final class U10Tool {
                 }
             }
             System.out.println("ACCOUNT id=" + account.accountId() + " balance=" + account.balance().toPlainString()
-                + " holdings=" + new TreeMap<>(account.holdings()) + " unpaid=" + account.unpaid().toPlainString()
+                + " holdings=" + new TreeMap<>(account.holdings()).toString().replace(" ", "") + " unpaid=" + account.unpaid().toPlainString()
                 + " reservations=" + account.reservations().size() + " sellReservations=" + account.sellReservations().size()
                 + " tradeIds=" + tradeIds);
         }
