@@ -96,6 +96,10 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
     private final java.util.Set<Integer> abandonedMapWrites = ConcurrentHashMap.newKeySet();
     // 종목 slot별 맵 쓰기 세대. 회수될 때마다 올려, 다시 보내려던 옛 쓰기가 나중에 이동 중 표시를 덮어쓰지 못하게 한다.
     private final java.util.concurrent.atomic.AtomicIntegerArray mapWriteGeneration;
+    // 종목 slot별로 마지막으로 넣은 맵 쓰기의 순서 번호.
+    private final java.util.concurrent.atomic.AtomicIntegerArray mapWriteSeq;
+    // 아직 끝나지 않은(queue에 있거나 보내는 중이거나 queue 뒤로 밀린) 맵 쓰기가 있는 종목 slot.
+    private final java.util.Set<Integer> pendingMapWriteSlots = ConcurrentHashMap.newKeySet();
     // 보내는 호출이 예외를 던지는 쓰기를 포기하기까지의 시도 횟수. 근거 없는 임의 값이다.
     private static final int MAP_WRITE_RUNTIME_ATTEMPTS = 5;
     private volatile long mapWriteRetryMillis = 1_000L;
@@ -118,7 +122,8 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
     private final java.util.concurrent.BlockingQueue<MapWrite> mapWriteQueue = new java.util.concurrent.LinkedBlockingQueue<>();
     private volatile Thread mapWriteThread;
 
-    private record MapWrite(int stockSlot, String value, int generation, java.util.concurrent.CompletableFuture<Void> done) {
+    // seq는 같은 종목 slot에서 쓰기를 넣은 순서 번호다. 더 새로운 쓰기가 있으면 오래된 쓰기는 보내지 않고 버린다.
+    private record MapWrite(int stockSlot, String value, int generation, int seq, java.util.concurrent.CompletableFuture<Void> done) {
     }
 
     // test()가 주문마다 불린다. 배열 참조를 volatile로 통째로 교체해 박싱 없이 인덱스 조회만 한다.
@@ -185,6 +190,7 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
         this.mapTopic = mapTopic;
         this.ownedSlotFlags = new boolean[stockSlotCount];
         this.mapWriteGeneration = new java.util.concurrent.atomic.AtomicIntegerArray(stockSlotCount);
+        this.mapWriteSeq = new java.util.concurrent.atomic.AtomicIntegerArray(stockSlotCount);
     }
 
     /**
@@ -242,7 +248,8 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
     private java.util.concurrent.CompletableFuture<Void> enqueueMapWrite(int stockSlot, String value, int generation) {
         java.util.concurrent.CompletableFuture<Void> done = new java.util.concurrent.CompletableFuture<>();
         startMapWriteThreadIfNeeded();
-        mapWriteQueue.add(new MapWrite(stockSlot, value, generation, done));
+        pendingMapWriteSlots.add(stockSlot);
+        mapWriteQueue.add(new MapWrite(stockSlot, value, generation, mapWriteSeq.incrementAndGet(stockSlot), done));
         return done;
     }
 
@@ -263,9 +270,16 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
     /** 포기한 쓰기의 종목 slot을 멈춤에 넣는다. 그 사이 회수되었으면(세대가 바뀜) 넣지 않는다. 회수 쪽의 지우기와 같은 잠금 안에서 한다. */
     private void markMapWriteAbandoned(MapWrite write) {
         synchronized (this) {
-            if (mapWriteGeneration.get(write.stockSlot()) == write.generation()) {
+            if (mapWriteGeneration.get(write.stockSlot()) == write.generation() && mapWriteSeq.get(write.stockSlot()) == write.seq()) {
                 abandonedMapWrites.add(write.stockSlot());
             }
+        }
+    }
+
+    /** 쓰기가 끝났다(성공, 버림, 포기). 그 종목 slot에 더 새로운 쓰기가 남아 있지 않을 때만 대기에서 뺀다. */
+    private void finishMapWrite(MapWrite write) {
+        if (mapWriteSeq.get(write.stockSlot()) == write.seq()) {
+            pendingMapWriteSlots.remove(write.stockSlot());
         }
     }
 
@@ -282,12 +296,23 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
             try {
                 while (true) {
                     if (mapWriteGeneration.get(write.stockSlot()) != write.generation()) {
+                        finishMapWrite(write);
+                        write.done().complete(null);
+                        break;
+                    }
+                    if (mapWriteSeq.get(write.stockSlot()) != write.seq()) {
+                        // 같은 종목 slot에 더 새로운 쓰기가 있다. 오래된 값을 나중에 올려 새 값을 덮지 않도록 버린다. 이 쓰기가 남긴 포기 표시도 지운다.
+                        abandonedMapWrites.remove(write.stockSlot());
+                        finishMapWrite(write);
                         write.done().complete(null);
                         break;
                     }
                     try {
                         mapProducer.send(new ProducerRecord<>(mapTopic, write.stockSlot(), write.value())).get();
-                        abandonedMapWrites.remove(write.stockSlot());
+                        if (mapWriteSeq.get(write.stockSlot()) == write.seq()) {
+                            abandonedMapWrites.remove(write.stockSlot());
+                        }
+                        finishMapWrite(write);
                         write.done().complete(null);
                         break;
                     } catch (ExecutionException e) {
@@ -313,6 +338,7 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
                             log.log(Level.ERROR, "[매칭] 맵 쓰기가 예외로 " + runtimeFailures + "번 실패해 포기함 — 맵이 이전 값으로 남아 이 종목 slot의 주문이 보관만 될 수 있음: 종목 slot="
                                 + write.stockSlot() + " 값=" + write.value() + " 원인=" + e);
                             markMapWriteAbandoned(write);
+                            finishMapWrite(write);
                             write.done().completeExceptionally(e);
                             break;
                         }
@@ -367,12 +393,15 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
     }
 
     /** 지금 이동 중 어느 대기 상태에든 있는 종목 slot(판정, 호가창 적재, 받음 기록 확인, 맵 전환, 포기한 맵 쓰기). 멈춤 신호가 머문 시간을 센다. */
-    public Set<Integer> slotsWaitingForMove() {
+    public synchronized Set<Integer> slotsWaitingForMove() {
+        // 대기 집합 사이를 slot이 옮겨 가는 전환은 모두 이 객체의 잠금 안에서 일어나므로, 같은 잠금 안에서 복사해 옮겨 가는 사이에 빠지지 않게 한다.
         Set<Integer> waiting = new java.util.HashSet<>(awaitingDecision);
         waiting.addAll(awaitingLoad);
         waiting.addAll(movedInAcquiring);
         waiting.addAll(awaitingMapSwitch);
+        waiting.addAll(awaitingJournalConfirm);
         waiting.addAll(abandonedMapWrites);
+        waiting.addAll(pendingMapWriteSlots);
         return waiting;
     }
 
@@ -518,7 +547,9 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
                 // 판정은 맵 읽기가 맵 토픽의 끝까지 따라온 뒤에 한다. 이전 담당의 이동 중 값이 아직 읽는 쪽에 도착하지 않았는데 항목 없음으로
                 // 보고 첫 배정으로 가정하면 빈 호가창으로 담당을 켜고 평상시 값을 올려 이전 담당이 진짜 호가창을 지우게 된다. 콜백은 판정 요청만
                 // 남기고 돌아간다.
-                awaitingDecision.addAll(slots);
+                synchronized (KafkaMatchingShardAssignment.this) {
+                    awaitingDecision.addAll(slots);
+                }
                 Runnable decision = () -> decide(slots);
                 if (decisionExecutor == null) {
                     decision.run();
@@ -538,10 +569,10 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
                 ownedSlotFlags = updated;
             }
         } else {
-            partitions.forEach(p -> {
-                awaitingJournalConfirm.add(p.partition());
-                slotEventRequests.requestAcquire(p.partition());
-            });
+            synchronized (this) {
+                partitions.forEach(p -> awaitingJournalConfirm.add(p.partition()));
+            }
+            partitions.forEach(p -> slotEventRequests.requestAcquire(p.partition()));
         }
         if (!partitions.isEmpty()) {
             publishMapEntries(partitions, ownOrderEndpoint);

@@ -45,6 +45,8 @@ class KafkaMatchingShardAssignmentStuckSlotTest {
         volatile Integer alwaysThrowForSlot;
         // 정해지면 이 종목 slot의 쓰기는 브로커 오류로 끝나는 future를 돌려준다(보내는 호출은 성공하고 응답이 실패).
         volatile Integer brokerFailForSlot;
+        // 정해지면 이 접미사로 끝나는 값의 쓰기는 브로커 오류로 끝난다(예: 회수가 올리는 「;moving」).
+        volatile String brokerFailValueSuffix;
 
         ThrowingProducer() {
             this(Integer.MAX_VALUE);
@@ -59,6 +61,9 @@ class KafkaMatchingShardAssignmentStuckSlotTest {
         public synchronized Future<RecordMetadata> send(ProducerRecord<Integer, String> record) {
             if (alwaysThrowForSlot != null && alwaysThrowForSlot.equals(record.key())) {
                 throw new IllegalStateException("이 쓰기는 영구히 실패");
+            }
+            if (brokerFailValueSuffix != null && record.value().endsWith(brokerFailValueSuffix)) {
+                return java.util.concurrent.CompletableFuture.failedFuture(new IllegalStateException("브로커 오류 흉내"));
             }
             if (brokerFailForSlot != null && brokerFailForSlot.equals(record.key())) {
                 return java.util.concurrent.CompletableFuture.failedFuture(new IllegalStateException("브로커 오류 흉내"));
@@ -89,6 +94,7 @@ class KafkaMatchingShardAssignmentStuckSlotTest {
     };
     private final Logger julLogger = Logger.getLogger(KafkaMatchingShardAssignment.class.getName());
     private KafkaMatchingShardAssignment assignment;
+    private MockProducer<Integer, String> assignmentProducer;
     private ConsumerRebalanceListener listener;
 
     @BeforeEach
@@ -105,7 +111,11 @@ class KafkaMatchingShardAssignmentStuckSlotTest {
     }
 
     private void build(MockProducer<Integer, String> producer, MapSync mapSync) {
-        IntFunction<Optional<MatchingSlotTarget>> lookup = slot -> Optional.of(new MatchingSlotTarget(PREVIOUS_OWNER, true));
+        build(producer, mapSync, slot -> Optional.of(new MatchingSlotTarget(PREVIOUS_OWNER, true)));
+    }
+
+    private void build(MockProducer<Integer, String> producer, MapSync mapSync, IntFunction<Optional<MatchingSlotTarget>> lookup) {
+        assignmentProducer = producer;
         assignment = new KafkaMatchingShardAssignment(mock(Consumer.class), producer, mock(Admin.class), 64, OWN,
             "assignment-topic", "map-topic", new SlotEventRequests(), lookup, slot -> { }, mapSync, Runnable::run);
         listener = assignment.rebalanceListener();
@@ -253,6 +263,61 @@ class KafkaMatchingShardAssignmentStuckSlotTest {
     }
 
     @Test
+    void 뒤로_밀린_회수_쓰기가_나중에_성공해도_같은_종목_slot의_더_새로운_쓰기를_덮어쓰지_않는다() throws Exception {
+        ThrowingProducer producer = new ThrowingProducer(0);
+        producer.brokerFailValueSuffix = ";moving";
+        build(producer, () -> true);
+        assignment.setMapWriteRetryMillis(10L);
+        assignment.setMapWriteFailureLimit(3);
+        assignment.setMapWriteDeadlineMillis(100L);
+        listener.onPartitionsAssigned(partitions(5));
+        assignment.acquireAfterLoad(5);
+        assignment.confirmAcquired(5); // 평상시 값 W1
+        awaitHistoryKeys(5, 1);
+
+        listener.onPartitionsRevoked(partitions(5)); // 「;moving」 W2: 브로커 오류로 계속 실패한다
+        listener.onPartitionsAssigned(partitions(5)); // 같은 pod가 되받는다
+        assignment.acquireAfterLoad(5);
+        assignment.confirmAcquired(5); // 평상시 값 W3
+        awaitHistoryKeys(5, 2);
+        producer.brokerFailValueSuffix = null; // 브로커 오류가 풀린다
+        Thread.sleep(300);
+
+        List<String> valuesForFive = producer.history().stream().filter(record -> record.key() == 5)
+            .map(ProducerRecord::value).toList();
+        assertThat(valuesForFive.get(valuesForFive.size() - 1)).as("마지막으로 쓴 값이 담당 pod 자신의 평상시 값이다").isEqualTo(OWN);
+        assertThat(valuesForFive).as("옛 「;moving」 쓰기는 더 새로운 쓰기가 있으면 버려진다").noneMatch(value -> value.endsWith(";moving"));
+        assertThat(assignment.stuckSlotCount()).as("새 쓰기가 성공했으니 맵은 맞고 멈춘 것이 아니다").isZero();
+    }
+
+    @Test
+    void 첫_배정으로_판정된_종목_slot도_저널_기록_확인을_기다리는_동안_이동_대기에_센다() {
+        build(new MockProducer<>(true, new IntegerSerializer(), new StringSerializer()), () -> true, slot -> Optional.empty());
+
+        listener.onPartitionsAssigned(partitions(5));
+
+        assertThat(assignment.slotsWaitingForMove()).containsExactly(5);
+        assignment.confirmAcquired(5);
+        assertThat(assignment.slotsWaitingForMove()).isEmpty();
+    }
+
+    @Test
+    void 맵_전환_쓰기가_queue에서_실패를_반복하는_동안에도_이동_대기에_센다() throws Exception {
+        ThrowingProducer producer = new ThrowingProducer(0);
+        producer.brokerFailForSlot = 5;
+        build(producer, () -> true);
+        assignment.setMapWriteRetryMillis(10L);
+        assignment.setMapWriteFailureLimit(1_000);
+        listener.onPartitionsAssigned(partitions(5));
+        assignment.acquireAfterLoad(5);
+
+        assignment.confirmAcquired(5); // awaitingMapSwitch는 비워지지만 쓰기는 아직 끝나지 않았다
+        Thread.sleep(100);
+
+        assertThat(assignment.slotsWaitingForMove()).containsExactly(5);
+    }
+
+    @Test
     void 맵_읽기가_따라오지_못해_판정하지_못하면_종목_slot_번호가_담긴_ERROR_로그를_남기고_멈춘_개수에_센다() {
         build(new MockProducer<>(true, new IntegerSerializer(), new StringSerializer()), () -> false);
 
@@ -272,6 +337,17 @@ class KafkaMatchingShardAssignmentStuckSlotTest {
         assertThat(assignment.stuckSlotCount()).isEqualTo(1);
         assignment.acquireAfterLoad(5);
         assertThat(assignment.stuckSlotCount()).isZero();
+    }
+
+    private void awaitHistoryKeys(int key, int count) throws InterruptedException {
+        long deadline = System.nanoTime() + 3_000_000_000L;
+        while (producer(key, count) && System.nanoTime() < deadline) {
+            Thread.sleep(5);
+        }
+    }
+
+    private boolean producer(int key, int count) {
+        return ((MockProducer<Integer, String>) assignmentProducer).history().stream().filter(record -> record.key() == key).count() < count;
     }
 
     private void awaitErrors() throws InterruptedException {
