@@ -7,9 +7,12 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Queue;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import com.lmax.disruptor.EventHandler;
 
@@ -27,6 +30,7 @@ import com.flab.stocktradingengine.matching.disruptor.io.SlotEventListener;
 import com.flab.stocktradingengine.matching.disruptor.snapshot.MatchingSnapshot;
 import com.flab.stocktradingengine.matching.disruptor.snapshot.MatchingSnapshotCodec;
 import com.flab.stocktradingengine.matching.disruptor.snapshot.MatchingSnapshotFactory;
+import com.flab.stocktradingengine.matching.disruptor.snapshot.MatchingSnapshotRestorer;
 
 /**
  * 링버퍼를 소비하는 단일 매칭 핸들러.
@@ -85,6 +89,24 @@ public class MatchingEventHandler implements EventHandler<OrderEvent> {
     // 넘김 이벤트에 도달해 넘기는 중인 종목 slot. 이 slot의 종목은 이후 PLACE·CANCEL을 호가창에 반영하지 않는다(U13).
     // 이 스레드만 접근한다. 비어 있으면 주문마다 종목 slot을 계산하지 않는다.
     private final Set<Integer> handedOverSlots = new HashSet<>();
+
+    // 적재를 마치고 강제 스냅샷의 디스크 확정을 기다리는 호가창 이동(U15). 엔진 thread가 넣고 완료를 확인하는 thread가 꺼낸다.
+    // appliedSeq가 -1이면 쓰기 queue가 차서 강제 스냅샷이 거부되어 아직 다시 찍어야 한다.
+    private final Queue<PendingLoad> loadsAwaitingDurable = new ConcurrentLinkedQueue<>();
+    // 강제 스냅샷 재시도 이벤트를 링버퍼에 넣어 두었고 엔진 thread가 아직 처리하지 않았는지.
+    private final AtomicBoolean forceSnapshotRetryQueued = new AtomicBoolean();
+
+    private static final class PendingLoad {
+        private final long transferId;
+        private final int stockSlot;
+        private volatile long appliedSeq;
+
+        private PendingLoad(long transferId, int stockSlot, long appliedSeq) {
+            this.transferId = transferId;
+            this.stockSlot = stockSlot;
+            this.appliedSeq = appliedSeq;
+        }
+    }
 
     // JournalEventHandler가 슬롯에 실어준 값(I6 U1) — 이 핸들러(소비자 스레드)만 읽는다.
     private long lastJournaledPosition;
@@ -145,6 +167,21 @@ public class MatchingEventHandler implements EventHandler<OrderEvent> {
             if (endOfBatch) {
                 notifyBooksChanged();
             }
+            return;
+        }
+        if (event.isBookLoad() || event.isForceSnapshot()) {
+            lastJournaledPosition = event.getJournaledPosition();
+            if (event.isBookLoad()) {
+                handleBookLoad(event);
+            } else {
+                forceSnapshotRetryQueued.set(false);
+                retryRejectedForcedSnapshots();
+            }
+            event.clear();
+            if (endOfBatch) {
+                notifyBooksChanged();
+            }
+            appliedSeq++;
             return;
         }
         if (event.isSlotEvent()) {
@@ -249,12 +286,84 @@ public class MatchingEventHandler implements EventHandler<OrderEvent> {
 
     /** books를 직렬화해 쓰기 큐에 넣는다(I6 U1). 직렬화(메모리 복사)까지만 이 스레드가 한다. */
     private void takeSnapshot() {
-        MatchingSnapshot snapshot = MatchingSnapshotFactory.capture(books, lastJournaledPosition);
-        byte[] snapshotBytes = snapshotCodec.encode(snapshot);
-        boolean offered = snapshotSink.offer(snapshotBytes, lastAppliedOrderIntakePositions(), appliedSeq);
-        if (!offered) {
+        if (!offerSnapshot()) {
             log.log(Level.WARNING, "[매칭] 스냅샷 쓰기 큐가 가득 차 이번 회차 스킵: appliedSeq=" + appliedSeq);
         }
+    }
+
+    private boolean offerSnapshot() {
+        MatchingSnapshot snapshot = MatchingSnapshotFactory.capture(books, lastJournaledPosition);
+        byte[] snapshotBytes = snapshotCodec.encode(snapshot);
+        return snapshotSink.offer(snapshotBytes, lastAppliedOrderIntakePositions(), appliedSeq);
+    }
+
+    /**
+     * 받은 종목별 호가창 바이트를 호가창에 적재하고(호가창 이동을 받는 쪽, U15), 그 종목 slot의 반영을 다시 켠 뒤 스냅샷을
+     * 강제로 찍는다. 스냅샷에 담긴 저널 위치는 이 shard 자신의 값이다(받은 바이트의 위치는 쓰지 않는다). 쓰기 queue가
+     * 차서 거부되면 appliedSeq -1로 남겨 재시도 이벤트가 다시 찍게 한다.
+     */
+    private void handleBookLoad(OrderEvent event) {
+        for (byte[] bytes : event.getBookBytes()) {
+            MatchingSnapshotRestorer.restoreInto(books, snapshotCodec.decode(bytes));
+        }
+        handedOverSlots.remove(event.getStockSlot());
+        appliedSeq++;
+        boolean offered = offerSnapshot();
+        loadsAwaitingDurable.add(new PendingLoad(event.getTransferId(), event.getStockSlot(), offered ? appliedSeq : -1L));
+        if (!offered) {
+            log.log(Level.WARNING, "[매칭] 적재 뒤 강제 스냅샷이 거부됨(쓰기 큐 가득): 이동 번호=" + event.getTransferId());
+        }
+    }
+
+    private void retryRejectedForcedSnapshots() {
+        boolean anyRejected = false;
+        for (PendingLoad pending : loadsAwaitingDurable) {
+            anyRejected |= pending.appliedSeq < 0;
+        }
+        if (!anyRejected) {
+            return;
+        }
+        appliedSeq++;
+        if (offerSnapshot()) {
+            for (PendingLoad pending : loadsAwaitingDurable) {
+                if (pending.appliedSeq < 0) {
+                    pending.appliedSeq = appliedSeq;
+                }
+            }
+        }
+    }
+
+    /** 강제 스냅샷이 거부된 적재가 남아 있는지. */
+    public boolean hasLoadAwaitingSnapshot() {
+        for (PendingLoad pending : loadsAwaitingDurable) {
+            if (pending.appliedSeq < 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** 거부된 강제 스냅샷을 다시 찍는 이벤트를 아직 링버퍼에 넣지 않았다면 넣을 권리를 얻는다. */
+    public boolean claimForceSnapshotRetry() {
+        return hasLoadAwaitingSnapshot() && forceSnapshotRetryQueued.compareAndSet(false, true);
+    }
+
+    /**
+     * 강제 스냅샷이 디스크에 확정된 적재마다 완료를 알린다({@link MatchingSnapshotSink#durableSeq()}가 그 스냅샷의
+     * appliedSeq 이상). 엔진 thread가 아닌 thread에서 부른다.
+     *
+     * @return 알린 건수
+     */
+    public int notifyDurableLoads() {
+        int notified = 0;
+        long durable = snapshotSink.durableSeq();
+        for (PendingLoad pending : loadsAwaitingDurable) {
+            if (pending.appliedSeq >= 0 && durable >= pending.appliedSeq && loadsAwaitingDurable.remove(pending)) {
+                slotEventListener.onBooksLoadedDurable(pending.transferId, pending.stockSlot);
+                notified++;
+            }
+        }
+        return notified;
     }
 
     /**

@@ -49,6 +49,12 @@ public class OrderEvent {
     private boolean positionOnly;
     // 종목 slot 받음·넘김 이벤트(U13)의 종목 slot 번호. type이 SLOT_ACQUIRED·SLOT_RELEASED일 때만 의미가 있다.
     private int stockSlot;
+    // 호가창 적재 이벤트(U15): 호가창 이동을 받은 쪽이 종목별 바이트를 엔진 thread에서 적재한다. type은 null이다.
+    private boolean bookLoad;
+    private long transferId;
+    private java.util.List<byte[]> bookBytes;
+    // 강제 스냅샷 재시도 이벤트(U15). type은 null이다.
+    private boolean forceSnapshot;
 
     /**
      * 주문 접수 명령으로 슬롯을 채운다. sourcePosition·sourceSessionId 를 모르는 발행자(저널 replay,
@@ -116,6 +122,19 @@ public class OrderEvent {
         this.stockSlot = stockSlot;
     }
 
+    /** 호가창 적재 이벤트로 슬롯을 채운다. 저널에는 기록하지 않는다(적재한 호가창은 강제 스냅샷으로 남는다). */
+    public void setBookLoad(long transferId, int stockSlot, java.util.List<byte[]> bookBytes) {
+        this.bookLoad = true;
+        this.transferId = transferId;
+        this.stockSlot = stockSlot;
+        this.bookBytes = bookBytes;
+    }
+
+    /** 강제 스냅샷 재시도 이벤트로 슬롯을 채운다. */
+    public void setForceSnapshot() {
+        this.forceSnapshot = true;
+    }
+
     /** 주문 취소 명령으로 슬롯을 채운다. 취소는 orderId·stockCode 만 필요하다. */
     public void setCancel(long orderId, String stockCode) {
         this.type = EventType.CANCEL;
@@ -147,6 +166,26 @@ public class OrderEvent {
         this.businessStartedAtNanos = 0L;
         this.positionOnly = false;
         this.stockSlot = 0;
+        this.bookLoad = false;
+        this.transferId = 0L;
+        this.bookBytes = null;
+        this.forceSnapshot = false;
+    }
+
+    public boolean isBookLoad() {
+        return bookLoad;
+    }
+
+    public boolean isForceSnapshot() {
+        return forceSnapshot;
+    }
+
+    public long getTransferId() {
+        return transferId;
+    }
+
+    public java.util.List<byte[]> getBookBytes() {
+        return bookBytes;
     }
 
     public boolean isSlotEvent() {

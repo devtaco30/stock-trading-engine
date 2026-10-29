@@ -3,6 +3,7 @@ package com.flab.stocktradingengine.matching.disruptor.engine;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
@@ -339,6 +340,41 @@ public class MatchingEngine {
      */
     public void publishSlotReleased(int stockSlot) {
         publishSlotEvent(EventType.SLOT_RELEASED, stockSlot);
+    }
+
+    /**
+     * 호가창 적재 이벤트를 링버퍼에 발행한다(U15). 주문과 같은 프로듀서 thread에서만 불러야 한다. 엔진 thread가
+     * 종목별 바이트를 호가창에 적재하고 스냅샷을 강제로 찍는다. 디스크에 확정되면
+     * {@link SlotEventListener#onBooksLoadedDurable}가 {@link #pollLoadCompletions}를 부른 thread에서 불린다.
+     */
+    public void publishBookLoad(long transferId, int stockSlot, List<byte[]> bookBytesPerStock) {
+        long sequence = ringBuffer.next();
+        try {
+            OrderEvent event = ringBuffer.get(sequence);
+            event.setBookLoad(transferId, stockSlot, bookBytesPerStock);
+        } finally {
+            ringBuffer.publish(sequence);
+        }
+    }
+
+    /**
+     * 적재 뒤 스냅샷이 디스크에 확정되었는지 확인해 완료를 알리고, 쓰기 queue가 차서 거부된 강제 스냅샷이 남아 있으면
+     * 재시도 이벤트를 발행한다. 주문을 발행하는 프로듀서 thread의 반복 안에서 부른다.
+     *
+     * @return 알리거나 재시도를 발행한 건수
+     */
+    public int pollLoadCompletions() {
+        int handled = matchingEventHandler.notifyDurableLoads();
+        if (matchingEventHandler.claimForceSnapshotRetry()) {
+            long sequence = ringBuffer.next();
+            try {
+                ringBuffer.get(sequence).setForceSnapshot();
+            } finally {
+                ringBuffer.publish(sequence);
+            }
+            handled++;
+        }
+        return handled;
     }
 
     private void publishSlotEvent(EventType slotEventType, int stockSlot) {

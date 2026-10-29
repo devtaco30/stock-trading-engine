@@ -52,6 +52,50 @@ class SlotEventRequestsTest {
     }
 
     @Test
+    void 적재_요청도_수신_thread가_발행하고_같은_반복에서_완료_확인을_한다() throws Exception {
+        java.util.List<Long> durableNotices = new java.util.concurrent.CopyOnWriteArrayList<>();
+        java.util.concurrent.atomic.AtomicLong durable = new java.util.concurrent.atomic.AtomicLong();
+        java.util.List<Long> offeredSeqs = new java.util.concurrent.CopyOnWriteArrayList<>();
+        MatchingSnapshotSink sink = new MatchingSnapshotSink() {
+            @Override
+            public boolean offer(byte[] snapshotBytes, java.util.Map<Integer, Long> orderIntakePositions, long appliedSeq) {
+                offeredSeqs.add(appliedSeq);
+                return true;
+            }
+
+            @Override
+            public long durableSeq() {
+                return durable.get();
+            }
+        };
+        engine = new MatchingEngine(1024, new com.lmax.disruptor.BlockingWaitStrategy(), (stockCode, fill) -> { },
+            new com.flab.stocktradingengine.matching.disruptor.journal.InMemoryJournal(), sink, true,
+            new com.flab.stocktradingengine.time.StageLatencyRegistry(false),
+            new com.flab.stocktradingengine.aeron.StockSlotHasher(64), new SlotEventListener() {
+                @Override
+                public void onBooksLoadedDurable(long transferId, int stockSlot) {
+                    durableNotices.add(transferId);
+                }
+            });
+        engine.start();
+        SlotEventRequests requests = new SlotEventRequests();
+        Thread zReceiveThread = new Thread(() -> requests.requestLoad(99L, 5, List.of()));
+        zReceiveThread.start();
+        zReceiveThread.join();
+
+        requests.drainTo(engine);
+        long deadline = System.nanoTime() + 3_000_000_000L;
+        while (offeredSeqs.isEmpty() && System.nanoTime() < deadline) {
+            Thread.sleep(5);
+        }
+        assertEquals(1, offeredSeqs.size(), "적재 뒤 강제 스냅샷이 찍혀야 한다");
+        durable.set(offeredSeqs.get(0));
+        requests.drainTo(engine);
+
+        assertEquals(List.of(99L), durableNotices);
+    }
+
+    @Test
     void 요청이_없으면_발행하지_않고_0을_돌려준다() {
         engine = new MatchingEngine(1024, (stockCode, fill) -> { });
         engine.start();

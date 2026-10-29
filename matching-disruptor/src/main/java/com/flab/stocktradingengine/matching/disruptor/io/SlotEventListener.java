@@ -29,4 +29,12 @@ public interface SlotEventListener {
      */
     default void onSlotHandedOver(int stockSlot, List<byte[]> bookBytesPerStock) {
     }
+
+    /**
+     * 호가창 이동을 받은 쪽(Z)에서 적재한 호가창이 강제로 찍은 스냅샷에 담겨 디스크에 확정되었다
+     * ({@link MatchingSnapshotSink#durableSeq()}가 그 스냅샷의 appliedSeq 이상). 이동을 보낸 쪽(X)에 「받았다」를
+     * 알리는 시점이다. {@code MatchingEngine#pollLoadCompletions}를 부르는 thread에서 불린다.
+     */
+    default void onBooksLoadedDurable(long transferId, int stockSlot) {
+    }
 }
