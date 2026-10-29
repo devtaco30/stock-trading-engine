@@ -415,6 +415,38 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
                     + " 맵에 이동 중 표시=" + slotNumbers(writeMoving) + " 남은 담당=" + currentSlotsSnapshot().size() + "개");
             }
 
+            /**
+             * 세션 시간을 넘겨 그룹에서 쫓겨난 뒤 돌아와 받는다. 그 종목 slot은 이미 다른 pod에 배정되어 그 pod가 맵에 자기 주소를 올렸을 수 있다. 기본
+             * 구현은 회수 콜백을 그대로 불러 맵에 이동 중 표시를 써 새 담당의 값을 덮으므로, 맵에는 쓰지 않고 담당 표시와 대기 상태만 끈다. 호가창은
+             * 지우지 않고 넘김 이벤트도 남기지 않는다(그 뒤 처리는 재시작 규칙의 몫이다).
+             */
+            @Override
+            public void onPartitionsLost(Collection<TopicPartition> partitions) {
+                List<Integer> cancel = new java.util.ArrayList<>();
+                synchronized (KafkaMatchingShardAssignment.this) {
+                    boolean[] updated = ownedSlotFlags.clone();
+                    for (TopicPartition partition : partitions) {
+                        int slot = partition.partition();
+                        updated[slot] = false;
+                        mapWriteGeneration.incrementAndGet(slot);
+                        awaitingDecision.remove(slot);
+                        boolean wasLoading = awaitingLoad.remove(slot);
+                        boolean wasAcquiringMovedIn = movedInAcquiring.remove(slot);
+                        awaitingJournalConfirm.remove(slot);
+                        awaitingMapSwitch.remove(slot);
+                        if (wasLoading || wasAcquiringMovedIn) {
+                            cancel.add(slot);
+                        }
+                    }
+                    ownedSlotFlags = updated;
+                }
+                if (movedSlotRequests != null) {
+                    cancel.forEach(movedSlotRequests::cancelHandover);
+                }
+                log.log(Level.WARNING, "[매칭] 종목 slot을 잃음(세션 만료로 이미 다른 pod에 배정되었을 수 있음) — 맵에는 쓰지 않고 담당 표시만 끔: "
+                    + slotNumbers(partitions));
+            }
+
             @Override
             public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
                 List<Integer> slots = partitions.stream().map(TopicPartition::partition).toList();
