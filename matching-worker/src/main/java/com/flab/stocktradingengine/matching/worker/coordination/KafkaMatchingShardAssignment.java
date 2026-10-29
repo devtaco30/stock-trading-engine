@@ -268,16 +268,17 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
                         log.log(Level.ERROR, "[매칭] 맵 쓰기 실패, 다시 보냄: 종목 slot=" + write.stockSlot() + " 값=" + write.value()
                             + " 원인=" + e.getCause());
                         Thread.sleep(mapWriteRetryMillis);
+                    } catch (RuntimeException e) {
+                        // 보내는 호출 자체가 던진 예외도 같은 간격으로 다시 보낸다. 담당 표시를 켠 뒤의 쓰기가 사라지면 맵이 이전 담당의 이동 중
+                        // 값으로 남아 이 종목 slot의 주문이 보관만 된다.
+                        log.log(Level.ERROR, "[매칭] 맵 쓰기가 예외로 끝나 다시 보냄: 종목 slot=" + write.stockSlot() + " 값=" + write.value()
+                            + " 원인=" + e);
+                        Thread.sleep(mapWriteRetryMillis);
                     }
                 }
             } catch (InterruptedException e) {
                 write.done().completeExceptionally(e);
                 return;
-            } catch (RuntimeException e) {
-                // 재시도하지 않는 실패다. 담당 표시를 켠 뒤의 쓰기라면 맵이 이전 담당의 이동 중 값으로 남아 이 종목 slot의 주문이 보관만 된다.
-                log.log(Level.ERROR, "[매칭] 맵 쓰기가 예외로 끝나 다시 보내지 않음 — 맵이 이전 값으로 남을 수 있음: 종목 slot=" + write.stockSlot()
-                    + " 값=" + write.value() + " 원인=" + e);
-                write.done().completeExceptionally(e);
             }
         }
     }

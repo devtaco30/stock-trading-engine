@@ -40,13 +40,23 @@ class KafkaMatchingShardAssignmentStuckSlotTest {
 
     /** 보내는 호출 자체가 예외를 던지는 producer(재시도하지 않는 RuntimeException 경로). */
     private static final class ThrowingProducer extends MockProducer<Integer, String> {
+        private final java.util.concurrent.atomic.AtomicInteger failuresLeft;
+
         ThrowingProducer() {
+            this(Integer.MAX_VALUE);
+        }
+
+        ThrowingProducer(int failures) {
             super(true, new IntegerSerializer(), new StringSerializer());
+            this.failuresLeft = new java.util.concurrent.atomic.AtomicInteger(failures);
         }
 
         @Override
         public synchronized Future<RecordMetadata> send(ProducerRecord<Integer, String> record) {
-            throw new IllegalStateException("직렬화 실패 흉내");
+            if (failuresLeft.getAndDecrement() > 0) {
+                throw new IllegalStateException("직렬화 실패 흉내");
+            }
+            return super.send(record);
         }
     }
 
@@ -101,6 +111,25 @@ class KafkaMatchingShardAssignmentStuckSlotTest {
 
         awaitErrors();
         assertThat(errors.get(0).getMessage()).contains("종목 slot=5").contains("맵");
+    }
+
+    @Test
+    void 쓰기가_예외로_끝나도_다시_보낸다() throws Exception {
+        ThrowingProducer producer = new ThrowingProducer(1);
+        build(producer, () -> true);
+        assignment.setMapWriteRetryMillis(30L);
+        listener.onPartitionsAssigned(partitions(5));
+        assignment.acquireAfterLoad(5);
+
+        assignment.confirmAcquired(5);
+
+        long deadline = System.nanoTime() + 3_000_000_000L;
+        while (producer.history().isEmpty() && System.nanoTime() < deadline) {
+            Thread.sleep(5);
+        }
+        assertThat(producer.history()).hasSize(1);
+        assertThat(producer.history().get(0).value()).isEqualTo(OWN);
+        assertThat(errors).isNotEmpty();
     }
 
     @Test
