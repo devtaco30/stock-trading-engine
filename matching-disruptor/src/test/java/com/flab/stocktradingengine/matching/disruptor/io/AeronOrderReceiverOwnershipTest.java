@@ -115,6 +115,23 @@ class AeronOrderReceiverOwnershipTest {
         assertEquals(2, engine.journal().entries().size(), "저널에는 주문 두 건만 있어야 한다(받음·넘김은 와이어로 받지 않는다)");
     }
 
+    @Test
+    void 수신_thread가_종목_slot_요청을_꺼내_이벤트로_발행한다() throws Exception {
+        SlotEventRequests requests = new SlotEventRequests();
+        AeronOrderReceiver withRequests = new AeronOrderReceiver(null, engine, new org.agrona.concurrent.BackoffIdleStrategy(),
+            slot -> true, STOCK_SLOT_HASHER, notOwnedOrders::add, requests);
+        requests.requestAcquire(5);
+
+        int drained = withRequests.drainSlotEvents();
+
+        assertEquals(1, drained);
+        long deadline = System.nanoTime() + 3_000_000_000L;
+        while (engine.journal().entries().isEmpty() && System.nanoTime() < deadline) {
+            Thread.sleep(5);
+        }
+        assertEquals(EventType.SLOT_ACQUIRED, engine.journal().entries().get(0).type());
+    }
+
     private JournaledOrder place(long orderId, String stockCode, OrderSide side) {
         return new JournaledOrder(EventType.PLACE, orderId, 100L + orderId, stockCode, side,
             new BigDecimal("70000"), 10, Instant.parse("2026-10-29T00:00:00Z"));

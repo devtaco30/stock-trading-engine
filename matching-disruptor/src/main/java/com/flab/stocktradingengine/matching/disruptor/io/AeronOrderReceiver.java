@@ -57,6 +57,7 @@ public final class AeronOrderReceiver implements AutoCloseable {
     private final IntPredicate ownedSlots;
     private final StockSlotHasher stockSlotHasher;
     private final NotOwnedOrderListener notOwnedOrderListener;
+    private final SlotEventRequests slotEventRequests;
 
     private Thread pollThread;
 
@@ -78,6 +79,15 @@ public final class AeronOrderReceiver implements AutoCloseable {
     public AeronOrderReceiver(Subscription subscription, MatchingEngine engine, IdleStrategy idleStrategy,
                               IntPredicate ownedSlots, StockSlotHasher stockSlotHasher,
                               NotOwnedOrderListener notOwnedOrderListener) {
+        this(subscription, engine, idleStrategy, ownedSlots, stockSlotHasher, notOwnedOrderListener,
+            new SlotEventRequests());
+    }
+
+    /** 종목 slot 받음·넘김 요청 통로를 함께 받는다. 이 thread가 주문과 함께 그 요청을 이벤트로 발행한다. */
+    public AeronOrderReceiver(Subscription subscription, MatchingEngine engine, IdleStrategy idleStrategy,
+                              IntPredicate ownedSlots, StockSlotHasher stockSlotHasher,
+                              NotOwnedOrderListener notOwnedOrderListener, SlotEventRequests slotEventRequests) {
+        this.slotEventRequests = slotEventRequests;
         this.subscription = subscription;
         this.engine = engine;
         this.idleStrategy = idleStrategy;
@@ -96,8 +106,9 @@ public final class AeronOrderReceiver implements AutoCloseable {
 
     private void pollLoop() {
         while (running.get()) {
+            int slotEvents = drainSlotEvents();
             int fragments = subscription.poll(fragmentHandler, FRAGMENT_LIMIT);
-            idleStrategy.idle(fragments);
+            idleStrategy.idle(fragments + slotEvents);
         }
     }
 
@@ -133,6 +144,11 @@ public final class AeronOrderReceiver implements AutoCloseable {
             engine.publishCancel(order.orderId(), order.stockCode());
         }
         // 종목 slot 받음·넘김은 저널에만 기록되는 항목이라 인테이크 와이어로 받아도 엔진에 넣지 않는다.
+    }
+
+    /** 쌓인 종목 slot 받음·넘김 요청을 이벤트로 발행한다. 패키지 가시성 — 단위 테스트가 Subscription 없이 부른다. */
+    int drainSlotEvents() {
+        return slotEventRequests.drainTo(engine);
     }
 
     /** 폴링 스레드를 멈추고 종료를 기다린다. */
