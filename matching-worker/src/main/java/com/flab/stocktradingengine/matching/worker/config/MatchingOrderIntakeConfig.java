@@ -19,6 +19,7 @@ import com.flab.stocktradingengine.aeron.StockSlotHasher;
 import com.flab.stocktradingengine.codec.JournaledOrder;
 import com.flab.stocktradingengine.matching.disruptor.engine.MatchingEngine;
 import com.flab.stocktradingengine.matching.disruptor.io.AeronOrderReceiver;
+import com.flab.stocktradingengine.matching.disruptor.io.SlotEventRequests;
 import com.flab.stocktradingengine.matching.worker.lifecycle.MatchingOrderReceiverLifecycle;
 import com.flab.stocktradingengine.matching.worker.messaging.RejectReplyPublisher;
 import com.flab.stocktradingengine.matching.worker.recovery.MatchingOrderIntakeReplayer;
@@ -222,9 +223,11 @@ public class MatchingOrderIntakeConfig {
     @Bean
     public AeronOrderReceiver matchingOrderReceiver(
             Subscription matchingOrderSubscription, MatchingEngine matchingEngine,
-            IntPredicate ownedSlots, StockSlotHasher stockSlotHasher, RejectReplyPublisher rejectReplyPublisher) {
+            IntPredicate ownedSlots, StockSlotHasher stockSlotHasher, RejectReplyPublisher rejectReplyPublisher,
+            SlotEventRequests slotEventRequests) {
         return new AeronOrderReceiver(
-            matchingOrderSubscription, matchingEngine, ownedSlots, stockSlotHasher, rejectReplyPublisher);
+            matchingOrderSubscription, matchingEngine, IdleStrategies.forThread(), ownedSlots, stockSlotHasher,
+            rejectReplyPublisher, slotEventRequests);
     }
 
     /**

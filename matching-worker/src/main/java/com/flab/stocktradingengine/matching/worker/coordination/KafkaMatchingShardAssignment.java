@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.IntPredicate;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -28,6 +29,8 @@ import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.serialization.StringDeserializer;
 
+import com.flab.stocktradingengine.matching.disruptor.io.SlotEventRequests;
+
 /**
  * 매칭 shard가 담당할 종목 slot을 Kafka 컨슈머 그룹 배정으로 받는다. 계좌 워커의
  * {@code KafkaShardAssignment}와 같은 방식이다: 조정용 토픽 {@link #ASSIGNMENT_TOPIC}에는 메시지를
@@ -46,6 +49,12 @@ import org.apache.kafka.common.serialization.StringDeserializer;
  * </ul>
  *
  * <p>기동 직후부터 첫 배정을 받을 때까지 {@link #test}는 모든 종목 slot에서 false다.</p>
+ *
+ * <h3>담당이 켜지는 시점</h3>
+ * <p>요청 통로({@link SlotEventRequests})를 받은 구성에서는 배정 콜백이 종목 slot을 바로 켜지 않는다. 받음 요청만 남기고,
+ * 엔진이 받음 이벤트를 저널에 기록한 뒤 {@link #confirmAcquired}를 불러야 켜진다. 켜진 뒤에 들어온 주문은 저널에서 항상
+ * 받음 항목 뒤에 있어서, 복구가 그 주문을 걸러내지 않는다(11-12절). 회수 콜백은 즉시 끄고 넘김 요청을 남긴다.
+ * 요청 통로가 없는 구성은 배정 즉시 켠다.</p>
  */
 public final class KafkaMatchingShardAssignment implements IntPredicate {
 
@@ -62,6 +71,10 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
     private final String ownOrderEndpoint;
     private final String assignmentTopic;
     private final String mapTopic;
+    // 받음 요청을 남기는 통로. null이면 배정 콜백이 종목 slot을 바로 켠다.
+    private final SlotEventRequests slotEventRequests;
+    // 받음 요청을 남겼고 저널 기록 확인을 기다리는 종목 slot. 그 사이 회수되면 빠진다.
+    private final java.util.Set<Integer> awaitingJournalConfirm = ConcurrentHashMap.newKeySet();
 
     // test()가 주문마다 불린다. 배열 참조를 volatile로 통째로 교체해 박싱 없이 인덱스 조회만 한다.
     private volatile boolean[] ownedSlotFlags;
@@ -77,6 +90,14 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
     public KafkaMatchingShardAssignment(Consumer<String, String> consumer, Producer<Integer, String> mapProducer,
                                         Admin adminClient, int stockSlotCount, String ownOrderEndpoint,
                                         String assignmentTopic, String mapTopic) {
+        this(consumer, mapProducer, adminClient, stockSlotCount, ownOrderEndpoint, assignmentTopic, mapTopic, null);
+    }
+
+    /** 받음·넘김 요청 통로를 받는다. 종목 slot 담당은 {@link #confirmAcquired}가 와야 켜진다. */
+    public KafkaMatchingShardAssignment(Consumer<String, String> consumer, Producer<Integer, String> mapProducer,
+                                        Admin adminClient, int stockSlotCount, String ownOrderEndpoint,
+                                        String assignmentTopic, String mapTopic, SlotEventRequests slotEventRequests) {
+        this.slotEventRequests = slotEventRequests;
         this.consumer = consumer;
         this.mapProducer = mapProducer;
         this.adminClient = adminClient;
@@ -111,6 +132,21 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
     public boolean test(int slot) {
         boolean[] flags = ownedSlotFlags;
         return slot >= 0 && slot < flags.length && flags[slot];
+    }
+
+    /**
+     * 종목 slot의 받음 이벤트가 저널에 기록되었다는 확인. 엔진의 저널 핸들러 thread가 부른다. 그 사이 회수된 종목 slot은
+     * 켜지 않는다.
+     */
+    public void confirmAcquired(int stockSlot) {
+        synchronized (this) {
+            if (!awaitingJournalConfirm.remove(stockSlot)) {
+                return;
+            }
+            boolean[] updated = ownedSlotFlags.clone();
+            updated[stockSlot] = true;
+            ownedSlotFlags = updated;
+        }
     }
 
     public Set<Integer> currentSlotsSnapshot() {
@@ -160,13 +196,19 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
      * 브로커에 써져 새 값을 지우는 순서 역전을 막기 위해서다. 협력 방식에서는 두 콜백이 옮겨지는
      * 종목 slot만 받는다.
      */
-    private ConsumerRebalanceListener rebalanceListener() {
+    ConsumerRebalanceListener rebalanceListener() {
         return new ConsumerRebalanceListener() {
             @Override
             public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
-                boolean[] updated = ownedSlotFlags.clone();
-                partitions.forEach(p -> updated[p.partition()] = false);
-                ownedSlotFlags = updated;
+                synchronized (KafkaMatchingShardAssignment.this) {
+                    boolean[] updated = ownedSlotFlags.clone();
+                    partitions.forEach(p -> updated[p.partition()] = false);
+                    ownedSlotFlags = updated;
+                    partitions.forEach(p -> awaitingJournalConfirm.remove(p.partition()));
+                }
+                if (slotEventRequests != null) {
+                    partitions.forEach(p -> slotEventRequests.requestRelease(p.partition()));
+                }
                 publishMapEntries(partitions, null);
                 log.log(Level.WARNING, "[매칭] 담당 종목 slot 회수: " + slotNumbers(partitions)
                     + " 남은 담당=" + currentSlotsSnapshot().size() + "개");
@@ -174,9 +216,18 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
 
             @Override
             public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
-                boolean[] updated = ownedSlotFlags.clone();
-                partitions.forEach(p -> updated[p.partition()] = true);
-                ownedSlotFlags = updated;
+                if (slotEventRequests == null) {
+                    synchronized (KafkaMatchingShardAssignment.this) {
+                        boolean[] updated = ownedSlotFlags.clone();
+                        partitions.forEach(p -> updated[p.partition()] = true);
+                        ownedSlotFlags = updated;
+                    }
+                } else {
+                    partitions.forEach(p -> {
+                        awaitingJournalConfirm.add(p.partition());
+                        slotEventRequests.requestAcquire(p.partition());
+                    });
+                }
                 if (!partitions.isEmpty()) {
                     publishMapEntries(partitions, ownOrderEndpoint);
                 }

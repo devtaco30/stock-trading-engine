@@ -12,6 +12,7 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.SmartLifecycle;
@@ -19,6 +20,8 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 import com.flab.stocktradingengine.aeron.StockSlotHasher;
+import com.flab.stocktradingengine.matching.disruptor.io.SlotEventListener;
+import com.flab.stocktradingengine.matching.disruptor.io.SlotEventRequests;
 import com.flab.stocktradingengine.matching.worker.coordination.KafkaMatchingShardAssignment;
 import com.flab.stocktradingengine.matching.worker.lifecycle.KafkaMatchingShardAssignmentLifecycle;
 
@@ -47,6 +50,29 @@ public class MatchingShardOwnershipConfig {
         return new StockSlotHasher(stockSlotCount);
     }
 
+    /** Kafka 배정 콜백 thread가 종목 slot 받음·넘김 요청을 넣고 주문 수신 thread가 꺼내 이벤트로 발행하는 통로. */
+    @Bean
+    public SlotEventRequests slotEventRequests() {
+        return new SlotEventRequests();
+    }
+
+    /**
+     * 받음 이벤트가 저널에 기록되면 그 종목 slot의 담당을 켠다. 조정 모드가 꺼져 있으면 배정 빈이 없어 아무 일도 하지 않는다.
+     * 엔진 빈이 이 빈을 받고 배정 빈은 엔진을 모르므로 순환이 없다.
+     */
+    @Bean
+    public SlotEventListener matchingSlotEventListener(ObjectProvider<KafkaMatchingShardAssignment> assignmentProvider) {
+        return new SlotEventListener() {
+            @Override
+            public void onSlotAcquiredJournaled(int stockSlot) {
+                KafkaMatchingShardAssignment assignment = assignmentProvider.getIfAvailable();
+                if (assignment != null) {
+                    assignment.confirmAcquired(stockSlot);
+                }
+            }
+        };
+    }
+
     @Bean
     @ConditionalOnProperty(prefix = "matching-shard.coordination", name = "enabled", havingValue = "false", matchIfMissing = true)
     public IntPredicate allStockSlotsOwned() {
@@ -65,7 +91,8 @@ public class MatchingShardOwnershipConfig {
             @Value("${spring.kafka.bootstrap-servers}") String bootstrapServers,
             @Value("${matching-worker.instance-id:}") String instanceIdConfig,
             @Value("${transport.matching-intake.channel:" + MatchingOrderIntakeConfig.DEFAULT_INTAKE_CHANNEL + "}") String orderEndpoint,
-            @Value("${matching-shard.coordination.session-timeout-ms:120000}") int sessionTimeoutMs) {
+            @Value("${matching-shard.coordination.session-timeout-ms:120000}") int sessionTimeoutMs,
+            SlotEventRequests slotEventRequests) {
         String instanceId = resolveInstanceId(instanceIdConfig, orderEndpoint);
         log.info("[매칭] 담당 종목 slot 소스: Kafka 컨슈머 그룹 배정({}) — 신원={} 주문 입구={} session.timeout.ms={}",
             KafkaMatchingShardAssignment.GROUP_ID, instanceId, orderEndpoint, sessionTimeoutMs);
@@ -75,7 +102,8 @@ public class MatchingShardOwnershipConfig {
         Producer<Integer, String> mapProducer = buildMapProducer(bootstrapServers);
         Admin adminClient = Admin.create(adminProps(bootstrapServers));
         return new KafkaMatchingShardAssignment(
-            consumer, mapProducer, adminClient, stockSlotHasher.stockSlotCount(), orderEndpoint);
+            consumer, mapProducer, adminClient, stockSlotHasher.stockSlotCount(), orderEndpoint,
+            KafkaMatchingShardAssignment.ASSIGNMENT_TOPIC, KafkaMatchingShardAssignment.MAP_TOPIC, slotEventRequests);
     }
 
     @Bean

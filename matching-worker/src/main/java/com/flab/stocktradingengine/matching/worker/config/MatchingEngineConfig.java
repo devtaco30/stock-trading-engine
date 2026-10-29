@@ -8,11 +8,13 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import com.flab.stocktradingengine.aeron.StockSlotHasher;
 import com.flab.stocktradingengine.codec.JournaledOrder;
 import com.flab.stocktradingengine.time.StageLatencyRegistry;
 import com.flab.stocktradingengine.matching.disruptor.engine.MatchingEngine;
 import com.flab.stocktradingengine.matching.disruptor.io.MatchListener;
 import com.flab.stocktradingengine.matching.disruptor.io.MatchingSnapshotSink;
+import com.flab.stocktradingengine.matching.disruptor.io.SlotEventListener;
 import com.flab.stocktradingengine.matching.disruptor.journal.Journal;
 import com.flab.stocktradingengine.matching.worker.lifecycle.MatchingEngineLifecycle;
 import com.flab.stocktradingengine.matching.worker.recovery.StoredMatchingSnapshot;
@@ -51,9 +53,12 @@ public class MatchingEngineConfig {
     public MatchingEngine matchingEngine(MatchListener listener, Journal journal, MatchingSnapshotSink matchingSnapshotWriter,
             Optional<StoredMatchingSnapshot> matchingLoadedSnapshot, List<JournaledOrder> matchingJournalRecoveredEntries,
             List<JournaledOrder> matchingOrderIntakeReplayedEntries,
-            ObjectProvider<StageLatencyRegistry> matchingStageLatencyRegistry) {
+            ObjectProvider<StageLatencyRegistry> matchingStageLatencyRegistry,
+            ObjectProvider<StockSlotHasher> stockSlotHasher, ObjectProvider<SlotEventListener> slotEventListener) {
         MatchingEngine engine = new MatchingEngine(BUFFER_SIZE, new BlockingWaitStrategy(), listener, journal,
-            matchingSnapshotWriter, true, matchingStageLatencyRegistry.getIfAvailable(() -> new StageLatencyRegistry(false)));
+            matchingSnapshotWriter, true, matchingStageLatencyRegistry.getIfAvailable(() -> new StageLatencyRegistry(false)),
+            stockSlotHasher.getIfAvailable(() -> new StockSlotHasher(MatchingShardOwnershipConfig.DEFAULT_STOCK_SLOT_COUNT)),
+            slotEventListener.getIfAvailable(() -> SlotEventListener.NO_OP));
         matchingLoadedSnapshot.ifPresent(stored -> {
             engine.restore(stored.snapshot());
             engine.seedOrderIntakePositions(stored.orderIntakePosition());
