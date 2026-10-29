@@ -29,6 +29,7 @@ import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.serialization.StringDeserializer;
 
+import com.flab.stocktradingengine.aeron.MatchingSlotTarget;
 import com.flab.stocktradingengine.matching.disruptor.io.SlotEventRequests;
 
 /**
@@ -191,8 +192,9 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
     }
 
     /**
-     * 회수된 종목 slot은 맵 토픽에 null로 지우고, 배정된 종목 slot은 이 매칭 shard의 주문 입구 주소로
-     * 올린다. 회수 쪽 발행을 동기로({@code get()}) 하는 이유는, 새 담당의 주소 발행보다 이 null이 나중에
+     * 회수된 종목 slot은 맵 토픽에 이 매칭 shard의 주소에 이동 중 표시를 붙인 값({@code 주소;moving})으로 올리고
+     * (지우지 않는다. 새 담당이 이전 담당의 주소를 맵에서 알아야 한다, 10-2절 수정본), 배정된 종목 slot은 이 매칭 shard의 주문 입구 주소로
+     * 올린다. 회수 쪽 발행을 동기로({@code get()}) 하는 이유는, 새 담당의 주소 발행보다 이 이동 중 표시가 나중에
      * 브로커에 써져 새 값을 지우는 순서 역전을 막기 위해서다. 협력 방식에서는 두 콜백이 옮겨지는
      * 종목 slot만 받는다.
      */
@@ -209,7 +211,7 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
                 if (slotEventRequests != null) {
                     partitions.forEach(p -> slotEventRequests.requestRelease(p.partition()));
                 }
-                publishMapEntries(partitions, null);
+                publishMapEntries(partitions, new MatchingSlotTarget(ownOrderEndpoint, true).encode());
                 log.log(Level.WARNING, "[매칭] 담당 종목 slot 회수: " + slotNumbers(partitions)
                     + " 남은 담당=" + currentSlotsSnapshot().size() + "개");
             }

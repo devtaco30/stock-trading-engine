@@ -124,7 +124,7 @@ class KafkaMatchingShardAssignmentIntegrationTest {
     }
 
     @Test
-    void 회수되면_해당_종목_slot의_값이_null로_올라온다() {
+    void 회수되면_해당_종목_slot의_값이_이전_담당_주소에_moving을_붙인_값으로_올라온다() {
         KafkaMatchingShardAssignment first = newMember("m1", assignmentTopic);
         first.start();
         awaitSlotCount(first, STOCK_SLOT_COUNT);
@@ -138,8 +138,8 @@ class KafkaMatchingShardAssignmentIntegrationTest {
 
         for (int slot : movedSlots) {
             assertThat(history.get(slot))
-                .as("옮겨 간 slot=" + slot + "은 첫 담당의 주소 → 회수 null → 새 담당의 주소 순서로 쌓인다")
-                .containsExactly("order-endpoint-of-m1", null, "order-endpoint-of-m2");
+                .as("옮겨 간 slot=" + slot + "은 첫 담당의 주소 → 회수 때 이동 중 표시 → 새 담당의 주소 순서로 쌓인다")
+                .containsExactly("order-endpoint-of-m1", "order-endpoint-of-m1;moving", "order-endpoint-of-m2");
         }
     }
 
@@ -189,14 +189,14 @@ class KafkaMatchingShardAssignmentIntegrationTest {
         Map<Integer, List<String>> history = awaitMapTopicHistory(
             published -> movedSlots.stream().allMatch(slot -> published.getOrDefault(slot, List.of()).size() == 3));
 
-        Set<Integer> slotsWithNullRecord = history.entrySet().stream()
-            .filter(entry -> entry.getValue().contains(null))
+        Set<Integer> slotsWithMovingRecord = history.entrySet().stream()
+            .filter(entry -> entry.getValue().contains("order-endpoint-of-m1;moving"))
             .map(Map.Entry::getKey)
             .collect(Collectors.toSet());
-        // 회수 콜백이 받은 종목 slot은 맵 토픽에 null이 한 번 쌓이므로, null이 쌓인 종목 slot이 곧 회수된 종목 slot이다.
-        assertThat(slotsWithNullRecord).isEqualTo(movedSlots);
-        assertThat(slotsWithNullRecord).doesNotContainAnyElementsOf(keptSlots);
-        assertThat(slotsWithNullRecord).hasSize(STOCK_SLOT_COUNT - keptSlots.size());
+        // 회수 콜백이 받은 종목 slot은 맵 토픽에 이동 중 표시(주소;moving)가 한 번 쌓이므로, 그것이 쌓인 종목 slot이 곧 회수된 종목 slot이다.
+        assertThat(slotsWithMovingRecord).isEqualTo(movedSlots);
+        assertThat(slotsWithMovingRecord).doesNotContainAnyElementsOf(keptSlots);
+        assertThat(slotsWithMovingRecord).hasSize(STOCK_SLOT_COUNT - keptSlots.size());
     }
 
     private KafkaMatchingShardAssignment newMember(String instanceId, String assignmentTopicName) {
