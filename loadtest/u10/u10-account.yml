@@ -1,0 +1,24 @@
+# U10 시험 전용 — 계좌 워커 1개(조정 모드 없음). 매칭 pod 주소 풀 두 개로 종목 slot별 담당을 찾아 보낸다.
+transport:
+  account-intake:
+    channel: aeron:udp?endpoint=localhost:20040
+  fill:
+    channel: aeron:udp?endpoint=localhost:20060
+matching-shard-routing:
+  stock-slot-count: 64
+  endpoints:
+    - aeron:udp?endpoint=localhost:20020
+    - aeron:udp?endpoint=localhost:20021
+account:
+  worker:
+    archive-dir: /tmp/u10/account
+    archive:
+      control-channel: aeron:udp?endpoint=localhost:8010
+account-worker:
+  seed-accounts:
+    - account-id: 90001
+      balance: 100000000
+      margin-rate: 0.40
+    - account-id: 90002
+      balance: 100000000
+      margin-rate: 0.40

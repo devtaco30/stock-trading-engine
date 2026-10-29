@@ -49,3 +49,14 @@ tasks.named<org.springframework.boot.gradle.tasks.run.BootRun>("bootRun") {
 		"--add-opens", "java.base/sun.nio.ch=ALL-UNNAMED"
 	)
 }
+
+// U10 확인 스크립트(loadtest/u10-*.sh)가 호출하는 시험 전용 도구 실행 태스크. 운영 코드와 무관하다.
+tasks.register<JavaExec>("u10Tool") {
+	classpath = sourceSets["test"].runtimeClasspath
+	mainClass.set("com.flab.stocktradingengine.account.worker.u10.U10Tool")
+	jvmArgs(
+		"--add-opens", "java.base/jdk.internal.misc=ALL-UNNAMED",
+		"--add-opens", "java.base/sun.nio.ch=ALL-UNNAMED"
+	)
+	args = (project.findProperty("u10Args") as String?)?.split(" ") ?: emptyList()
+}

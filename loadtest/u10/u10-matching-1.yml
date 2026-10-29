@@ -1,0 +1,17 @@
+# U10 시험 전용 — 매칭 shard 1번. --spring.config.additional-location으로만 넘긴다(application-local.yml은 쓰지 않는다).
+matching-shard:
+  coordination:
+    enabled: true
+    session-timeout-ms: 30000
+matching-worker:
+  instance-id: matching-worker-1   # 서버 번호 = 끝 순번 1 + 6
+transport:
+  matching-intake:
+    channel: aeron:udp?endpoint=localhost:20021
+  fill:
+    channel: aeron:udp?endpoint=localhost:20060
+matching:
+  worker:
+    archive-dir: /tmp/u10/matching-1
+    archive:
+      control-channel: aeron:udp?endpoint=localhost:8012
