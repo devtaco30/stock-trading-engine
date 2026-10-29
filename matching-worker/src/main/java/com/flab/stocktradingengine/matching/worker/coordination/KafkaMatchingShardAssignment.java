@@ -88,12 +88,14 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
     // 종목 slot별 맵 쓰기 세대. 회수될 때마다 올려, 다시 보내려던 옛 쓰기가 나중에 이동 중 표시를 덮어쓰지 못하게 한다.
     private final java.util.concurrent.atomic.AtomicIntegerArray mapWriteGeneration;
     private volatile long mapWriteRetryMillis = 1_000L;
-    private final java.util.concurrent.ScheduledExecutorService mapWriteRetryExecutor =
-        java.util.concurrent.Executors.newSingleThreadScheduledExecutor(runnable -> {
-            Thread thread = new Thread(runnable, "matching-shard-map-write-retry");
-            thread.setDaemon(true);
-            return thread;
-        });
+    // 맵 쓰기는 전부 이 queue로 보내 쓰기 전용 thread 하나가 넣은 순서대로 처리한다. 순서가 queue 순서로 고정되고, 세대 확인은 그 thread가
+    // 쓰기 직전에 한다. 호출 thread(Kafka 콜백, 주문 수신 thread)는 브로커 응답을 기다리지 않거나(기다려야 하면 완료 future로 기다린다) 락 안에서
+    // send하지 않는다.
+    private final java.util.concurrent.BlockingQueue<MapWrite> mapWriteQueue = new java.util.concurrent.LinkedBlockingQueue<>();
+    private volatile Thread mapWriteThread;
+
+    private record MapWrite(int stockSlot, String value, int generation, java.util.concurrent.CompletableFuture<Void> done) {
+    }
 
     // test()가 주문마다 불린다. 배열 참조를 volatile로 통째로 교체해 박싱 없이 인덱스 조회만 한다.
     private volatile boolean[] ownedSlotFlags;
@@ -187,32 +189,64 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
             generation = mapWriteGeneration.get(stockSlot);
         }
         if (switchMapAfterAcquire) {
-            sendOwnEndpointAsync(stockSlot, generation);
+            // 응답을 기다리지 않는다(호출 thread는 받음 항목의 기록 확인을 폴링하는 주문 수신 thread다).
+            enqueueMapWrite(stockSlot, new MatchingSlotTarget(ownOrderEndpoint, false).encode(), generation);
+        }
+    }
+
+    /** 맵 쓰기를 queue에 넣고 완료 future를 돌려준다. 쓰기 전용 thread는 처음 쓸 때 시작한다. */
+    private java.util.concurrent.CompletableFuture<Void> enqueueMapWrite(int stockSlot, String value, int generation) {
+        java.util.concurrent.CompletableFuture<Void> done = new java.util.concurrent.CompletableFuture<>();
+        startMapWriteThreadIfNeeded();
+        mapWriteQueue.add(new MapWrite(stockSlot, value, generation, done));
+        return done;
+    }
+
+    private synchronized void startMapWriteThreadIfNeeded() {
+        if (mapWriteThread == null) {
+            Thread thread = new Thread(this::mapWriteLoop, "matching-shard-map-writer");
+            thread.setDaemon(true);
+            mapWriteThread = thread;
+            thread.start();
         }
     }
 
     /**
-     * 이동으로 받은 종목 slot의 맵을 자기 주소의 평상시 값으로 바꾸는 쓰기를 브로커 응답을 기다리지 않고 보낸다(호출 thread는
-     * 받음 항목의 기록 확인을 폴링하는 thread다). 실패하면 ERROR 로그를 남기고 {@code mapWriteRetryMillis} 뒤에 다시 보낸다.
-     * 그 사이 회수되어 세대가 바뀌었으면 보내지 않는다.
+     * 쓰기 전용 thread. queue에서 하나씩 꺼내, 보내기 직전에 그 종목 slot의 세대가 쓰기를 넣을 때와 같은지 확인한다(회수되어 세대가 바뀌었으면
+     * 보내지 않고 끝낸다). 브로커 응답을 기다리고, 실패하면 ERROR 로그를 남기고 {@code mapWriteRetryMillis} 뒤에 같은 쓰기를 다시 보낸다 —
+     * 뒤 쓰기는 앞 쓰기가 끝날 때까지 기다리므로 순서가 바뀌지 않는다.
      */
-    private void sendOwnEndpointAsync(int stockSlot, int generation) {
-        if (mapWriteGeneration.get(stockSlot) != generation) {
-            return;
+    private void mapWriteLoop() {
+        while (!Thread.currentThread().isInterrupted()) {
+            MapWrite write;
+            try {
+                write = mapWriteQueue.take();
+            } catch (InterruptedException e) {
+                return;
+            }
+            try {
+                while (true) {
+                    if (mapWriteGeneration.get(write.stockSlot()) != write.generation()) {
+                        write.done().complete(null);
+                        break;
+                    }
+                    try {
+                        mapProducer.send(new ProducerRecord<>(mapTopic, write.stockSlot(), write.value())).get();
+                        write.done().complete(null);
+                        break;
+                    } catch (ExecutionException e) {
+                        log.log(Level.ERROR, "[매칭] 맵 쓰기 실패, 다시 보냄: 종목 slot=" + write.stockSlot() + " 값=" + write.value()
+                            + " 원인=" + e.getCause());
+                        Thread.sleep(mapWriteRetryMillis);
+                    }
+                }
+            } catch (InterruptedException e) {
+                write.done().completeExceptionally(e);
+                return;
+            } catch (RuntimeException e) {
+                write.done().completeExceptionally(e);
+            }
         }
-        mapProducer.send(new ProducerRecord<>(mapTopic, stockSlot, new MatchingSlotTarget(ownOrderEndpoint, false).encode()),
-            (metadata, exception) -> {
-                if (exception == null) {
-                    return;
-                }
-                log.log(Level.ERROR, "[매칭] 맵 전환 쓰기 실패, 다시 보냄: 종목 slot=" + stockSlot + " 원인=" + exception);
-                try {
-                    mapWriteRetryExecutor.schedule(() -> sendOwnEndpointAsync(stockSlot, generation),
-                        mapWriteRetryMillis, java.util.concurrent.TimeUnit.MILLISECONDS);
-                } catch (java.util.concurrent.RejectedExecutionException e) {
-                    // close() 뒤라 다시 보내지 않는다.
-                }
-            });
     }
 
     /** 패키지 가시성 — 시험이 다시 보내기 간격을 줄인다. */
@@ -244,7 +278,6 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
     }
 
     public void close() {
-        mapWriteRetryExecutor.shutdownNow();
         running = false;
         consumer.wakeup();
         try {
@@ -254,7 +287,13 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
+        // 컨슈머를 닫으면 맡은 종목 slot 전체에 회수 콜백이 불려 이동 중 표시를 쓰고 기다린다. 쓰기 전용 thread는 그 뒤에 멈춘다.
         consumer.close();
+        Thread writer = mapWriteThread;
+        if (writer != null) {
+            writer.interrupt();
+        }
+        mapWriteQueue.forEach(write -> write.done().completeExceptionally(new IllegalStateException("닫힘")));
         mapProducer.close();
         adminClient.close();
     }
@@ -364,12 +403,20 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
         slotEventRequests.requestAcquire(stockSlot);
     }
 
+    /**
+     * 종목 slot마다 같은 값을 맵에 쓰고 쓰기가 끝날 때까지 기다린다(회수 콜백과 첫 배정). 세대는 이 호출이 보는 현재 세대다 — 회수는
+     * 세대를 먼저 올린 뒤 부르므로 이 쓰기는 회수 직후에 보내진다.
+     */
     private void publishMapEntries(Collection<TopicPartition> partitions, String value) {
+        List<java.util.concurrent.CompletableFuture<Void>> writes = new java.util.ArrayList<>();
         for (TopicPartition partition : partitions) {
+            writes.add(enqueueMapWrite(partition.partition(), value, mapWriteGeneration.get(partition.partition())));
+        }
+        for (java.util.concurrent.CompletableFuture<Void> write : writes) {
             try {
-                mapProducer.send(new ProducerRecord<>(mapTopic, partition.partition(), value)).get();
+                write.get();
             } catch (ExecutionException e) {
-                throw new IllegalStateException(mapTopic + " 발행 실패: 종목 slot=" + partition.partition() + " value=" + value, e);
+                throw new IllegalStateException(mapTopic + " 발행 실패: 값=" + value, e);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 throw new IllegalStateException(mapTopic + " 발행 중 인터럽트됨", e);

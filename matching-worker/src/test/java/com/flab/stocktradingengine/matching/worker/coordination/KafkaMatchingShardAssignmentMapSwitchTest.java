@@ -59,16 +59,17 @@ class KafkaMatchingShardAssignmentMapSwitchTest {
     }
 
     @Test
-    void 담당_표시가_켜진_직후_맵에_자기_주소의_평상시_값을_한_번_올린다() {
+    void 담당_표시가_켜진_직후_맵에_자기_주소의_평상시_값을_한_번_올린다() throws Exception {
         listener.onPartitionsAssigned(partitions(5));
         assignment.acquireAfterLoad(5);
 
         assignment.confirmAcquired(5);
 
         assertThat(assignment.test(5)).isTrue();
-        assertThat(mapProducer.history()).hasSize(1);
+        awaitHistory(1);
         assertThat(mapProducer.history().get(0).key()).isEqualTo(5);
         assertThat(mapProducer.history().get(0).value()).isEqualTo(OWN);
+        mapProducer.completeNext();
     }
 
     @Test
@@ -76,7 +77,7 @@ class KafkaMatchingShardAssignmentMapSwitchTest {
         listener.onPartitionsAssigned(partitions(5));
         assignment.acquireAfterLoad(5);
         assignment.confirmAcquired(5);
-        assertThat(mapProducer.history()).hasSize(1);
+        awaitHistory(1);
 
         mapProducer.errorNext(new RuntimeException("브로커 오류"));
         awaitHistory(2);
@@ -88,15 +89,73 @@ class KafkaMatchingShardAssignmentMapSwitchTest {
     }
 
     @Test
+    void 브로커가_응답하지_않아도_confirmAcquired는_기다리지_않고_돌아온다() throws Exception {
+        listener.onPartitionsAssigned(partitions(5));
+        assignment.acquireAfterLoad(5);
+
+        long startedAt = System.nanoTime();
+        assignment.confirmAcquired(5);
+        long elapsedMillis = (System.nanoTime() - startedAt) / 1_000_000L;
+
+        assertThat(elapsedMillis).as("주문 수신 thread가 Kafka 응답을 기다리면 안 된다").isLessThan(500L);
+        assertThat(assignment.test(5)).isTrue();
+        awaitHistory(1);
+        mapProducer.completeNext();
+    }
+
+    @Test
+    void 맵_쓰기는_쓰기_전용_thread_하나가_넣은_순서대로_보낸다() throws Exception {
+        listener.onPartitionsAssigned(partitions(5, 6));
+        assignment.acquireAfterLoad(5);
+        assignment.acquireAfterLoad(6);
+
+        assignment.confirmAcquired(5);
+        assignment.confirmAcquired(6);
+        awaitHistory(1);
+        Thread.sleep(150);
+        assertThat(mapProducer.history()).as("앞 쓰기가 끝나기 전에는 뒤 쓰기를 보내지 않는다").hasSize(1);
+        assertThat(mapProducer.history().get(0).key()).isEqualTo(5);
+
+        mapProducer.completeNext();
+        awaitHistory(2);
+        assertThat(mapProducer.history().get(1).key()).isEqualTo(6);
+        mapProducer.completeNext();
+    }
+
+    @Test
+    void 회수_콜백은_자기_쓰기가_끝날_때까지_기다린다() throws Exception {
+        listener.onPartitionsAssigned(partitions(5));
+        assignment.acquireAfterLoad(5);
+        assignment.confirmAcquired(5);
+        awaitHistory(1);
+        mapProducer.completeNext();
+
+        java.util.concurrent.atomic.AtomicBoolean returned = new java.util.concurrent.atomic.AtomicBoolean();
+        Thread revoke = new Thread(() -> {
+            listener.onPartitionsRevoked(partitions(5));
+            returned.set(true);
+        });
+        revoke.start();
+        awaitHistory(2);
+        Thread.sleep(150);
+        assertThat(returned.get()).as("이동 중 표시의 브로커 응답이 오기 전에는 콜백이 끝나지 않는다").isFalse();
+
+        mapProducer.completeNext();
+        revoke.join(3000);
+
+        assertThat(returned.get()).isTrue();
+        assertThat(mapProducer.history().get(1).value()).isEqualTo(OWN + ";moving");
+    }
+
+    @Test
     void 다시_보내기_전에_회수되면_옛_쓰기를_다시_보내지_않는다() throws Exception {
         listener.onPartitionsAssigned(partitions(5));
         assignment.acquireAfterLoad(5);
         assignment.confirmAcquired(5);
-        assertThat(mapProducer.history()).hasSize(1);
+        awaitHistory(1);
         assignment.setMapWriteRetryMillis(300L);
         mapProducer.errorNext(new RuntimeException("브로커 오류")); // 300ms 뒤에 다시 보내기가 예약된다
 
-        // 회수 콜백은 이동 중 표시를 보내고 브로커 응답을 기다리므로 다른 thread에서 부르고 이쪽에서 응답을 완료시킨다.
         Thread revoke = new Thread(() -> listener.onPartitionsRevoked(partitions(5)));
         revoke.start();
         while (revoke.isAlive()) {
