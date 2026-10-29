@@ -259,6 +259,31 @@ class MatchingDestinationResolverTest {
     }
 
     @Test
+    void 초기_읽기_뒤_읽기_thread가_예외로_끝나면_view가_모든_종목_slot을_알_수_없음으로_돌려준다() {
+        String stockCode = "005930";
+        int slot = stockSlotHasher.slotFor(stockCode);
+        Map<TopicPartition, Long> endOffsets = new HashMap<>();
+        for (int partitionNumber = 0; partitionNumber < STOCK_SLOT_COUNT; partitionNumber++) {
+            endOffsets.put(new TopicPartition(MAP_TOPIC, partitionNumber), partitionNumber == slot ? 1L : 0L);
+        }
+        consumer.updateEndOffsets(endOffsets);
+        consumer.schedulePollTask(() -> consumer.addRecord(new ConsumerRecord<>(MAP_TOPIC, slot, 0L, slot, ADDRESS_A)));
+        resolver.start();
+        resolver.awaitInitialCatchUp(Duration.ofSeconds(10));
+        assertEquals(Optional.of(ADDRESS_A), resolver.endpointFor(stockCode));
+        assertTrue(resolver.readFailure().isEmpty());
+
+        consumer.schedulePollTask(() -> {
+            throw new KafkaException("초기 읽기 뒤 브로커 오류");
+        });
+        awaitCondition(() -> resolver.readFailure().isPresent(), "읽기 thread 종료 기록");
+
+        assertEquals(Optional.empty(), resolver.view().targetFor(stockCode));
+        assertEquals(Optional.empty(), resolver.targetFor(stockCode));
+        assertInstanceOf(KafkaException.class, resolver.readFailure().get());
+    }
+
+    @Test
     void 한_번에_받은_변경_둘은_읽는_쪽에_섞여_보이지_않고_이미_읽은_표는_바뀌지_않는다() throws Exception {
         String firstStock = "005930";
         String secondStock = stockInDifferentSlot(firstStock);

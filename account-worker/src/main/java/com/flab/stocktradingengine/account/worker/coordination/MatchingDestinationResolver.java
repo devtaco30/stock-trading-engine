@@ -61,6 +61,10 @@ public final class MatchingDestinationResolver implements MatchingTargetLookup {
     private final CountDownLatch initialCatchUpLatch = new CountDownLatch(1);
     // 초기 읽기를 마치기 전에 읽기 thread가 예외로 끝났으면 그 예외. awaitInitialCatchUp이 실패로 알린다.
     private volatile Throwable initialCatchUpFailure;
+    // 읽기 thread가 예외로 끝난 뒤의 원인(초기 읽기 전후 모두). 값이 있으면 표가 더는 갱신되지 않으므로
+    // view()는 모든 종목 slot을 「알 수 없음」으로 돌려준다.
+    private volatile Throwable readFailureCause;
+    private static final MatchingTargetView UNKNOWN_VIEW = stockCode -> Optional.empty();
 
     /**
      * 표 크기는 {@link StockSlotHasher}가 들고 있는 종목 slot 개수 하나만 쓴다 — 계산에 쓰는 개수와
@@ -88,7 +92,17 @@ public final class MatchingDestinationResolver implements MatchingTargetLookup {
     /** 지금 표의 모습을 고정해 돌려준다. 이 view로 조회하는 동안 갱신이 있어도 view의 내용은 그대로다. */
     @Override
     public MatchingTargetView view() {
+        if (readFailureCause != null) {
+            // 갱신이 멈춘 옛 표로 계속 보내면 주문이 옛 담당 pod로 간다 — 담당을 모르는 상태와 같은 경로(보관 목록,
+            // 가득 차면 MATCHING_HOLDING_FULL 거부)로 닫는다.
+            return UNKNOWN_VIEW;
+        }
         return tableState.view();
+    }
+
+    /** 읽기 thread가 예외로 끝났으면 그 원인. 상태를 조회하는 접근자다. */
+    public Optional<Throwable> readFailure() {
+        return Optional.ofNullable(readFailureCause);
     }
 
     private TableState newTableState(MatchingSlotTarget[] table) {
@@ -193,7 +207,9 @@ public final class MatchingDestinationResolver implements MatchingTargetLookup {
             // close()가 의도적으로 poll을 깨운 것 — 정상 종료 경로.
         } catch (RuntimeException e) {
             // 초기 읽기를 마치기 전이면 대기 중인 호출자가 정상 반환하지 않고 실패로 알게 한다.
-            log.log(Level.ERROR, "[목적지] " + MAP_TOPIC + " 읽기 thread가 예외로 끝났습니다", e);
+            log.log(Level.ERROR, "[목적지] " + MAP_TOPIC + " 읽기 thread가 예외로 끝났습니다 — 이후 모든 종목 slot의 담당을 "
+                + "알 수 없음으로 돌려줍니다", e);
+            readFailureCause = e;
             if (!caughtUp) {
                 initialCatchUpFailure = e;
             }
