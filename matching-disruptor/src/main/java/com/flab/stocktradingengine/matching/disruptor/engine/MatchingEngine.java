@@ -28,12 +28,11 @@ import com.flab.stocktradingengine.matching.disruptor.journal.InMemoryJournal;
 import com.flab.stocktradingengine.matching.disruptor.journal.Journal;
 import com.flab.stocktradingengine.matching.disruptor.snapshot.MatchingSnapshot;
 import com.flab.stocktradingengine.matching.disruptor.snapshot.MatchingSnapshotFactory;
-import com.flab.stocktradingengine.matching.disruptor.snapshot.RestingOrder;
+import com.flab.stocktradingengine.matching.disruptor.snapshot.MatchingSnapshotRestorer;
 import com.flab.stocktradingengine.time.EpochNanos;
 import com.flab.stocktradingengine.time.StageLatencyRegistry;
 import com.flab.stocktradingengine.trading.entity.OrderSide;
 import com.flab.stocktradingengine.trading.matching.OrderBook;
-import com.flab.stocktradingengine.trading.matching.OrderEntry;
 
 /**
  * Disruptor 매칭 코어의 진입점.
@@ -246,27 +245,7 @@ public class MatchingEngine {
      */
     public void restore(MatchingSnapshot snapshot) {
         requireNotStarted();
-        snapshot.booksByStock().forEach((stockCode, bookSnapshot) -> {
-            OrderBook book = books.computeIfAbsent(stockCode, k -> new OrderBook());
-            for (RestingOrder restingOrder : bookSnapshot.restingOrders()) {
-                book.restoreRestingOrder(toOrderEntry(stockCode, restingOrder));
-            }
-            bookSnapshot.filledOrderTimestampsEpochMillis().forEach((orderId, epochMillis) ->
-                book.restoreFilledOrderTimestamp(orderId, Instant.ofEpochMilli(epochMillis)));
-        });
-    }
-
-    private static OrderEntry toOrderEntry(String stockCode, RestingOrder restingOrder) {
-        OrderEntry entry = new OrderEntry(restingOrder.orderId(), restingOrder.accountId(), stockCode,
-            restingOrder.side(), restingOrder.price(), restingOrder.quantity(),
-            Instant.ofEpochMilli(restingOrder.orderAtEpochMillis()));
-        if (restingOrder.filledQuantity() > 0) {
-            entry.addFilled(restingOrder.filledQuantity());
-        }
-        if (restingOrder.cancelled()) {
-            entry.cancel();
-        }
-        return entry;
+        MatchingSnapshotRestorer.restoreInto(books, snapshot);
     }
 
     /** 저널 엔트리 하나를 스크래치 슬롯에 채운다 — {@code OrderEvent}의 타입별 setter와 1:1 대응. */
