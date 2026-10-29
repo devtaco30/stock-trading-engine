@@ -2,6 +2,8 @@ package com.flab.stocktradingengine.matching.disruptor.io;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import java.util.function.IntPredicate;
+
 import org.agrona.DirectBuffer;
 import org.agrona.concurrent.IdleStrategy;
 
@@ -9,6 +11,7 @@ import io.aeron.Subscription;
 import io.aeron.logbuffer.FragmentHandler;
 import io.aeron.logbuffer.Header;
 
+import com.flab.stocktradingengine.aeron.StockSlotHasher;
 import com.flab.stocktradingengine.support.IdleStrategies;
 import com.flab.stocktradingengine.codec.EventType;
 import com.flab.stocktradingengine.codec.JournaledOrder;
@@ -30,6 +33,12 @@ import com.flab.stocktradingengine.matching.disruptor.engine.MatchingEngine;
  * {@link IdleStrategy}(유휴 전략)가 정한다 — Disruptor 의 WaitStrategy 와 같은 자리의 개념이다.
  * 여기선 {@link BackoffIdleStrategy}(놀면 점점 더 물러나 대기)를 쓴다.</p>
  *
+ * <h3>담당 확인</h3>
+ * <p>PLACE는 종목코드를 종목 slot으로 바꿔 담당 판정({@code ownedSlots})을 통과한 것만
+ * {@code publishPlace}로 넣는다. 담당이 아니면 접수하지 않고 {@link NotOwnedOrderListener}에 넘긴다.
+ * 예외를 던지지 않으므로 폴링 thread가 죽지 않는다. 담당 판정과 hasher를 주지 않는 생성자는 모든
+ * 주문을 담당으로 본다(샤딩을 모르는 기존 구성).</p>
+ *
  * <h3>단일 프로듀서 유지</h3>
  * <p>이 폴링 스레드 하나만 {@code publishPlace} 를 호출하므로, {@link MatchingEngine} 의
  * {@code ProducerType.SINGLE} 전제가 그대로 지켜진다.</p>
@@ -45,6 +54,9 @@ public final class AeronOrderReceiver implements AutoCloseable {
     private final IdleStrategy idleStrategy;
     private final AtomicBoolean running = new AtomicBoolean(false);
     private final FragmentHandler fragmentHandler = this::onFragment;
+    private final IntPredicate ownedSlots;
+    private final StockSlotHasher stockSlotHasher;
+    private final NotOwnedOrderListener notOwnedOrderListener;
 
     private Thread pollThread;
 
@@ -54,9 +66,18 @@ public final class AeronOrderReceiver implements AutoCloseable {
 
     /** 쉬는 방식 변경 실험(EXPERIMENT_IDLE)이 폴링 스레드의 쉬는 방식을 바꿀 수 있게 전략을 주입받는다. */
     public AeronOrderReceiver(Subscription subscription, MatchingEngine engine, IdleStrategy idleStrategy) {
+        this(subscription, engine, idleStrategy, slot -> true, new StockSlotHasher(1), NotOwnedOrderListener.NO_OP);
+    }
+
+    public AeronOrderReceiver(Subscription subscription, MatchingEngine engine, IdleStrategy idleStrategy,
+                              IntPredicate ownedSlots, StockSlotHasher stockSlotHasher,
+                              NotOwnedOrderListener notOwnedOrderListener) {
         this.subscription = subscription;
         this.engine = engine;
         this.idleStrategy = idleStrategy;
+        this.ownedSlots = ownedSlots;
+        this.stockSlotHasher = stockSlotHasher;
+        this.notOwnedOrderListener = notOwnedOrderListener;
     }
 
     /** 폴링 스레드를 기동한다. */
@@ -88,6 +109,11 @@ public final class AeronOrderReceiver implements AutoCloseable {
         long matchReceivedAtNanos = engine.stagesEnabled() ? EpochNanos.now() : 0L;
         JournaledOrder order = codec.decode(buffer, offset);
         if (order.type() == EventType.PLACE) {
+            int stockSlot = stockSlotHasher.slotFor(order.stockCode());
+            if (!ownedSlots.test(stockSlot)) {
+                notOwnedOrderListener.onNotOwned(order);
+                return;
+            }
             long sourcePosition = header != null ? header.position() : 0L;
             int sourceSessionId = header != null ? header.sessionId() : 0;
             engine.publishPlace(
