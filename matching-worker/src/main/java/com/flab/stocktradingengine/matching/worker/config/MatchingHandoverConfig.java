@@ -24,6 +24,7 @@ import com.flab.stocktradingengine.matching.worker.coordination.HandoverEndpoint
 import com.flab.stocktradingengine.matching.worker.coordination.KafkaMatchingShardAssignment;
 import com.flab.stocktradingengine.matching.worker.coordination.MatchingSlotMapReader;
 import com.flab.stocktradingengine.matching.worker.handover.HandoverBookStore;
+import com.flab.stocktradingengine.matching.worker.handover.HandoverCleanupTrigger;
 import com.flab.stocktradingengine.matching.worker.handover.HandoverCoordinator;
 import com.flab.stocktradingengine.matching.worker.handover.HandoverReceiver;
 import com.flab.stocktradingengine.matching.worker.handover.HandoverRequester;
@@ -70,6 +71,16 @@ public class MatchingHandoverConfig {
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         return new MatchingSlotMapReader(new KafkaConsumer<>(props), stockSlotHasher.stockSlotCount(),
             KafkaMatchingShardAssignment.MAP_TOPIC);
+    }
+
+    /** 맵 전환을 보고 넘긴 종목 slot의 정리를 요청한다(U16b). 요청은 주문 수신 thread가 이벤트로 발행한다. */
+    @Bean
+    public HandoverCleanupTrigger handoverCleanupTrigger(
+            MatchingSlotMapReader reader, HandoverBookStore store, SlotEventRequests slotEventRequests,
+            @Value("${transport.matching-intake.channel:" + MatchingOrderIntakeConfig.DEFAULT_INTAKE_CHANNEL + "}") String ownChannel) {
+        HandoverCleanupTrigger trigger = new HandoverCleanupTrigger(ownChannel, store, slotEventRequests::requestCleanup);
+        reader.addListener(trigger::onMapChange);
+        return trigger;
     }
 
     @Bean

@@ -92,6 +92,15 @@ public class MatchingShardOwnershipConfig {
             }
 
             @Override
+            public void onSlotCleanedUp(int stockSlot) {
+                // 새 담당이 확정되어 호가창을 지웠다. 보관한 바이트도 더 보낼 이유가 없다(11-14절 4번).
+                HandoverBookStore store = handoverBookStore.getIfAvailable();
+                if (store != null) {
+                    store.remove(stockSlot);
+                }
+            }
+
+            @Override
             public void onSlotHandedOver(int stockSlot, List<byte[]> bookBytesPerStock) {
                 // 넘김 이벤트를 처리한 엔진 thread가 부른다. 요청이 오면 호가창 발신 thread가 이 바이트를 보낸다.
                 HandoverBookStore store = handoverBookStore.getIfAvailable();

@@ -169,10 +169,12 @@ public class MatchingEventHandler implements EventHandler<OrderEvent> {
             }
             return;
         }
-        if (event.isBookLoad() || event.isForceSnapshot()) {
+        if (event.isBookLoad() || event.isForceSnapshot() || event.isSlotCleanup()) {
             lastJournaledPosition = event.getJournaledPosition();
             if (event.isBookLoad()) {
                 handleBookLoad(event);
+            } else if (event.isSlotCleanup()) {
+                handleSlotCleanup(event);
             } else {
                 forceSnapshotRetryQueued.set(false);
                 retryRejectedForcedSnapshots();
@@ -327,6 +329,16 @@ public class MatchingEventHandler implements EventHandler<OrderEvent> {
         if (!offered) {
             log.log(Level.WARNING, "[매칭] 적재 뒤 강제 스냅샷이 거부됨(쓰기 큐 가득): 이동 번호=" + event.getTransferId());
         }
+    }
+
+    /**
+     * 넘긴 종목 slot의 호가창을 지운다. 넘기는 중 목록({@code handedOverSlots})은 그 종목 slot을 다시 받을 때까지 둔다 — 지운 뒤에
+     * 도착한 이벤트가 빈 호가창에 새 호가창을 만들지 못하게 한다.
+     */
+    private void handleSlotCleanup(OrderEvent event) {
+        int cleanedSlot = event.getStockSlot();
+        books.keySet().removeIf(stockCode -> stockSlotHasher.slotFor(stockCode) == cleanedSlot);
+        slotEventListener.onSlotCleanedUp(cleanedSlot);
     }
 
     private void retryRejectedForcedSnapshots() {

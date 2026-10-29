@@ -37,4 +37,11 @@ public interface SlotEventListener {
      */
     default void onBooksLoadedDurable(long transferId, int stockSlot) {
     }
+
+    /**
+     * 넘긴 종목 slot의 호가창을 엔진 thread에서 지웠다(U16b). 이동을 보낸 쪽(X)이 새 담당의 확정(맵 전환)을 보고 정리한 것이다.
+     * 매칭 핸들러 thread에서 불린다. 이 통지에서 보관해 둔 호가창 바이트를 지운다.
+     */
+    default void onSlotCleanedUp(int stockSlot) {
+    }
 }

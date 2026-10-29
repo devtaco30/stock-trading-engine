@@ -18,24 +18,29 @@ import com.flab.stocktradingengine.matching.disruptor.engine.MatchingEngine;
 public final class SlotEventRequests {
 
     // type이 null이면 호가창 적재 요청이다(U15).
-    private record Request(EventType type, int stockSlot, long transferId, List<byte[]> bookBytes) {
+    private record Request(EventType type, int stockSlot, long transferId, List<byte[]> bookBytes, boolean cleanup) {
     }
 
     private final Queue<Request> queue = new ConcurrentLinkedQueue<>();
 
     /** 어느 thread에서나 부를 수 있다. */
     public void requestAcquire(int stockSlot) {
-        queue.add(new Request(EventType.SLOT_ACQUIRED, stockSlot, 0L, null));
+        queue.add(new Request(EventType.SLOT_ACQUIRED, stockSlot, 0L, null, false));
     }
 
     /** 어느 thread에서나 부를 수 있다. */
     public void requestRelease(int stockSlot) {
-        queue.add(new Request(EventType.SLOT_RELEASED, stockSlot, 0L, null));
+        queue.add(new Request(EventType.SLOT_RELEASED, stockSlot, 0L, null, false));
+    }
+
+    /** 넘긴 종목 slot의 호가창을 지워 달라고 넣는다(U16b). 어느 thread에서나 부를 수 있다. */
+    public void requestCleanup(int stockSlot) {
+        queue.add(new Request(null, stockSlot, 0L, null, true));
     }
 
     /** 호가창 이동을 받은 쪽의 수신 thread가 조립을 마친 종목별 바이트를 적재해 달라고 넣는다. 어느 thread에서나 부를 수 있다. */
     public void requestLoad(long transferId, int stockSlot, List<byte[]> bookBytesPerStock) {
-        queue.add(new Request(null, stockSlot, transferId, bookBytesPerStock));
+        queue.add(new Request(null, stockSlot, transferId, bookBytesPerStock, false));
     }
 
     /**
@@ -47,7 +52,9 @@ public final class SlotEventRequests {
         int drained = 0;
         Request request;
         while ((request = queue.poll()) != null) {
-            if (request.type() == null) {
+            if (request.cleanup()) {
+                engine.publishSlotCleanup(request.stockSlot());
+            } else if (request.type() == null) {
                 engine.publishBookLoad(request.transferId(), request.stockSlot(), request.bookBytes());
             } else if (request.type() == EventType.SLOT_ACQUIRED) {
                 engine.publishSlotAcquired(request.stockSlot());

@@ -78,6 +78,27 @@ class MatchingHandoverConfigTest {
             });
     }
 
+    @Test
+    void 정리_통지는_보관소의_호가창_바이트를_지운다() {
+        contextRunner
+            .withPropertyValues(
+                "matching-shard.coordination.enabled=true",
+                "spring.kafka.bootstrap-servers=localhost:9092",
+                "matching-worker.instance-id=matching-1",
+                "transport.matching-intake.channel=aeron:udp?endpoint=localhost:20021",
+                "matching-shard.handover.endpoints[0]=aeron:udp?endpoint=localhost:20020",
+                "matching-shard.handover.endpoints[1]=aeron:udp?endpoint=localhost:20021")
+            .run(context -> {
+                SlotEventListener listener = context.getBean(SlotEventListener.class);
+                HandoverBookStore store = context.getBean(HandoverBookStore.class);
+                listener.onSlotHandedOver(7, java.util.List.of(new byte[] {1, 2}));
+
+                listener.onSlotCleanedUp(7);
+
+                assertThat(store.get(7)).isEmpty();
+            });
+    }
+
     private static LifecycleProcessor noOpProcessor() {
         return new LifecycleProcessor() {
             @Override

@@ -56,6 +56,16 @@ class MatchingSlotMapReaderTest {
     }
 
     @Test
+    void 반영한_항목마다_관찰자에게_종목_slot과_새_값을_알린다() {
+        List<String> seen = new java.util.ArrayList<>();
+        reader.addListener((slot, target) -> seen.add(slot + ":" + target.map(MatchingSlotTarget::encode).orElse("없음")));
+
+        reader.applyRecords(records(record(3, X), record(5, X + ";moving"), record(3, null)));
+
+        assertThat(seen).containsExactly("3:" + X, "5:" + X + ";moving", "3:없음");
+    }
+
+    @Test
     void 읽는_thread가_예외로_끝나면_초기_읽기_대기가_실패로_끝난다() {
         Consumer<Integer, String> failing = mock(Consumer.class);
         TopicPartition partition = new TopicPartition(TOPIC, 0);

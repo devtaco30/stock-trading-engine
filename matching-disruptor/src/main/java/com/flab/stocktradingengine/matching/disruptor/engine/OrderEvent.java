@@ -55,6 +55,8 @@ public class OrderEvent {
     private java.util.List<byte[]> bookBytes;
     // 강제 스냅샷 재시도 이벤트(U15). type은 null이다.
     private boolean forceSnapshot;
+    // 넘긴 쪽(X)이 호가창을 지우는 정리 이벤트(U16b). type은 null이고 stockSlot만 의미가 있다.
+    private boolean slotCleanup;
 
     /**
      * 주문 접수 명령으로 슬롯을 채운다. sourcePosition·sourceSessionId 를 모르는 발행자(저널 replay,
@@ -130,6 +132,12 @@ public class OrderEvent {
         this.bookBytes = bookBytes;
     }
 
+    /** 넘긴 종목 slot의 호가창을 지우는 정리 이벤트로 슬롯을 채운다. 저널에는 기록하지 않는다. */
+    public void setSlotCleanup(int stockSlot) {
+        this.slotCleanup = true;
+        this.stockSlot = stockSlot;
+    }
+
     /** 강제 스냅샷 재시도 이벤트로 슬롯을 채운다. */
     public void setForceSnapshot() {
         this.forceSnapshot = true;
@@ -170,10 +178,15 @@ public class OrderEvent {
         this.transferId = 0L;
         this.bookBytes = null;
         this.forceSnapshot = false;
+        this.slotCleanup = false;
     }
 
     public boolean isBookLoad() {
         return bookLoad;
+    }
+
+    public boolean isSlotCleanup() {
+        return slotCleanup;
     }
 
     public boolean isForceSnapshot() {

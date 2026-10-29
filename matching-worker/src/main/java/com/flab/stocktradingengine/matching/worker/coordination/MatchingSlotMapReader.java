@@ -6,6 +6,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -38,11 +39,23 @@ public final class MatchingSlotMapReader {
     private final CountDownLatch initialCatchUpLatch = new CountDownLatch(1);
     // 읽는 thread가 예외로 끝났으면 그 예외. 초기 읽기 대기가 이것을 보고 실패로 끝난다.
     private volatile Throwable failure;
+    private final List<MapChangeListener> listeners = new CopyOnWriteArrayList<>();
 
     public MatchingSlotMapReader(Consumer<Integer, String> consumer, int stockSlotCount, String mapTopic) {
         this.consumer = consumer;
         this.mapTopic = mapTopic;
         this.slotToTarget = new MatchingSlotTarget[stockSlotCount];
+    }
+
+    /** 맵 항목이 바뀔 때 불리는 관찰자. 읽는 thread에서 불리므로 오래 걸리는 일을 하지 않는다. */
+    @FunctionalInterface
+    public interface MapChangeListener {
+
+        void onChange(int stockSlot, Optional<MatchingSlotTarget> target);
+    }
+
+    public void addListener(MapChangeListener listener) {
+        listeners.add(listener);
     }
 
     /** 이 종목 slot의 맵 항목. 항목이 없거나 형식을 읽지 못했으면 빈 값이다. */
@@ -130,6 +143,8 @@ public final class MatchingSlotMapReader {
     /** 패키지 가시성 — 단위 시험이 레코드를 직접 넣는다. poll thread에서만 불러야 한다. */
     void applyRecords(ConsumerRecords<Integer, String> records) {
         MatchingSlotTarget[] updated = slotToTarget.clone();
+        // 반영한 항목마다 그 시점의 값을 모아 두었다가 배열을 교체한 뒤 관찰자에게 알린다.
+        List<Map.Entry<Integer, Optional<MatchingSlotTarget>>> changes = new java.util.ArrayList<>();
         for (ConsumerRecord<Integer, String> record : records) {
             int slot = record.key();
             if (slot < 0 || slot >= updated.length) {
@@ -138,15 +153,25 @@ public final class MatchingSlotMapReader {
             }
             if (record.value() == null) {
                 updated[slot] = null;
-                continue;
+            } else {
+                try {
+                    updated[slot] = MatchingSlotTarget.parse(record.value());
+                } catch (IllegalArgumentException e) {
+                    log.log(Level.WARNING, "[맵] " + mapTopic + "에서 읽을 수 없는 값: 종목 slot=" + slot + " 값=" + record.value());
+                    updated[slot] = null;
+                }
             }
-            try {
-                updated[slot] = MatchingSlotTarget.parse(record.value());
-            } catch (IllegalArgumentException e) {
-                log.log(Level.WARNING, "[맵] " + mapTopic + "에서 읽을 수 없는 값: 종목 slot=" + slot + " 값=" + record.value());
-                updated[slot] = null;
-            }
+            changes.add(Map.entry(slot, Optional.ofNullable(updated[slot])));
         }
         slotToTarget = updated;
+        for (Map.Entry<Integer, Optional<MatchingSlotTarget>> change : changes) {
+            for (MapChangeListener listener : listeners) {
+                try {
+                    listener.onChange(change.getKey(), change.getValue());
+                } catch (RuntimeException e) {
+                    log.log(Level.ERROR, "[맵] 관찰자 처리 중 예외(읽기는 계속함): 종목 slot=" + change.getKey() + " 원인=" + e);
+                }
+            }
+        }
     }
 }

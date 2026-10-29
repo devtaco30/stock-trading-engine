@@ -53,8 +53,8 @@ public class JournalEventHandler implements EventHandler<OrderEvent> {
 
     @Override
     public void onEvent(OrderEvent event, long sequence, boolean endOfBatch) {
-        if (event.isBookLoad() || event.isForceSnapshot()) {
-            // 호가창 적재와 강제 스냅샷 재시도는 저널에 기록하지 않는다. 매칭 핸들러가 읽을 저널 위치만 채운다.
+        if (event.isBookLoad() || event.isForceSnapshot() || event.isSlotCleanup()) {
+            // 호가창 적재, 강제 스냅샷 재시도, 넘긴 종목 slot 정리는 저널에 기록하지 않는다. 매칭 핸들러가 읽을 저널 위치만 채운다.
             event.setJournaledPosition(journal.position());
             return;
         }

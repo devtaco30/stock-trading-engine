@@ -380,6 +380,19 @@ public class MatchingEngine {
     }
 
     /**
+     * 넘긴 종목 slot의 호가창을 엔진 thread에서 지우는 정리 이벤트를 링버퍼에 발행한다(U16b). 주문과 같은 프로듀서 thread에서만
+     * 불러야 한다. 저널에는 기록하지 않는다.
+     */
+    public void publishSlotCleanup(int stockSlot) {
+        long sequence = ringBuffer.next();
+        try {
+            ringBuffer.get(sequence).setSlotCleanup(stockSlot);
+        } finally {
+            ringBuffer.publish(sequence);
+        }
+    }
+
+    /**
      * 적재 뒤 스냅샷이 디스크에 확정되었는지 확인해 완료를 알리고, 쓰기 queue가 차서 거부된 강제 스냅샷이 남아 있으면
      * 재시도 이벤트를 발행한다. 주문을 발행하는 프로듀서 thread의 반복 안에서 부른다.
      *
