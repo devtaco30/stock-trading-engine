@@ -22,5 +22,3 @@ spring:
       acks: all
       retries: 3
 
-snowflake:
-  node-id: 4
