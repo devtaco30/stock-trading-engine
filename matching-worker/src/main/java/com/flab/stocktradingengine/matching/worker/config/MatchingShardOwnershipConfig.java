@@ -1,5 +1,6 @@
 package com.flab.stocktradingengine.matching.worker.config;
 
+import java.util.List;
 import java.util.Properties;
 import java.util.function.IntPredicate;
 
@@ -23,6 +24,7 @@ import com.flab.stocktradingengine.aeron.StockSlotHasher;
 import com.flab.stocktradingengine.matching.disruptor.io.SlotEventListener;
 import com.flab.stocktradingengine.matching.disruptor.io.SlotEventRequests;
 import com.flab.stocktradingengine.matching.worker.coordination.KafkaMatchingShardAssignment;
+import com.flab.stocktradingengine.matching.worker.handover.HandoverBookStore;
 import com.flab.stocktradingengine.matching.worker.lifecycle.KafkaMatchingShardAssignmentLifecycle;
 
 import lombok.extern.slf4j.Slf4j;
@@ -61,13 +63,28 @@ public class MatchingShardOwnershipConfig {
      * 엔진 빈이 이 빈을 받고 배정 빈은 엔진을 모르므로 순환이 없다.
      */
     @Bean
-    public SlotEventListener matchingSlotEventListener(ObjectProvider<KafkaMatchingShardAssignment> assignmentProvider) {
+    public SlotEventListener matchingSlotEventListener(
+            ObjectProvider<KafkaMatchingShardAssignment> assignmentProvider, ObjectProvider<HandoverBookStore> handoverBookStore) {
         return new SlotEventListener() {
             @Override
             public void onSlotAcquiredJournaled(int stockSlot) {
                 KafkaMatchingShardAssignment assignment = assignmentProvider.getIfAvailable();
                 if (assignment != null) {
                     assignment.confirmAcquired(stockSlot);
+                }
+                // 넘겼던 종목 slot을 다시 받았으면 보관한 호가창 바이트는 더 이상 보낼 이유가 없다(11-13절 4번).
+                HandoverBookStore store = handoverBookStore.getIfAvailable();
+                if (store != null) {
+                    store.remove(stockSlot);
+                }
+            }
+
+            @Override
+            public void onSlotHandedOver(int stockSlot, List<byte[]> bookBytesPerStock) {
+                // 넘김 이벤트를 처리한 엔진 thread가 부른다. 요청이 오면 호가창 발신 thread가 이 바이트를 보낸다.
+                HandoverBookStore store = handoverBookStore.getIfAvailable();
+                if (store != null) {
+                    store.put(stockSlot, bookBytesPerStock);
                 }
             }
         };

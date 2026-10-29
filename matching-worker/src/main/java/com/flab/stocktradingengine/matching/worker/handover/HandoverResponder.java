@@ -1,0 +1,139 @@
+package com.flab.stocktradingengine.matching.worker.handover;
+
+import java.lang.System.Logger;
+import java.lang.System.Logger.Level;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
+
+import org.agrona.DirectBuffer;
+import org.agrona.concurrent.BackoffIdleStrategy;
+import org.agrona.concurrent.IdleStrategy;
+import org.agrona.concurrent.UnsafeBuffer;
+
+import com.flab.stocktradingengine.aeron.AeronStreamIds;
+import com.flab.stocktradingengine.matching.disruptor.handover.HandoverFragmenter;
+import com.flab.stocktradingengine.matching.disruptor.handover.HandoverMessage;
+import com.flab.stocktradingengine.matching.worker.coordination.HandoverEndpointPool;
+
+import io.aeron.Aeron;
+import io.aeron.Publication;
+import io.aeron.Subscription;
+import io.aeron.logbuffer.Header;
+
+/**
+ * 호가창 이동을 보내는 쪽(X)의 전용 thread. 자기 주문 입구 주소의 스트림 2008에서 요청을 받아, 보관한 종목별 바이트를
+ * 요청한 쪽의 응답 주소(스트림 2009)로 종목마다 메시지 하나씩 보낸다. 매칭 thread는 offer하지 않는다 — 큰 메시지의
+ * offer가 배압으로 재시도되면 같은 thread가 처리하는 다른 종목 slot의 매칭이 멈추기 때문이다(11-6절).
+ *
+ * <p>응답 주소가 풀에 없는 요청과 보관한 바이트가 없는 요청은 응답하지 않고 로그와 횟수로 남긴다. 요청한 쪽이 대기 한도 안에서
+ * 다시 요청한다(U15c).</p>
+ */
+public final class HandoverResponder implements AutoCloseable {
+
+    private static final Logger log = System.getLogger(HandoverResponder.class.getName());
+
+    private static final int FRAGMENT_LIMIT = 10;
+    private static final long OFFER_DEADLINE_NANOS = 5_000_000_000L;
+    private static final long CLOSE_JOIN_TIMEOUT_MILLIS = 1000L;
+
+    private final HandoverEndpointPool pool;
+    private final HandoverBookStore store;
+    private final Subscription requestSubscription;
+    private final Map<String, Publication> responsePublications = new HashMap<>();
+    private final AtomicBoolean running = new AtomicBoolean(false);
+    private final AtomicLong requestsWithoutBook = new AtomicLong();
+    private final AtomicLong requestsRejectedByPool = new AtomicLong();
+    private final AtomicLong responsesAbandoned = new AtomicLong();
+
+    private Thread thread;
+
+    public HandoverResponder(Aeron aeron, String ownChannel, HandoverEndpointPool pool, HandoverBookStore store) {
+        this.pool = pool;
+        this.store = store;
+        this.requestSubscription = aeron.addSubscription(ownChannel, AeronStreamIds.ORDER_BOOK_REQUEST);
+        for (String peer : pool.peers()) {
+            responsePublications.put(peer, aeron.addPublication(peer, AeronStreamIds.ORDER_BOOK_RESPONSE));
+        }
+    }
+
+    public void start() {
+        running.set(true);
+        thread = new Thread(this::pollLoop, "handover-responder");
+        thread.setDaemon(true);
+        thread.start();
+    }
+
+    private void pollLoop() {
+        IdleStrategy idle = new BackoffIdleStrategy();
+        while (running.get()) {
+            int fragments = requestSubscription.poll(this::onRequest, FRAGMENT_LIMIT);
+            idle.idle(fragments);
+        }
+    }
+
+    private void onRequest(DirectBuffer buffer, int offset, int length, Header header) {
+        byte[] wire = new byte[length];
+        buffer.getBytes(offset, wire);
+        HandoverRequest request = HandoverRequest.decode(wire, 0, length);
+        Publication reply = responsePublications.get(request.replyChannel());
+        if (reply == null) {
+            requestsRejectedByPool.incrementAndGet();
+            log.log(Level.ERROR, "[호가창 이동] 응답 주소가 풀에 없어 요청을 버림: " + request);
+            return;
+        }
+        Optional<List<byte[]>> stored = store.get(request.stockSlot());
+        if (stored.isEmpty()) {
+            requestsWithoutBook.incrementAndGet();
+            log.log(Level.WARNING, "[호가창 이동] 보관한 호가창이 없어 응답하지 못함: " + request);
+            return;
+        }
+        send(reply, request, stored.get());
+    }
+
+    private void send(Publication reply, HandoverRequest request, List<byte[]> bodies) {
+        List<HandoverMessage> messages = HandoverFragmenter.split(
+            request.transferId(), request.stockSlot(), bodies, reply.maxMessageLength());
+        long deadline = System.nanoTime() + OFFER_DEADLINE_NANOS;
+        for (HandoverMessage message : messages) {
+            byte[] wire = message.encode();
+            if (!OfferSupport.offerWithDeadline(reply, new UnsafeBuffer(wire), wire.length, deadline)) {
+                responsesAbandoned.incrementAndGet();
+                log.log(Level.ERROR, "[호가창 이동] 응답을 마감 안에 보내지 못함: " + request + " 보낸 순번=" + message.index());
+                return;
+            }
+        }
+    }
+
+    /** 요청은 왔지만 보관한 바이트가 없어 응답하지 못한 횟수. */
+    public long requestsWithoutBook() {
+        return requestsWithoutBook.get();
+    }
+
+    /** 응답 주소가 풀에 없어 버린 요청 횟수. */
+    public long requestsRejectedByPool() {
+        return requestsRejectedByPool.get();
+    }
+
+    /** 마감 안에 보내지 못해 포기한 응답 횟수. */
+    public long responsesAbandoned() {
+        return responsesAbandoned.get();
+    }
+
+    @Override
+    public void close() {
+        running.set(false);
+        if (thread != null) {
+            try {
+                thread.join(CLOSE_JOIN_TIMEOUT_MILLIS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+        requestSubscription.close();
+        responsePublications.values().forEach(Publication::close);
+    }
+}
