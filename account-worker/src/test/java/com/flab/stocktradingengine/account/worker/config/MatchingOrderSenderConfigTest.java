@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -15,6 +16,7 @@ import java.util.Optional;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
@@ -26,6 +28,7 @@ import com.flab.stocktradingengine.aeron.StockSlotHasher;
 
 import io.aeron.Aeron;
 import io.aeron.ConcurrentPublication;
+import io.aeron.Subscription;
 
 /**
  * 매칭 샤딩 U9 — 매칭 pod 주소 풀({@code matching-shard-routing.endpoints})이 없으면 지금처럼 Publication
@@ -39,6 +42,12 @@ class MatchingOrderSenderConfigTest {
     private static final String MAP_TOPIC = MatchingDestinationResolver.MAP_TOPIC;
 
     private final Aeron aeron = mock(Aeron.class);
+
+    /** 주소 풀 설정이 있으면 거부 회신 스트림 구독을 여는데, Aeron 대역은 구독을 돌려주지 않으므로 대역 구독을 준다. */
+    @BeforeEach
+    void stubRejectReplySubscription() {
+        when(aeron.addSubscription(anyString(), eq(AeronStreamIds.REJECT_REPLY))).thenReturn(mock(Subscription.class));
+    }
 
     private ApplicationContextRunner contextRunner() {
         return contextRunnerWith(new SleepingMockConsumer(MAP_TOPIC, 64));
@@ -62,6 +71,7 @@ class MatchingOrderSenderConfigTest {
             assertThat(context).hasSingleBean(AeronMatchingOrderSender.class);
             assertThat(context).doesNotHaveBean(MatchingDestinationResolver.class);
             verify(aeron, times(1)).addPublication(anyString(), eq(AeronStreamIds.MATCHING_INTAKE));
+            verify(aeron, never()).addSubscription(anyString(), eq(AeronStreamIds.REJECT_REPLY));
         });
     }
 
@@ -78,6 +88,7 @@ class MatchingOrderSenderConfigTest {
                 assertThat(context).hasSingleBean(AeronMatchingOrderSender.class);
                 verify(aeron).addPublication(ADDRESS_ONE, AeronStreamIds.MATCHING_INTAKE);
                 verify(aeron).addPublication(ADDRESS_TWO, AeronStreamIds.MATCHING_INTAKE);
+                verify(aeron, times(1)).addSubscription(anyString(), eq(AeronStreamIds.REJECT_REPLY));
                 verify(aeron, times(2)).addPublication(anyString(), eq(AeronStreamIds.MATCHING_INTAKE));
             });
     }

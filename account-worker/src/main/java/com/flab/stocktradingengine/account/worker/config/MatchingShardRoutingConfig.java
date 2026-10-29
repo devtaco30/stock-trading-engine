@@ -22,12 +22,15 @@ import org.springframework.context.annotation.Configuration;
 
 import com.flab.stocktradingengine.account.worker.coordination.MatchingDestinationResolver;
 import com.flab.stocktradingengine.account.worker.lifecycle.MatchingDestinationResolverLifecycle;
+import com.flab.stocktradingengine.account.worker.lifecycle.MatchingRejectReplyReceiverLifecycle;
 import com.flab.stocktradingengine.account.worker.messaging.AeronMatchingOrderSender;
+import com.flab.stocktradingengine.account.worker.messaging.MatchingRejectReplyReceiver;
 import com.flab.stocktradingengine.aeron.AeronStreamIds;
 import com.flab.stocktradingengine.aeron.StockSlotHasher;
 
 import io.aeron.Aeron;
 import io.aeron.Publication;
+import io.aeron.Subscription;
 
 /**
  * 매칭 샤딩 U9 — {@code matching-shard-routing.endpoints}(매칭 pod 주소 풀)가 있을 때만 켜지는 배선.
@@ -91,6 +94,25 @@ public class MatchingShardRoutingConfig {
             @Value("${matching-order.holding-capacity-per-slot:65536}") int holdingCapacityPerSlot) {
         return new AeronMatchingOrderSender(matchingDestinationResolver, matchingOrderPublications.byEndpoint(),
             matchingStockSlotHasher, holdingCapacityPerSlot);
+    }
+
+    /** 체결을 받는 주소에서 스트림 번호만 다르게 구독한다(새 포트 없음). */
+    @Bean(destroyMethod = "close")
+    public Subscription matchingRejectReplySubscription(
+            Aeron aeron,
+            @Value("${transport.fill.channel:" + AccountFillIntakeConfig.DEFAULT_FILL_CHANNEL + "}") String fillChannel) {
+        return aeron.addSubscription(fillChannel, AeronStreamIds.REJECT_REPLY);
+    }
+
+    @Bean
+    public MatchingRejectReplyReceiver matchingRejectReplyReceiver(
+            Subscription matchingRejectReplySubscription, AeronMatchingOrderSender matchingOrderSender) {
+        return new MatchingRejectReplyReceiver(matchingRejectReplySubscription, matchingOrderSender::acceptRejectedOrder);
+    }
+
+    @Bean
+    public SmartLifecycle matchingRejectReplyReceiverLifecycle(MatchingRejectReplyReceiver matchingRejectReplyReceiver) {
+        return new MatchingRejectReplyReceiverLifecycle(matchingRejectReplyReceiver);
     }
 
     /** 주소 풀의 주소마다 미리 열어 둔 Publication들. 종료할 때 모두 닫는다. */
