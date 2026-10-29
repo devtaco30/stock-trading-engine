@@ -95,6 +95,16 @@ class HandoverRestartRuleTest {
     }
 
     @Test
+    void 맵이_다른_pod의_이동_중_값이어도_지운다() {
+        engine = recoveredEngine();
+
+        rule(slot -> Optional.of(new MatchingSlotTarget(OTHER, true))).apply(engine, Set.of());
+
+        assertThat(engine.containsOrder(STOCK, 1L)).as("다른 pod가 이 종목 slot을 넘기는 중이면 이 shard의 호가창은 낡은 복사본이다").isFalse();
+        assertThat(store.get(SLOT)).isEmpty();
+    }
+
+    @Test
     void 맵_값이_없거나_자기_주소의_평상시_값이면_건드리지_않는다() {
         engine = recoveredEngine();
 

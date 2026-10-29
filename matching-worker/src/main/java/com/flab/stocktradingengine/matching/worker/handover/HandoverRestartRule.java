@@ -13,7 +13,7 @@ import com.flab.stocktradingengine.matching.disruptor.engine.MatchingEngine;
  * 호가창을 넘긴 쪽(X)의 재시작 규칙(11-14절 3번). 저널 재적용은 넘긴 종목 slot의 호가창도 되살린다. 엔진을 시작하기 전에, 담당
  * 목록에 없는데 호가창이 있는 종목 slot을 맵 값으로 가른다.
  * <ul>
- * <li>다른 pod의 평상시 주소이면 새 담당이 확정한 뒤이므로 호가창을 지운다.</li>
+ * <li>맵의 담당이 다른 pod이면(평상시 값이든 이동 중 값이든) 낡은 복사본이므로 호가창을 지운다.</li>
  * <li>자기 주소의 {@code ;moving}이면 이동이 끝나지 않았으므로 호가창을 두고, 새 담당의 재요청에 응답할 수 있게 보관
  * ({@link HandoverBookStore})을 호가창에서 다시 만들며, 그 종목 slot을 넘기는 중으로 표시한다.</li>
  * <li>값이 없거나 자기 주소의 평상시 값이면 건드리지 않는다.</li>
@@ -64,10 +64,11 @@ public final class HandoverRestartRule {
                 continue;
             }
             MatchingSlotTarget value = target.get();
-            if (!value.moving() && !value.endpoint().equals(ownEndpoint)) {
+            if (!value.endpoint().equals(ownEndpoint)) {
+                // 맵의 담당이 다른 pod이면(평상시 값이든 그 pod가 넘기는 중인 값이든) 이 shard의 호가창은 낡은 복사본이다.
                 engine.removeBooksOfSlot(stockSlot);
                 store.remove(stockSlot);
-                log.log(Level.INFO, "[재시작] 새 담당이 확정한 종목 slot의 호가창을 지움: 종목 slot=" + stockSlot + " 새 담당=" + value.endpoint());
+                log.log(Level.INFO, "[재시작] 맵의 담당이 다른 pod인 종목 slot의 호가창을 지움: 종목 slot=" + stockSlot + " 맵 값=" + value);
             } else if (value.moving() && value.endpoint().equals(ownEndpoint)) {
                 store.put(stockSlot, engine.encodeBooksOfSlot(stockSlot));
                 engine.markSlotHandedOver(stockSlot);
