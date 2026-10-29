@@ -54,11 +54,20 @@ public class MatchingShardRoutingConfig {
     @Bean
     @ConditionalOnMissingBean(name = "matchingShardMapConsumer")
     public Consumer<Integer, String> matchingShardMapConsumer(@Value("${spring.kafka.bootstrap-servers}") String bootstrapServers) {
+        return new KafkaConsumer<>(matchingShardMapConsumerProperties(bootstrapServers));
+    }
+
+    /**
+     * 맵 토픽은 매칭 shard가 만든다. 이 컨슈머가 없는 토픽을 조회하다 1파티션짜리 빈 토픽을 자동 생성하면
+     * 매칭 shard가 만들 토픽과 어긋나므로 자동 생성을 끈다.
+     */
+    static Properties matchingShardMapConsumerProperties(String bootstrapServers) {
         Properties props = new Properties();
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, IntegerDeserializer.class.getName());
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
-        return new KafkaConsumer<>(props);
+        props.put(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG, false);
+        return props;
     }
 
     @Bean(destroyMethod = "close")
