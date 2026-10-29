@@ -45,6 +45,9 @@ public final class HandoverResponder implements AutoCloseable {
     private final Subscription requestSubscription;
     private final Map<String, Publication> responsePublications = new HashMap<>();
     private final AtomicBoolean running = new AtomicBoolean(false);
+    // 한 번의 poll에서 읽은 요청 중 종목 slot별로 마지막 하나. 이 thread만 쓴다.
+    private final Map<Integer, HandoverRequest> collected = new java.util.LinkedHashMap<>();
+    private final AtomicLong requestsAfterCleanup = new AtomicLong();
     private final AtomicLong requestsWithoutBook = new AtomicLong();
     private final AtomicLong requestsRejectedByPool = new AtomicLong();
     private final AtomicLong responsesAbandoned = new AtomicLong();
@@ -68,28 +71,50 @@ public final class HandoverResponder implements AutoCloseable {
         thread.start();
     }
 
+    /** 패키지 가시성 — 시험이 응답 thread를 시작하지 않고 poll을 한 번 부른다. */
+    int pollOnce() {
+        int fragments = requestSubscription.poll(this::collectRequest, FRAGMENT_LIMIT);
+        respondToCollected();
+        return fragments;
+    }
+
     private void pollLoop() {
         IdleStrategy idle = new BackoffIdleStrategy();
         while (running.get()) {
-            int fragments = requestSubscription.poll(this::onRequest, FRAGMENT_LIMIT);
-            idle.idle(fragments);
+            idle.idle(pollOnce());
         }
     }
 
-    /** 요청 하나가 실패해도 그 요청만 포기하고 thread는 계속 돈다. */
-    private void onRequest(DirectBuffer buffer, int offset, int length, Header header) {
+    /** 한 번의 poll에서 읽은 요청을 종목 slot별로 마지막 하나만 남긴다. 요청 하나가 깨져도 그 요청만 포기한다. */
+    private void collectRequest(DirectBuffer buffer, int offset, int length, Header header) {
         try {
-            handleRequest(buffer, offset, length);
+            byte[] wire = new byte[length];
+            buffer.getBytes(offset, wire);
+            HandoverRequest request = HandoverRequest.decode(wire, 0, length);
+            collected.put(request.stockSlot(), request);
         } catch (RuntimeException e) {
             requestFailures.incrementAndGet();
             log.log(Level.ERROR, "[호가창 이동] 요청 하나를 처리하지 못하고 포기함: " + e);
         }
     }
 
-    private void handleRequest(DirectBuffer buffer, int offset, int length) {
-        byte[] wire = new byte[length];
-        buffer.getBytes(offset, wire);
-        HandoverRequest request = HandoverRequest.decode(wire, 0, length);
+    private void respondToCollected() {
+        if (collected.isEmpty()) {
+            return;
+        }
+        List<HandoverRequest> batch = new java.util.ArrayList<>(collected.values());
+        collected.clear();
+        for (HandoverRequest request : batch) {
+            try {
+                handleRequest(request);
+            } catch (RuntimeException e) {
+                requestFailures.incrementAndGet();
+                log.log(Level.ERROR, "[호가창 이동] 요청 하나를 처리하지 못하고 포기함: " + e);
+            }
+        }
+    }
+
+    private void handleRequest(HandoverRequest request) {
         Publication reply = responsePublications.get(request.replyChannel());
         if (reply == null) {
             requestsRejectedByPool.incrementAndGet();
@@ -98,8 +123,13 @@ public final class HandoverResponder implements AutoCloseable {
         }
         Optional<List<byte[]>> stored = store.get(request.stockSlot());
         if (stored.isEmpty()) {
-            requestsWithoutBook.incrementAndGet();
-            log.log(Level.WARNING, "[호가창 이동] 보관한 호가창이 없어 응답하지 못함: " + request);
+            if (store.wasRemoved(request.stockSlot())) {
+                requestsAfterCleanup.incrementAndGet();
+                log.log(Level.INFO, "[호가창 이동] 정리한 뒤 늦게 도착한 요청이라 응답하지 않음: " + request);
+            } else {
+                requestsWithoutBook.incrementAndGet();
+                log.log(Level.WARNING, "[호가창 이동] 보관한 호가창이 없어 응답하지 못함: " + request);
+            }
             return;
         }
         send(reply, request, stored.get());
@@ -119,7 +149,12 @@ public final class HandoverResponder implements AutoCloseable {
         }
     }
 
-    /** 요청은 왔지만 보관한 바이트가 없어 응답하지 못한 횟수. */
+    /** 정리한 뒤 늦게 도착해 응답하지 않은 중복 요청 수. */
+    public long requestsAfterCleanup() {
+        return requestsAfterCleanup.get();
+    }
+
+    /** 요청은 왔지만 한 번도 보관한 적 없어 응답하지 못한 횟수. */
     public long requestsWithoutBook() {
         return requestsWithoutBook.get();
     }
