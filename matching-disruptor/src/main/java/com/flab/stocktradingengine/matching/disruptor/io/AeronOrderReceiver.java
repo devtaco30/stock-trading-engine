@@ -69,6 +69,12 @@ public final class AeronOrderReceiver implements AutoCloseable {
         this(subscription, engine, idleStrategy, slot -> true, new StockSlotHasher(1), NotOwnedOrderListener.NO_OP);
     }
 
+    public AeronOrderReceiver(Subscription subscription, MatchingEngine engine,
+                              IntPredicate ownedSlots, StockSlotHasher stockSlotHasher,
+                              NotOwnedOrderListener notOwnedOrderListener) {
+        this(subscription, engine, IdleStrategies.forThread(), ownedSlots, stockSlotHasher, notOwnedOrderListener);
+    }
+
     public AeronOrderReceiver(Subscription subscription, MatchingEngine engine, IdleStrategy idleStrategy,
                               IntPredicate ownedSlots, StockSlotHasher stockSlotHasher,
                               NotOwnedOrderListener notOwnedOrderListener) {

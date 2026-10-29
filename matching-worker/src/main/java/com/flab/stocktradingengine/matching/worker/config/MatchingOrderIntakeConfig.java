@@ -20,6 +20,7 @@ import com.flab.stocktradingengine.codec.JournaledOrder;
 import com.flab.stocktradingengine.matching.disruptor.engine.MatchingEngine;
 import com.flab.stocktradingengine.matching.disruptor.io.AeronOrderReceiver;
 import com.flab.stocktradingengine.matching.worker.lifecycle.MatchingOrderReceiverLifecycle;
+import com.flab.stocktradingengine.matching.worker.messaging.RejectReplyPublisher;
 import com.flab.stocktradingengine.matching.worker.recovery.MatchingOrderIntakeReplayer;
 import com.flab.stocktradingengine.matching.worker.recovery.StoredMatchingSnapshot;
 
@@ -219,8 +220,11 @@ public class MatchingOrderIntakeConfig {
     }
 
     @Bean
-    public AeronOrderReceiver matchingOrderReceiver(Subscription matchingOrderSubscription, MatchingEngine matchingEngine) {
-        return new AeronOrderReceiver(matchingOrderSubscription, matchingEngine);
+    public AeronOrderReceiver matchingOrderReceiver(
+            Subscription matchingOrderSubscription, MatchingEngine matchingEngine,
+            IntPredicate ownedSlots, StockSlotHasher stockSlotHasher, RejectReplyPublisher rejectReplyPublisher) {
+        return new AeronOrderReceiver(
+            matchingOrderSubscription, matchingEngine, ownedSlots, stockSlotHasher, rejectReplyPublisher);
     }
 
     /**
