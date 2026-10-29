@@ -65,6 +65,7 @@ class HandoverTransportIntegrationTest {
             (transferId, stockSlot, bodies) -> assembled.add(new Assembled(transferId, stockSlot, bodies)));
         xResponder.start();
         zReceiver.start();
+        awaitUntil(() -> zRequester.peerConnected(X_CHANNEL)); // 연결 확인이 있으므로 첫 요청 전에 연결을 기다린다
     }
 
     @AfterEach
@@ -163,6 +164,25 @@ class HandoverTransportIntegrationTest {
 
         assertThat(zRequester.finish(SLOT, transferId)).isTrue();
         assertThat(zRequester.finish(SLOT, transferId)).isFalse();
+    }
+
+    @Test
+    void 연결되지_않은_주소로_요청하면_마감을_기다리지_않고_바로_빈_값을_돌려준다() {
+        String deadChannel = "aeron:udp?endpoint=localhost:20732"; // 이 주소를 구독하는 프로세스가 없다
+        HandoverEndpointPool pool = new HandoverEndpointPool(List.of(X_CHANNEL, Z_CHANNEL, deadChannel), Z_CHANNEL);
+        HandoverRequester requester = new HandoverRequester(aeron, Z_CHANNEL, pool,
+            slot -> Optional.of(new MatchingSlotTarget(deadChannel, true)), 6L);
+        try {
+            long startedAt = System.nanoTime();
+            Optional<Long> result = requester.request(SLOT);
+            long elapsedMillis = (System.nanoTime() - startedAt) / 1_000_000L;
+
+            assertThat(result).isEmpty();
+            assertThat(elapsedMillis).as("연결이 없는 주소에 offer 마감(2초)까지 기다리면 단일 coordinator thread가 막힌다").isLessThan(500L);
+            assertThat(requester.inFlight(SLOT)).as("보내지 못한 요청은 진행 중으로 남기지 않는다").isFalse();
+        } finally {
+            requester.close();
+        }
     }
 
     @Test

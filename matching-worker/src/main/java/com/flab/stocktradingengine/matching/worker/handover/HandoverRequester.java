@@ -76,6 +76,11 @@ public final class HandoverRequester implements AutoCloseable, HandoverRequestPo
             // 풀에는 있으나 자기 자신인 경우다. 자기 자신에게 호가창을 요청하지 않는다.
             return Optional.empty();
         }
+        if (!publication.isConnected()) {
+            // 이전 담당이 구독하고 있지 않으면 offer를 마감까지 재시도하며 단일 coordinator thread를 붙잡는다. 바로 실패로 돌려 다음 간격에 다시 한다.
+            log.log(Level.WARNING, "[호가창 이동] 이전 담당 " + previousOwner + "와 연결되지 않아 요청을 보내지 않음: 종목 slot=" + stockSlot);
+            return Optional.empty();
+        }
         long transferId = (nodeId << 53) | counter.incrementAndGet();
         byte[] wire = new HandoverRequest(transferId, stockSlot, ownChannel).encode();
         Long replaced = currentTransferBySlot.put(stockSlot, transferId);
@@ -101,6 +106,12 @@ public final class HandoverRequester implements AutoCloseable, HandoverRequestPo
         return target.get().moving() ? MapEntryState.MOVING : MapEntryState.NOT_MOVING;
     }
 
+    /** 패키지 가시성 — 그 주소로 가는 요청 Publication이 연결되었는지. */
+    boolean peerConnected(String endpoint) {
+        Publication publication = requestPublications.get(endpoint);
+        return publication != null && publication.isConnected();
+    }
+
     /** 이 종목 slot에서 지금 진행 중인 요청의 이동 번호. 없으면 빈 값. */
     Optional<Long> currentTransferId(int stockSlot) {
         return Optional.ofNullable(currentTransferBySlot.get(stockSlot));
@@ -112,6 +123,9 @@ public final class HandoverRequester implements AutoCloseable, HandoverRequestPo
         Sent sent = sentBySlot.get(stockSlot);
         if (sent == null || !currentTransferBySlot.containsKey(stockSlot)
             || currentTransferBySlot.get(stockSlot) != sent.transferId()) {
+            return false;
+        }
+        if (!sent.publication().isConnected()) {
             return false;
         }
         long deadline = System.nanoTime() + SEND_DEADLINE_NANOS;
