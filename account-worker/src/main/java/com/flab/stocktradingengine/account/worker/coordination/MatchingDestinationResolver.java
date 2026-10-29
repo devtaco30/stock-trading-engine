@@ -59,6 +59,8 @@ public final class MatchingDestinationResolver implements MatchingTargetLookup {
     private volatile boolean running;
     private Thread pollThread;
     private final CountDownLatch initialCatchUpLatch = new CountDownLatch(1);
+    // 초기 읽기를 마치기 전에 읽기 thread가 예외로 끝났으면 그 예외. awaitInitialCatchUp이 실패로 알린다.
+    private volatile Throwable initialCatchUpFailure;
 
     /**
      * 표 크기는 {@link StockSlotHasher}가 들고 있는 종목 slot 개수 하나만 쓴다 — 계산에 쓰는 개수와
@@ -136,13 +138,18 @@ public final class MatchingDestinationResolver implements MatchingTargetLookup {
      * 한다 — 계좌 shard가 "아직 아무 배정도 모르는 채로" 주문을 받기 시작하는 것을 막는 용도다.
      * 토픽이 비어 있으면 곧바로 반환한다.
      *
-     * @throws IllegalStateException timeout 안에 못 끝나면(브로커 문제 등)
+     * @throws IllegalStateException timeout 안에 못 끝나거나(브로커 문제 등), 초기 읽기를 마치기 전에
+     *                               읽기 thread가 예외로 끝났으면(원인 예외를 cause로 담는다)
      */
     public void awaitInitialCatchUp(Duration timeout) {
         try {
             if (!initialCatchUpLatch.await(timeout.toMillis(), TimeUnit.MILLISECONDS)) {
                 throw new IllegalStateException(
                     MAP_TOPIC + " 초기 읽기가 " + timeout + " 안에 끝나지 않았습니다");
+            }
+            Throwable failure = initialCatchUpFailure;
+            if (failure != null) {
+                throw new IllegalStateException(MAP_TOPIC + " 초기 읽기 중 읽기 thread가 예외로 끝났습니다", failure);
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -178,6 +185,12 @@ public final class MatchingDestinationResolver implements MatchingTargetLookup {
             }
         } catch (WakeupException e) {
             // close()가 의도적으로 poll을 깨운 것 — 정상 종료 경로.
+        } catch (RuntimeException e) {
+            // 초기 읽기를 마치기 전이면 대기 중인 호출자가 정상 반환하지 않고 실패로 알게 한다.
+            log.log(Level.ERROR, "[목적지] " + MAP_TOPIC + " 읽기 thread가 예외로 끝났습니다", e);
+            if (!caughtUp) {
+                initialCatchUpFailure = e;
+            }
         } finally {
             // 정상 종료 경로에서도 대기 중인 awaitInitialCatchUp 호출자가 영원히 안 깨는 일이 없게 한다.
             initialCatchUpLatch.countDown();

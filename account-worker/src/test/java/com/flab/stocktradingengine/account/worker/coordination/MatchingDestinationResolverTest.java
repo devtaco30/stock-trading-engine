@@ -2,6 +2,7 @@ package com.flab.stocktradingengine.account.worker.coordination;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
@@ -24,6 +25,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.junit.jupiter.api.AfterEach;
@@ -221,6 +223,17 @@ class MatchingDestinationResolverTest {
 
         assertTimeoutPreemptively(Duration.ofSeconds(3),
             () -> resolver.awaitInitialCatchUp(Duration.ofSeconds(10)));
+    }
+
+    @Test
+    void 초기_읽기_중_읽기_thread가_예외로_끝나면_대기가_정상_반환하지_않고_실패한다() {
+        consumer.setPollException(new KafkaException("브로커 오류"));
+
+        resolver.start();
+
+        IllegalStateException failure = assertTimeoutPreemptively(Duration.ofSeconds(3),
+            () -> assertThrows(IllegalStateException.class, () -> resolver.awaitInitialCatchUp(Duration.ofSeconds(10))));
+        assertInstanceOf(KafkaException.class, failure.getCause());
     }
 
     @Test
