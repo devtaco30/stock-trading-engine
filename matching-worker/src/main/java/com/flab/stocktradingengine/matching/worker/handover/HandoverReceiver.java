@@ -47,6 +47,7 @@ public final class HandoverReceiver implements AutoCloseable {
         this.requester = requester;
         this.loadSink = loadSink;
         this.subscription = aeron.addSubscription(ownChannel, AeronStreamIds.ORDER_BOOK_RESPONSE);
+        requester.onAbandonedTransfer(assembler::discard);
     }
 
     public void start() {
@@ -94,6 +95,11 @@ public final class HandoverReceiver implements AutoCloseable {
                 + " 종목 수=" + complete.get().size());
             loadSink.onAssembled(message.transferId(), message.stockSlot(), complete.get());
         }
+    }
+
+    /** 일부만 도착해 조립 중인 이동의 수. */
+    int pendingAssemblies() {
+        return assembler.pendingCount();
     }
 
     /** 처리 중 예외가 나 포기한 응답 메시지 수(깨진 메시지, 적재 요청 실패 등). */

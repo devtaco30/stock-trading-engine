@@ -121,6 +121,35 @@ class HandoverTransportIntegrationTest {
     }
 
     @Test
+    void 응답이_일부만_오고_끊긴_이동을_취소하면_모아_둔_조립_상태도_지운다() throws Exception {
+        long transferId = zRequester.request(SLOT).orElseThrow();
+        sendPartialResponse(transferId);
+        awaitUntil(() -> zReceiver.pendingAssemblies() == 1);
+
+        zRequester.cancel(SLOT);
+
+        assertThat(zReceiver.pendingAssemblies()).as("취소 뒤 같은 이동 번호의 메시지가 더 오지 않아도 본문이 남지 않는다").isZero();
+    }
+
+    @Test
+    void 같은_종목_slot을_새_이동_번호로_다시_요청하면_앞_이동의_조립_상태를_지운다() throws Exception {
+        long first = zRequester.request(SLOT).orElseThrow();
+        sendPartialResponse(first);
+        awaitUntil(() -> zReceiver.pendingAssemblies() == 1);
+
+        zRequester.request(SLOT).orElseThrow();
+
+        assertThat(zReceiver.pendingAssemblies()).isZero();
+    }
+
+    private void sendPartialResponse(long transferId) {
+        Publication publication = aeron.addPublication(Z_CHANNEL, AeronStreamIds.ORDER_BOOK_RESPONSE);
+        awaitUntil(publication::isConnected);
+        byte[] wire = new HandoverMessage(transferId, SLOT, 0, 2, bytes(1, 100)).encode();
+        awaitUntil(() -> publication.offer(new UnsafeBuffer(wire), 0, wire.length) > 0);
+    }
+
+    @Test
     void 보낼_종목이_하나도_없는_종목_slot도_빈_목록으로_완료된다() {
         xStore.put(SLOT, List.of());
 

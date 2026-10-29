@@ -8,6 +8,7 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.IntFunction;
+import java.util.function.LongConsumer;
 
 import org.agrona.concurrent.UnsafeBuffer;
 
@@ -43,6 +44,8 @@ public final class HandoverRequester implements AutoCloseable, HandoverRequestPo
     }
 
     private final Map<Integer, Sent> sentBySlot = new ConcurrentHashMap<>();
+    // 응답이 완성되지 않은 채 끝난 이동(취소, 새 요청으로 대체)의 이동 번호를 알린다. 응답 일부만 모아 둔 조립 상태를 지우는 데 쓴다.
+    private volatile LongConsumer abandonedTransferListener = transferId -> { };
 
     public HandoverRequester(Aeron aeron, String ownChannel, HandoverEndpointPool pool,
                              IntFunction<Optional<MatchingSlotTarget>> mapLookup, long nodeId) {
@@ -75,7 +78,10 @@ public final class HandoverRequester implements AutoCloseable, HandoverRequestPo
         }
         long transferId = (nodeId << 53) | counter.incrementAndGet();
         byte[] wire = new HandoverRequest(transferId, stockSlot, ownChannel).encode();
-        currentTransferBySlot.put(stockSlot, transferId);
+        Long replaced = currentTransferBySlot.put(stockSlot, transferId);
+        if (replaced != null) {
+            abandonedTransferListener.accept(replaced);
+        }
         long deadline = System.nanoTime() + SEND_DEADLINE_NANOS;
         if (!OfferSupport.offerWithDeadline(publication, new UnsafeBuffer(wire), wire.length, deadline)) {
             currentTransferBySlot.remove(stockSlot, transferId);
@@ -116,8 +122,16 @@ public final class HandoverRequester implements AutoCloseable, HandoverRequestPo
     /** 이 종목 slot에서 진행 중인 요청을 취소한다. 이후 도착하는 그 요청의 응답은 번호가 달라 버려진다. */
     @Override
     public void cancel(int stockSlot) {
-        currentTransferBySlot.remove(stockSlot);
+        Long cancelled = currentTransferBySlot.remove(stockSlot);
         sentBySlot.remove(stockSlot);
+        if (cancelled != null) {
+            abandonedTransferListener.accept(cancelled);
+        }
+    }
+
+    /** 응답이 완성되지 않은 채 끝난 이동의 이동 번호를 받을 곳을 정한다. */
+    void onAbandonedTransfer(LongConsumer listener) {
+        this.abandonedTransferListener = listener;
     }
 
     /** 적재 요청을 낸 이동을 끝난 것으로 기록한다. */
