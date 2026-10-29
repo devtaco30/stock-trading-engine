@@ -39,6 +39,8 @@ public final class MatchingSlotMapReader {
     private final CountDownLatch initialCatchUpLatch = new CountDownLatch(1);
     // 읽는 thread가 예외로 끝났으면 그 예외. 초기 읽기 대기가 이것을 보고 실패로 끝난다.
     private volatile Throwable failure;
+    // 읽기가 예외로 멈춘 뒤 다시 시작하기까지의 간격. 근거 없는 임의 값이다.
+    private volatile long restartIntervalMillis = 5_000L;
     // 파티션마다 읽어 반영한 다음 위치. 읽는 thread가 poll마다 갱신하고 다른 thread가 따라왔는지 볼 때 읽는다.
     private volatile java.util.concurrent.atomic.AtomicLongArray consumedOffsets = new java.util.concurrent.atomic.AtomicLongArray(1);
     private final List<MapChangeListener> listeners = new CopyOnWriteArrayList<>();
@@ -69,7 +71,8 @@ public final class MatchingSlotMapReader {
     /** 이 종목 slot의 맵 항목. 항목이 없거나 형식을 읽지 못했으면 빈 값이다. */
     public Optional<MatchingSlotTarget> targetFor(int stockSlot) {
         MatchingSlotTarget[] snapshot = slotToTarget;
-        if (stockSlot < 0 || stockSlot >= snapshot.length) {
+        if (stockSlot < 0 || stockSlot >= snapshot.length || failure != null) {
+            // 읽기가 멈춘 동안의 값은 낡았을 수 있어 돌려주지 않는다. 호출하는 쪽은 비어 있음을 「알 수 없음」으로 다룬다.
             return Optional.empty();
         }
         return Optional.ofNullable(snapshot[stockSlot]);
@@ -100,6 +103,16 @@ public final class MatchingSlotMapReader {
                 throw new IllegalStateException(mapTopic + " 파티션 정보를 기다리다 인터럽트됨", e);
             }
         }
+    }
+
+    /** 읽기가 예외로 멈춘 뒤 다시 시작하기까지의 간격. 값을 정한 근거는 없다(미측정). */
+    public void setRestartIntervalMillis(long millis) {
+        this.restartIntervalMillis = millis;
+    }
+
+    /** 읽기가 정상인지. 예외로 멈춘 뒤 다시 읽기에 성공하기 전에는 false이고, 이때 {@link #targetFor}는 낡은 값을 돌려주지 않는다. */
+    public boolean isHealthy() {
+        return failure == null;
     }
 
     public void start() {
@@ -148,23 +161,38 @@ public final class MatchingSlotMapReader {
         boolean caughtUp = false;
         try {
             while (running) {
-                ConsumerRecords<Integer, String> records = consumer.poll(Duration.ofMillis(500));
-                if (!records.isEmpty()) {
-                    applyRecords(records);
-                }
-                for (TopicPartition partition : partitions) {
-                    consumedOffsets.set(partition.partition(), consumer.position(partition));
-                }
-                if (!caughtUp && isCaughtUp(partitions, endOffsets)) {
-                    caughtUp = true;
-                    initialCatchUpLatch.countDown();
+                try {
+                    ConsumerRecords<Integer, String> records = consumer.poll(Duration.ofMillis(500));
+                    if (!records.isEmpty()) {
+                        applyRecords(records);
+                    }
+                    for (TopicPartition partition : partitions) {
+                        consumedOffsets.set(partition.partition(), consumer.position(partition));
+                    }
+                    if (!caughtUp && isCaughtUp(partitions, endOffsets)) {
+                        caughtUp = true;
+                        initialCatchUpLatch.countDown();
+                    }
+                    if (failure != null) {
+                        failure = null;
+                        log.log(Level.WARNING, "[맵] " + mapTopic + " 읽기가 다시 정상으로 돌아옴");
+                    }
+                } catch (WakeupException e) {
+                    throw e;
+                } catch (RuntimeException e) {
+                    failure = e;
+                    log.log(Level.ERROR, "[맵] " + mapTopic + " 읽기가 예외로 멈춤, " + restartIntervalMillis + "ms 뒤 다시 시작함: " + e);
+                    initialCatchUpLatch.countDown(); // 초기 읽기를 기다리는 쪽이 실패를 알 수 있게 한다
+                    try {
+                        Thread.sleep(restartIntervalMillis);
+                    } catch (InterruptedException interrupted) {
+                        Thread.currentThread().interrupt();
+                        return;
+                    }
                 }
             }
         } catch (WakeupException e) {
             // close()가 poll을 깨운 것이다.
-        } catch (RuntimeException e) {
-            failure = e;
-            log.log(Level.ERROR, "[맵] " + mapTopic + " 읽는 thread가 예외로 끝남: " + e);
         } finally {
             initialCatchUpLatch.countDown();
         }

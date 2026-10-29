@@ -83,6 +83,57 @@ class MatchingSlotMapReaderTest {
     }
 
     @Test
+    void 읽는_thread가_예외로_끝나면_낡은_값을_돌려주지_않고_알_수_없음으로_본다() throws Exception {
+        Consumer<Integer, String> failing = mock(Consumer.class);
+        TopicPartition partition = new TopicPartition(TOPIC, 0);
+        org.mockito.Mockito.when(failing.partitionsFor(TOPIC))
+            .thenReturn(List.of(new org.apache.kafka.common.PartitionInfo(TOPIC, 0, null, null, null)));
+        org.mockito.Mockito.when(failing.endOffsets(List.of(partition))).thenReturn(Map.of(partition, 10L));
+        org.mockito.Mockito.when(failing.poll(org.mockito.ArgumentMatchers.any(java.time.Duration.class)))
+            .thenThrow(new IllegalStateException("브로커 연결 실패"));
+        MatchingSlotMapReader failingReader = new MatchingSlotMapReader(failing, 64, TOPIC);
+        failingReader.setRestartIntervalMillis(10_000L); // 이 시험에서는 다시 시작하기 전의 상태를 본다
+        failingReader.applyRecords(records(record(3, X + ";moving")));
+        assertThat(failingReader.targetFor(3)).isPresent();
+
+        failingReader.start();
+        awaitUntil(() -> !failingReader.isHealthy());
+
+        assertThat(failingReader.targetFor(3)).as("죽은 읽기가 마지막으로 읽은 낡은 값을 돌려주면 이동 중이 아니라는 잘못된 판정이 나온다").isEmpty();
+    }
+
+    @Test
+    void 읽는_thread가_예외로_끝나도_간격을_두고_다시_시작해_정상으로_돌아오면_읽은_값이_다시_보인다() throws Exception {
+        Consumer<Integer, String> flaky = mock(Consumer.class);
+        TopicPartition partition = new TopicPartition(TOPIC, 0);
+        org.mockito.Mockito.when(flaky.partitionsFor(TOPIC))
+            .thenReturn(List.of(new org.apache.kafka.common.PartitionInfo(TOPIC, 0, null, null, null)));
+        org.mockito.Mockito.when(flaky.endOffsets(List.of(partition))).thenReturn(Map.of(partition, 0L));
+        org.mockito.Mockito.when(flaky.position(partition)).thenReturn(0L);
+        org.mockito.Mockito.when(flaky.poll(org.mockito.ArgumentMatchers.any(java.time.Duration.class)))
+            .thenThrow(new IllegalStateException("일시적 브로커 오류"))
+            .thenReturn(ConsumerRecords.empty());
+        MatchingSlotMapReader flakyReader = new MatchingSlotMapReader(flaky, 64, TOPIC);
+        flakyReader.setRestartIntervalMillis(300L);
+        flakyReader.applyRecords(records(record(3, X + ";moving")));
+
+        flakyReader.start();
+        awaitUntil(() -> !flakyReader.isHealthy()); // 먼저 멈춘 상태가 관찰된다
+        assertThat(flakyReader.targetFor(3)).isEmpty();
+        awaitUntil(() -> flakyReader.isHealthy() && flakyReader.targetFor(3).isPresent());
+
+        flakyReader.close();
+    }
+
+    private static void awaitUntil(java.util.function.BooleanSupplier condition) throws InterruptedException {
+        long deadline = System.nanoTime() + 3_000_000_000L;
+        while (!condition.getAsBoolean() && System.nanoTime() < deadline) {
+            Thread.sleep(5);
+        }
+        assertThat(condition.getAsBoolean()).as("3초 안에 조건이 충족되지 않음").isTrue();
+    }
+
+    @Test
     void 읽기를_정상으로_닫으면_초기_읽기_대기는_실패하지_않는다() {
         Consumer<Integer, String> consumer = mock(Consumer.class);
         TopicPartition partition = new TopicPartition(TOPIC, 0);
