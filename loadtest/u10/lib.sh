@@ -101,3 +101,15 @@ send_order() { # <계좌> <종목> <BUY|SELL> <가격> <수량> <requestId>
 
 dump_matching() { ./gradlew --offline -q :matching-worker:u10MatchingDump -Pu10Args="$1" 2>&1; }
 dump_account() { tool dump-account /tmp/u10/account; }
+
+# check_owned_slots <shard 0 덤프> <shard 1 덤프> — 두 매칭 shard의 정상 종료 스냅샷에 적힌 담당 종목 slot이
+# 겹치지 않고 합이 64개인지 단언한다(OK 변수를 0으로 내리는 방식은 각 단계 스크립트와 같다).
+check_owned_slots() {
+    local s0 s1 c0 c1 total unique
+    s0=$(echo "$1" | sed -n 's/^OWNED .* slots=\(.*\)$/\1/p'); s1=$(echo "$2" | sed -n 's/^OWNED .* slots=\(.*\)$/\1/p')
+    c0=$(echo "$s0" | tr ',' '\n' | grep -c .); c1=$(echo "$s1" | tr ',' '\n' | grep -c .)
+    total=$((c0 + c1))
+    unique=$(printf '%s,%s' "$s0" "$s1" | tr ',' '\n' | grep . | sort -u | wc -l | tr -d ' ')
+    if [ "$total" = 64 ] && [ "$unique" = 64 ]; then echo "통과: 두 매칭 shard의 담당 종목 slot이 겹치지 않고 합이 64개다 (shard 0 $c0개, shard 1 $c1개)"
+    else echo "실패: 담당 종목 slot 합 $total개, 서로 다른 값 $unique개 (shard 0 $c0개, shard 1 $c1개)"; OK=0; fi
+}

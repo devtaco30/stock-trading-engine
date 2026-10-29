@@ -16,7 +16,7 @@ import com.flab.stocktradingengine.matching.worker.recovery.StoredMatchingSnapsh
  * 맡은 종목 slot과 호가창의 대기 주문을 줄 단위로 출력한다. 스냅샷이 없으면 종료 코드 2다.
  *
  * <pre>
- * OWNED count=32 min=0 max=31
+ * OWNED count=32 min=0 max=31 slots=0,1,2,...
  * BOOK stock=000001 resting=1 orderIds=123
  * </pre>
  */
@@ -35,7 +35,8 @@ public final class U10MatchingSnapshotDump {
         StoredMatchingSnapshot snapshot = stored.get();
         System.out.println("OWNED count=" + snapshot.ownedStockSlots().size()
             + " min=" + (snapshot.ownedStockSlots().isEmpty() ? -1 : Collections.min(snapshot.ownedStockSlots()))
-            + " max=" + (snapshot.ownedStockSlots().isEmpty() ? -1 : Collections.max(snapshot.ownedStockSlots())));
+            + " max=" + (snapshot.ownedStockSlots().isEmpty() ? -1 : Collections.max(snapshot.ownedStockSlots()))
+            + " slots=" + new java.util.TreeSet<>(snapshot.ownedStockSlots()).toString().replace(" ", "").replace("[", "").replace("]", ""));
         Map<String, BookSnapshot> books = new TreeMap<>(snapshot.snapshot().booksByStock());
         for (Map.Entry<String, BookSnapshot> entry : books.entrySet()) {
             StringBuilder orderIds = new StringBuilder();

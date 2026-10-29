@@ -34,6 +34,7 @@ check() { # <desc> <shard> <stock> <expected resting>
     if [ "$got" = "$4" ]; then echo "통과: $1 (매칭 shard $2, 종목 $3, 대기 주문 $got)"; else echo "실패: $1 (매칭 shard $2, 종목 $3, 기대 $4 실제 $got)"; OK=0; fi
 }
 [ "$XS" != "?" ] && [ "$YS" != "?" ] && [ "$XS" != "$YS" ] || { fail "X와 Y의 담당 shard를 알 수 없거나 같다: X=$XEND Y=$YEND"; exit 1; }
+check_owned_slots "$D0" "$D1"
 OTHER_X=$((1 - XS)); OTHER_Y=$((1 - YS))
 check "종목 X 주문이 담당 매칭 shard의 호가창에 있다" "$XS" "$X" 1
 check "종목 Y 주문이 담당 매칭 shard의 호가창에 있다" "$YS" "$Y" 1

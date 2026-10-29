@@ -53,6 +53,8 @@ expect "매수 계좌에 남은 예약이 없다" "0" "$(field "$BUYER" reservat
 expect "매도 계좌의 두 종목 보유가 줄었다" "{$X=6,$Y=7}" "$(field "$SELLER" holdings)"
 expect "매도 계좌에 남은 매도 예약이 없다" "0" "$(field "$SELLER" sellReservations)"
 
+check_owned_slots "$D0" "$D1"
+
 TRADE_IDS=$(field "$BUYER" tradeIds)
 TRADE_COUNT=$(echo "$TRADE_IDS" | tr ',' '\n' | grep -c .)
 UNIQUE_COUNT=$(echo "$TRADE_IDS" | tr ',' '\n' | grep . | sort -u | wc -l | tr -d ' ')
