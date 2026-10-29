@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.IntPredicate;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -23,6 +24,7 @@ import com.flab.stocktradingengine.matching.disruptor.io.SlotEventRequests;
 import com.flab.stocktradingengine.matching.worker.lifecycle.MatchingOrderReceiverLifecycle;
 import com.flab.stocktradingengine.matching.worker.messaging.RejectReplyPublisher;
 import com.flab.stocktradingengine.matching.worker.recovery.MatchingOrderIntakeReplayer;
+import com.flab.stocktradingengine.matching.worker.recovery.OwnedStockSlotRestorer;
 import com.flab.stocktradingengine.matching.worker.recovery.StoredMatchingSnapshot;
 
 import io.aeron.Aeron;
@@ -171,12 +173,22 @@ public class MatchingOrderIntakeConfig {
     public List<JournaledOrder> matchingOrderIntakeReplayedEntries(
             AeronArchive aeronArchive,
             Optional<StoredMatchingSnapshot> matchingLoadedSnapshot,
+            List<JournaledOrder> matchingJournalRecoveredEntries,
+            StockSlotHasher stockSlotHasher,
+            @Value("${matching-shard.coordination.enabled:false}") boolean coordinationEnabled,
             @Value("${transport.matching-intake.channel:" + DEFAULT_INTAKE_CHANNEL + "}") String intakeChannel) {
         Map<Integer, Long> orderIntakePositions = matchingLoadedSnapshot
             .map(StoredMatchingSnapshot::orderIntakePosition)
             .orElse(Map.of());
         MatchingOrderIntakeReplayer replayer = new MatchingOrderIntakeReplayer(aeronArchive);
-        return replayer.readFrom(intakeChannel, AeronStreamIds.MATCHING_INTAKE, orderIntakePositions);
+        List<JournaledOrder> replayed = replayer.readFrom(intakeChannel, AeronStreamIds.MATCHING_INTAKE, orderIntakePositions);
+        if (!coordinationEnabled) {
+            return replayed;
+        }
+        // 조정 모드에서는 Kafka의 첫 배정을 기다리지 않고 디스크의 목록(스냅샷 + 저널의 받음·넘김 항목)으로 거른다(11-12절).
+        Set<Integer> snapshotSlots = matchingLoadedSnapshot.map(StoredMatchingSnapshot::ownedStockSlots).orElse(Set.of());
+        Set<Integer> ownedSlots = OwnedStockSlotRestorer.restoreFromJournal(snapshotSlots, matchingJournalRecoveredEntries);
+        return filterOwnedEntries(replayed, ownedSlots::contains, stockSlotHasher);
     }
 
     /**
