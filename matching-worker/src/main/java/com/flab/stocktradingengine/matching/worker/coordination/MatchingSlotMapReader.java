@@ -67,8 +67,35 @@ public final class MatchingSlotMapReader {
         return Optional.ofNullable(snapshot[stockSlot]);
     }
 
+    // 토픽을 만든 직후에는 파티션 정보가 아직 비어 있을 수 있다. 나타날 때까지 이 시간 동안 다시 물어본다.
+    private volatile long partitionWaitMillis = 10_000L;
+
+    /** 패키지 가시성 — 시험이 기다리는 시간을 줄인다. */
+    void setPartitionWaitMillis(long millis) {
+        this.partitionWaitMillis = millis;
+    }
+
+    private List<PartitionInfo> awaitPartitions() {
+        long deadline = System.nanoTime() + partitionWaitMillis * 1_000_000L;
+        while (true) {
+            List<PartitionInfo> infos = consumer.partitionsFor(mapTopic);
+            if (infos != null && !infos.isEmpty()) {
+                return infos;
+            }
+            if (System.nanoTime() > deadline) {
+                throw new IllegalStateException(mapTopic + "의 파티션 정보가 " + partitionWaitMillis + "ms 안에 나타나지 않았습니다");
+            }
+            try {
+                Thread.sleep(100);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException(mapTopic + " 파티션 정보를 기다리다 인터럽트됨", e);
+            }
+        }
+    }
+
     public void start() {
-        List<PartitionInfo> partitionInfos = consumer.partitionsFor(mapTopic);
+        List<PartitionInfo> partitionInfos = awaitPartitions();
         List<TopicPartition> partitions = partitionInfos.stream()
             .map(info -> new TopicPartition(mapTopic, info.partition())).toList();
         consumer.assign(partitions);

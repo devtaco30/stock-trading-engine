@@ -99,6 +99,38 @@ class MatchingSlotMapReaderTest {
         okReader.close();
     }
 
+    @Test
+    void 토픽을_만든_직후_파티션_정보가_비어_있어도_나타날_때까지_다시_물어본_뒤_읽기를_시작한다() {
+        Consumer<Integer, String> consumer = mock(Consumer.class);
+        TopicPartition partition = new TopicPartition(TOPIC, 0);
+        org.mockito.Mockito.when(consumer.partitionsFor(TOPIC))
+            .thenReturn(List.of())
+            .thenReturn(List.of())
+            .thenReturn(List.of(new org.apache.kafka.common.PartitionInfo(TOPIC, 0, null, null, null)));
+        org.mockito.Mockito.when(consumer.endOffsets(List.of(partition))).thenReturn(Map.of(partition, 0L));
+        org.mockito.Mockito.when(consumer.poll(org.mockito.ArgumentMatchers.any(java.time.Duration.class)))
+            .thenReturn(ConsumerRecords.empty());
+        org.mockito.Mockito.when(consumer.position(partition)).thenReturn(0L);
+        MatchingSlotMapReader lateTopicReader = new MatchingSlotMapReader(consumer, 64, TOPIC);
+
+        lateTopicReader.start();
+        lateTopicReader.awaitInitialCatchUp(java.time.Duration.ofSeconds(3));
+        lateTopicReader.close();
+
+        org.mockito.Mockito.verify(consumer).assign(List.of(partition));
+    }
+
+    @Test
+    void 파티션_정보가_끝내_나타나지_않으면_시작이_실패한다() {
+        Consumer<Integer, String> consumer = mock(Consumer.class);
+        org.mockito.Mockito.when(consumer.partitionsFor(TOPIC)).thenReturn(List.of());
+        MatchingSlotMapReader neverReader = new MatchingSlotMapReader(consumer, 64, TOPIC);
+        neverReader.setPartitionWaitMillis(200L);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(neverReader::start)
+            .isInstanceOf(IllegalStateException.class).hasMessageContaining("파티션");
+    }
+
     @SafeVarargs
     private static ConsumerRecords<Integer, String> records(ConsumerRecord<Integer, String>... records) {
         return new ConsumerRecords<>(Map.of(new TopicPartition(TOPIC, 0), List.of(records)));

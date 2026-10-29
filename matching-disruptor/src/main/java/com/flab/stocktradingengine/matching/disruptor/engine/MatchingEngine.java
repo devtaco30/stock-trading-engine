@@ -3,8 +3,10 @@ package com.flab.stocktradingengine.matching.disruptor.engine;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.function.LongSupplier;
@@ -30,6 +32,7 @@ import com.flab.stocktradingengine.matching.disruptor.io.SlotEventListener;
 import com.flab.stocktradingengine.matching.disruptor.journal.InMemoryJournal;
 import com.flab.stocktradingengine.matching.disruptor.journal.Journal;
 import com.flab.stocktradingengine.matching.disruptor.snapshot.MatchingSnapshot;
+import com.flab.stocktradingengine.matching.disruptor.snapshot.MatchingSnapshotCodec;
 import com.flab.stocktradingengine.matching.disruptor.snapshot.MatchingSnapshotFactory;
 import com.flab.stocktradingengine.matching.disruptor.snapshot.MatchingSnapshotRestorer;
 import com.flab.stocktradingengine.time.EpochNanos;
@@ -268,6 +271,48 @@ public class MatchingEngine {
     public void restore(MatchingSnapshot snapshot) {
         requireNotStarted();
         MatchingSnapshotRestorer.restoreInto(books, snapshot);
+    }
+
+    /** 호가창이 있는 종목들이 속한 종목 slot들. 시작 전 복구 단계에서만 부른다. */
+    public Set<Integer> stockSlotsWithBooks() {
+        requireNotStarted();
+        Set<Integer> slots = new HashSet<>();
+        for (String stockCode : books.keySet()) {
+            slots.add(stockSlotHasher.slotFor(stockCode));
+        }
+        return slots;
+    }
+
+    /** 그 종목 slot에 속한 종목들의 호가창을 지운다. 시작 전 복구 단계에서만 부른다(11-14절 3번). */
+    public void removeBooksOfSlot(int stockSlot) {
+        requireNotStarted();
+        books.keySet().removeIf(stockCode -> stockSlotHasher.slotFor(stockCode) == stockSlot);
+    }
+
+    /**
+     * 그 종목 slot의 종목마다 호가창 바이트를 만든다(넘김 이벤트가 내보내는 것과 같은 모양, 종목코드 순서). 시작 전 복구 단계에서만
+     * 부른다. 재시작한 쪽이 이동이 끝나지 않은 종목 slot의 보관 바이트를 다시 만들 때 쓴다.
+     */
+    public List<byte[]> encodeBooksOfSlot(int stockSlot) {
+        requireNotStarted();
+        MatchingSnapshotCodec codec = new MatchingSnapshotCodec();
+        Map<String, OrderBook> slotBooks = new java.util.TreeMap<>();
+        for (Map.Entry<String, OrderBook> entry : books.entrySet()) {
+            if (stockSlotHasher.slotFor(entry.getKey()) == stockSlot) {
+                slotBooks.put(entry.getKey(), entry.getValue());
+            }
+        }
+        List<byte[]> encoded = new java.util.ArrayList<>(slotBooks.size());
+        for (Map.Entry<String, OrderBook> entry : slotBooks.entrySet()) {
+            encoded.add(codec.encode(MatchingSnapshotFactory.capture(Map.of(entry.getKey(), entry.getValue()), journal.position())));
+        }
+        return encoded;
+    }
+
+    /** 그 종목 slot을 넘기는 중으로 표시한다. 시작 전 복구 단계에서만 부른다. */
+    public void markSlotHandedOver(int stockSlot) {
+        requireNotStarted();
+        matchingEventHandler.seedHandedOverSlots(Set.of(stockSlot));
     }
 
     /** 저널 엔트리 하나를 스크래치 슬롯에 채운다 — {@code OrderEvent}의 타입별 setter와 1:1 대응. */

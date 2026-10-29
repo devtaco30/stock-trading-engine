@@ -2,6 +2,8 @@ package com.flab.stocktradingengine.matching.worker.config;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 import java.util.Properties;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -9,6 +11,7 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.bind.Bindable;
@@ -19,6 +22,8 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
 
 import com.flab.stocktradingengine.aeron.StockSlotHasher;
+import com.flab.stocktradingengine.codec.JournaledOrder;
+import com.flab.stocktradingengine.matching.disruptor.engine.MatchingEngine;
 import com.flab.stocktradingengine.matching.disruptor.io.SlotEventRequests;
 import com.flab.stocktradingengine.matching.worker.coordination.HandoverEndpointPool;
 import com.flab.stocktradingengine.matching.worker.coordination.KafkaMatchingShardAssignment;
@@ -29,6 +34,9 @@ import com.flab.stocktradingengine.matching.worker.handover.HandoverCoordinator;
 import com.flab.stocktradingengine.matching.worker.handover.HandoverReceiver;
 import com.flab.stocktradingengine.matching.worker.handover.HandoverRequester;
 import com.flab.stocktradingengine.matching.worker.handover.HandoverResponder;
+import com.flab.stocktradingengine.matching.worker.handover.HandoverRestartRule;
+import com.flab.stocktradingengine.matching.worker.recovery.OwnedStockSlotRestorer;
+import com.flab.stocktradingengine.matching.worker.recovery.StoredMatchingSnapshot;
 import com.flab.stocktradingengine.matching.worker.lifecycle.HandoverLifecycle;
 
 import io.aeron.Aeron;
@@ -45,6 +53,8 @@ public class MatchingHandoverConfig {
 
     // 맵 읽기는 배정보다 먼저 시작하고 나중에 멈춘다(배정 생명주기가 -2).
     private static final int MAP_READER_PHASE = -3;
+    // 맵 읽기(-3) 뒤, 엔진 시작(0) 전.
+    private static final int RESTART_RULE_PHASE = -1;
     // 요청 응답·수신 thread는 엔진(0)과 주문 수신(1)이 돈 뒤에 시작한다.
     private static final int TRANSPORT_PHASE = 2;
 
@@ -94,6 +104,34 @@ public class MatchingHandoverConfig {
                 reader.awaitInitialCatchUp(Duration.ofSeconds(30));
             },
             reader::close);
+    }
+
+    /**
+     * 넘긴 쪽(X)의 재시작 규칙(U16c)을 엔진 시작 전에 적용한다. 맵 읽기(phase -3)가 따라잡은 뒤, 엔진(phase 0)이 시작되기 전에
+     * 돌도록 phase -1에 둔다. 기다리는 시간은 {@code matching-shard.recovery.map-catch-up-timeout-ms}(기본 10초)이고 넘기면
+     * 호가창을 지우지 않고 경고만 남긴다.
+     */
+    @Bean
+    public SmartLifecycle handoverRestartRuleLifecycle(
+            MatchingSlotMapReader reader, HandoverBookStore store, ObjectProvider<MatchingEngine> engine,
+            ObjectProvider<Optional<StoredMatchingSnapshot>> loadedSnapshot,
+            @Qualifier("matchingJournalRecoveredEntries") ObjectProvider<List<JournaledOrder>> matchingJournalRecoveredEntries,
+            @Value("${matching-shard.recovery.map-catch-up-timeout-ms:10000}") long timeoutMillis,
+            @Value("${transport.matching-intake.channel:" + MatchingOrderIntakeConfig.DEFAULT_INTAKE_CHANNEL + "}") String ownChannel) {
+        HandoverRestartRule rule = new HandoverRestartRule(ownChannel, reader::targetFor, store);
+        return new HandoverLifecycle(RESTART_RULE_PHASE,
+            () -> {
+                MatchingEngine matchingEngine = engine.getIfAvailable();
+                List<JournaledOrder> journalEntries = matchingJournalRecoveredEntries.getIfAvailable();
+                if (matchingEngine == null || journalEntries == null) {
+                    return;
+                }
+                Set<Integer> snapshotSlots = loadedSnapshot.getIfAvailable(Optional::empty)
+                    .map(StoredMatchingSnapshot::ownedStockSlots).orElse(Set.of());
+                Set<Integer> ownedSlots = OwnedStockSlotRestorer.restoreFromJournal(snapshotSlots, journalEntries);
+                rule.applyWhenMapReady(() -> reader.awaitInitialCatchUp(Duration.ofMillis(timeoutMillis)), matchingEngine, ownedSlots);
+            },
+            () -> { });
     }
 
     @Bean
