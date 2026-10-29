@@ -2,8 +2,10 @@ package com.flab.stocktradingengine.matching.worker.handover;
 
 import java.lang.System.Logger;
 import java.lang.System.Logger.Level;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
@@ -50,8 +52,11 @@ public final class HandoverCoordinator implements MovedSlotRequests, AutoCloseab
     private final HandoverRequestPort port;
     private final long retryIntervalNanos;
     private final long responseTimeoutNanos;
-    private final BlockingQueue<Integer> newSlots = new LinkedBlockingQueue<>();
-    private final BlockingQueue<Integer> cancelledSlots = new LinkedBlockingQueue<>();
+    /** 요청과 취소를 넣은 순서대로 한 queue에 둔다. 따로 두면 아직 시작하지 않은 요청이 그 뒤의 취소보다 먼저 처리되어 상태가 되살아난다. */
+    private record Command(boolean cancel, int stockSlot) {
+    }
+
+    private final BlockingQueue<Command> commands = new LinkedBlockingQueue<>();
     private final Map<Integer, Tracked> tracked = new HashMap<>();
     private final AtomicLong failures = new AtomicLong();
 
@@ -99,12 +104,12 @@ public final class HandoverCoordinator implements MovedSlotRequests, AutoCloseab
 
     @Override
     public void requestHandover(int stockSlot) {
-        newSlots.add(stockSlot);
+        commands.add(new Command(false, stockSlot));
     }
 
     @Override
     public void cancelHandover(int stockSlot) {
-        cancelledSlots.add(stockSlot);
+        commands.add(new Command(true, stockSlot));
         port.cancel(stockSlot); // 진행 중 응답이 즉시 버려지게, 추적 정리는 전용 thread가 한다
     }
 
@@ -123,19 +128,40 @@ public final class HandoverCoordinator implements MovedSlotRequests, AutoCloseab
     private void loop() {
         while (running) {
             try {
-                Integer stockSlot = newSlots.poll(TICK_MILLIS, TimeUnit.MILLISECONDS);
-                if (stockSlot != null) {
-                    startTracking(stockSlot);
-                }
-                Integer cancelled;
-                while ((cancelled = cancelledSlots.poll()) != null) {
-                    tracked.remove(cancelled);
+                Command first = commands.poll(TICK_MILLIS, TimeUnit.MILLISECONDS);
+                if (first != null) {
+                    List<Command> batch = new ArrayList<>();
+                    batch.add(first);
+                    commands.drainTo(batch);
+                    applyCommands(batch);
                 }
                 tick();
             } catch (InterruptedException e) {
                 return;
             } catch (RuntimeException e) {
                 log.log(Level.ERROR, "[호가창 이동] 요청 추적 중 예외(계속 진행함): " + e);
+            }
+        }
+    }
+
+    /** 모인 명령을 넣은 순서대로 처리한다. 그 뒤에 같은 종목 slot의 취소가 있는 요청은 보내지 않는다. */
+    private void applyCommands(List<Command> batch) {
+        for (int i = 0; i < batch.size(); i++) {
+            Command command = batch.get(i);
+            if (command.cancel()) {
+                tracked.remove(command.stockSlot());
+                port.cancel(command.stockSlot()); // 앞선 요청이 되살린 상태까지 지운다
+                continue;
+            }
+            boolean cancelledLater = false;
+            for (int j = i + 1; j < batch.size(); j++) {
+                if (batch.get(j).cancel() && batch.get(j).stockSlot() == command.stockSlot()) {
+                    cancelledLater = true;
+                    break;
+                }
+            }
+            if (!cancelledLater) {
+                startTracking(command.stockSlot());
             }
         }
     }
