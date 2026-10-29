@@ -244,12 +244,14 @@ public class MatchingEngine {
         MatchingEventHandler recoveryHandler = new MatchingEventHandler(books, NO_OP_LISTENER, NO_OP_SNAPSHOT_SINK, false,
             MatchingSegmentStages.DISABLED, stockSlotHasher, SlotEventListener.NO_OP);
         recoveryHandler.seedHandedOverSlots(matchingEventHandler.handedOverSlotsSnapshot());
+        recoveryHandler.seedAcquiredSlots(matchingEventHandler.acquiredSlotsSnapshot());
         OrderEvent scratch = new OrderEvent();
         for (JournaledOrder order : entries) {
             applyToScratch(scratch, order);
             recoveryHandler.onEvent(scratch, 0L, false);
         }
         matchingEventHandler.seedHandedOverSlots(recoveryHandler.handedOverSlotsSnapshot());
+        matchingEventHandler.seedAcquiredSlots(recoveryHandler.acquiredSlotsSnapshot());
     }
 
     /**
