@@ -371,86 +371,74 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
         }
     }
 
+    private void handleRevokedLocally(Collection<TopicPartition> partitions, boolean writeMap) {
+        List<TopicPartition> writeMoving = new java.util.ArrayList<>();
+        List<Integer> cancel = new java.util.ArrayList<>();
+        List<Integer> cleanup = new java.util.ArrayList<>();
+        List<Integer> release = new java.util.ArrayList<>();
+        synchronized (KafkaMatchingShardAssignment.this) {
+            boolean[] updated = ownedSlotFlags.clone();
+            for (TopicPartition partition : partitions) {
+                int slot = partition.partition();
+                updated[slot] = false;
+                mapWriteGeneration.incrementAndGet(slot);
+                boolean wasDeciding = awaitingDecision.remove(slot);
+                boolean wasLoading = awaitingLoad.remove(slot);
+                boolean wasAcquiringMovedIn = movedInAcquiring.remove(slot);
+                awaitingJournalConfirm.remove(slot);
+                awaitingMapSwitch.remove(slot);
+                if (wasDeciding) {
+                    continue; // 판정 전에 회수되었다. 한 일이 없다.
+                }
+                if (wasLoading || wasAcquiringMovedIn) {
+                    // 이동으로 받는 도중 담당이 되기 전에 회수되었다. 맵은 이전 담당의 「주소;moving」 그대로 두어 다음 담당이 이전 담당에게
+                    // 요청하게 한다(자기 주소의 이동 중 값으로 덮으면 호가창 없는 이 shard에 요청이 간다). 진행 중이던 요청의 응답은 버리고,
+                    // 적재가 끝나 있었다면 그 호가창은 복사본이므로 정리로 지운다. 받음 항목을 이미 요청했다면 저널이 맞도록 넘김 항목도 남긴다.
+                    cancel.add(slot);
+                    cleanup.add(slot);
+                    if (wasAcquiringMovedIn) {
+                        release.add(slot);
+                    }
+                } else {
+                    release.add(slot);
+                    writeMoving.add(partition);
+                }
+            }
+            ownedSlotFlags = updated;
+        }
+        if (movedSlotRequests != null) {
+            cancel.forEach(movedSlotRequests::cancelHandover);
+        }
+        if (slotEventRequests != null) {
+            cleanup.forEach(slotEventRequests::requestCleanup);
+            release.forEach(slotEventRequests::requestRelease);
+        }
+        if (writeMap) {
+            publishMapEntries(writeMoving, new MatchingSlotTarget(ownOrderEndpoint, true).encode());
+            log.log(Level.WARNING, "[매칭] 담당 종목 slot 회수: " + slotNumbers(partitions)
+                + " 맵에 이동 중 표시=" + slotNumbers(writeMoving) + " 남은 담당=" + currentSlotsSnapshot().size() + "개");
+        } else {
+            // 세션 만료로 잃은 종목 slot은 이미 다른 pod에 배정되어 그 pod가 맵에 자기 주소를 올렸을 수 있다. 맵에 쓰면 그 값을 덮는다.
+            log.log(Level.WARNING, "[매칭] 종목 slot을 잃음(세션 만료로 이미 다른 pod에 배정되었을 수 있음) — 맵에는 쓰지 않고 담당 표시를 끄고 넘김을 저널에 남김: "
+                + slotNumbers(partitions));
+        }
+    }
+
     ConsumerRebalanceListener rebalanceListener() {
         return new ConsumerRebalanceListener() {
             @Override
             public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
-                List<TopicPartition> writeMoving = new java.util.ArrayList<>();
-                List<Integer> cancel = new java.util.ArrayList<>();
-                List<Integer> cleanup = new java.util.ArrayList<>();
-                List<Integer> release = new java.util.ArrayList<>();
-                synchronized (KafkaMatchingShardAssignment.this) {
-                    boolean[] updated = ownedSlotFlags.clone();
-                    for (TopicPartition partition : partitions) {
-                        int slot = partition.partition();
-                        updated[slot] = false;
-                        mapWriteGeneration.incrementAndGet(slot);
-                        boolean wasDeciding = awaitingDecision.remove(slot);
-                        boolean wasLoading = awaitingLoad.remove(slot);
-                        boolean wasAcquiringMovedIn = movedInAcquiring.remove(slot);
-                        awaitingJournalConfirm.remove(slot);
-                        awaitingMapSwitch.remove(slot);
-                        if (wasDeciding) {
-                            continue; // 판정 전에 회수되었다. 한 일이 없다.
-                        }
-                        if (wasLoading || wasAcquiringMovedIn) {
-                            // 이동으로 받는 도중 담당이 되기 전에 회수되었다. 맵은 이전 담당의 「주소;moving」 그대로 두어 다음 담당이 이전 담당에게
-                            // 요청하게 한다(자기 주소의 이동 중 값으로 덮으면 호가창 없는 이 shard에 요청이 간다). 진행 중이던 요청의 응답은 버리고,
-                            // 적재가 끝나 있었다면 그 호가창은 복사본이므로 정리로 지운다. 받음 항목을 이미 요청했다면 저널이 맞도록 넘김 항목도 남긴다.
-                            cancel.add(slot);
-                            cleanup.add(slot);
-                            if (wasAcquiringMovedIn) {
-                                release.add(slot);
-                            }
-                        } else {
-                            release.add(slot);
-                            writeMoving.add(partition);
-                        }
-                    }
-                    ownedSlotFlags = updated;
-                }
-                if (movedSlotRequests != null) {
-                    cancel.forEach(movedSlotRequests::cancelHandover);
-                }
-                if (slotEventRequests != null) {
-                    cleanup.forEach(slotEventRequests::requestCleanup);
-                    release.forEach(slotEventRequests::requestRelease);
-                }
-                publishMapEntries(writeMoving, new MatchingSlotTarget(ownOrderEndpoint, true).encode());
-                log.log(Level.WARNING, "[매칭] 담당 종목 slot 회수: " + slotNumbers(partitions)
-                    + " 맵에 이동 중 표시=" + slotNumbers(writeMoving) + " 남은 담당=" + currentSlotsSnapshot().size() + "개");
+                handleRevokedLocally(partitions, true);
             }
 
             /**
-             * 세션 시간을 넘겨 그룹에서 쫓겨난 뒤 돌아와 받는다. 그 종목 slot은 이미 다른 pod에 배정되어 그 pod가 맵에 자기 주소를 올렸을 수 있다. 기본
-             * 구현은 회수 콜백을 그대로 불러 맵에 이동 중 표시를 써 새 담당의 값을 덮으므로, 맵에는 쓰지 않고 담당 표시와 대기 상태만 끈다. 호가창은
-             * 지우지 않고 넘김 이벤트도 남기지 않는다(그 뒤 처리는 재시작 규칙의 몫이다).
+             * 세션 시간을 넘겨 그룹에서 쫓겨난 뒤 돌아와 받는다. 기본 구현은 회수 콜백을 그대로 불러 새 담당이 올린 맵 값을 이동 중 표시로 덮으므로,
+             * 회수와 같은 로컬 정리(담당 표시 끄기, 대기 상태 지우기, 요청 취소, 저널에 넘김 남기기)만 하고 맵에는 쓰지 않는다. 호가창은 지우지 않는다.
+             * 저널에 넘김을 남겨야 엔진이 이 종목 slot을 담당으로 보지 않아 이후 도착하는 적재를 받아들이고, 재시작 규칙도 담당으로 보지 않는다.
              */
             @Override
             public void onPartitionsLost(Collection<TopicPartition> partitions) {
-                List<Integer> cancel = new java.util.ArrayList<>();
-                synchronized (KafkaMatchingShardAssignment.this) {
-                    boolean[] updated = ownedSlotFlags.clone();
-                    for (TopicPartition partition : partitions) {
-                        int slot = partition.partition();
-                        updated[slot] = false;
-                        mapWriteGeneration.incrementAndGet(slot);
-                        awaitingDecision.remove(slot);
-                        boolean wasLoading = awaitingLoad.remove(slot);
-                        boolean wasAcquiringMovedIn = movedInAcquiring.remove(slot);
-                        awaitingJournalConfirm.remove(slot);
-                        awaitingMapSwitch.remove(slot);
-                        if (wasLoading || wasAcquiringMovedIn) {
-                            cancel.add(slot);
-                        }
-                    }
-                    ownedSlotFlags = updated;
-                }
-                if (movedSlotRequests != null) {
-                    cancel.forEach(movedSlotRequests::cancelHandover);
-                }
-                log.log(Level.WARNING, "[매칭] 종목 slot을 잃음(세션 만료로 이미 다른 pod에 배정되었을 수 있음) — 맵에는 쓰지 않고 담당 표시만 끔: "
-                    + slotNumbers(partitions));
+                handleRevokedLocally(partitions, false);
             }
 
             @Override

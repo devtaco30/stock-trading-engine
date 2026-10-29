@@ -244,6 +244,20 @@ class MatchingEngineBookLoadTest {
     }
 
     @Test
+    void 담당이었다가_넘긴_종목_slot에_호가창이_다시_이동해_오면_적재가_적용된다() throws Exception {
+        startEngine();
+        int slot = HASHER.slotFor(STOCK);
+        engine.publishSlotAcquired(slot);
+        engine.publishSlotReleased(slot); // 세션 만료로 잃은 종목 slot도 넘김이 저널에 남는다
+
+        engine.publishBookLoad(TRANSFER_ID, slot, List.of(sourceBookBytes()));
+        engine.publishPlace(3L, 300L, STOCK, OrderSide.SELL, new BigDecimal("10000"), 6, Instant.now());
+        awaitFill();
+
+        assertEquals(1L, fills.get(0).buyOrderId(), "넘긴 뒤에 도착한 적재는 막히지 않고 적용된다");
+    }
+
+    @Test
     void 적재는_다른_종목_slot의_호가창을_비우지_않는다() throws Exception {
         startEngine();
         String otherSlotStock = stockInOtherSlot();
