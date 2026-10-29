@@ -30,6 +30,8 @@ class MatchingEngineSnapshotTest {
 
     private static final String STOCK = "005930";
     private static final int BUFFER_SIZE = 1024;
+    // 주문을 발행한 계좌 shard로 보는 Aeron sessionId(시험용 값)
+    private static final int SESSION = 7;
     private static final MatchListener NO_OP_LISTENER = (stockCode, fill) -> {};
 
     private final MatchingSnapshotCodec codec = new MatchingSnapshotCodec();
@@ -52,10 +54,9 @@ class MatchingEngineSnapshotTest {
     void 미체결_주문이_스냅샷_왕복_후_복원된다() {
         original = new MatchingEngine(BUFFER_SIZE, NO_OP_LISTENER);
         original.start();
-        original.publishPlace(1L, 100L, STOCK, OrderSide.BUY, new BigDecimal("10000"), 10, Instant.now());
-        awaitContainsOrder(original, 1L);
+        original.publishPlace(1L, 100L, STOCK, OrderSide.BUY, new BigDecimal("10000"), 10, Instant.now(), 1L, SESSION);
 
-        MatchingSnapshot snapshot = original.snapshot();
+        MatchingSnapshot snapshot = drainAndSnapshot(original, 1L);
         MatchingSnapshot decoded = codec.decode(codec.encode(snapshot));
 
         restored = new MatchingEngine(BUFFER_SIZE, NO_OP_LISTENER);
@@ -70,10 +71,9 @@ class MatchingEngineSnapshotTest {
     void 복원한_주문이_라이브_매칭에_참여한다() throws InterruptedException {
         original = new MatchingEngine(BUFFER_SIZE, NO_OP_LISTENER);
         original.start();
-        original.publishPlace(1L, 100L, STOCK, OrderSide.BUY, new BigDecimal("10000"), 10, Instant.now());
-        awaitContainsOrder(original, 1L);
+        original.publishPlace(1L, 100L, STOCK, OrderSide.BUY, new BigDecimal("10000"), 10, Instant.now(), 1L, SESSION);
 
-        MatchingSnapshot decoded = codec.decode(codec.encode(original.snapshot()));
+        MatchingSnapshot decoded = codec.decode(codec.encode(drainAndSnapshot(original, 1L)));
 
         CountDownLatch latch = new CountDownLatch(1);
         List<FillResult> fills = new CopyOnWriteArrayList<>();
@@ -95,13 +95,10 @@ class MatchingEngineSnapshotTest {
     void 전량체결_멱등_캐시도_복원된다() {
         original = new MatchingEngine(BUFFER_SIZE, NO_OP_LISTENER);
         original.start();
-        original.publishPlace(1L, 100L, STOCK, OrderSide.BUY, new BigDecimal("10000"), 10, Instant.now());
-        original.publishPlace(2L, 200L, STOCK, OrderSide.SELL, new BigDecimal("10000"), 10, Instant.now().plusMillis(1));
-        // 2는 1 다음에 같은(단일) 소비자 스레드가 처리하고, 그 처리 안에서 매칭까지 동기로 끝난다 —
-        // 그래서 containsOrder(2)가 true가 된 시점엔 1·2의 매칭도 이미 끝나 있다.
-        awaitContainsOrder(original, 2L);
+        original.publishPlace(1L, 100L, STOCK, OrderSide.BUY, new BigDecimal("10000"), 10, Instant.now(), 1L, SESSION);
+        original.publishPlace(2L, 200L, STOCK, OrderSide.SELL, new BigDecimal("10000"), 10, Instant.now().plusMillis(1), 2L, SESSION);
 
-        MatchingSnapshot decoded = codec.decode(codec.encode(original.snapshot()));
+        MatchingSnapshot decoded = codec.decode(codec.encode(drainAndSnapshot(original, 2L)));
 
         restored = new MatchingEngine(BUFFER_SIZE, NO_OP_LISTENER);
         restored.restore(decoded);
@@ -110,14 +107,21 @@ class MatchingEngineSnapshotTest {
         assertTrue(restored.containsOrder(STOCK, 1L), "전량 체결된 주문도 멱등 캐시(TTL) 덕에 containsOrder는 true여야 한다");
     }
 
-    private void awaitContainsOrder(MatchingEngine engine, long orderId) {
-        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(1);
-        while (!engine.containsOrder(STOCK, orderId)) {
+    /**
+     * 마지막으로 발행한 주문이 처리된 것을 확인한 뒤 소비자 thread를 멈추고 스냅샷을 찍는다. {@code MatchingEngine#snapshot}은
+     * 소비자 thread가 멈춘 시점에만 안전하다. 처리 중인 호가창을 테스트 thread가 읽으면 경합이 생겨 가끔 실패했다.
+     * 처리 확인은 소비자가 주문을 반영한 뒤 남기는 발행자별 위치(동시성 맵)로 한다. 소비자 thread가 아직 돌기 전에
+     * {@code shutdown}을 부르면 Disruptor가 적체를 보지 못하고 바로 멈추기 때문에, 위치 확인 없이 shutdown만 부르면 안 된다.
+     */
+    private MatchingSnapshot drainAndSnapshot(MatchingEngine engine, long lastPosition) {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(3);
+        while (!Long.valueOf(lastPosition).equals(engine.lastAppliedOrderIntakePositions().get(SESSION))) {
             if (System.nanoTime() > deadline) {
-                throw new AssertionError("1초 안에 주문이 호가창에 반영되지 않음: orderId=" + orderId);
+                throw new AssertionError("3초 안에 주문이 반영되지 않음: 위치=" + lastPosition);
             }
             Thread.onSpinWait();
         }
+        engine.shutdown();
+        return engine.snapshot();
     }
-
 }
