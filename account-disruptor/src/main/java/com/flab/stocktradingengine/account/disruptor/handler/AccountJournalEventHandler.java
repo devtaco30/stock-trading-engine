@@ -49,7 +49,8 @@ public class AccountJournalEventHandler implements EventHandler<AccountEvent> {
         }
         journal.append(new AccountJournalEntry(
             event.getType(), event.getOrderId(), event.getAccountId(), event.getStockCode(),
-            event.getPrice(), event.getQuantity(), event.getRequestId(), event.getTradeId()));
+            event.getPrice(), event.getQuantity(), event.getRequestId(), event.getTradeId(),
+            event.isHoldingFull()));
         event.setJournaledPosition(journal.position());
         if (stages.isEnabled()) {
             event.setJournalEndedAtNanos(EpochNanos.now());

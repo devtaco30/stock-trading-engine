@@ -20,6 +20,11 @@ import java.math.BigDecimal;
  * 발급 전(입력 그대로) 시점을 기록한다. 리플레이(2b-2)는 이 입력을 같은 결정론적 발급기(2b-0)에
  * 다시 넣어 orderId를 재생성한다. BUY_FILL·SELL_FILL·SETTLEMENT의 orderId·tradeId는 계좌가
  * 발급하는 값이 아니라 매칭·정산이 넘겨준 입력이라 저널 시점에 이미 확정돼 있다.</p>
+
+ *
+ * <p><b>holdingFull</b>은 BUY·SELL 엔트리에서만 의미가 있다 — 주문을 링버퍼에 올리는 수신 스레드가
+ * 그 순간 매칭행 보관 목록에 여유가 없다고 본 판정이다. 판정을 저널에 남기므로 복구(발신기 no-op)도
+ * 같은 거부를 되풀이한다.</p>
  */
 public record AccountJournalEntry(
     AccountEventType type,
@@ -29,6 +34,16 @@ public record AccountJournalEntry(
     BigDecimal price,
     int quantity,
     String requestId,
-    long tradeId
+    long tradeId,
+    boolean holdingFull
 ) {
+
+    /**
+     * 보관 목록 가득 표시가 없던 시절의 여덟 필드 형태 — 표시는 false다. 옛 저널을 읽는 코드와
+     * 표시와 무관한 엔트리(체결·정산 등)가 그대로 쓴다.
+     */
+    public AccountJournalEntry(AccountEventType type, long orderId, long accountId, String stockCode,
+                               BigDecimal price, int quantity, String requestId, long tradeId) {
+        this(type, orderId, accountId, stockCode, price, quantity, requestId, tradeId, false);
+    }
 }

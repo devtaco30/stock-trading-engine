@@ -46,4 +46,12 @@ public interface MatchingOrderSender {
                               long originNanos, long receivedAtNanos, long acceptedAtNanos) {
         forwardPlace(orderId, accountId, stockCode, side, price, quantity);
     }
+
+    /**
+     * 이 종목의 주문을 매칭으로 내보내기 전에 쌓아 둘 보관 목록에 여유가 있는지 — 주문을 링버퍼에 올리는
+     * 수신 스레드가 읽는다(스레드 안전해야 한다). 보관 목록이 없는 구현은 항상 true다.
+     */
+    default boolean hasHoldingRoom(String stockCode) {
+        return true;
+    }
 }

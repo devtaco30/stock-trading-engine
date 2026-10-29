@@ -21,6 +21,7 @@ public class AccountEvent {
     private int quantity;
     private String requestId;
     private long tradeId;
+    private boolean holdingFull;
     private long sourcePosition;
     private int sourceSessionId;
     private long journaledPosition;
@@ -114,6 +115,11 @@ public class AccountEvent {
         this.price = amount;
     }
 
+    /** 수신 스레드가 BUY·SELL을 올릴 때 본 매칭행 보관 목록 가득 판정. 저널에 실려 복구도 같은 판정을 읽는다. */
+    public void setHoldingFull(boolean holdingFull) {
+        this.holdingFull = holdingFull;
+    }
+
     /** 저널 핸들러가 기록을 마친 뒤 그 시점의 저널 위치를 슬롯에 남긴다(1-2). 비즈니스 핸들러가 읽는다. */
     public void setJournaledPosition(long journaledPosition) {
         this.journaledPosition = journaledPosition;
@@ -160,6 +166,7 @@ public class AccountEvent {
         this.quantity = 0;
         this.requestId = null;
         this.tradeId = 0L;
+        this.holdingFull = false;
         this.sourcePosition = 0L;
         this.sourceSessionId = 0;
         this.journaledPosition = 0L;
@@ -203,6 +210,10 @@ public class AccountEvent {
 
     public long getTradeId() {
         return tradeId;
+    }
+
+    public boolean isHoldingFull() {
+        return holdingFull;
     }
 
     public long getSourcePosition() {

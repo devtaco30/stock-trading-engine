@@ -148,6 +148,35 @@ class AccountJournalEntryCodecTest {
         assertFalse(decoded.isPresent());
     }
 
+    @Test
+    @DisplayName("보관 목록 가득 표시는 라운드트립에서 유지된다")
+    void 보관목록_가득_표시_라운드트립() {
+        AccountJournalEntry entry = new AccountJournalEntry(
+            AccountEventType.BUY, 0L, 1L, STOCK, new BigDecimal("10000"), 10, "r1", 0L, true);
+
+        AccountJournalEntry decoded = roundTrip(entry);
+
+        assertTrue(decoded.holdingFull());
+        assertEquals("r1", decoded.requestId());
+    }
+
+    @Test
+    @DisplayName("표시 없이 쓴 옛 엔트리는 그대로 읽히고 가득 표시는 false다(저널 호환)")
+    void 옛_엔트리는_가득_표시가_false() {
+        AccountJournalEntry oldEntry = new AccountJournalEntry(
+            AccountEventType.SELL, 0L, 2L, STOCK, new BigDecimal("9000"), 3, "r2", 0L);
+        UnsafeBuffer buffer = new UnsafeBuffer(new byte[256]);
+
+        int length = codec.encode(buffer, 0, oldEntry);
+        byte flags = buffer.getByte(1);
+
+        assertEquals(0, flags & 0b0000_1000, "표시를 쓰지 않으면 flags의 새 비트는 0이어야 옛 기록과 같다");
+        AccountJournalEntry decoded = codec.decode(buffer, 0);
+        assertFalse(decoded.holdingFull());
+        assertEquals(oldEntry, decoded);
+        assertEquals(length, codec.encode(buffer, 0, decoded));
+    }
+
     private AccountJournalEntry roundTrip(AccountJournalEntry entry) {
         UnsafeBuffer buffer = new UnsafeBuffer(new byte[256]);
         int length = codec.encode(buffer, 0, entry);

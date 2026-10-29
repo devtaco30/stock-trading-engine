@@ -100,6 +100,7 @@ public class AccountEngine {
     private final AccountEventHandler businessHandler;
     private final SlotHasher slotHasher;
     private final IntPredicate ownedSlots;
+    private final MatchingOrderSender matchingOrderSender;
     private final AccountOrderIdGenerator orderIdGenerator;
     private RingBuffer<AccountEvent> ringBuffer;
 
@@ -145,6 +146,7 @@ public class AccountEngine {
         this.journal = journal;
         this.slotHasher = slotHasher;
         this.ownedSlots = ownedSlots;
+        this.matchingOrderSender = matchingOrderSender;
         this.orderIdGenerator = new AccountOrderIdGenerator(nodeId);
         ThreadFactory threadFactory = DaemonThreadFactory.INSTANCE;
         this.disruptor = new Disruptor<>(
@@ -375,8 +377,14 @@ public class AccountEngine {
     private void applyToScratch(AccountEvent event, AccountJournalEntry entry) {
         switch (entry.type()) {
             // 저널 엔트리엔 발행 시각도 없다(리플레이 대상은 저널이지 발행 스트림이 아니다) — 0으로 채운다.
-            case BUY -> event.setBuy(entry.accountId(), entry.stockCode(), entry.price(), entry.quantity(), entry.requestId(), 0L);
-            case SELL -> event.setSell(entry.accountId(), entry.stockCode(), entry.price(), entry.quantity(), entry.requestId(), 0L);
+            case BUY -> {
+                event.setBuy(entry.accountId(), entry.stockCode(), entry.price(), entry.quantity(), entry.requestId(), 0L);
+                event.setHoldingFull(entry.holdingFull());
+            }
+            case SELL -> {
+                event.setSell(entry.accountId(), entry.stockCode(), entry.price(), entry.quantity(), entry.requestId(), 0L);
+                event.setHoldingFull(entry.holdingFull());
+            }
             // 저널 엔트리엔 sourcePosition·sourceSessionId가 없다(리플레이 대상 자체가 저널이지
             // 체결 수신 스트림이 아니다) — 0으로 채운다. start() 전에만 도는 복구 경로라 이후 라이브
             // 첫 체결이 곧 덮어쓴다.
@@ -437,6 +445,7 @@ public class AccountEngine {
         try {
             AccountEvent event = ringBuffer.get(sequence);
             event.setBuy(accountId, stockCode, price, quantity, requestId, publishedAtEpochNanos);
+            event.setHoldingFull(!matchingOrderSender.hasHoldingRoom(stockCode));
             stampReceived(event, receivedAtNanos);
         } finally {
             ringBuffer.publish(sequence);
@@ -464,6 +473,7 @@ public class AccountEngine {
         try {
             AccountEvent event = ringBuffer.get(sequence);
             event.setSell(accountId, stockCode, price, quantity, requestId, publishedAtEpochNanos);
+            event.setHoldingFull(!matchingOrderSender.hasHoldingRoom(stockCode));
             stampReceived(event, receivedAtNanos);
         } finally {
             ringBuffer.publish(sequence);

@@ -21,6 +21,9 @@ import org.agrona.MutableDirectBuffer;
  *   (flags 의 REQUEST_ID 비트가 서면) [requestId:4+M]
  * </pre>
  *
+ * <p>flags 의 HOLDING_FULL 비트(0b1000)는 보관 목록 가득 판정이다. 뒤따르는 필드가 없는 표시라
+ * 레이아웃은 그대로이고, 이 비트를 쓰기 전에 만든 옛 엔트리는 0으로 읽힌다.</p>
+ *
  * <p>⚠️ durable 포맷 — {@code type}을 {@link AccountEventType}의 ordinal로 저장한다. 이미 디스크에
  * 기록된 저널이 있는 채로 그 enum의 선언 순서를 바꾸거나 값을 끼워 넣으면 옛 기록을 잘못 디코딩한다.
  * 새 타입을 추가할 땐 반드시 끝에 붙인다.</p>
@@ -30,6 +33,8 @@ public final class AccountJournalEntryCodec {
     private static final byte PRICE_PRESENT = 0b0000_0001;
     private static final byte STOCK_CODE_PRESENT = 0b0000_0010;
     private static final byte REQUEST_ID_PRESENT = 0b0000_0100;
+    // 보관 목록 가득 판정(BUY·SELL). 이 비트가 없던 옛 엔트리는 0으로 읽혀 false가 된다.
+    private static final byte HOLDING_FULL = 0b0000_1000;
 
     /**
      * 저널 엔트리를 버퍼에 인코딩한다.
@@ -111,7 +116,8 @@ public final class AccountJournalEntryCodec {
             requestId = buffer.getStringAscii(position);
         }
 
-        return new AccountJournalEntry(type, orderId, accountId, stockCode, price, quantity, requestId, tradeId);
+        boolean holdingFull = (flags & HOLDING_FULL) != 0;
+        return new AccountJournalEntry(type, orderId, accountId, stockCode, price, quantity, requestId, tradeId, holdingFull);
     }
 
     /**
@@ -141,6 +147,9 @@ public final class AccountJournalEntryCodec {
         }
         if (entry.requestId() != null) {
             flags |= REQUEST_ID_PRESENT;
+        }
+        if (entry.holdingFull()) {
+            flags |= HOLDING_FULL;
         }
         return flags;
     }

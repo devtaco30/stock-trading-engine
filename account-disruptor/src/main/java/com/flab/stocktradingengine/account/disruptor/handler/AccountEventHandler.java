@@ -303,6 +303,11 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
             return;
         }
 
+        if (event.isHoldingFull()) {
+            listener.onRejected(accountId, orderId, requestId, RejectReason.MATCHING_HOLDING_FULL);
+            return;
+        }
+
         ReserveResult result = state.tryReserve(orderId, price, event.getQuantity());
         if (result.accepted()) {
             latencyHistogram.record(event.getPublishedAtEpochNanos());
@@ -356,6 +361,11 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
         BigDecimal price = event.getPrice();
         if (event.getQuantity() <= 0 || price == null || price.signum() <= 0) {
             listener.onRejected(accountId, orderId, requestId, RejectReason.INVALID_QUANTITY);
+            return;
+        }
+
+        if (event.isHoldingFull()) {
+            listener.onRejected(accountId, orderId, requestId, RejectReason.MATCHING_HOLDING_FULL);
             return;
         }
 
