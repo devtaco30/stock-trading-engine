@@ -43,6 +43,8 @@ class KafkaMatchingShardAssignmentStuckSlotTest {
         private final java.util.concurrent.atomic.AtomicInteger failuresLeft;
         // 정해지면 이 종목 slot의 쓰기만 항상 예외를 던진다(입력 문제로 영구히 실패하는 쓰기).
         volatile Integer alwaysThrowForSlot;
+        // 정해지면 이 종목 slot의 쓰기는 브로커 오류로 끝나는 future를 돌려준다(보내는 호출은 성공하고 응답이 실패).
+        volatile Integer brokerFailForSlot;
 
         ThrowingProducer() {
             this(Integer.MAX_VALUE);
@@ -57,6 +59,9 @@ class KafkaMatchingShardAssignmentStuckSlotTest {
         public synchronized Future<RecordMetadata> send(ProducerRecord<Integer, String> record) {
             if (alwaysThrowForSlot != null && alwaysThrowForSlot.equals(record.key())) {
                 throw new IllegalStateException("이 쓰기는 영구히 실패");
+            }
+            if (brokerFailForSlot != null && brokerFailForSlot.equals(record.key())) {
+                return java.util.concurrent.CompletableFuture.failedFuture(new IllegalStateException("브로커 오류 흉내"));
             }
             if (failuresLeft.getAndDecrement() > 0) {
                 throw new IllegalStateException("직렬화 실패 흉내");
@@ -195,6 +200,56 @@ class KafkaMatchingShardAssignmentStuckSlotTest {
         listener.onPartitionsRevoked(partitions(5));
 
         assertThat(assignment.stuckSlotCount()).isZero();
+    }
+
+    @Test
+    void 한_쓰기가_브로커_오류로_계속_실패해도_뒤의_종목_slot의_쓰기는_나가고_그_쓰기는_멈춘_개수에_센다() throws Exception {
+        ThrowingProducer producer = new ThrowingProducer(0);
+        producer.brokerFailForSlot = 5;
+        build(producer, () -> true);
+        assignment.setMapWriteRetryMillis(10L);
+        assignment.setMapWriteFailureLimit(3);
+        listener.onPartitionsAssigned(partitions(5, 6));
+        assignment.acquireAfterLoad(5);
+        assignment.acquireAfterLoad(6);
+
+        assignment.confirmAcquired(5);
+        assignment.confirmAcquired(6);
+
+        long deadline = System.nanoTime() + 3_000_000_000L;
+        while ((producer.history().stream().noneMatch(record -> record.key() == 6) || assignment.stuckSlotCount() == 0)
+            && System.nanoTime() < deadline) {
+            Thread.sleep(5);
+        }
+        assertThat(producer.history()).as("앞 쓰기가 계속 실패해도 뒤 종목 slot의 쓰기는 나간다").anyMatch(record -> record.key() == 6);
+        assertThat(assignment.stuckSlotCount()).isEqualTo(1);
+        assertThat(errors.stream().anyMatch(record -> record.getMessage().contains("종목 slot=5"))).isTrue();
+    }
+
+    @Test
+    void queue_뒤로_보낸_쓰기가_나중에_성공하면_멈춘_개수에서_빠진다() throws Exception {
+        ThrowingProducer producer = new ThrowingProducer(0);
+        producer.brokerFailForSlot = 5;
+        build(producer, () -> true);
+        assignment.setMapWriteRetryMillis(10L);
+        assignment.setMapWriteFailureLimit(3);
+        listener.onPartitionsAssigned(partitions(5));
+        assignment.acquireAfterLoad(5);
+        assignment.confirmAcquired(5);
+        long deadline = System.nanoTime() + 3_000_000_000L;
+        while (assignment.stuckSlotCount() == 0 && System.nanoTime() < deadline) {
+            Thread.sleep(5);
+        }
+        assertThat(assignment.stuckSlotCount()).isEqualTo(1);
+
+        producer.brokerFailForSlot = null; // 브로커가 돌아왔다
+
+        deadline = System.nanoTime() + 3_000_000_000L;
+        while (assignment.stuckSlotCount() != 0 && System.nanoTime() < deadline) {
+            Thread.sleep(5);
+        }
+        assertThat(assignment.stuckSlotCount()).isZero();
+        assertThat(producer.history()).anyMatch(record -> record.key() == 5);
     }
 
     @Test

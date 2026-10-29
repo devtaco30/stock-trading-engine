@@ -99,6 +99,8 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
     // 보내는 호출이 예외를 던지는 쓰기를 포기하기까지의 시도 횟수. 근거 없는 임의 값이다.
     private static final int MAP_WRITE_RUNTIME_ATTEMPTS = 5;
     private volatile long mapWriteRetryMillis = 1_000L;
+    // 브로커 오류로 연속 실패해 쓰기를 queue 뒤로 보내기까지의 횟수. 근거 없는 임의 값(60번, 재시도 간격 1초면 약 1분)이다.
+    private volatile int mapWriteFailureLimit = 60;
     // 콜백(회수·첫 배정)이 자기 맵 쓰기의 완료를 기다리는 한도. 넘기면 ERROR 로그를 남기고 콜백은 돌아간다(쓰기 thread는 계속 재시도한다).
     // 콜백은 Kafka poll 안에서 불리므로 오래 막히면 max.poll.interval.ms를 넘겨 그룹에서 쫓겨날 수 있다(11-8절 마감 D).
     private volatile long mapWriteDeadlineMillis = 30_000L;
@@ -250,6 +252,15 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
      * 보내지 않고 끝낸다). 브로커 응답을 기다리고, 실패하면 ERROR 로그를 남기고 {@code mapWriteRetryMillis} 뒤에 같은 쓰기를 다시 보낸다 —
      * 뒤 쓰기는 앞 쓰기가 끝날 때까지 기다리므로 순서가 바뀌지 않는다.
      */
+    /** 포기한 쓰기의 종목 slot을 멈춤에 넣는다. 그 사이 회수되었으면(세대가 바뀜) 넣지 않는다. 회수 쪽의 지우기와 같은 잠금 안에서 한다. */
+    private void markMapWriteAbandoned(MapWrite write) {
+        synchronized (this) {
+            if (mapWriteGeneration.get(write.stockSlot()) == write.generation()) {
+                abandonedMapWrites.add(write.stockSlot());
+            }
+        }
+    }
+
     private void mapWriteLoop() {
         while (!Thread.currentThread().isInterrupted()) {
             MapWrite write;
@@ -259,6 +270,7 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
                 return;
             }
             int runtimeFailures = 0;
+            int brokerFailures = 0;
             try {
                 while (true) {
                     if (mapWriteGeneration.get(write.stockSlot()) != write.generation()) {
@@ -271,6 +283,17 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
                         write.done().complete(null);
                         break;
                     } catch (ExecutionException e) {
+                        brokerFailures++;
+                        if (brokerFailures >= mapWriteFailureLimit) {
+                            // 쓰기 thread가 하나라 이 쓰기가 계속 실패하면 뒤 종목 slot의 쓰기가 모두 막힌다. 신호를 남기고 queue 뒤로 보내 뒤 쓰기가 먼저
+                            // 나가게 한다. 이 쓰기는 완료하지 않은 채 다시 시도되고, 성공하면 멈춤에서 빠진다.
+                            log.log(Level.ERROR, "[매칭] 맵 쓰기가 브로커 오류로 " + brokerFailures + "번 연속 실패해 queue 뒤로 보냄 — 맵이 실제 상태와 어긋난 채 남아 있음: 종목 slot="
+                                + write.stockSlot() + " 값=" + write.value() + " 원인=" + e.getCause());
+                            markMapWriteAbandoned(write);
+                            Thread.sleep(mapWriteRetryMillis);
+                            mapWriteQueue.add(write);
+                            break;
+                        }
                         log.log(Level.ERROR, "[매칭] 맵 쓰기 실패, 다시 보냄: 종목 slot=" + write.stockSlot() + " 값=" + write.value()
                             + " 원인=" + e.getCause());
                         Thread.sleep(mapWriteRetryMillis);
@@ -281,7 +304,7 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
                         if (runtimeFailures >= MAP_WRITE_RUNTIME_ATTEMPTS) {
                             log.log(Level.ERROR, "[매칭] 맵 쓰기가 예외로 " + runtimeFailures + "번 실패해 포기함 — 맵이 이전 값으로 남아 이 종목 slot의 주문이 보관만 될 수 있음: 종목 slot="
                                 + write.stockSlot() + " 값=" + write.value() + " 원인=" + e);
-                            abandonedMapWrites.add(write.stockSlot());
+                            markMapWriteAbandoned(write);
                             write.done().completeExceptionally(e);
                             break;
                         }
@@ -303,6 +326,11 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
      */
     public void setMapWriteDeadlineMillis(long millis) {
         this.mapWriteDeadlineMillis = millis;
+    }
+
+    /** 같은 맵 쓰기가 브로커 오류로 연속 이만큼 실패하면 ERROR를 남기고 queue 뒤로 보낸다. 값을 정한 근거는 없다(미측정). */
+    public void setMapWriteFailureLimit(int limit) {
+        this.mapWriteFailureLimit = limit;
     }
 
     /** 패키지 가시성 — 시험이 다시 보내기 간격을 줄인다. */
