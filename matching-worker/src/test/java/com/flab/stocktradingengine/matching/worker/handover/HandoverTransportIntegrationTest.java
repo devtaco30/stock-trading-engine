@@ -93,6 +93,34 @@ class HandoverTransportIntegrationTest {
     }
 
     @Test
+    void 재요청은_같은_이동_번호로_나가고_같은_이동의_중복_응답은_한_번만_적재한다() throws Exception {
+        xStore.put(SLOT, List.of(bytes(1, 300), bytes(2, 400)));
+
+        long transferId = zRequester.request(SLOT).orElseThrow();
+        assertThat(zRequester.resend(SLOT)).isTrue();
+        assertThat(zRequester.resend(SLOT)).isTrue();
+        awaitAssembled(1);
+        Thread.sleep(400); // 재요청마다 X가 같은 바이트를 다시 보낸다. 늦게 온 중복 응답이 모두 도착할 시간을 준다.
+
+        assertThat(assembled).as("같은 이동의 중복 응답은 먼저 완성된 것 하나만 적재한다").hasSize(1);
+        assertThat(assembled.get(0).transferId()).isEqualTo(transferId);
+        assertThat(assembled.get(0).bodies().get(0)).isEqualTo(bytes(1, 300));
+    }
+
+    @Test
+    void 포기해서_취소한_뒤_늦게_온_응답은_버려진다() throws Exception {
+        xStore.put(SLOT, List.of(bytes(1, 300)));
+
+        zRequester.request(SLOT).orElseThrow();
+        zRequester.cancel(SLOT); // 포기 시간을 넘겨 실패로 끝낸 것과 같다
+        awaitUntil(() -> zReceiver.discardedMessages() >= 1);
+
+        assertThat(assembled).isEmpty();
+        assertThat(zRequester.inFlight(SLOT)).isFalse();
+        assertThat(zRequester.resend(SLOT)).as("취소한 요청은 다시 보내지 않는다").isFalse();
+    }
+
+    @Test
     void 보낼_종목이_하나도_없는_종목_slot도_빈_목록으로_완료된다() {
         xStore.put(SLOT, List.of());
 

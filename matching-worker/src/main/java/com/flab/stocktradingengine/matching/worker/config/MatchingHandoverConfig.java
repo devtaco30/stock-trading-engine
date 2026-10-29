@@ -207,8 +207,12 @@ public class MatchingHandoverConfig {
     }
 
     @Bean
-    public HandoverCoordinator handoverCoordinator(HandoverRequester requester) {
-        return new HandoverCoordinator(requester::request, requester::cancel);
+    public HandoverCoordinator handoverCoordinator(
+            HandoverRequester requester,
+            @Value("${matching-shard.handover.retry-interval-ms:1000}") long retryIntervalMillis,
+            @Value("${matching-shard.handover.response-timeout-ms:5000}") long responseTimeoutMillis) {
+        // 기본값은 Jack이 정한 값: 응답이 오지 않으면 1초마다 같은 요청을 다시 보내고, 처음 요청부터 5초가 지나면 실패로 본다.
+        return new HandoverCoordinator(requester, retryIntervalMillis, responseTimeoutMillis);
     }
 
     @Bean

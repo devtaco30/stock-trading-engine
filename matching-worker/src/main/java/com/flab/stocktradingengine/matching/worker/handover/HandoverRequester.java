@@ -1,5 +1,7 @@
 package com.flab.stocktradingengine.matching.worker.handover;
 
+import java.lang.System.Logger;
+import java.lang.System.Logger.Level;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -23,7 +25,9 @@ import io.aeron.Publication;
  *
  * <p>이동 번호는 서버 번호를 상위 비트에 둔 카운터다(ADR-023의 orderId와 같은 방식).</p>
  */
-public final class HandoverRequester implements AutoCloseable {
+public final class HandoverRequester implements AutoCloseable, HandoverRequestPort {
+
+    private static final Logger log = System.getLogger(HandoverRequester.class.getName());
 
     private static final long SEND_DEADLINE_NANOS = 2_000_000_000L;
 
@@ -34,6 +38,11 @@ public final class HandoverRequester implements AutoCloseable {
     private final AtomicLong counter = new AtomicLong();
     private final Map<String, Publication> requestPublications = new HashMap<>();
     private final Map<Integer, Long> currentTransferBySlot = new ConcurrentHashMap<>();
+    // 재요청에 쓰려고 보낸 요청의 바이트와 보낸 곳을 종목 slot별로 기억한다. 같은 요청(같은 이동 번호)을 그대로 다시 보낸다.
+    private record Sent(long transferId, byte[] wire, Publication publication, String previousOwner) {
+    }
+
+    private final Map<Integer, Sent> sentBySlot = new ConcurrentHashMap<>();
 
     public HandoverRequester(Aeron aeron, String ownChannel, HandoverEndpointPool pool,
                              IntFunction<Optional<MatchingSlotTarget>> mapLookup, long nodeId) {
@@ -52,6 +61,7 @@ public final class HandoverRequester implements AutoCloseable {
      * @return 보낸 요청의 이동 번호. 맵에 이동 중 항목이 없거나(첫 배정이거나 아직 맵에 도착하지 않음) 요청을 마감 안에 못 보냈으면 빈 값
      * @throws IllegalStateException 맵의 이전 담당 주소가 풀에 없을 때(설정 어긋남)
      */
+    @Override
     public Optional<Long> request(int stockSlot) {
         Optional<MatchingSlotTarget> target = mapLookup.apply(stockSlot);
         if (target.isEmpty() || !target.get().moving()) {
@@ -71,6 +81,8 @@ public final class HandoverRequester implements AutoCloseable {
             currentTransferBySlot.remove(stockSlot, transferId);
             return Optional.empty();
         }
+        sentBySlot.put(stockSlot, new Sent(transferId, wire, publication, previousOwner));
+        log.log(Level.INFO, "[호가창 이동] 요청 보냄: 이동 번호=" + transferId + " 종목 slot=" + stockSlot + " 이전 담당=" + previousOwner);
         return Optional.of(transferId);
     }
 
@@ -79,14 +91,39 @@ public final class HandoverRequester implements AutoCloseable {
         return Optional.ofNullable(currentTransferBySlot.get(stockSlot));
     }
 
+    /** 진행 중인 같은 요청(같은 이동 번호)을 다시 보낸다. */
+    @Override
+    public boolean resend(int stockSlot) {
+        Sent sent = sentBySlot.get(stockSlot);
+        if (sent == null || !currentTransferBySlot.containsKey(stockSlot)
+            || currentTransferBySlot.get(stockSlot) != sent.transferId()) {
+            return false;
+        }
+        long deadline = System.nanoTime() + SEND_DEADLINE_NANOS;
+        boolean offered = OfferSupport.offerWithDeadline(sent.publication(), new UnsafeBuffer(sent.wire()), sent.wire().length, deadline);
+        if (offered) {
+            log.log(Level.INFO, "[호가창 이동] 요청 다시 보냄: 이동 번호=" + sent.transferId() + " 종목 slot=" + stockSlot
+                + " 이전 담당=" + sent.previousOwner());
+        }
+        return offered;
+    }
+
+    @Override
+    public boolean inFlight(int stockSlot) {
+        return currentTransferBySlot.containsKey(stockSlot);
+    }
+
     /** 이 종목 slot에서 진행 중인 요청을 취소한다. 이후 도착하는 그 요청의 응답은 번호가 달라 버려진다. */
+    @Override
     public void cancel(int stockSlot) {
         currentTransferBySlot.remove(stockSlot);
+        sentBySlot.remove(stockSlot);
     }
 
     /** 적재 요청을 낸 이동을 끝난 것으로 기록한다. */
     void finish(int stockSlot, long transferId) {
         currentTransferBySlot.remove(stockSlot, transferId);
+        sentBySlot.remove(stockSlot);
     }
 
     @Override

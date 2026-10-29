@@ -87,6 +87,7 @@ public class MatchingShardOwnershipConfig {
             public void onBooksLoadedDurable(long transferId, int stockSlot) {
                 // 이동으로 받은 종목 slot의 호가창 적재와 스냅샷 확정이 끝났다. 이제 받음 요청을 남기고 저널 기록 확인이 오면 담당이 켜진다.
                 // 이전 담당(X)에게 받았다고 알리는 일은 U16이 한다.
+                log.info("[호가창 이동] 적재 확정: 이동 번호={} 종목 slot={}", transferId, stockSlot);
                 KafkaMatchingShardAssignment assignment = assignmentProvider.getIfAvailable();
                 if (assignment != null) {
                     assignment.acquireAfterLoad(stockSlot);

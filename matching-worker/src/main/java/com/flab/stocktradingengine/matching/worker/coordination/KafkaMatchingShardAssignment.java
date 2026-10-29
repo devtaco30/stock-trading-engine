@@ -218,6 +218,7 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
             generation = mapWriteGeneration.get(stockSlot);
         }
         if (switchMapAfterAcquire) {
+            log.log(Level.INFO, "[호가창 이동] 담당 켜짐: 종목 slot=" + stockSlot);
             // 응답을 기다리지 않는다(호출 thread는 받음 항목의 기록 확인을 폴링하는 주문 수신 thread다).
             enqueueMapWrite(stockSlot, new MatchingSlotTarget(ownOrderEndpoint, false).encode(), generation);
         }

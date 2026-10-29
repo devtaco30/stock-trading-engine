@@ -90,6 +90,8 @@ public final class HandoverReceiver implements AutoCloseable {
         Optional<List<byte[]>> complete = assembler.accept(message);
         if (complete.isPresent()) {
             requester.finish(message.stockSlot(), message.transferId());
+            log.log(Level.INFO, "[호가창 이동] 응답 완성: 이동 번호=" + message.transferId() + " 종목 slot=" + message.stockSlot()
+                + " 종목 수=" + complete.get().size());
             loadSink.onAssembled(message.transferId(), message.stockSlot(), complete.get());
         }
     }
