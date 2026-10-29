@@ -68,22 +68,46 @@ send_order 90001 "$X" BUY 20000 4 u10-buy-x
 send_order 90001 "$Y" BUY 20000 3 u10-buy-y
 sleep 6
 
-# 맵 기록으로 이동 시간 계산(이동 중 첫 기록 ~ 마지막 담당 전환 기록, 로그 시각)
-tool map-history localhost:9092 | grep -P '^\d+\t\d+\t' > "$WORK/map-history.txt" || true
-python3 - "$WORK/map-history.txt" "$JOIN_EPOCH_MS" <<'PY'
-import sys
+# 이동 시간 계산 — 기준 시각이 서로 다른 값을 따로 낸다(이름에 기준을 적는다).
+#   MOVE_MS_MAP_RECORD_TIME: 맵 토픽 기록의 브로커 기록 시각(CreateTime)만 쓴다. 「이동 중」 표시가 처음 올라온 기록 ~ 마지막
+#                            slot이 pod 1 담당으로 바뀐 기록.
+#   JOIN_TO_SPLIT_MS_LOG_AND_MAP_RECORD_TIME: matching-1 로그의 첫 「담당 종목 slot 배정」 줄 시각(pod 1 합류) ~ 맵이
+#                            「이동 중 0, 32개씩」이 된 시각(마지막 slot이 pod 1 담당으로 바뀐 기록의 브로커 기록 시각).
+#   REVOKE_TO_RECEIVE_MS_LOG: matching-0 로그의 「담당 종목 slot 회수」 줄 ~ matching-1 로그의 「이동으로 받는 중」 줄(로그 시각만).
+# 모두 이 컴퓨터 한 대의 값이며 일반화하지 않는다.
+tool map-history localhost:9092 | awk -F'\t' 'NF >= 3 && $1 ~ /^[0-9]+$/ && $2 ~ /^[0-9]+$/' > "$WORK/map-history.txt" || true
+python3 - "$WORK/map-history.txt" "$LOG_DIR" <<'PY'
+import sys,re,datetime
 rows=[l.rstrip('\n').split('\t') for l in open(sys.argv[1]) if l.strip()]
 rows=[(int(s),int(t),v) for s,t,v in rows]
+logdir=sys.argv[2]
+def ts(line):
+    return int(datetime.datetime.fromisoformat(line.split(' ')[0]).timestamp()*1000)
+def first(path,pat):
+    for l in open(path,errors='replace'):
+        if re.search(pat,l): return ts(l),l
+    return None,None
 moving=[t for s,t,v in rows if v.endswith(';moving')]
 final={}
 for s,t,v in rows:
     final[s]=(t,v)
 to1=[t for s,(t,v) in final.items() if v=='aeron:udp?endpoint=localhost:20021']
-print("맵 기록 %d건, 이동 중 표시 %d건" % (len(rows), len(moving)))
+print("맵 기록 %d건, 이동 중 표시 %d건, pod 1 담당으로 끝난 slot %d개" % (len(rows), len(moving), len(to1)))
 if moving and to1:
-    print("MOVE_MS 이동 중 첫 기록 → 마지막 담당 전환 기록: %d ms" % (max(to1)-min(moving)))
+    print("MOVE_MS_MAP_RECORD_TIME=%d  (이동 중 첫 기록 ~ 마지막 pod 1 담당 전환 기록, 브로커 기록 시각)" % (max(to1)-min(moving)))
 else:
-    print("MOVE_MS 계산 불가(이동 중 표시 %d건, pod 1 담당으로 끝난 slot %d개)" % (len(moving), len(to1)))
+    print("MOVE_MS_MAP_RECORD_TIME=계산 불가(이동 중 표시 %d건)" % len(moving))
+join,_=first(logdir+'/matching-1.log',r'담당 종목 slot 배정')
+if join and to1:
+    print("JOIN_TO_SPLIT_MS_LOG_AND_MAP_RECORD_TIME=%d  (matching-1 첫 배정 로그 ~ 마지막 pod 1 담당 전환 기록)" % (max(to1)-join))
+else:
+    print("JOIN_TO_SPLIT_MS_LOG_AND_MAP_RECORD_TIME=계산 불가")
+rev,_=first(logdir+'/matching-0.log',r'담당 종목 slot 회수')
+rcv,_=first(logdir+'/matching-1.log',r'이동으로 받는 중=\[[0-9]')
+if rev and rcv:
+    print("REVOKE_TO_RECEIVE_MS_LOG=%d  (matching-0 회수 로그 ~ matching-1 이동으로 받는 중 로그)" % (rcv-rev))
+else:
+    print("REVOKE_TO_RECEIVE_MS_LOG=계산 불가")
 PY
 
 # 4. 정상 종료 → 스냅샷 판독
