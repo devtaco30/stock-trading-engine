@@ -35,4 +35,20 @@ class RateLimitedLogTest {
         assertThat(limiter.tryAcquire(5)).isEqualTo(0);
         assertThat(limiter.tryAcquire(6)).isEqualTo(0);
     }
+
+    @Test
+    void 키가_계속_새로_들어와도_상태_수가_상한을_넘지_않는다() {
+        for (long key = 0; key < 50_000L; key++) {
+            limiter.tryAcquire(key);
+        }
+
+        assertThat(limiter.stateCount()).isLessThanOrEqualTo(RateLimitedLog.MAX_KEYS);
+    }
+
+    @Test
+    void 상한에서_상태를_비워도_새_키는_계속_내보낸다() {
+        for (long key = 0; key < (long) RateLimitedLog.MAX_KEYS + 10; key++) {
+            assertThat(limiter.tryAcquire(key)).isEqualTo(0);
+        }
+    }
 }

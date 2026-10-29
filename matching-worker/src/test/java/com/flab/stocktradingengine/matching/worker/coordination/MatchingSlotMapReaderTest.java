@@ -150,6 +150,32 @@ class MatchingSlotMapReaderTest {
         quietReader.close();
     }
 
+    @Test
+    void 쉬는_동안_다시_온_재시작_요청은_이미_반영된_것으로_보고_다시_쉬지_않는다() throws Exception {
+        Consumer<Integer, String> consumer = mock(Consumer.class);
+        TopicPartition partition = new TopicPartition(TOPIC, 0);
+        org.mockito.Mockito.when(consumer.partitionsFor(TOPIC))
+            .thenReturn(List.of(new org.apache.kafka.common.PartitionInfo(TOPIC, 0, null, null, null)));
+        org.mockito.Mockito.when(consumer.endOffsets(List.of(partition))).thenReturn(Map.of(partition, 0L));
+        org.mockito.Mockito.when(consumer.position(partition)).thenReturn(0L);
+        org.mockito.Mockito.when(consumer.poll(org.mockito.ArgumentMatchers.any(java.time.Duration.class)))
+            .thenReturn(ConsumerRecords.empty());
+        MatchingSlotMapReader quietReader = new MatchingSlotMapReader(consumer, 64, TOPIC);
+        quietReader.setRestartIntervalMillis(300L);
+        quietReader.start();
+        awaitUntil(quietReader::isHealthy);
+        long requestedAt = System.nanoTime();
+        quietReader.requestRestart("첫 요청");
+        awaitUntil(() -> !quietReader.isHealthy());
+
+        quietReader.requestRestart("쉬는 동안 다시 온 요청");
+        awaitUntil(quietReader::isHealthy);
+        long unhealthyMillis = (System.nanoTime() - requestedAt) / 1_000_000L;
+
+        assertThat(unhealthyMillis).as("쉬는 간격(300ms) 한 번만 멈춘다. 이미 반영한 요청 때문에 다시 쉬면 600ms를 넘는다").isLessThan(500L);
+        quietReader.close();
+    }
+
     private static void awaitUntil(java.util.function.BooleanSupplier condition) throws InterruptedException {
         long deadline = System.nanoTime() + 3_000_000_000L;
         while (!condition.getAsBoolean() && System.nanoTime() < deadline) {

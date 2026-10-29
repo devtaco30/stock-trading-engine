@@ -251,10 +251,15 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
     }
 
     /** 맵 쓰기를 queue에 넣고 완료 future를 돌려준다. 쓰기 전용 thread는 처음 쓸 때 시작한다. */
-    private java.util.concurrent.CompletableFuture<Void> enqueueMapWrite(int stockSlot, String value, int generation) {
+    java.util.concurrent.CompletableFuture<Void> enqueueMapWrite(int stockSlot, String value, int generation) {
         java.util.concurrent.CompletableFuture<Void> done = new java.util.concurrent.CompletableFuture<>();
         startMapWriteThreadIfNeeded();
         synchronized (this) {
+            if (mapWriteGeneration.get(stockSlot) != generation) {
+                // 잠금을 나와 여기까지 오는 사이에 회수되었다. 옛 세대 쓰기를 대기에 다시 넣으면 이미 담당이 아닌 종목 slot이 멈춤으로 센다.
+                done.complete(null);
+                return done;
+            }
             // 순서 번호를 올리고 대기에 넣는 것을 한 덩어리로 해야, 그 사이에 앞 쓰기의 완료 처리가 새 쓰기를 대기에서 빼지 못한다.
             int seq = mapWriteSeq.incrementAndGet(stockSlot);
             pendingMapWriteSlots.add(stockSlot);

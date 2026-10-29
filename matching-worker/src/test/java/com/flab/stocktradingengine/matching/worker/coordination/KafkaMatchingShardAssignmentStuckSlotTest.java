@@ -355,6 +355,19 @@ class KafkaMatchingShardAssignmentStuckSlotTest {
     }
 
     @Test
+    void 잠금을_나온_사이에_회수된_옛_세대_쓰기는_대기에_넣지_않는다() {
+        build(new ThrowingProducer(0), () -> true);
+        listener.onPartitionsAssigned(partitions(5));
+        assignment.acquireAfterLoad(5);
+        int oldGeneration = 0;
+        listener.onPartitionsRevoked(partitions(5)); // 세대가 올라간다(이동 중 표시 쓰기는 없다: 아직 담당 전)
+
+        assignment.enqueueMapWrite(5, OWN, oldGeneration);
+
+        assertThat(assignment.slotsWaitingForMove()).isEmpty();
+    }
+
+    @Test
     void 맵_읽기가_따라오지_못해_판정하지_못하면_종목_slot_번호가_담긴_ERROR_로그를_남기고_멈춘_개수에_센다() {
         build(new MockProducer<>(true, new IntegerSerializer(), new StringSerializer()), () -> false);
 

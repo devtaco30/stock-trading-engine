@@ -40,6 +40,9 @@ public final class MatchingSlotMapReader {
     // 읽는 thread가 예외로 끝났으면 그 예외. 초기 읽기 대기가 이것을 보고 실패로 끝난다.
     private volatile Throwable failure;
     private volatile boolean restartRequested;
+    private volatile long restartRequestedAtNanos;
+    // 멈췄다가 다시 읽기 시작한 시각. 이보다 먼저 들어온 재시작 요청은 이미 반영된 것으로 본다.
+    private volatile long resumedAtNanos = Long.MIN_VALUE;
     // 읽기가 예외로 멈춘 뒤 다시 시작하기까지의 간격. 근거 없는 임의 값이다.
     private volatile long restartIntervalMillis = 5_000L;
     // 파티션마다 읽어 반영한 다음 위치. 읽는 thread가 poll마다 갱신하고 다른 thread가 따라왔는지 볼 때 읽는다.
@@ -117,6 +120,7 @@ public final class MatchingSlotMapReader {
      */
     public void requestRestart(String reason) {
         log.log(Level.ERROR, "[맵] " + mapTopic + " 읽기 재시작 요청: " + reason);
+        restartRequestedAtNanos = System.nanoTime();
         restartRequested = true;
     }
 
@@ -174,7 +178,10 @@ public final class MatchingSlotMapReader {
                 try {
                     if (restartRequested) {
                         restartRequested = false;
-                        throw new IllegalStateException("재시작 요청을 받음");
+                        if (resumedAtNanos == Long.MIN_VALUE || restartRequestedAtNanos - resumedAtNanos > 0) {
+                            throw new IllegalStateException("재시작 요청을 받음");
+                        }
+                        // 쉬는 동안 들어온 요청이라 이미 반영된 것과 같다.
                     }
                     ConsumerRecords<Integer, String> records = consumer.poll(Duration.ofMillis(500));
                     if (!records.isEmpty()) {
@@ -203,6 +210,7 @@ public final class MatchingSlotMapReader {
                         Thread.currentThread().interrupt();
                         return;
                     }
+                    resumedAtNanos = System.nanoTime();
                 }
             }
         } catch (WakeupException e) {
