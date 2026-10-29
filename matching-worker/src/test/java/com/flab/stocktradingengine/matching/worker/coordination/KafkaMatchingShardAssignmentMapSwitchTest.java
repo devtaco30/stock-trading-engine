@@ -196,20 +196,23 @@ class KafkaMatchingShardAssignmentMapSwitchTest {
 
     @Test
     void 첫_배정_종목_slot은_담당이_켜져도_맵을_다시_쓰지_않는다() {
-        KafkaMatchingShardAssignment first = new KafkaMatchingShardAssignment(mock(Consumer.class),
-            new MockProducer<>(true, new IntegerSerializer(), new StringSerializer()), mock(Admin.class), 64, OWN,
-            "assignment-topic", "map-topic", new SlotEventRequests(), slot -> Optional.empty(), slot -> { });
         MockProducer<Integer, String> producer = new MockProducer<>(true, new IntegerSerializer(), new StringSerializer());
-        KafkaMatchingShardAssignment firstWithProducer = new KafkaMatchingShardAssignment(mock(Consumer.class), producer,
+        KafkaMatchingShardAssignment firstAssignment = new KafkaMatchingShardAssignment(mock(Consumer.class), producer,
             mock(Admin.class), 64, OWN, "assignment-topic", "map-topic", new SlotEventRequests(), slot -> Optional.empty(), slot -> { });
+        try {
+            firstAssignment.rebalanceListener().onPartitionsAssigned(partitions(5));
+            long writesForFive = producer.history().stream().filter(record -> record.key() == 5).count();
+            firstAssignment.confirmAcquired(5);
 
-        firstWithProducer.rebalanceListener().onPartitionsAssigned(partitions(5));
-        int afterAssigned = producer.history().size();
-        firstWithProducer.confirmAcquired(5);
+            // 맵 쓰기는 쓰기 전용 thread 하나가 넣은 순서대로 보낸다. 5번의 잘못된 쓰기가 있었다면 그 뒤에 넣은 7번의 쓰기보다 먼저 나갔으므로,
+            // 7번의 쓰기가 끝난 뒤에는 반드시 기록에 나타나 있다. 회수 콜백은 자기 쓰기가 끝날 때까지 기다린다.
+            firstAssignment.rebalanceListener().onPartitionsRevoked(partitions(7));
 
-        assertThat(producer.history()).hasSize(afterAssigned);
-        first.close();
-        firstWithProducer.close();
+            assertThat(producer.history()).anyMatch(record -> record.key() == 7);
+            assertThat(producer.history().stream().filter(record -> record.key() == 5).count()).isEqualTo(writesForFive);
+        } finally {
+            firstAssignment.close();
+        }
     }
 
     private void awaitHistory(int size) throws InterruptedException {
