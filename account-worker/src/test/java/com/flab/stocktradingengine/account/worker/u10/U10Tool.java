@@ -47,6 +47,11 @@ import io.aeron.driver.ThreadingMode;
  *       서로 다른 매칭 pod가 맡는 종목코드 둘을 {@code X=.. XEND=.. Y=.. YEND=..}로 출력한다. 배정이 덜 됐으면 종료 코드 2.</li>
  *   <li>{@code send <accountIntakeChannel> <accountId> <stockCode> <BUY|SELL> <price> <quantity> <requestId>} —
  *       계좌 워커 주문 입구(스트림 4004)에 주문 한 건을 보낸다. 연결이 안 되면 종료 코드 3.</li>
+ *   <li>{@code codes <stockSlotCount> <splitSlot>} — 종목 slot이 splitSlot 이상인 종목코드 X와 미만인 종목코드 Y를 출력한다
+ *       (Kafka 없이 계산만 한다).</li>
+ *   <li>{@code assigned <kafkaBootstrap> <stockSlotCount>} — 맵 토픽의 종목 slot별 마지막 값을 읽어
+ *       {@code ASSIGNED 배정된 수/전체 MOVING 이동 중인 수 ENDPOINTS 주소=개수,...}를 출력한다.</li>
+ *   <li>{@code map-history <kafkaBootstrap>} — 맵 토픽의 모든 기록을 {@code slot<TAB>CreateTime(ms)<TAB>값} 줄로 출력한다.</li>
  *   <li>{@code dump-account <archiveDir>} — 계좌 워커가 정상 종료할 때 쓴 스냅샷을 줄 단위로 출력한다. 스냅샷이 없으면 종료 코드 2.</li>
  * </ul>
  */
@@ -62,6 +67,9 @@ public final class U10Tool {
             case "pick" -> pick(args[1], Integer.parseInt(args[2]));
             case "send" -> send(args);
             case "dump-account" -> dumpAccount(new File(args[1]));
+            case "codes" -> codes(Integer.parseInt(args[1]), Integer.parseInt(args[2]));
+            case "assigned" -> assigned(args[1], Integer.parseInt(args[2]));
+            case "map-history" -> mapHistory(args[1]);
             default -> {
                 System.err.println("알 수 없는 하위 명령: " + args[0]);
                 System.exit(1);
@@ -116,6 +124,80 @@ public final class U10Tool {
         }
         System.out.println("ONE_ENDPOINT_ONLY");
         System.exit(2);
+    }
+
+
+    private record MapRecord(int slot, long timestamp, String value) {
+    }
+
+    private static List<MapRecord> readMapRecords(String bootstrap) {
+        Properties props = new Properties();
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrap);
+        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, IntegerDeserializer.class.getName());
+        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+        List<MapRecord> records = new ArrayList<>();
+        try (KafkaConsumer<Integer, String> consumer = new KafkaConsumer<>(props)) {
+            List<PartitionInfo> infos = consumer.partitionsFor(MatchingDestinationResolver.MAP_TOPIC, Duration.ofSeconds(10));
+            if (infos == null || infos.isEmpty()) {
+                return records;
+            }
+            List<TopicPartition> partitions = new ArrayList<>();
+            for (PartitionInfo info : infos) {
+                partitions.add(new TopicPartition(MatchingDestinationResolver.MAP_TOPIC, info.partition()));
+            }
+            consumer.assign(partitions);
+            consumer.seekToBeginning(partitions);
+            Map<TopicPartition, Long> ends = consumer.endOffsets(partitions);
+            long deadline = System.currentTimeMillis() + 10_000L;
+            while (System.currentTimeMillis() < deadline && !reachedEnds(consumer, partitions, ends)) {
+                for (ConsumerRecord<Integer, String> record : consumer.poll(Duration.ofMillis(200))) {
+                    records.add(new MapRecord(record.key(), record.timestamp(), record.value()));
+                }
+            }
+        }
+        return records;
+    }
+
+    private static void codes(int stockSlotCount, int splitSlot) {
+        StockSlotHasher hasher = new StockSlotHasher(stockSlotCount);
+        String high = null;
+        String low = null;
+        for (int number = 1; number <= 999_999 && (high == null || low == null); number++) {
+            String code = String.format("%06d", number);
+            int slot = hasher.slotFor(code);
+            if (slot >= splitSlot && high == null) {
+                high = code;
+            } else if (slot < splitSlot && low == null) {
+                low = code;
+            }
+        }
+        System.out.println("X=" + high + " XSLOT=" + hasher.slotFor(high) + " Y=" + low + " YSLOT=" + hasher.slotFor(low));
+    }
+
+    private static void assigned(String bootstrap, int stockSlotCount) {
+        Map<Integer, MatchingSlotTarget> latest = new HashMap<>();
+        for (MapRecord record : readMapRecords(bootstrap)) {
+            if (record.value() == null) {
+                latest.remove(record.slot());
+            } else {
+                latest.put(record.slot(), MatchingSlotTarget.parse(record.value()));
+            }
+        }
+        long moving = latest.values().stream().filter(MatchingSlotTarget::moving).count();
+        Map<String, Integer> perEndpoint = new TreeMap<>();
+        for (MatchingSlotTarget target : latest.values()) {
+            if (!target.moving()) {
+                perEndpoint.merge(target.endpoint(), 1, Integer::sum);
+            }
+        }
+        long steady = perEndpoint.values().stream().mapToInt(Integer::intValue).sum();
+        System.out.println("ASSIGNED " + steady + "/" + stockSlotCount + " MOVING " + moving + " ENDPOINTS " + perEndpoint);
+    }
+
+    private static void mapHistory(String bootstrap) {
+        for (MapRecord record : readMapRecords(bootstrap)) {
+            System.out.println(record.slot() + "\t" + record.timestamp() + "\t" + record.value());
+        }
     }
 
     private static boolean reachedEnds(KafkaConsumer<Integer, String> consumer, List<TopicPartition> partitions,
