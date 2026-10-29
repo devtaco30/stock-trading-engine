@@ -39,6 +39,7 @@ public final class HandoverReceiver implements AutoCloseable {
     private final HandoverAssembler assembler = new HandoverAssembler();
     private final AtomicBoolean running = new AtomicBoolean(false);
     private final AtomicLong discardedMessages = new AtomicLong();
+    private final AtomicLong messageFailures = new AtomicLong();
 
     private Thread thread;
 
@@ -64,7 +65,17 @@ public final class HandoverReceiver implements AutoCloseable {
         }
     }
 
+    /** 메시지 하나가 실패해도 그 메시지만 포기하고 thread는 계속 돈다. */
     private void onMessage(DirectBuffer buffer, int offset, int length, Header header) {
+        try {
+            handleMessage(buffer, offset, length);
+        } catch (RuntimeException e) {
+            messageFailures.incrementAndGet();
+            log.log(Level.ERROR, "[호가창 이동] 응답 메시지 하나를 처리하지 못하고 포기함: " + e);
+        }
+    }
+
+    private void handleMessage(DirectBuffer buffer, int offset, int length) {
         byte[] wire = new byte[length];
         buffer.getBytes(offset, wire);
         HandoverMessage message = HandoverMessage.decode(wire, 0, length);
@@ -81,6 +92,11 @@ public final class HandoverReceiver implements AutoCloseable {
             requester.finish(message.stockSlot(), message.transferId());
             loadSink.onAssembled(message.transferId(), message.stockSlot(), complete.get());
         }
+    }
+
+    /** 처리 중 예외가 나 포기한 응답 메시지 수(깨진 메시지, 적재 요청 실패 등). */
+    public long messageFailures() {
+        return messageFailures.get();
     }
 
     /** 진행 중인 요청과 번호가 달라 버린 응답 메시지 수. */

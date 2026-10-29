@@ -137,6 +137,36 @@ class HandoverTransportIntegrationTest {
     }
 
     @Test
+    void 깨진_요청_하나는_그_요청만_포기하고_응답_thread는_다음_요청을_계속_처리한다() {
+        Publication toX = aeron.addPublication(X_CHANNEL, AeronStreamIds.ORDER_BOOK_REQUEST);
+        awaitConnected(toX);
+        xStore.put(SLOT, List.of(bytes(1, 10)));
+
+        send(toX, new byte[] {1, 2, 3});
+        awaitUntil(() -> xResponder.requestFailures() >= 1);
+        zRequester.request(SLOT).orElseThrow();
+        awaitAssembled(1);
+
+        assertThat(xResponder.requestFailures()).isEqualTo(1);
+        assertThat(assembled.get(0).bodies().get(0)).isEqualTo(bytes(1, 10));
+    }
+
+    @Test
+    void 깨진_응답_하나는_그_메시지만_포기하고_수신_thread는_다음_응답을_계속_처리한다() {
+        xStore.put(SLOT, List.of(bytes(5, 10)));
+        Publication toZ = aeron.addPublication(Z_CHANNEL, AeronStreamIds.ORDER_BOOK_RESPONSE);
+        awaitConnected(toZ);
+
+        send(toZ, new byte[] {1, 2, 3});
+        awaitUntil(() -> zReceiver.messageFailures() >= 1);
+        zRequester.request(SLOT).orElseThrow();
+        awaitAssembled(1);
+
+        assertThat(zReceiver.messageFailures()).isEqualTo(1);
+        assertThat(assembled.get(0).bodies().get(0)).isEqualTo(bytes(5, 10));
+    }
+
+    @Test
     void X에_보관한_바이트가_없으면_응답하지_않고_세어_둔다() {
         zRequester.request(SLOT).orElseThrow();
 

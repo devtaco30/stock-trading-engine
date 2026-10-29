@@ -48,6 +48,7 @@ public final class HandoverResponder implements AutoCloseable {
     private final AtomicLong requestsWithoutBook = new AtomicLong();
     private final AtomicLong requestsRejectedByPool = new AtomicLong();
     private final AtomicLong responsesAbandoned = new AtomicLong();
+    private final AtomicLong requestFailures = new AtomicLong();
 
     private Thread thread;
 
@@ -75,7 +76,17 @@ public final class HandoverResponder implements AutoCloseable {
         }
     }
 
+    /** 요청 하나가 실패해도 그 요청만 포기하고 thread는 계속 돈다. */
     private void onRequest(DirectBuffer buffer, int offset, int length, Header header) {
+        try {
+            handleRequest(buffer, offset, length);
+        } catch (RuntimeException e) {
+            requestFailures.incrementAndGet();
+            log.log(Level.ERROR, "[호가창 이동] 요청 하나를 처리하지 못하고 포기함: " + e);
+        }
+    }
+
+    private void handleRequest(DirectBuffer buffer, int offset, int length) {
         byte[] wire = new byte[length];
         buffer.getBytes(offset, wire);
         HandoverRequest request = HandoverRequest.decode(wire, 0, length);
@@ -116,6 +127,11 @@ public final class HandoverResponder implements AutoCloseable {
     /** 응답 주소가 풀에 없어 버린 요청 횟수. */
     public long requestsRejectedByPool() {
         return requestsRejectedByPool.get();
+    }
+
+    /** 처리 중 예외가 나 포기한 요청 횟수(깨진 요청, 닫힌 Publication 등). */
+    public long requestFailures() {
+        return requestFailures.get();
     }
 
     /** 마감 안에 보내지 못해 포기한 응답 횟수. */
