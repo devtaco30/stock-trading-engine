@@ -59,6 +59,27 @@ class MatchingNodeIdTest {
     }
 
     @Test
+    void 조정_모드가_켜져_있는데_신원_이름이_없으면_기동_예외다() {
+        contextRunner
+            .withPropertyValues("matching-shard.coordination.enabled=true", "snowflake.node-id=11")
+            .run(context -> assertThat(context).hasFailed());
+    }
+
+    @Test
+    void 조정_모드가_켜져_있고_신원_이름이_있으면_정상_기동한다() {
+        contextRunner
+            .withPropertyValues("matching-shard.coordination.enabled=true", "matching-worker.instance-id=matching-1")
+            .run(context -> assertThat(context).hasNotFailed());
+    }
+
+    @Test
+    void 조정_모드가_꺼져_있으면_신원_이름이_없어도_기존_동작이다() {
+        contextRunner
+            .withPropertyValues("matching-shard.coordination.enabled=false", "snowflake.node-id=11")
+            .run(context -> assertThat(context).hasNotFailed());
+    }
+
+    @Test
     void application_yml에_node_id_기본값이_남아_있지_않다() throws Exception {
         try (InputStream stream = getClass().getResourceAsStream("/application.yml")) {
             String yml = new String(stream.readAllBytes(), StandardCharsets.UTF_8);

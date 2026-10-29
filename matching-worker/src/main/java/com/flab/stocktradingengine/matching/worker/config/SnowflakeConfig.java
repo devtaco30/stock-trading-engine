@@ -17,7 +17,8 @@ import com.flab.stocktradingengine.support.SnowflakeNodeIdResolver;
  * ({@code matching-worker.instance-id}, Kafka 그룹의 {@code group.instance.id}와 같은 값)이 있으면 그
  * 끝 순번에 {@link #NODE_ID_BASE}를 더한 값이다. 매칭 shard마다 신원이 다르므로 서버 번호도 다르고,
  * 재시작해도 같은 신원이면 같은 번호다. 신원 이름이 없으면(단일 워커 실행) 예전처럼
- * {@code snowflake.node-id} 설정, 그것도 없으면 호스트명으로 정한다.
+ * {@code snowflake.node-id} 설정, 그것도 없으면 호스트명으로 정한다. 매칭 shard를 여럿 띄우는 조정 모드에서는
+ * 신원 이름이 없으면 기동을 막는다(서버 번호가 겹치면 계좌 워커가 서로 다른 체결을 중복으로 보고 무시한다).
  */
 @Configuration
 public class SnowflakeConfig {
@@ -30,8 +31,14 @@ public class SnowflakeConfig {
     @Bean
     public SnowflakeIdGenerator snowflakeIdGenerator(
         @Value("${matching-worker.instance-id:}") String instanceId,
-        @Value("${snowflake.node-id:}") String nodeIdConfig
+        @Value("${snowflake.node-id:}") String nodeIdConfig,
+        @Value("${matching-shard.coordination.enabled:false}") boolean coordinationEnabled
     ) {
+        if (coordinationEnabled && instanceId.isBlank()) {
+            throw new IllegalStateException(
+                "조정 모드(matching-shard.coordination.enabled=true)에서는 matching-worker.instance-id가 필요하다 — "
+                    + "신원 이름이 없으면 매칭 shard끼리 서버 번호가 겹쳐 서로 다른 체결이 같은 tradeId로 발급될 수 있다");
+        }
         long nodeId = instanceId.isBlank()
             ? SnowflakeNodeIdResolver.resolve(nodeIdConfig)
             : nodeIdFromInstanceId(instanceId);
