@@ -138,7 +138,9 @@ public class MatchingShardOwnershipConfig {
             ObjectProvider<MapSync> mapSync,
             @Value("${matching-shard.rebalance.map-write-deadline-ms:30000}") long mapWriteDeadlineMillis,
             // 같은 맵 쓰기가 브로커 오류로 연속 이만큼 실패하면 ERROR를 남기고 queue 뒤로 보낸다. 기본값 60번은 근거 없는 임의 값이다(미측정).
-            @Value("${matching-shard.rebalance.map-write-failure-limit:60}") int mapWriteFailureLimit) {
+            @Value("${matching-shard.rebalance.map-write-failure-limit:60}") int mapWriteFailureLimit,
+            // 맵 읽기가 늦어 건너뛴 판정을 다시 하는 간격. 기본값 10초는 근거 없는 임의 값이다(미측정).
+            @Value("${matching-shard.coordination.decision-retry-interval-ms:10000}") long decisionRetryMillis) {
         String instanceId = resolveInstanceId(instanceIdConfig, orderEndpoint);
         log.info("[매칭] 담당 종목 slot 소스: Kafka 컨슈머 그룹 배정({}) — 신원={} 주문 입구={} session.timeout.ms={}",
             KafkaMatchingShardAssignment.GROUP_ID, instanceId, orderEndpoint, sessionTimeoutMs);
@@ -172,6 +174,7 @@ public class MatchingShardOwnershipConfig {
         assignmentRef.set(assignment);
         assignment.setMapWriteDeadlineMillis(mapWriteDeadlineMillis);
         assignment.setMapWriteFailureLimit(mapWriteFailureLimit);
+        assignment.setDecisionRetryMillis(decisionRetryMillis);
         return assignment;
     }
 

@@ -99,6 +99,14 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
     // 보내는 호출이 예외를 던지는 쓰기를 포기하기까지의 시도 횟수. 근거 없는 임의 값이다.
     private static final int MAP_WRITE_RUNTIME_ATTEMPTS = 5;
     private volatile long mapWriteRetryMillis = 1_000L;
+    // 맵 읽기가 늦어 건너뛴 판정을 다시 하는 간격. 첫 배정 판정과 섞이지 않게 전용 실행기에서 돈다. 근거 없는 임의 값이다.
+    private volatile long decisionRetryMillis = 10_000L;
+    private final java.util.concurrent.ScheduledExecutorService redecisionExecutor =
+        java.util.concurrent.Executors.newSingleThreadScheduledExecutor(runnable -> {
+            Thread thread = new Thread(runnable, "matching-shard-redecision");
+            thread.setDaemon(true);
+            return thread;
+        });
     // 브로커 오류로 연속 실패해 쓰기를 queue 뒤로 보내기까지의 횟수. 근거 없는 임의 값(60번, 재시도 간격 1초면 약 1분)이다.
     private volatile int mapWriteFailureLimit = 60;
     // 콜백(회수·첫 배정)이 자기 맵 쓰기의 완료를 기다리는 한도. 넘기면 ERROR 로그를 남기고 콜백은 돌아간다(쓰기 thread는 계속 재시도한다).
@@ -328,6 +336,11 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
         this.mapWriteDeadlineMillis = millis;
     }
 
+    /** 맵 읽기가 늦어 건너뛴 판정을 다시 시도하는 간격. 값을 정한 근거는 없다(미측정). */
+    public void setDecisionRetryMillis(long millis) {
+        this.decisionRetryMillis = millis;
+    }
+
     /** 같은 맵 쓰기가 브로커 오류로 연속 이만큼 실패하면 ERROR를 남기고 queue 뒤로 보낸다. 값을 정한 근거는 없다(미측정). */
     public void setMapWriteFailureLimit(int limit) {
         this.mapWriteFailureLimit = limit;
@@ -397,6 +410,7 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
         if (writer != null) {
             writer.interrupt();
         }
+        redecisionExecutor.shutdownNow();
         mapWriteQueue.forEach(write -> write.done().completeExceptionally(new IllegalStateException("닫힘")));
         mapProducer.close();
         adminClient.close();
@@ -527,12 +541,38 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
 
     private enum Kind { MOVED_IN, SELF_RESTART, FIRST }
 
+    /** 아직 판정을 기다리는 종목 slot만 골라 간격 뒤에 전용 실행기에서 다시 판정한다. 그 사이 회수된 종목 slot은 판정하지 않는다. */
+    private void scheduleRedecision(List<Integer> slots) {
+        List<Integer> stillWaiting = slots.stream().filter(awaitingDecision::contains).toList();
+        if (stillWaiting.isEmpty() || !running && redecisionExecutor.isShutdown()) {
+            return;
+        }
+        try {
+            redecisionExecutor.schedule(() -> decide(stillWaiting), decisionRetryMillis, java.util.concurrent.TimeUnit.MILLISECONDS);
+        } catch (java.util.concurrent.RejectedExecutionException e) {
+            // 닫는 중이다.
+        }
+    }
+
     /** 판정 thread에서 돈다. 맵 읽기가 따라온 뒤 종목 slot마다 이동으로 받는지, 재시작인지, 첫 배정인지 가른다. */
     private void decide(List<Integer> slots) {
-        if (mapSync != null && !mapSync.awaitCaughtUp()) {
-            log.log(Level.ERROR, "[매칭] 맵 읽기가 시간 안에 맵 토픽의 끝까지 따라오지 못해 이동으로 받는지 판정하지 못함 — "
-                + "첫 배정으로 가정하지 않고 담당을 켜지 않은 채 둔다: 종목 slot=" + slots);
-            return;
+        if (mapSync != null) {
+            boolean ready;
+            if (!mapSync.healthy()) {
+                // 읽기가 멈춘 동안은 따라오기를 기다려도 소용없다. 판정 thread를 막지 않고 다음 간격으로 미룬다.
+                log.log(Level.ERROR, "[매칭] 맵 읽기가 멈춰 있어 이동으로 받는지 판정을 미룸 — 첫 배정으로 가정하지 않고 담당을 켜지 않은 채 둔다: 종목 slot=" + slots);
+                ready = false;
+            } else {
+                ready = mapSync.awaitCaughtUp();
+                if (!ready) {
+                    log.log(Level.ERROR, "[매칭] 맵 읽기가 시간 안에 맵 토픽의 끝까지 따라오지 못해 이동으로 받는지 판정하지 못함 — "
+                        + "첫 배정으로 가정하지 않고 담당을 켜지 않은 채 둔다: 종목 slot=" + slots);
+                }
+            }
+            if (!ready) {
+                scheduleRedecision(slots);
+                return;
+            }
         }
         List<Integer> toRequest = new java.util.ArrayList<>();
         List<Integer> toAcquire = new java.util.ArrayList<>();

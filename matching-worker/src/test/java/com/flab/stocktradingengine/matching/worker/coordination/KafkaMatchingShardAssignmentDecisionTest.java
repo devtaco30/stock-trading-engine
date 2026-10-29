@@ -50,6 +50,8 @@ class KafkaMatchingShardAssignmentDecisionTest {
     private final List<Runnable> deferredDecisions = new ArrayList<>();
     private final AtomicReference<Optional<MatchingSlotTarget>> mapEntry = new AtomicReference<>(Optional.empty());
     private final AtomicReference<Boolean> caughtUp = new AtomicReference<>(true);
+    private final AtomicReference<Boolean> mapReaderHealthy = new AtomicReference<>(true);
+    private final java.util.concurrent.atomic.AtomicInteger awaitCalls = new java.util.concurrent.atomic.AtomicInteger();
     private final List<String> order = new CopyOnWriteArrayList<>();
     private MatchingEngine engine;
     private KafkaMatchingShardAssignment assignment;
@@ -83,9 +85,18 @@ class KafkaMatchingShardAssignmentDecisionTest {
             order.add("lookup");
             return mapEntry.get();
         };
-        MapSync mapSync = () -> {
-            order.add("sync");
-            return caughtUp.get();
+        MapSync mapSync = new MapSync() {
+            @Override
+            public boolean awaitCaughtUp() {
+                order.add("sync");
+                awaitCalls.incrementAndGet();
+                return caughtUp.get();
+            }
+
+            @Override
+            public boolean healthy() {
+                return mapReaderHealthy.get();
+            }
         };
         Executor executor = task -> {
             if (deferDecisions) {
@@ -96,6 +107,7 @@ class KafkaMatchingShardAssignmentDecisionTest {
         };
         assignment = new KafkaMatchingShardAssignment(mock(Consumer.class), mapProducer, mock(Admin.class), 64, OWN,
             "assignment-topic", "map-topic", requests, lookup, movedSlotRequests, mapSync, executor);
+        assignment.setDecisionRetryMillis(40L);
         listener = assignment.rebalanceListener();
     }
 
@@ -138,6 +150,50 @@ class KafkaMatchingShardAssignmentDecisionTest {
         assertThat(order.get(0)).isEqualTo("sync");
         assertThat(order).contains("lookup");
         assertThat(handoverRequested).containsExactly(5);
+    }
+
+    @Test
+    void 맵_읽기가_늦은_상태에서_판정이_건너뛰어진_뒤_간격이_지나_맵이_따라오면_그_종목_slot이_판정된다() throws Exception {
+        caughtUp.set(false);
+        mapEntry.set(Optional.of(new MatchingSlotTarget(PREVIOUS_OWNER, true)));
+        listener.onPartitionsAssigned(partitions(5));
+        Thread.sleep(150);
+        assertThat(handoverRequested).as("따라오지 못하는 동안은 판정하지 않는다").isEmpty();
+        assertThat(assignment.stuckSlotCount()).isEqualTo(1);
+
+        caughtUp.set(true); // 맵 읽기가 따라왔다
+
+        awaitUntil(() -> handoverRequested.contains(5));
+        assertThat(assignment.stuckSlotCount()).isEqualTo(1); // 이제 호가창 적재를 기다린다
+        assertThat(assignment.slotsAwaitingDecision()).isEmpty();
+    }
+
+    @Test
+    void 맵_읽기가_건강하지_않으면_따라오기를_기다리지_않고_다음_간격으로_미룬다() throws Exception {
+        mapReaderHealthy.set(false);
+        mapEntry.set(Optional.of(new MatchingSlotTarget(PREVIOUS_OWNER, true)));
+
+        listener.onPartitionsAssigned(partitions(5));
+        Thread.sleep(200);
+
+        assertThat(awaitCalls.get()).as("죽은 읽기를 최대 10초씩 기다리며 판정 thread를 막지 않는다").isZero();
+        assertThat(handoverRequested).isEmpty();
+
+        mapReaderHealthy.set(true);
+        awaitUntil(() -> handoverRequested.contains(5));
+    }
+
+    @Test
+    void 판정을_기다리는_중_회수된_종목_slot은_다시_판정하지_않는다() throws Exception {
+        caughtUp.set(false);
+        mapEntry.set(Optional.of(new MatchingSlotTarget(PREVIOUS_OWNER, true)));
+        listener.onPartitionsAssigned(partitions(5));
+        listener.onPartitionsRevoked(partitions(5));
+
+        caughtUp.set(true);
+        Thread.sleep(200);
+
+        assertThat(handoverRequested).isEmpty();
     }
 
     @Test
@@ -210,6 +266,14 @@ class KafkaMatchingShardAssignmentDecisionTest {
 
         assertThat(mapProducer.history()).extracting(record -> record.value()).contains(OWN + ";moving");
         assertThat(handoverCancelled).isEmpty();
+    }
+
+    private static void awaitUntil(java.util.function.BooleanSupplier condition) throws InterruptedException {
+        long deadline = System.nanoTime() + 3_000_000_000L;
+        while (!condition.getAsBoolean() && System.nanoTime() < deadline) {
+            Thread.sleep(5);
+        }
+        assertThat(condition.getAsBoolean()).as("3초 안에 조건이 충족되지 않음").isTrue();
     }
 
     private void awaitCleaned(int count) throws InterruptedException {

@@ -118,7 +118,7 @@ public class MatchingHandoverConfig {
                 throw new IllegalStateException("맵 토픽 끝 위치 조회 중 인터럽트됨", e);
             }
         };
-        return new MapSyncResources(new MapCatchUpWaiter(endOffset, () -> reader.consumedOffset(0), timeoutMillis), admin);
+        return new MapSyncResources(new MapCatchUpWaiter(endOffset, () -> reader.consumedOffset(0), timeoutMillis), admin, reader::isHealthy);
     }
 
     /** 판정 대기 장치와 그것이 쓰는 Admin을 같이 닫기 위한 묶음. */
@@ -126,9 +126,17 @@ public class MatchingHandoverConfig {
         private final MapSync delegate;
         private final org.apache.kafka.clients.admin.Admin admin;
 
-        MapSyncResources(MapSync delegate, org.apache.kafka.clients.admin.Admin admin) {
+        private final java.util.function.BooleanSupplier healthy;
+
+        MapSyncResources(MapSync delegate, org.apache.kafka.clients.admin.Admin admin, java.util.function.BooleanSupplier healthy) {
             this.delegate = delegate;
             this.admin = admin;
+            this.healthy = healthy;
+        }
+
+        @Override
+        public boolean healthy() {
+            return healthy.getAsBoolean();
         }
 
         @Override
