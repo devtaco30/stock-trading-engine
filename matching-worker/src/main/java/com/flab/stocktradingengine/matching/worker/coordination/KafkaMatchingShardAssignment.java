@@ -233,7 +233,13 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
             boolean[] updated = ownedSlotFlags.clone();
             updated[stockSlot] = true;
             ownedSlotFlags = updated;
-            switchMapAfterAcquire = awaitingMapSwitch.remove(stockSlot);
+            switchMapAfterAcquire = awaitingMapSwitch.contains(stockSlot);
+            if (switchMapAfterAcquire) {
+                // 맵 전환 쓰기를 넣기 전에 대기 집합에서 빠지는 틈이 없도록 쓰기 대기에 먼저 넣고 나서 맵 전환 대기에서 뺀다. 멈춤 신호는
+                // slotsWaitingForMove가 같은 잠금 안에서 복사하므로 항상 어느 한 집합에는 있다.
+                pendingMapWriteSlots.add(stockSlot);
+                awaitingMapSwitch.remove(stockSlot);
+            }
             movedInAcquiring.remove(stockSlot);
             generation = mapWriteGeneration.get(stockSlot);
         }
@@ -248,8 +254,12 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
     private java.util.concurrent.CompletableFuture<Void> enqueueMapWrite(int stockSlot, String value, int generation) {
         java.util.concurrent.CompletableFuture<Void> done = new java.util.concurrent.CompletableFuture<>();
         startMapWriteThreadIfNeeded();
-        pendingMapWriteSlots.add(stockSlot);
-        mapWriteQueue.add(new MapWrite(stockSlot, value, generation, mapWriteSeq.incrementAndGet(stockSlot), done));
+        synchronized (this) {
+            // 순서 번호를 올리고 대기에 넣는 것을 한 덩어리로 해야, 그 사이에 앞 쓰기의 완료 처리가 새 쓰기를 대기에서 빼지 못한다.
+            int seq = mapWriteSeq.incrementAndGet(stockSlot);
+            pendingMapWriteSlots.add(stockSlot);
+            mapWriteQueue.add(new MapWrite(stockSlot, value, generation, seq, done));
+        }
         return done;
     }
 
@@ -277,7 +287,7 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
     }
 
     /** 쓰기가 끝났다(성공, 버림, 포기). 그 종목 slot에 더 새로운 쓰기가 남아 있지 않을 때만 대기에서 뺀다. */
-    private void finishMapWrite(MapWrite write) {
+    private synchronized void finishMapWrite(MapWrite write) {
         if (mapWriteSeq.get(write.stockSlot()) == write.seq()) {
             pendingMapWriteSlots.remove(write.stockSlot());
         }
@@ -348,6 +358,7 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
                     }
                 }
             } catch (InterruptedException e) {
+                // 종료 중이다. 이 경로는 대기 집합을 정리하지 않는다(종료 뒤에는 읽는 쪽도 없다).
                 write.done().completeExceptionally(e);
                 return;
             }
@@ -478,6 +489,9 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
                 updated[slot] = false;
                 mapWriteGeneration.incrementAndGet(slot);
                 abandonedMapWrites.remove(slot);
+                // 회수·lost된 종목 slot의 옛 쓰기는 queue에서 꺼내질 때까지 남는다. 쓰기 thread가 다른 종목 slot에서 막혀 있어도 이미 담당이
+                // 아닌 종목 slot을 멈춤으로 세지 않도록 여기서 뺀다. 이어서 넣는 「;moving」 쓰기는 enqueue가 다시 넣는다.
+                pendingMapWriteSlots.remove(slot);
                 boolean wasDeciding = awaitingDecision.remove(slot);
                 boolean wasLoading = awaitingLoad.remove(slot);
                 boolean wasAcquiringMovedIn = movedInAcquiring.remove(slot);

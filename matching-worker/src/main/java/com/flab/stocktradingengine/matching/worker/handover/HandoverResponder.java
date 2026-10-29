@@ -50,6 +50,7 @@ public final class HandoverResponder implements AutoCloseable {
     private final AtomicLong requestsAfterCleanup = new AtomicLong();
     // 같은 종목 slot의 보관 없음 로그를 10초에 한 번으로 줄인다(근거 없는 임의 간격). 카운터는 건너뛴 로그와 무관하게 센다.
     private final RateLimitedLog noBookLog = new RateLimitedLog(10_000L);
+    private final RateLimitedLog afterCleanupLog = new RateLimitedLog(10_000L);
     private final AtomicLong requestsWithoutBook = new AtomicLong();
     private final AtomicLong requestsRejectedByPool = new AtomicLong();
     private final AtomicLong responsesAbandoned = new AtomicLong();
@@ -125,15 +126,17 @@ public final class HandoverResponder implements AutoCloseable {
         }
         Optional<List<byte[]>> stored = store.get(request.stockSlot());
         if (stored.isEmpty()) {
-            int suppressed = noBookLog.tryAcquire(request.stockSlot());
-            String suffix = suppressed > 0 ? " (같은 로그 " + suppressed + "건을 건너뜀)" : "";
             if (store.wasRemoved(request.stockSlot())) {
                 requestsAfterCleanup.incrementAndGet();
+                int suppressed = afterCleanupLog.tryAcquire(request.stockSlot());
+                String suffix = suppressed > 0 ? " (같은 로그 " + suppressed + "건을 건너뜀)" : "";
                 if (suppressed >= 0) {
                     log.log(Level.INFO, "[호가창 이동] 정리한 뒤 늦게 도착한 요청이라 응답하지 않음: " + request + suffix);
                 }
             } else {
                 requestsWithoutBook.incrementAndGet();
+                int suppressed = noBookLog.tryAcquire(request.stockSlot());
+                String suffix = suppressed > 0 ? " (같은 로그 " + suppressed + "건을 건너뜀)" : "";
                 if (suppressed >= 0) {
                     log.log(Level.WARNING, "[호가창 이동] 보관한 호가창이 없어 응답하지 못함: " + request + suffix);
                 }

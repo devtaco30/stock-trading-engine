@@ -288,6 +288,7 @@ class KafkaMatchingShardAssignmentStuckSlotTest {
         assertThat(valuesForFive.get(valuesForFive.size() - 1)).as("마지막으로 쓴 값이 담당 pod 자신의 평상시 값이다").isEqualTo(OWN);
         assertThat(valuesForFive).as("옛 「;moving」 쓰기는 더 새로운 쓰기가 있으면 버려진다").noneMatch(value -> value.endsWith(";moving"));
         assertThat(assignment.stuckSlotCount()).as("새 쓰기가 성공했으니 맵은 맞고 멈춘 것이 아니다").isZero();
+        assertThat(assignment.slotsWaitingForMove()).as("버려진 옛 쓰기와 성공한 새 쓰기 모두 대기에서 빠진다").isEmpty();
     }
 
     @Test
@@ -315,6 +316,42 @@ class KafkaMatchingShardAssignmentStuckSlotTest {
         Thread.sleep(100);
 
         assertThat(assignment.slotsWaitingForMove()).containsExactly(5);
+    }
+
+    @Test
+    void 쓰기가_성공하면_이동_대기에서_빠진다() throws Exception {
+        build(new ThrowingProducer(0), () -> true);
+        assignment.setMapWriteRetryMillis(10L);
+        listener.onPartitionsAssigned(partitions(5));
+        assignment.acquireAfterLoad(5);
+
+        assignment.confirmAcquired(5);
+
+        long deadline = System.nanoTime() + 3_000_000_000L;
+        while (!assignment.slotsWaitingForMove().isEmpty() && System.nanoTime() < deadline) {
+            Thread.sleep(5);
+        }
+        assertThat(assignment.slotsWaitingForMove()).isEmpty();
+    }
+
+    @Test
+    void 쓰기_thread가_다른_종목_slot에서_막혀_있어도_잃은_종목_slot의_밀린_쓰기는_이동_대기에서_빠진다() throws Exception {
+        ThrowingProducer producer = new ThrowingProducer(0);
+        producer.brokerFailForSlot = 7;
+        build(producer, () -> true);
+        assignment.setMapWriteRetryMillis(10L);
+        assignment.setMapWriteFailureLimit(1_000_000);
+        listener.onPartitionsAssigned(partitions(5, 7));
+        assignment.acquireAfterLoad(5);
+        assignment.acquireAfterLoad(7);
+        assignment.confirmAcquired(7); // 이 쓰기가 계속 실패하며 쓰기 thread를 붙잡는다
+        assignment.confirmAcquired(5); // 5의 쓰기는 7의 뒤에 queue에서 기다린다
+        Thread.sleep(100);
+        assertThat(assignment.slotsWaitingForMove()).containsExactlyInAnyOrder(5, 7);
+
+        listener.onPartitionsLost(partitions(5));
+
+        assertThat(assignment.slotsWaitingForMove()).as("이미 담당이 아닌 종목 slot을 멈춤으로 세지 않는다").containsExactly(7);
     }
 
     @Test

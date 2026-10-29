@@ -16,7 +16,7 @@ public final class RateLimitedLog {
 
     private final long intervalMillis;
     private final LongSupplier nowMillis;
-    private final Map<Integer, State> states = new ConcurrentHashMap<>();
+    private final Map<Long, State> states = new ConcurrentHashMap<>();
 
     public RateLimitedLog(long intervalMillis, LongSupplier nowMillis) {
         this.intervalMillis = intervalMillis;
@@ -30,7 +30,7 @@ public final class RateLimitedLog {
     /**
      * @return 지금 내보내도 되면 직전에 내보낸 뒤 건너뛴 횟수(0 이상), 간격 안이라 건너뛰어야 하면 -1
      */
-    public int tryAcquire(int key) {
+    public int tryAcquire(long key) {
         long now = nowMillis.getAsLong();
         int[] result = new int[1];
         states.compute(key, (k, state) -> {
