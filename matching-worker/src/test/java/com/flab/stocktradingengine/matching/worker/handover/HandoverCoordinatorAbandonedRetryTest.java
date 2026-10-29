@@ -160,6 +160,43 @@ class HandoverCoordinatorAbandonedRetryTest {
         awaitUntil(() -> port.requestedTransferIds.size() >= 2);
     }
 
+    @Test
+    void 같은_종목_slot의_포기_ERROR는_로그_간격_안에는_한_번만_남긴다() throws Exception {
+        java.util.logging.Logger julLogger = java.util.logging.Logger.getLogger(HandoverCoordinator.class.getName());
+        List<java.util.logging.LogRecord> errors = new CopyOnWriteArrayList<>();
+        java.util.logging.Handler handler = new java.util.logging.Handler() {
+            @Override
+            public void publish(java.util.logging.LogRecord record) {
+                if (record.getLevel().intValue() >= java.util.logging.Level.SEVERE.intValue()) {
+                    errors.add(record);
+                }
+            }
+
+            @Override
+            public void flush() {
+            }
+
+            @Override
+            public void close() {
+            }
+        };
+        julLogger.addHandler(handler);
+        try {
+            FakePort port = new FakePort();
+            coordinator = new HandoverCoordinator(port, RETRY_MILLIS, 100L, 60L); // 포기와 재요청이 빠르게 반복된다
+            coordinator.setLogIntervalMillis(60_000L);
+            coordinator.start();
+            coordinator.requestHandover(5);
+
+            awaitUntil(() -> coordinator.failures() >= 4);
+
+            assertThat(errors).as("포기는 여러 번이지만 같은 종목 slot의 ERROR는 로그 간격 안에 한 번").hasSize(1);
+            assertThat(errors.get(0).getMessage()).contains("종목 slot=5");
+        } finally {
+            julLogger.removeHandler(handler);
+        }
+    }
+
     private static void awaitUntil(java.util.function.BooleanSupplier condition) throws InterruptedException {
         long deadline = System.nanoTime() + 3_000_000_000L;
         while (!condition.getAsBoolean() && System.nanoTime() < deadline) {

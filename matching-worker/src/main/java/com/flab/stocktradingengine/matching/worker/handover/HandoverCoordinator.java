@@ -64,6 +64,7 @@ public final class HandoverCoordinator implements MovedSlotRequests, AutoCloseab
     private final Map<Integer, Tracked> tracked = new HashMap<>();
     // 포기한 종목 slot과 다시 요청할 시각. tracked와 겹치지 않는다. 전용 thread만 쓴다.
     private final Map<Integer, Long> abandoned = new HashMap<>();
+    private volatile RateLimitedLog abandonLog = new RateLimitedLog(10_000L);
     private final AtomicLong failures = new AtomicLong();
 
     private volatile boolean running;
@@ -123,6 +124,11 @@ public final class HandoverCoordinator implements MovedSlotRequests, AutoCloseab
     public void cancelHandover(int stockSlot) {
         commands.add(new Command(true, stockSlot));
         port.cancel(stockSlot); // 진행 중 응답이 즉시 버려지게, 추적 정리는 전용 thread가 한다
+    }
+
+    /** 같은 종목 slot의 포기 ERROR를 다시 남기는 간격. 기본 10초는 근거 없는 임의 값이다. */
+    public void setLogIntervalMillis(long millis) {
+        this.abandonLog = new RateLimitedLog(millis);
     }
 
     /** 재요청 직전에 그 종목 slot이 아직 호가창 적재를 기다리는지 알려 주는 곳을 정한다. */
@@ -263,9 +269,13 @@ public final class HandoverCoordinator implements MovedSlotRequests, AutoCloseab
                     if (abandonedRetryIntervalNanos > 0) {
                         abandoned.put(stockSlot, now + abandonedRetryIntervalNanos);
                     }
-                    log.log(Level.ERROR, "[호가창 이동] 응답을 " + TimeUnit.NANOSECONDS.toMillis(responseTimeoutNanos)
-                        + "ms 안에 완성하지 못해 이동을 실패로 끝냄 — 담당을 켜지 않은 채 두고 맵은 이전 담당의 이동 중 값 그대로이며 빈 호가창으로 시작하지 않는다: 종목 slot="
-                        + stockSlot);
+                    int suppressed = abandonLog.tryAcquire(stockSlot);
+                    if (suppressed >= 0) {
+                        log.log(Level.ERROR, "[호가창 이동] 응답을 " + TimeUnit.NANOSECONDS.toMillis(responseTimeoutNanos)
+                            + "ms 안에 완성하지 못해 이동을 실패로 끝냄 — 담당을 켜지 않은 채 두고 맵은 이전 담당의 이동 중 값 그대로이며 빈 호가창으로 시작하지 않는다"
+                            + (abandonedRetryIntervalNanos > 0 ? "(" + TimeUnit.NANOSECONDS.toMillis(abandonedRetryIntervalNanos) + "ms 뒤 다시 요청함)" : "")
+                            + ": 종목 slot=" + stockSlot + (suppressed > 0 ? " (같은 로그 " + suppressed + "건을 건너뜀)" : ""));
+                    }
                     continue;
                 }
                 if (now - entry.lastSentAtNanos >= retryIntervalNanos) {

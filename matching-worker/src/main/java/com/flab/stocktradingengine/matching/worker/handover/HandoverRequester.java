@@ -44,6 +44,9 @@ public final class HandoverRequester implements AutoCloseable, HandoverRequestPo
     }
 
     private final Map<Integer, Sent> sentBySlot = new ConcurrentHashMap<>();
+    // 같은 종목 slot의 반복 로그를 10초에 한 번으로 줄인다(근거 없는 임의 간격). 연결된 채 응답하지 못하는 이전 담당에게 종목 slot마다 초당 재요청이 나간다.
+    private final RateLimitedLog resendLog = new RateLimitedLog(10_000L);
+    private final RateLimitedLog notConnectedLog = new RateLimitedLog(10_000L);
     // 종목 slot별로 취소된 횟수. 응답을 완성해 적재를 요청하는 동안 취소가 끼었는지 앞뒤 값을 비교해 알아낸다.
     private final Map<Integer, java.util.concurrent.atomic.AtomicInteger> cancelGenerations = new ConcurrentHashMap<>();
     // 응답이 완성되지 않은 채 끝난 이동(취소, 새 요청으로 대체)의 이동 번호를 알린다. 응답 일부만 모아 둔 조립 상태를 지우는 데 쓴다.
@@ -80,7 +83,11 @@ public final class HandoverRequester implements AutoCloseable, HandoverRequestPo
         }
         if (!publication.isConnected()) {
             // 이전 담당이 구독하고 있지 않으면 offer를 마감까지 재시도하며 단일 coordinator thread를 붙잡는다. 바로 실패로 돌려 다음 간격에 다시 한다.
-            log.log(Level.WARNING, "[호가창 이동] 이전 담당 " + previousOwner + "와 연결되지 않아 요청을 보내지 않음: 종목 slot=" + stockSlot);
+            int suppressed = notConnectedLog.tryAcquire(stockSlot);
+            if (suppressed >= 0) {
+                log.log(Level.WARNING, "[호가창 이동] 이전 담당 " + previousOwner + "와 연결되지 않아 요청을 보내지 않음: 종목 slot=" + stockSlot
+                    + (suppressed > 0 ? " (같은 로그 " + suppressed + "건을 건너뜀)" : ""));
+            }
             return Optional.empty();
         }
         long transferId = (nodeId << 53) | counter.incrementAndGet();
@@ -139,8 +146,11 @@ public final class HandoverRequester implements AutoCloseable, HandoverRequestPo
         long deadline = System.nanoTime() + SEND_DEADLINE_NANOS;
         boolean offered = OfferSupport.offerWithDeadline(sent.publication(), new UnsafeBuffer(sent.wire()), sent.wire().length, deadline);
         if (offered) {
-            log.log(Level.INFO, "[호가창 이동] 요청 다시 보냄: 이동 번호=" + sent.transferId() + " 종목 slot=" + stockSlot
-                + " 이전 담당=" + sent.previousOwner());
+            int suppressed = resendLog.tryAcquire(stockSlot);
+            if (suppressed >= 0) {
+                log.log(Level.INFO, "[호가창 이동] 요청 다시 보냄: 이동 번호=" + sent.transferId() + " 종목 slot=" + stockSlot
+                    + " 이전 담당=" + sent.previousOwner() + (suppressed > 0 ? " (같은 로그 " + suppressed + "건을 건너뜀)" : ""));
+            }
         }
         return offered;
     }

@@ -41,6 +41,8 @@ public final class HandoverReceiver implements AutoCloseable {
     private final HandoverAssembler assembler = new HandoverAssembler();
     private final AtomicBoolean running = new AtomicBoolean(false);
     private final AtomicLong discardedMessages = new AtomicLong();
+    // 같은 종목 slot의 번호 불일치 경고를 10초에 한 번으로 줄인다(근거 없는 임의 간격).
+    private final RateLimitedLog mismatchLog = new RateLimitedLog(10_000L);
     private final AtomicLong messageFailures = new AtomicLong();
 
     private Thread thread;
@@ -92,8 +94,11 @@ public final class HandoverReceiver implements AutoCloseable {
         if (current.isEmpty() || current.get() != message.transferId()) {
             discardedMessages.incrementAndGet();
             assembler.discard(message.transferId());
-            log.log(Level.WARNING, "[호가창 이동] 진행 중인 요청과 이동 번호가 달라 응답을 버림: " + message
-                + " 진행 중=" + current.map(String::valueOf).orElse("없음"));
+            int suppressed = mismatchLog.tryAcquire(message.stockSlot());
+            if (suppressed >= 0) {
+                log.log(Level.WARNING, "[호가창 이동] 진행 중인 요청과 이동 번호가 달라 응답을 버림: " + message
+                    + " 진행 중=" + current.map(String::valueOf).orElse("없음") + (suppressed > 0 ? " (같은 로그 " + suppressed + "건을 건너뜀)" : ""));
+            }
             return;
         }
         Optional<List<byte[]>> complete = assembler.accept(message);
