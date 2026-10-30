@@ -156,3 +156,14 @@ check_owned_slots() {
 count_in_window() {
     awk -v s="$1" -v e="$2" '$1 ~ /^[0-9]+$/ && $1 + 0 >= s + 0 && $1 + 0 <= e + 0 { n++ } END { print n + 0 }'
 }
+
+# held_premise <동시 보관 최대 건수> — 이동 중 표시를 본 종목 slot의 새 주문이 보관 목록에 쌓였으면 1, 아니면 0을 출력한다(설계서 10-1절 수정본 3번의 구간 안 동작).
+# 거부 회신 건수는 전제로 쓰지 않는다. 거부 회신은 맵에 이동 중이 표시되기 전에 나간 주문이 있을 때만 생기므로 실행마다 0일 수 있다.
+held_premise() {
+    case "$1" in ''|*[!0-9]*) echo 0;; *) if [ "$1" -ge 1 ]; then echo 1; else echo 0; fi;; esac
+}
+
+# reject_offsets <구간 시작 epoch ms> — 표준 입력의 거부 수신 시각마다 「시각 − 구간 시작」(ms, 음수면 구간 앞)을 한 줄에 하나씩 출력한다. 보고 수치용이다.
+reject_offsets() {
+    awk -v s="$1" '$1 ~ /^[0-9]+$/ { print $1 - s }'
+}

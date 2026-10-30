@@ -22,3 +22,7 @@ account-worker:
     - account-id: 90002
       balance: 100000000
       margin-rate: 0.40
+logging:
+  level:
+    # 거부 회신마다 수신 시각을 남겨 u10-flow.sh가 이동 중 표시 구간 안의 거부 건수를 직접 센다.
+    com.flab.stocktradingengine.account.worker.messaging.AeronMatchingOrderSender: DEBUG

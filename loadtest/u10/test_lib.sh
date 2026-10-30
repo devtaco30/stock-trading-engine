@@ -63,6 +63,18 @@ check "구간 앞뒤에만 시각이 있으면 0이다" "0" "$(printf '10\n500\n
 check "입력이 비어도 0이다" "0" "$(printf '' | count_in_window 100 200)"
 check "숫자가 아닌 줄은 무시한다" "1" "$(printf 'abc\n150\n\n' | count_in_window 100 200)"
 
+
+# held_premise <동시 보관 최대 건수> — 이동 중 표시를 본 종목 slot의 새 주문이 보관 목록에 쌓였는지(1) 아닌지(0). 설계서 10-1절 수정본 3번.
+# 거부 회신 건수는 전제가 아니다(맵에 이동 중이 표시되기 전에 나간 주문이 있을 때만 생기며 실행마다 0일 수 있다).
+check "동시 보관 최대가 1 이상이면 전제 참" "1" "$(held_premise 402)"
+check "동시 보관 최대가 정확히 1이어도 참" "1" "$(held_premise 1)"
+check "동시 보관 최대가 0이면 거짓" "0" "$(held_premise 0)"
+check "값이 없으면(종료 로그 없음) 거짓" "0" "$(held_premise '')"
+check "숫자가 아니면 거짓" "0" "$(held_premise abc)"
+# reject_offsets <구간 시작 epoch ms> — 표준 입력의 거부 수신 시각마다 「시각 − 구간 시작」(ms, 음수면 구간 앞)을 한 줄에 하나씩 출력한다. 보고 수치용.
+check "구간 시작과의 차를 부호 있게 낸다" "-10 5" "$(printf '990\n1005\n' | reject_offsets 1000 | paste -sd' ' -)"
+check "입력이 비면 아무것도 내지 않는다" "" "$(printf '' | reject_offsets 1000)"
+
 rm -rf "$WORK"
 echo "통과 ${PASS}건, 실패 ${FAIL}건"
 [ "$FAIL" = 0 ]
