@@ -125,6 +125,11 @@ public class AeronMatchingOrderSender implements MatchingOrderSender, AutoClosea
     private volatile long lastRejectedReplyEpochMillis;
     // 보관 목록에 동시에 있었던 주문 수의 최대(publisherThread가 올린다).
     private volatile int maxHeldOrderTotal;
+    // 새 주문(거부 회신으로 돌아온 주문이 아닌 주문)을 보관한 이유별 누적 건수(publisherThread만 올린다). 「동시 보관 최대」는 이 셋과 거부 회신 보관을
+    // 구분하지 않으므로, 시험이 이동 중 표시를 실제로 만났는지는 이 중 첫째 값으로 판정한다.
+    private volatile long heldForMovingMarkCount;
+    private volatile long heldForNoOwnerCount;
+    private volatile long heldBehindRetransmitCount;
     private final OrderCodec codec = new OrderCodec();
     private final OneToOneConcurrentArrayQueue<JournaledOrder> outbox = new OneToOneConcurrentArrayQueue<>(OUTBOX_CAPACITY);
     private final IdleStrategy enqueueIdleStrategy = new BackoffIdleStrategy();
@@ -188,6 +193,21 @@ public class AeronMatchingOrderSender implements MatchingOrderSender, AutoClosea
     /** 보관 목록(재전송 대기 + 신규)에 동시에 있었던 주문 수의 최대. */
     public int maxHeldOrderTotal() {
         return maxHeldOrderTotal;
+    }
+
+    /** 맵에서 이동 중 표시를 본 종목 slot이라 보관한 새 주문의 누적 건수. */
+    public long heldForMovingMarkCount() {
+        return heldForMovingMarkCount;
+    }
+
+    /** 맵에 담당이 없는 종목 slot이라 보관한 새 주문의 누적 건수. */
+    public long heldForNoOwnerCount() {
+        return heldForNoOwnerCount;
+    }
+
+    /** 같은 종목 slot에 재전송 대기 주문이 있어 그 뒤에 보관한 새 주문의 누적 건수. */
+    public long heldBehindRetransmitCount() {
+        return heldBehindRetransmitCount;
     }
 
     /** 테스트용 — 재전송 간격(기본, 상한)과 거부가 없으면 횟수를 되돌리는 시간을 바꾼다. start() 전에만 부른다. */
@@ -320,8 +340,19 @@ public class AeronMatchingOrderSender implements MatchingOrderSender, AutoClosea
 
     private void route(MatchingTargetView view, JournaledOrder order) {
         MatchingSlotTarget target = findTarget(view, order.stockCode());
-        if (target == null || target.moving() || slotHasHeldOrders(order.stockCode())) {
+        if (target == null) {
+            heldForNoOwnerCount++;
+            hold(order, false);
+            return;
+        }
+        if (target.moving()) {
+            heldForMovingMarkCount++;
+            hold(order, false);
+            return;
+        }
+        if (slotHasHeldOrders(order.stockCode())) {
             // 같은 종목 slot에 재전송 대기 중인 주문이 있으면(재전송 간격 동안) 새 주문이 앞질러 나가지 않도록 뒤에 보관한다.
+            heldBehindRetransmitCount++;
             hold(order, false);
             return;
         }
@@ -444,7 +475,8 @@ public class AeronMatchingOrderSender implements MatchingOrderSender, AutoClosea
         int consecutiveRejects;
         boolean rejectedSinceFlush;
         long lastRejectNanos = Long.MIN_VALUE / 2;
-        long notBeforeNanos;
+        // 처음에는 지금 시각이라 「nanoTime - notBeforeNanos < 0」 비교가 nanoTime이 음수인 플랫폼에서도 거짓이다(0이면 음수 nanoTime에서 영원히 안 풀린다).
+        long notBeforeNanos = System.nanoTime();
 
         boolean isEmpty() {
             return retransmit.isEmpty() && fresh.isEmpty();
@@ -494,8 +526,10 @@ public class AeronMatchingOrderSender implements MatchingOrderSender, AutoClosea
         for (int slot = 0; slot < holdingCounts.length(); slot++) {
             heldRemaining += holdingCounts.get(slot);
         }
-        log.info("[계좌] 매칭 발신 종료: 담당 아님 거부 회신 수신 {}건(첫 수신 {} 마지막 수신 {} epoch ms), 보관 목록 최대 {}건, 보관 목록에 남은 주문 {}건",
-            rejectedReplyCount.sum(), firstRejectedReplyEpochMillis.get(), lastRejectedReplyEpochMillis, maxHeldOrderTotal, heldRemaining);
+        log.info("[계좌] 매칭 발신 종료: 담당 아님 거부 회신 수신 {}건(첫 수신 {} 마지막 수신 {} epoch ms), 보관 목록 최대 {}건, 보관 목록에 남은 주문 {}건, "
+                + "새 주문 보관 이유별 이동 중 표시 {}건 담당 없음 {}건 재전송 대기 뒤 {}건",
+            rejectedReplyCount.sum(), firstRejectedReplyEpochMillis.get(), lastRejectedReplyEpochMillis, maxHeldOrderTotal, heldRemaining,
+            heldForMovingMarkCount, heldForNoOwnerCount, heldBehindRetransmitCount);
         if (heldRemaining > 0 && !publisherThread.isAlive()) {
             log.error("[계좌] 담당 매칭 pod를 찾지 못해 보관 중이던 주문 {}건이 종료와 함께 사라집니다", heldRemaining);
         }

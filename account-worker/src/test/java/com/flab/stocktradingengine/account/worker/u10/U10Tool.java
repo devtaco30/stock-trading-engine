@@ -353,7 +353,11 @@ public final class U10Tool {
 
     static final int INVALID_QUANTITY = 2_000_000_000;
 
-    /** 발신 계획. 계좌 잔고를 넘는 매수(잔고 초과 거부용)를 X에 기간 한가운데 한 건 섞는다. 오프셋 순으로 정렬해 돌려준다. */
+    /**
+     * 발신 계획. 계좌 잔고를 넘는 매수(잔고 초과 거부용)를 X에 기간 한가운데 한 건 섞는다. 오프셋 순으로 정렬해 돌려준다.
+     * 주문의 발행 시각({@code publishedAtEpochNanos}, 계획을 만든 시각이라 실제 발신보다 최대 기간만큼 앞선다)은 계좌 엔진이 순서나 판정에 쓰지 않는다:
+     * 사용처는 {@code AccountEventHandler}가 {@code LatencyHistogram.record}에 넘기는 두 곳(측정 훅)뿐이다 [코드로 읽음: grep].
+     */
     static List<PlannedOrder> streamPlan(StreamSpec spec) {
         List<PlannedOrder> plan = new ArrayList<>();
         addStreamOrders(plan, spec, spec.xStock(), spec.xPerSecond(), "x");

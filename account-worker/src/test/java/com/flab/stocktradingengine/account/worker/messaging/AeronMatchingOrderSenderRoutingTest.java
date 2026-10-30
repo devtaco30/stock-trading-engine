@@ -274,6 +274,39 @@ class AeronMatchingOrderSenderRoutingTest {
     }
 
     @Test
+    void 보관한_새_주문을_이유별로_센다_이동_중_표시_담당_없음_재전송_대기_뒤() throws InterruptedException {
+        RecordingPublication addressOne = new RecordingPublication();
+        RecordingPublication addressTwo = new RecordingPublication();
+        targetByStockCode.put(stockOne, new MatchingSlotTarget(ADDRESS_ONE, true));
+        // stockTwo는 담당이 없다. stockThree는 담당이 있고 이동 중이 아니다.
+        targetByStockCode.put(stockThree, new MatchingSlotTarget(ADDRESS_ONE, false));
+        sender = newSender(addressOne, addressTwo, 100);
+        sender.setRetransmitBackoff(300L, 1_000L, 10_000L);
+        sender.start();
+        assertThat(sender.heldForMovingMarkCount()).isZero();
+        assertThat(sender.heldForNoOwnerCount()).isZero();
+        assertThat(sender.heldBehindRetransmitCount()).isZero();
+
+        forward(10L, stockOne);
+        forward(11L, stockOne);
+        forward(12L, stockTwo);
+        await(() -> holdingCount(stockOne) == 2 && holdingCount(stockTwo) == 1, "새 주문 셋이 보관되기");
+        assertThat(sender.heldForMovingMarkCount()).as("이동 중 표시 때문에 보관한 새 주문").isEqualTo(2);
+        assertThat(sender.heldForNoOwnerCount()).as("담당이 없어 보관한 새 주문").isEqualTo(1);
+        assertThat(sender.heldBehindRetransmitCount()).isZero();
+
+        sender.acceptRejectedOrder(placeOrder(1L, stockThree));
+        await(() -> addressOne.sent.size() == 1, "첫 재전송은 바로 나간다");
+        sender.acceptRejectedOrder(placeOrder(2L, stockThree));
+        Thread.sleep(50);
+        forward(13L, stockThree);
+        await(() -> holdingCount(stockThree) == 2, "재전송 대기 주문과 그 뒤 새 주문이 보관되기");
+        assertThat(sender.heldBehindRetransmitCount()).as("재전송 대기 주문이 있어 뒤에 보관한 새 주문").isEqualTo(1);
+        assertThat(sender.heldForMovingMarkCount()).as("거부 회신 주문은 이동 중 표시 보관에 세지 않는다").isEqualTo(2);
+        assertThat(sender.heldForNoOwnerCount()).isEqualTo(1);
+    }
+
+    @Test
     void 재전송_대기_중인_slot에_새_주문이_들어와도_재전송이_먼저_나간다() throws InterruptedException {
         RecordingPublication addressOne = new RecordingPublication();
         RecordingPublication addressTwo = new RecordingPublication();
