@@ -128,7 +128,7 @@ public class MatchingHandoverConfig {
         };
         MapCatchUpWaiter waiter = new MapCatchUpWaiter(endOffset, () -> reader.consumedOffset(0), timeoutMillis);
         waiter.setReaderHealthy(reader::isHealthy);
-        reader.setRestartIntervalMillis(readerRestartMillis);
+        reader.setRestartIntervalMillis(requireValidReaderRestartMillis(readerRestartMillis));
         waiter.onRepeatedFailure(catchUpFailureLimit, () -> reader.requestRestart("끝 위치를 따라오지 못한 판정이 연속 " + catchUpFailureLimit + "번"));
         MapReaderHealthCheck healthCheck = new MapReaderHealthCheck(
             endOffset, () -> reader.consumedOffset(0), reader::isHealthy, healthCheckStuckLimit,
@@ -137,6 +137,17 @@ public class MatchingHandoverConfig {
                 reader.requestRestart("끝 위치에 못 닿은 채 읽은 위치가 주기 점검 " + healthCheckStuckLimit + "번 연속 멈춰 있음");
             });
         return new MapSyncResources(waiter, admin, reader::isHealthy, healthCheck, healthCheckIntervalMillis);
+    }
+
+    // 읽기가 멈췄다가 다시 시작하는 간격의 하한. 간격이 이보다 짧으면 판정이 맵 항목을 읽는 사이 멈췄다 복구되는 일이 재확인보다 먼저 끝날 수 있다. 100은 근거 없는 임의 값이다(미측정).
+    static final long MIN_READER_RESTART_MILLIS = 100L;
+
+    static long requireValidReaderRestartMillis(long millis) {
+        if (millis < MIN_READER_RESTART_MILLIS) {
+            throw new IllegalArgumentException("matching-shard.coordination.map-reader-restart-ms는 " + MIN_READER_RESTART_MILLIS
+                + " 이상이어야 합니다: " + millis);
+        }
+        return millis;
     }
 
     /** 판정 대기 장치와 그것이 쓰는 Admin을 같이 닫기 위한 묶음. */
