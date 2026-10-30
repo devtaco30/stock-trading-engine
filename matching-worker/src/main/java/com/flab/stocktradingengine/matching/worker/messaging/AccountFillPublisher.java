@@ -99,6 +99,16 @@ public class AccountFillPublisher implements MatchListener {
         return outboxes;
     }
 
+    /** 모든 목적지의 체결 발신 queue에 지금 쌓인 체결 수의 합(12-3절 2번 표의 9단계). */
+    public long fillQueueDepth() {
+        return outboxesByEndpoint.values().stream().mapToLong(FillOutbox::queueDepth).sum();
+    }
+
+    /** 체결 발신 queue가 가득 차 enqueue가 기다린 횟수의 합. */
+    public long fillEnqueueWaitCount() {
+        return outboxesByEndpoint.values().stream().mapToLong(FillOutbox::enqueueWaitCount).sum();
+    }
+
     @Override
     public void onFill(String stockCode, FillResult fill) {
         onFill(stockCode, fill, 0L, 0L);
