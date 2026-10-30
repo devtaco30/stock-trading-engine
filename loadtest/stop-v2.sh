@@ -4,14 +4,18 @@ set -uo pipefail
 # run-v2.sh·run-e2e-v2.sh가 기동한 v2 프로세스(api·account-worker·matching-worker 등)를 멈춘다.
 # 종료 대상은 이 하네스가 PID 파일로 기록한 것만이다. 이름 일괄 종료(pkill -f)는 쓰지 않는다. 다른 세션/워크트리에서 같은 main 클래스로
 # 띄운 JVM이 같이 죽기 때문이다. 대상은 둘이다.
-#   1) PID 파일의 런처(gradlew)와 그 자손.
+#   1) PID 파일의 런처(gradlew)와 그 자손. Gradle 데몬은 다른 worktree의 빌드도 맡으므로 자손이어도 종료하지 않는다.
 #   2) gradle bootRun은 Gradle 데몬에 실행을 넘겨 JVM이 런처의 자손이 아닐 수 있으므로, 그 라벨의 고정 포트
 #      (매칭 shard i = 입구 UDP 20020+i, api = TCP 8080, 계좌 워커 = 입구 UDP 20040·20041)를 쥔 프로세스.
-#      포트를 쥐었어도 명령행에 그 모듈의 main 클래스 이름이 없으면 건드리지 않는다.
+#      포트를 쥐었어도 명령행에 그 모듈의 main 클래스 이름이 없거나 작업 디렉터리·명령행이 이 worktree 안이 아니면 건드리지 않는다.
+# 런처와 포트 모두 「이 worktree의 프로세스인가」(process_in_worktree)를 통과해야 한다. pid가 재사용되어 다른 worktree의
+# gradlew가 PID 파일의 pid가 되어도 종료하지 않는다. 종료한 뒤에도 같은 모듈의 JVM이 이 worktree에 남아 있으면 경고만 낸다.
 # 인프라(docker compose)는 그대로 둔다 — 같은 밤 반복 측정(U4) 때 재기동 비용 없이 그대로 쓴다.
 cd "$(dirname "$0")/.."
 
 PID_DIR="loadtest/pids"
+# 이 저장소(worktree)의 절대경로. 종료 대상이 이 worktree에서 띄운 프로세스인지 판별한다.
+REPO_ROOT="$(pwd -P)"
 
 # macOS 기본 /bin/bash(3.2, GPLv2 라이선스 동결)는 연관 배열(declare -A, bash 4+)을 못 쓴다 —
 # case문으로 대체.
@@ -35,6 +39,19 @@ module_pid_files() {
     return 0
 }
 
+# 프로세스가 이 worktree에서 띄운 것인지: 명령행에 이 저장소 경로가 있거나 작업 디렉터리가 이 저장소 안이다.
+process_in_worktree() {
+    local pid="$1" cwd
+    case "$(process_command "$pid")" in
+        *"$REPO_ROOT"/*) return 0 ;;
+    esac
+    cwd="$(lsof -a -p "$pid" -d cwd -Fn 2> /dev/null | sed -n 's/^n//p' | head -n 1)"
+    case "$cwd" in
+        "$REPO_ROOT"|"$REPO_ROOT"/*) return 0 ;;
+    esac
+    return 1
+}
+
 # 인자로 받은 pid 중 하나라도 살아 있으면 0.
 any_alive() {
     local pid
@@ -50,6 +67,10 @@ process_command() { ps -p "$1" -o command= 2> /dev/null; }
 descendants_of() {
     local child
     for child in $(pgrep -P "$1" 2> /dev/null); do
+        # Gradle 데몬은 다른 worktree의 빌드도 맡으므로 종료 대상에서 뺀다(그 아래 자손도 보지 않는다).
+        case "$(process_command "$child")" in
+            *GradleDaemon*) continue ;;
+        esac
         echo "$child"
         descendants_of "$child"
     done
@@ -78,20 +99,33 @@ stop_targets_for_pid_file() {
     local pid_file="$1" main_class="$2" label launcher command holder spec
     label="$(basename "$pid_file" .pid)"
     launcher="$(cat "$pid_file" 2> /dev/null)"
-    # 런처 pid가 재사용되어 다른 프로세스가 되었을 수 있으므로 gradle 런처이거나 그 모듈의 JVM일 때만 대상으로 한다.
-    if [ -n "$launcher" ] && kill -0 "$launcher" 2> /dev/null; then
+    # 런처 pid가 재사용되어 다른 프로세스가 되었을 수 있으므로 gradlew 런처이거나 그 모듈의 JVM이면서 이 worktree의 프로세스일 때만 대상으로 한다.
+    if [ -n "$launcher" ] && kill -0 "$launcher" 2> /dev/null && process_in_worktree "$launcher"; then
         command="$(process_command "$launcher")"
         case "$command" in
-            *gradle*|*"$main_class"*) echo "$launcher"; descendants_of "$launcher" ;;
+            *gradlew*|*"$main_class"*) echo "$launcher"; descendants_of "$launcher" ;;
         esac
     fi
     spec="$(label_port_spec "$label")"
     if [ -n "$spec" ]; then
         for holder in $(port_holder_pids "$spec"); do
             case "$(process_command "$holder")" in
-                *"$main_class"*) echo "$holder" ;;
+                *"$main_class"*) process_in_worktree "$holder" && echo "$holder" ;;
             esac
         done
+    fi
+}
+
+# PID 파일과 포트로 찾지 못했지만 이 worktree에 같은 모듈의 JVM이 남아 있으면 경고만 낸다(종료하지 않는다).
+# bootRun의 JVM이 런처의 자손이 아니고 포트 규칙도 없는 모듈(settlement-worker, account-projection-worker)이 안 멈추는 경우를 알린다.
+warn_leftover_processes() {
+    local module="$1" main_class="$2" pid leftover=""
+    for pid in $(pgrep -f "$main_class" 2> /dev/null); do
+        [ "$pid" = "$$" ] && continue
+        process_in_worktree "$pid" && leftover="${leftover:+${leftover} }${pid}"
+    done
+    if [ -n "$leftover" ]; then
+        echo "경고: ${module}의 JVM이 이 worktree에 남았다(pid ${leftover}). PID 파일과 포트로 찾지 못해 종료하지 않았다. 직접 확인한다" >&2
     fi
 }
 
@@ -111,8 +145,12 @@ stop_module() {
         done
         for pid in $targets; do kill -9 "$pid" 2> /dev/null; done
         [ -n "$targets" ] && echo "${module} 정지(${pid_file##*/}: $(echo $targets | tr '\n' ' '))"
+        if any_alive $targets; then
+            echo "경고: ${module}의 종료 대상이 강제 종료 뒤에도 남아 있다(${pid_file##*/}: $(echo $targets | tr '\n' ' '))" >&2
+        fi
         rm -f "$pid_file"
     done < <(module_pid_files "$module")
+    warn_leftover_processes "$module" "$main_class"
 }
 
 # 시험이 위 함수만 불러 확인하도록 source 할 때는 여기서 멈춘다(아래는 실제 프로세스를 종료한다).

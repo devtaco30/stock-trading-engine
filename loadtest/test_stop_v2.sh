@@ -29,6 +29,7 @@ assert_eq() {
 cat > "${TMP}/gradlew-fake" << 'EOF'
 #!/bin/bash
 sleep 300 &
+bash -c 'sleep 300; : "$0"' GradleDaemon-fake > /dev/null 2>&1 &
 wait
 EOF
 
@@ -67,7 +68,28 @@ sleep 0.5
 PIDS_TO_CLEAN="$LAUNCHER $CHILD $HOLDER7 $HOLDER6 $DECOY"
 assert_alive "시작 전 포트 쥔 같은 이름" "$HOLDER7"
 
-stop_module matching-worker > /dev/null 2>&1
+
+# --- 추가 보호 ---
+# a) 다른 worktree의 gradlew 대역(작업 디렉터리가 이 저장소 밖): PID 파일이 가리켜도(pid 재사용 상황) 종료하지 않는다.
+( cd "$TMP" && exec bash "${TMP}/gradlew-fake" > /dev/null 2>&1 ) &
+OTHER_LAUNCHER=$!
+sleep 0.5
+echo "$OTHER_LAUNCHER" > "${PID_DIR}/matching-worker-1.pid"
+# b) 같은 이름의 JVM 대역이 입구 포트(20025 = matching-worker-5)를 쥐었지만 작업 디렉터리가 이 저장소 밖
+OTHER_HOLDER="$( cd "$TMP" && start_port_holder 20025 "$MAIN_CLASS" )"
+echo 999999 > "${PID_DIR}/matching-worker-5.pid"
+# c) PID 파일은 있지만 포트 규칙이 없는 모듈(settlement-worker): 이 저장소 작업 디렉터리의 같은 클래스 프로세스가 남아 있으면 경고만 하고 종료하지 않는다.
+bash -c 'sleep 300; : "$0"' "com.flab.stocktradingengine.settlement.worker.SettlementWorkerApplication" > /dev/null 2>&1 &
+LEFTOVER=$!
+echo 999999 > "${PID_DIR}/settlement-worker.pid"
+sleep 0.5
+PIDS_TO_CLEAN="$PIDS_TO_CLEAN $OTHER_LAUNCHER $OTHER_HOLDER $LEFTOVER"
+
+# 위 a)·b)·c)를 준비한 뒤 정지를 다시 부른다. 1단계(matching-worker-0, -6, -7)는 이미 정리됐다.
+DAEMON_PID="$(pgrep -f GradleDaemon-fake | head -n 1)"
+
+stop_module matching-worker > "${TMP}/out-matching.txt" 2>&1
+stop_module settlement-worker > "${TMP}/out-settlement.txt" 2>&1
 
 assert_dead "PID 파일의 런처" "$LAUNCHER"
 assert_dead "런처의 자손" "$CHILD"
@@ -76,10 +98,17 @@ assert_alive "입구 포트를 쥐었지만 이름이 다른 프로세스는 건
 assert_alive "PID 파일에도 포트에도 없는 같은 이름 프로세스는 건드리지 않는다" "$DECOY"
 assert_eq "정리한 모듈의 PID 파일은 지운다" "0" "$(ls "$PID_DIR" | grep -c '^matching-worker')"
 
+assert_alive "다른 worktree의 gradlew(작업 디렉터리가 저장소 밖)는 pid 파일이 가리켜도 건드리지 않는다" "$OTHER_LAUNCHER"
+assert_alive "입구 포트를 쥔 같은 이름이어도 작업 디렉터리가 저장소 밖이면 건드리지 않는다" "$OTHER_HOLDER"
+assert_alive "런처의 자손인 Gradle 데몬은 종료하지 않는다" "$DAEMON_PID"
+assert_alive "포트 규칙이 없는 모듈의 남은 프로세스는 종료하지 않는다" "$LEFTOVER"
+assert_eq "남은 프로세스가 있으면 경고를 낸다" "1" "$(grep -c "$LEFTOVER" "${TMP}/out-settlement.txt")"
+assert_eq "경고에 남았다고 적는다" "1" "$(grep -c '남았' "${TMP}/out-settlement.txt")"
+
 # 5) 이름 일괄 종료가 코드에 남아 있지 않다
 assert_eq "pkill 이 실행 코드에 없다" "0" "$(grep -v '^\s*#' loadtest/stop-v2.sh | grep -c 'pkill')"
 
-for pid in $PIDS_TO_CLEAN; do kill "$pid" 2> /dev/null; done
+for pid in $PIDS_TO_CLEAN $(pgrep -f GradleDaemon-fake); do kill "$pid" 2> /dev/null; done
 rm -rf "$TMP"
 
 echo "통과 ${PASSES}, 실패 ${FAILS}"

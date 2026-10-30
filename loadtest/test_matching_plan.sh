@@ -178,6 +178,7 @@ test_await_assigned() {
     out="$(MATCHING_ASSIGN_POLL_SEC=1 await_matching_slots_assigned 64 2 2 2>&1)"
     assert_eq "63개에서 멈추면 실패" "1" "$?"
     assert_contains "빠진 종목 slot 번호를 출력" "$out" "주인 없는 종목 slot: 63"
+    assert_contains "shard 수를 줄여 다시 띄웠을 때의 원인을 안내" "$out" "정적 멤버"
 
     # 여러 개가 빠지면 모두 출력한다.
     echo 0 > "${dir}/calls"
@@ -223,6 +224,29 @@ test_reset_map_topic() {
 
     FAKE_NEVER_GONE=1 MATCHING_TOPIC_GONE_POLL_SEC=1 MATCHING_TOPIC_GONE_TIMEOUT_SEC=2 reset_matching_map_topic > /dev/null 2>&1
     assert_eq "토픽이 사라지지 않으면 실패" "1" "$?"
+
+    # broker 조회 자체가 실패하면(컨테이너가 없거나 연결 실패) 초기화했다고 말하지 않고 실패한다.
+    matching_kafka_topics() { echo "Error: No such container" >&2; return 1; }
+    out="$(MATCHING_TOPIC_GONE_POLL_SEC=0 reset_matching_map_topic 2>&1)"
+    assert_eq "broker 조회가 실패하면 실패" "1" "$?"
+    assert_not_contains "실패했는데 완료라고 하지 않는다" "$out" "초기화 완료"
+
+    # 삭제 명령이 실패하면 실패한다.
+    matching_kafka_topics() {
+        case "$*" in
+            *--delete*) return 1 ;;
+            *--list*) echo "matching-shard-map" ;;
+        esac
+    }
+    MATCHING_TOPIC_GONE_POLL_SEC=0 reset_matching_map_topic > /dev/null 2>&1
+    assert_eq "삭제 명령이 실패하면 실패" "1" "$?"
+
+    # 토픽이 원래 없으면 삭제 호출 없이 성공한다.
+    : > "$calls_file"
+    matching_kafka_topics() { echo "$*" >> "$calls_file"; case "$*" in *--list*) echo "other-topic" ;; esac; }
+    MATCHING_TOPIC_GONE_POLL_SEC=0 reset_matching_map_topic > /dev/null 2>&1
+    assert_eq "토픽이 없으면 성공" "0" "$?"
+    assert_not_contains "없는 토픽은 지우지 않는다" "$(cat "$calls_file")" "--delete"
     unset -f matching_kafka_topics
     rm -f "$calls_file" "${calls_file}.n"
 }

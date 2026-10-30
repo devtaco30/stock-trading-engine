@@ -130,16 +130,27 @@ matching_kafka_topics() {
 
 # 맵 토픽은 compacted 라 죽은 pod 의 마지막 값이 지워지지 않고 남는다. 직전 실행(예: shard 8개)의 값이 남은 채로 새 shard 가 뜨기도 전에
 # 「배정 완료」로 읽히는 것을 막으려고 매칭 shard 를 띄우기 전에 이 토픽을 지운다. 사라질 때까지 기다린다(없던 토픽이면 바로 끝난다).
+# 조회·삭제 명령의 종료 코드를 확인한다: 컨테이너가 없거나 broker에 연결하지 못했는데 초기화했다고 말하지 않는다.
+# 조정 토픽(ASSIGNMENT_TOPIC)과 컨슈머 그룹의 정적 멤버는 지우지 않는다.
 reset_matching_map_topic() {
-    local timeout="${MATCHING_TOPIC_GONE_TIMEOUT_SEC:-30}" poll="${MATCHING_TOPIC_GONE_POLL_SEC:-1}" start=$SECONDS
-    matching_kafka_topics --delete --topic "$MATCHING_MAP_TOPIC" > /dev/null 2>&1
-    while matching_kafka_topics --list 2> /dev/null | grep -qx -- "$MATCHING_MAP_TOPIC"; do
-        if [ $((SECONDS - start)) -ge "$timeout" ]; then
-            echo "맵 토픽 ${MATCHING_MAP_TOPIC}이 ${timeout}초 안에 지워지지 않았다" >&2
+    local timeout="${MATCHING_TOPIC_GONE_TIMEOUT_SEC:-30}" poll="${MATCHING_TOPIC_GONE_POLL_SEC:-1}" start=$SECONDS topics
+    topics="$(matching_kafka_topics --list 2>&1)" || {
+        echo "broker에서 토픽 목록을 읽지 못했다(컨테이너 stock-trading-kafka 상태 확인): ${topics}" >&2
+        return 1
+    }
+    if printf '%s\n' "$topics" | grep -qx -- "$MATCHING_MAP_TOPIC"; then
+        matching_kafka_topics --delete --topic "$MATCHING_MAP_TOPIC" > /dev/null 2>&1 || {
+            echo "맵 토픽 ${MATCHING_MAP_TOPIC} 삭제 명령이 실패했다" >&2
             return 1
-        fi
-        sleep "$poll"
-    done
+        }
+        while topics="$(matching_kafka_topics --list 2>&1)" && printf '%s\n' "$topics" | grep -qx -- "$MATCHING_MAP_TOPIC"; do
+            if [ $((SECONDS - start)) -ge "$timeout" ]; then
+                echo "맵 토픽 ${MATCHING_MAP_TOPIC}이 ${timeout}초 안에 지워지지 않았다" >&2
+                return 1
+            fi
+            sleep "$poll"
+        done
+    fi
     echo "맵 토픽 ${MATCHING_MAP_TOPIC} 초기화 완료"
 }
 
@@ -166,7 +177,7 @@ await_matching_slots_assigned() {
             return 0
         fi
         if [ $((SECONDS - start)) -ge "$timeout" ]; then
-            [ -n "$missing" ] && echo "제한 시간 ${timeout}초 안에 배정이 끝나지 않았다 — 주인 없는 종목 slot: ${missing}" >&2
+            [ -n "$missing" ] && echo "제한 시간 ${timeout}초 안에 배정이 끝나지 않았다 — 주인 없는 종목 slot: ${missing}. 직전 실행보다 매칭 shard 수를 줄여 다시 띄웠다면 이전 정적 멤버(group.instance.id)가 조정 토픽의 컨슈머 그룹에 남아 배정이 끝나지 않을 수 있다(그룹은 지우지 않는다)" >&2
             [ "$addresses" != "$shard_count" ] && echo "제한 시간 ${timeout}초 안에 shard가 다 모이지 않았다 — 서로 다른 주소 ${addresses}개, 기대 ${shard_count}개" >&2
             return 1
         fi
