@@ -5,9 +5,12 @@ import org.springframework.context.SmartLifecycle;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import com.flab.stocktradingengine.account.disruptor.engine.AccountEngine;
+import com.flab.stocktradingengine.account.worker.lifecycle.AccountEngineMetricsReporterLifecycle;
 import com.flab.stocktradingengine.account.worker.lifecycle.MatchingSendMetricsReporterLifecycle;
 import com.flab.stocktradingengine.account.worker.lifecycle.MetricsReporterLifecycle;
 import com.flab.stocktradingengine.account.worker.messaging.AeronMatchingOrderSender;
+import com.flab.stocktradingengine.account.worker.metrics.AccountEngineMetricsReporter;
 import com.flab.stocktradingengine.account.worker.messaging.MatchingSendMetricsReporter;
 import com.flab.stocktradingengine.account.worker.listener.MetricsAccountResultListener;
 
@@ -33,5 +36,12 @@ public class MetricsReporterConfig {
     @ConditionalOnProperty(prefix = "account-worker.metrics", name = "enabled", havingValue = "true")
     public SmartLifecycle matchingSendMetricsReporterLifecycle(AeronMatchingOrderSender matchingOrderSender) {
         return new MatchingSendMetricsReporterLifecycle(new MatchingSendMetricsReporter(matchingOrderSender));
+    }
+
+    /** 계좌 ring buffer 남은 칸·가득 참 횟수와 계좌 저널 offer 재시도(12-3절 2번 표의 3·4단계)를 같은 스위치로 1초마다 로그에 낸다. */
+    @Bean
+    @ConditionalOnProperty(prefix = "account-worker.metrics", name = "enabled", havingValue = "true")
+    public SmartLifecycle accountEngineMetricsReporterLifecycle(AccountEngine accountEngine) {
+        return new AccountEngineMetricsReporterLifecycle(new AccountEngineMetricsReporter(accountEngine));
     }
 }
