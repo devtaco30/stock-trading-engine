@@ -55,7 +55,7 @@ public class MatchingEngineMetricsReporter implements AutoCloseable {
             backPressure = aeronJournal.offerBackPressureCount();
             otherRetries = aeronJournal.offerOtherRetryCount();
         }
-        return new MatchingEngineMetrics(engine.ringBufferRemainingCapacity(), engine.ringFullWaitCount(), backPressure, otherRetries,
+        return new MatchingEngineMetrics(engine.ringBufferRemainingCapacity(), engine.ringFullWaitCount(), engine.ringFullWaitNanos(), backPressure, otherRetries,
             fillQueueDepth.getAsLong(), fillEnqueueWaits.getAsLong(), engine.fullyFilledOrderCount(),
             ordersReceived.getAsLong(), ordersNotOwned.getAsLong(), rejectRepliesSent.getAsLong(), engine.fillCount());
     }
@@ -63,9 +63,10 @@ public class MatchingEngineMetricsReporter implements AutoCloseable {
     /** 누적 값은 구간 증가분으로, 남은 칸과 queue 깊이는 현재 값으로 한 줄을 만든다. */
     static String formatLine(MatchingEngineMetrics previous, MatchingEngineMetrics current) {
         return String.format(
-            "matching-engine ringRemaining=%d ringFullWaits=%d journalBackPressure=%d journalOtherRetries=%d fillQueueDepth=%d fillEnqueueWaits=%d fullyFilledOrders=%d fullyFilledOrdersTotal=%d ordersReceived=%d ordersNotOwned=%d rejectRepliesSent=%d fills=%d",
+            "matching-engine ringRemaining=%d ringFullWaits=%d ringFullWaitMs=%.1f journalBackPressure=%d journalOtherRetries=%d fillQueueDepth=%d fillEnqueueWaits=%d fullyFilledOrders=%d fullyFilledOrdersTotal=%d ordersReceived=%d ordersNotOwned=%d rejectRepliesSent=%d fills=%d",
             current.ringRemaining(),
             current.ringFullWaits() - previous.ringFullWaits(),
+            (current.ringFullWaitNanos() - previous.ringFullWaitNanos()) / 1_000_000.0,
             current.journalBackPressure() - previous.journalBackPressure(),
             current.journalOtherRetries() - previous.journalOtherRetries(),
             current.fillQueueDepth(),

@@ -181,6 +181,8 @@ public class MatchingEngine {
     }
 
     private final java.util.concurrent.atomic.LongAdder ringFullWaitCount = new java.util.concurrent.atomic.LongAdder();
+    // 빈 칸이 없어 발행이 기다린 총 시간(나노초). 기다린 횟수는 기다린 발행 호출 수라 얼마나 오래 막혔는지는 이 값으로 본다.
+    private final java.util.concurrent.atomic.LongAdder ringFullWaitNanos = new java.util.concurrent.atomic.LongAdder();
 
     /**
      * 링버퍼 칸을 예약한다. 빈 칸이 없으면 기다린 호출 수를 하나 올리고 {@code next()}로 기다린다. 평상시 경로는 {@code tryNext()} 한 번이라 호출이 늘지 않는다.
@@ -190,7 +192,10 @@ public class MatchingEngine {
             return ringBuffer.tryNext();
         } catch (com.lmax.disruptor.InsufficientCapacityException e) {
             ringFullWaitCount.increment();
-            return ringBuffer.next();
+            long waitStartNanos = System.nanoTime();
+            long sequence = ringBuffer.next();
+            ringFullWaitNanos.add(System.nanoTime() - waitStartNanos);
+            return sequence;
         }
     }
 
@@ -207,6 +212,11 @@ public class MatchingEngine {
     /** 빈 칸이 없어 발행 호출이 기다린 누적 횟수(발행 호출 단위, 시간이 아니다). 짧게 0에 닿았다 풀린 구간도 남는다. */
     public long ringFullWaitCount() {
         return ringFullWaitCount.sum();
+    }
+
+    /** 빈 칸이 없어 발행이 기다린 총 시간(나노초, 누적). {@link #ringFullWaitCount()}가 센 발행 호출마다 기다린 시간의 합이다. */
+    public long ringFullWaitNanos() {
+        return ringFullWaitNanos.sum();
     }
 
     /**

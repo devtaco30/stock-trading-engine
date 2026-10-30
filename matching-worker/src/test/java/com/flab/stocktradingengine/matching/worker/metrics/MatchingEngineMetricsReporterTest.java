@@ -16,11 +16,11 @@ class MatchingEngineMetricsReporterTest {
 
     @Test
     void 누적_값은_구간_증가분으로_남은_칸과_queue_깊이는_현재_값으로_한_줄을_만든다() {
-        MatchingEngineMetrics previous = new MatchingEngineMetrics(1024, 3, 10, 4, 7, 2, 100, 1000, 20, 15, 400);
-        MatchingEngineMetrics current = new MatchingEngineMetrics(0, 8, 25, 9, 65536, 5, 160, 1900, 50, 40, 700);
+        MatchingEngineMetrics previous = new MatchingEngineMetrics(1024, 3, 1_500_000_000L, 10, 4, 7, 2, 100, 1000, 20, 15, 400);
+        MatchingEngineMetrics current = new MatchingEngineMetrics(0, 8, 4_000_000_000L, 25, 9, 65536, 5, 160, 1900, 50, 40, 700);
 
         assertThat(MatchingEngineMetricsReporter.formatLine(previous, current)).isEqualTo(
-            "matching-engine ringRemaining=0 ringFullWaits=5 journalBackPressure=15 journalOtherRetries=5 fillQueueDepth=65536 fillEnqueueWaits=3 fullyFilledOrders=60 fullyFilledOrdersTotal=160 ordersReceived=900 ordersNotOwned=30 rejectRepliesSent=25 fills=300");
+            "matching-engine ringRemaining=0 ringFullWaits=5 ringFullWaitMs=2500.0 journalBackPressure=15 journalOtherRetries=5 fillQueueDepth=65536 fillEnqueueWaits=3 fullyFilledOrders=60 fullyFilledOrdersTotal=160 ordersReceived=900 ordersNotOwned=30 rejectRepliesSent=25 fills=300");
     }
 
     @Test
@@ -39,6 +39,7 @@ class MatchingEngineMetricsReporterTest {
         assertThat(beforeStart.ordersReceived()).isEqualTo(9L);
         assertThat(beforeStart.ordersNotOwned()).isEqualTo(4L);
         assertThat(beforeStart.rejectRepliesSent()).isEqualTo(3L);
+        assertThat(beforeStart.ringFullWaitNanos()).isZero();
         assertThat(beforeStart.fills()).isZero();
         assertThat(beforeStart.journalBackPressure()).as("Aeron 저널이 아니면 저널 재시도는 0").isZero();
         assertThat(beforeStart.journalOtherRetries()).isZero();

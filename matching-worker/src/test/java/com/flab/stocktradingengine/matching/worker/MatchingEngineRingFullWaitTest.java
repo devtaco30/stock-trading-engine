@@ -70,4 +70,36 @@ class MatchingEngineRingFullWaitTest {
         assertThat(producer.isAlive()).isFalse();
         assertThat(engine.ringFullWaitCount()).as("호출 수이지 기다린 시간이 아니다").isLessThanOrEqualTo(12L);
     }
+
+    @Test
+    void 막혀서_기다린_총_시간을_나노초로_센다() throws Exception {
+        BlockingJournal journal = new BlockingJournal();
+        MatchingEngine engine = new MatchingEngine(4, new BlockingWaitStrategy(), (stockCode, fill) -> { }, journal);
+        engine.start();
+        assertThat(engine.ringFullWaitNanos()).as("기다린 적이 없으면 0").isZero();
+        Thread producer = new Thread(() -> {
+            for (long orderId = 1; orderId <= 12; orderId++) {
+                engine.publishPlace(orderId, 1L, "005930", OrderSide.SELL, new BigDecimal("10000"), 1, Instant.now());
+            }
+        });
+        producer.setDaemon(true);
+        try {
+            producer.start();
+            long deadline = System.nanoTime() + 5_000_000_000L;
+            while (engine.ringFullWaitCount() == 0 && System.nanoTime() < deadline) {
+                Thread.sleep(5);
+            }
+            assertThat(engine.ringFullWaitCount()).isPositive();
+            Thread.sleep(150);
+            journal.gate.countDown();
+            producer.join(10_000);
+            assertThat(producer.isAlive()).isFalse();
+            assertThat(engine.ringFullWaitNanos())
+                .as("소비자가 150ms 이상 멈춰 있어 발행이 그만큼 기다렸다")
+                .isGreaterThanOrEqualTo(100_000_000L);
+        } finally {
+            journal.gate.countDown();
+            engine.shutdown();
+        }
+    }
 }
