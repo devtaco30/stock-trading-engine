@@ -54,7 +54,8 @@ import io.aeron.driver.ThreadingMode;
  *   <li>{@code codes-many <stockSlotCount> <splitSlot> <count>} — 종목 slot이 splitSlot 이상인 종목코드 count개를
  *       {@code HIGH=a,b,c}로 출력한다.</li>
  *   <li>{@code send-bulk <channel> <accountId> <BUY|SELL> <firstPrice> <perStock> <requestIdPrefix> <stockCode...>} —
- *       종목마다 perStock건을 가격 firstPrice, firstPrice+1, …로 한 연결에서 보낸다(수량 1).</li>
+ *       종목마다 perStock건을 가격 firstPrice, firstPrice+1, …로 한 연결에서 보낸다(수량 1). 환경변수 {@code BULK_ACCOUNTS=<계좌 수>}(기본 1)를 주면
+ *       종목의 i번째 주문(0부터)을 계좌 {@code accountId + (i % 계좌 수)}로 나눠 보낸다(표지 매수는 표지 계좌 그대로).</li>
  *   <li>{@code assigned <kafkaBootstrap> <stockSlotCount>} — 맵 토픽의 종목 slot별 마지막 값을 읽어
  *       {@code ASSIGNED 배정된 수/전체 MOVING 이동 중인 수 ENDPOINTS 주소=개수,...}를 출력한다.</li>
  *   <li>{@code map-history <kafkaBootstrap>} — 맵 토픽의 모든 기록을 {@code slot<TAB>CreateTime(ms)<TAB>값} 줄로 출력한다.</li>
@@ -224,12 +225,39 @@ public final class U10Tool {
         void accept(DecodedAccountOrder order);
     }
 
-    /** 종목마다 매도 perStock건을 보내고 그 바로 뒤에 표지 매수(있으면)를 보낸다. 보낸 주문 수를 돌려준다. */
+    /** 종목마다 매도 perStock건을 보내고 그 바로 뒤에 표지 매수(있으면)를 보낸다. 모든 주문을 기준 계좌 하나로 보낸다. 보낸 주문 수를 돌려준다. */
     static int bulkOrders(long accountId, OrderSide side, long firstPrice, int perStock, String prefix, BulkTargets targets, OrderSink sink) {
+        return bulkOrders(accountId, side, firstPrice, perStock, 1, prefix, targets, sink);
+    }
+
+    /** 환경변수 BULK_ACCOUNTS 값을 읽는다. 없거나 비면 1(계좌 하나)이고, 양의 정수가 아니면 거부한다. */
+    static int parseBulkAccounts(String value) {
+        if (value == null || value.isEmpty()) {
+            return 1;
+        }
+        int accounts;
+        try {
+            accounts = Integer.parseInt(value);
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("BULK_ACCOUNTS는 양의 정수여야 한다: " + value, e);
+        }
+        if (accounts < 1) {
+            throw new IllegalArgumentException("BULK_ACCOUNTS는 양의 정수여야 한다: " + value);
+        }
+        return accounts;
+    }
+
+    /**
+     * 종목마다 매도 perStock건을 보내고 그 바로 뒤에 표지 매수(있으면)를 보낸다. 종목의 i번째 주문(0부터)은 계좌 {@code accountId + (i % accounts)}로 보낸다.
+     * 표지 매수는 계좌 수와 무관하게 표지 계좌로 가고, 가격은 계좌 수와 무관하게 첫 가격 + i * 가격 간격이다. 보낸 주문 수(표지 제외)를 돌려준다.
+     */
+    static int bulkOrders(long accountId, OrderSide side, long firstPrice, int perStock, int accounts, String prefix, BulkTargets targets,
+                          OrderSink sink) {
         int sent = 0;
         for (String stockCode : targets.stockCodes()) {
             for (int i = 0; i < perStock; i++) {
-                sink.accept(new DecodedAccountOrder(side, accountId, stockCode, BigDecimal.valueOf(firstPrice + i * targets.priceStep()), 1,
+                sink.accept(new DecodedAccountOrder(side, accountId + (i % accounts), stockCode,
+                    BigDecimal.valueOf(firstPrice + i * targets.priceStep()), 1,
                     prefix + "-" + stockCode + "-" + i, EpochNanos.now()));
                 sent++;
             }
@@ -447,7 +475,8 @@ public final class U10Tool {
             UnsafeBuffer buffer = new UnsafeBuffer(new byte[256]);
             long started = System.currentTimeMillis();
             BulkTargets targets = parseBulkTargets(args, 7);
-            int sent = bulkOrders(accountId, side, firstPrice, perStock, prefix, targets,
+            int bulkAccounts = parseBulkAccounts(System.getenv("BULK_ACCOUNTS"));
+            int sent = bulkOrders(accountId, side, firstPrice, perStock, bulkAccounts, prefix, targets,
                 order -> offerBlocking(publication, codec, buffer, order, 30_000L));
             for (String stockCode : targets.stockCodes()) {
                 if (targets.sentinelAccountId() != 0L) {

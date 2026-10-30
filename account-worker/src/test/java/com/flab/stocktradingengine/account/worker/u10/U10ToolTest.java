@@ -125,6 +125,45 @@ class U10ToolTest {
     }
 
     @Test
+    void send_bulk_계좌_수를_주면_i번째_주문을_기준_계좌_더하기_i_나머지_계좌_수의_계좌로_보낸다() {
+        U10Tool.BulkTargets targets = new U10Tool.BulkTargets(List.of("000001", "000002"), 90001L, 20000L, 1L);
+        List<com.flab.stocktradingengine.codec.DecodedAccountOrder> sent = new ArrayList<>();
+        int count = U10Tool.bulkOrders(90002L, com.flab.stocktradingengine.trading.entity.OrderSide.SELL, 20000L, 7, 3, "p", targets, sent::add);
+        assertEquals(14, count);
+        List<Long> sellAccounts = sent.stream()
+            .filter(order -> order.type() == com.flab.stocktradingengine.trading.entity.OrderSide.SELL)
+            .filter(order -> order.stockCode().equals("000001")).map(order -> order.accountId()).toList();
+        assertEquals(List.of(90002L, 90003L, 90004L, 90002L, 90003L, 90004L, 90002L), sellAccounts);
+        List<Long> secondStock = sent.stream()
+            .filter(order -> order.type() == com.flab.stocktradingengine.trading.entity.OrderSide.SELL)
+            .filter(order -> order.stockCode().equals("000002")).map(order -> order.accountId()).toList();
+        assertEquals(sellAccounts, secondStock, "종목마다 i가 0부터 다시 시작해 같은 계좌 순서다");
+        assertTrue(sent.stream().filter(order -> order.type() == com.flab.stocktradingengine.trading.entity.OrderSide.BUY)
+            .allMatch(order -> order.accountId() == 90001L), "표지 매수는 계좌 수와 무관하게 표지 계좌로 간다");
+        List<Long> prices = sent.stream().filter(order -> order.stockCode().equals("000001")
+            && order.type() == com.flab.stocktradingengine.trading.entity.OrderSide.SELL).map(order -> order.price().longValue()).toList();
+        assertEquals(List.of(20000L, 20001L, 20002L, 20003L, 20004L, 20005L, 20006L), prices, "가격은 계좌 수와 무관하게 첫 가격 + i다");
+    }
+
+    @Test
+    void send_bulk_계좌_수_1이면_모든_주문이_기준_계좌로_간다() {
+        U10Tool.BulkTargets targets = new U10Tool.BulkTargets(List.of("000001"), 0L, 0L, 1L);
+        List<com.flab.stocktradingengine.codec.DecodedAccountOrder> sent = new ArrayList<>();
+        U10Tool.bulkOrders(90002L, com.flab.stocktradingengine.trading.entity.OrderSide.SELL, 20000L, 4, 1, "p", targets, sent::add);
+        assertTrue(sent.stream().allMatch(order -> order.accountId() == 90002L));
+    }
+
+    @Test
+    void BULK_ACCOUNTS_값은_없으면_1이고_양의_정수가_아니면_거부한다() {
+        assertEquals(1, U10Tool.parseBulkAccounts(null));
+        assertEquals(1, U10Tool.parseBulkAccounts(""));
+        assertEquals(5, U10Tool.parseBulkAccounts("5"));
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> U10Tool.parseBulkAccounts("0"));
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> U10Tool.parseBulkAccounts("-2"));
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> U10Tool.parseBulkAccounts("abc"));
+    }
+
+    @Test
     void stream_계획은_종목마다_매도와_매수를_번갈아_정해진_속도로_내고_잔고_초과_주문을_한_건_섞는다() {
         U10Tool.StreamSpec spec = new U10Tool.StreamSpec(1_000L, 200, 20, "000001", "000002", 90002L, 90001L, 20000L);
         List<U10Tool.PlannedOrder> plan = U10Tool.streamPlan(spec);
