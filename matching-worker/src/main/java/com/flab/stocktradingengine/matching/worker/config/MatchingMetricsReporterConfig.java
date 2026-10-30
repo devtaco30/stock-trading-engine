@@ -8,6 +8,7 @@ import org.springframework.context.annotation.Configuration;
 import com.flab.stocktradingengine.matching.disruptor.engine.MatchingEngine;
 import com.flab.stocktradingengine.matching.disruptor.io.AeronOrderReceiver;
 import com.flab.stocktradingengine.matching.worker.messaging.AccountFillPublisher;
+import com.flab.stocktradingengine.matching.worker.messaging.RejectReplyPublisher;
 import com.flab.stocktradingengine.matching.worker.metrics.MatchingEngineMetricsReporter;
 import com.flab.stocktradingengine.matching.worker.metrics.MatchingEngineMetricsReporterLifecycle;
 
@@ -21,9 +22,10 @@ public class MatchingMetricsReporterConfig {
     @Bean
     @ConditionalOnProperty(prefix = "matching-worker.metrics", name = "enabled", havingValue = "true")
     public SmartLifecycle matchingEngineMetricsReporterLifecycle(
-            MatchingEngine engine, AccountFillPublisher fillPublisher, AeronOrderReceiver orderReceiver) {
+            MatchingEngine engine, AccountFillPublisher fillPublisher, AeronOrderReceiver orderReceiver,
+            RejectReplyPublisher rejectReplyPublisher) {
         return new MatchingEngineMetricsReporterLifecycle(
             new MatchingEngineMetricsReporter(engine, fillPublisher::fillQueueDepth, fillPublisher::fillEnqueueWaitCount,
-                orderReceiver::placeAcceptedCount, orderReceiver::notOwnedCount));
+                orderReceiver::placeAcceptedCount, orderReceiver::notOwnedCount, rejectReplyPublisher::sentCount));
     }
 }

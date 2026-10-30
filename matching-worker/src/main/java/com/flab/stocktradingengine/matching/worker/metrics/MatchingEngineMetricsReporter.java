@@ -24,6 +24,7 @@ public class MatchingEngineMetricsReporter implements AutoCloseable {
     private final LongSupplier fillEnqueueWaits;
     private final LongSupplier ordersReceived;
     private final LongSupplier ordersNotOwned;
+    private final LongSupplier rejectRepliesSent;
     private final AtomicBoolean running = new AtomicBoolean(false);
     private Thread reporterThread;
 
@@ -31,20 +32,22 @@ public class MatchingEngineMetricsReporter implements AutoCloseable {
      * @param fillQueueDepth 체결 발신 queue들에 지금 쌓인 체결 수의 합
      * @param fillEnqueueWaits 체결 발신 queue가 가득 차 enqueue가 기다린 횟수의 합
      * @param ordersReceived 담당 종목이라 엔진에 넣은 PLACE 주문 수의 누적
-     * @param ordersNotOwned 담당 종목이 아니라 거부 회신으로 돌려보낸 PLACE 주문 수의 누적
+     * @param ordersNotOwned 담당 종목이 아니라 거부 회신 발신 queue에 넣은 PLACE 주문 수의 누적
+     * @param rejectRepliesSent 거부 회신 중 Aeron offer가 성공한 수의 누적(ordersNotOwned와 대조한다)
      */
     public MatchingEngineMetricsReporter(MatchingEngine engine, LongSupplier fillQueueDepth, LongSupplier fillEnqueueWaits,
-                                         LongSupplier ordersReceived, LongSupplier ordersNotOwned) {
+                                         LongSupplier ordersReceived, LongSupplier ordersNotOwned, LongSupplier rejectRepliesSent) {
         this.engine = engine;
         this.fillQueueDepth = fillQueueDepth;
         this.fillEnqueueWaits = fillEnqueueWaits;
         this.ordersReceived = ordersReceived;
         this.ordersNotOwned = ordersNotOwned;
+        this.rejectRepliesSent = rejectRepliesSent;
     }
 
     /** 엔진과 (Aeron Archive 저널이면) 저널에서 값을 읽는다. Aeron 저널이 아니면 저널 재시도는 0이다. */
     static MatchingEngineMetrics read(MatchingEngine engine, LongSupplier fillQueueDepth, LongSupplier fillEnqueueWaits,
-                                      LongSupplier ordersReceived, LongSupplier ordersNotOwned) {
+                                      LongSupplier ordersReceived, LongSupplier ordersNotOwned, LongSupplier rejectRepliesSent) {
         Journal journal = engine.journal();
         long backPressure = 0L;
         long otherRetries = 0L;
@@ -54,13 +57,13 @@ public class MatchingEngineMetricsReporter implements AutoCloseable {
         }
         return new MatchingEngineMetrics(engine.ringBufferRemainingCapacity(), engine.ringFullWaitCount(), backPressure, otherRetries,
             fillQueueDepth.getAsLong(), fillEnqueueWaits.getAsLong(), engine.fullyFilledOrderCount(),
-            ordersReceived.getAsLong(), ordersNotOwned.getAsLong(), engine.fillCount());
+            ordersReceived.getAsLong(), ordersNotOwned.getAsLong(), rejectRepliesSent.getAsLong(), engine.fillCount());
     }
 
     /** 누적 값은 구간 증가분으로, 남은 칸과 queue 깊이는 현재 값으로 한 줄을 만든다. */
     static String formatLine(MatchingEngineMetrics previous, MatchingEngineMetrics current) {
         return String.format(
-            "matching-engine ringRemaining=%d ringFullWaits=%d journalBackPressure=%d journalOtherRetries=%d fillQueueDepth=%d fillEnqueueWaits=%d fullyFilledOrders=%d fullyFilledOrdersTotal=%d ordersReceived=%d ordersNotOwned=%d fills=%d",
+            "matching-engine ringRemaining=%d ringFullWaits=%d journalBackPressure=%d journalOtherRetries=%d fillQueueDepth=%d fillEnqueueWaits=%d fullyFilledOrders=%d fullyFilledOrdersTotal=%d ordersReceived=%d ordersNotOwned=%d rejectRepliesSent=%d fills=%d",
             current.ringRemaining(),
             current.ringFullWaits() - previous.ringFullWaits(),
             current.journalBackPressure() - previous.journalBackPressure(),
@@ -71,6 +74,7 @@ public class MatchingEngineMetricsReporter implements AutoCloseable {
             current.fullyFilledOrders(),
             current.ordersReceived() - previous.ordersReceived(),
             current.ordersNotOwned() - previous.ordersNotOwned(),
+            current.rejectRepliesSent() - previous.rejectRepliesSent(),
             current.fills() - previous.fills());
     }
 
@@ -82,7 +86,7 @@ public class MatchingEngineMetricsReporter implements AutoCloseable {
     }
 
     private void reportLoop() {
-        MatchingEngineMetrics previous = read(engine, fillQueueDepth, fillEnqueueWaits, ordersReceived, ordersNotOwned);
+        MatchingEngineMetrics previous = read(engine, fillQueueDepth, fillEnqueueWaits, ordersReceived, ordersNotOwned, rejectRepliesSent);
         while (running.get()) {
             try {
                 Thread.sleep(REPORT_INTERVAL_MILLIS);
@@ -90,7 +94,7 @@ public class MatchingEngineMetricsReporter implements AutoCloseable {
                 Thread.currentThread().interrupt();
                 return;
             }
-            MatchingEngineMetrics current = read(engine, fillQueueDepth, fillEnqueueWaits, ordersReceived, ordersNotOwned);
+            MatchingEngineMetrics current = read(engine, fillQueueDepth, fillEnqueueWaits, ordersReceived, ordersNotOwned, rejectRepliesSent);
             log.info(formatLine(previous, current));
             previous = current;
         }

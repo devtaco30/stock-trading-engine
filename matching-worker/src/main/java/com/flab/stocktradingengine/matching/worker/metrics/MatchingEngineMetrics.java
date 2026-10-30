@@ -4,5 +4,5 @@ package com.flab.stocktradingengine.matching.worker.metrics;
 record MatchingEngineMetrics(
         long ringRemaining, long ringFullWaits, long journalBackPressure, long journalOtherRetries,
         long fillQueueDepth, long fillEnqueueWaits, long fullyFilledOrders,
-        long ordersReceived, long ordersNotOwned, long fills) {
+        long ordersReceived, long ordersNotOwned, long rejectRepliesSent, long fills) {
 }

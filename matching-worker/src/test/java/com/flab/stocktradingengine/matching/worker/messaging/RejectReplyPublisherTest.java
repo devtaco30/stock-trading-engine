@@ -106,6 +106,22 @@ class RejectReplyPublisherTest {
     }
 
     @Test
+    void 보낸_회신_수는_offer가_성공한_건만_센다() throws Exception {
+        Subscription rejectSubscription = aeron.addSubscription(CHANNEL, AeronStreamIds.REJECT_REPLY);
+        publisher = new RejectReplyPublisher(resolver, Map.of(ENDPOINT, rejectPublication));
+        publisher.start();
+
+        publisher.onNotOwned(place(1L, 101L));
+        publisher.onNotOwned(place(2L, 101L));
+        Thread.sleep(200);
+        assertThat(publisher.sentCount()).as("목적지를 모르면 대기 목록에만 있고 보낸 수는 0").isZero();
+
+        endpointByAccountId.put(101L, ENDPOINT);
+        assertThat(poll(rejectSubscription, 2)).hasSize(2);
+        assertThat(publisher.sentCount()).isEqualTo(2L);
+    }
+
+    @Test
     void 수신자가_아직_연결되지_않았으면_보관했다가_연결되면_보낸다() throws Exception {
         endpointByAccountId.put(101L, ENDPOINT);
         publisher = new RejectReplyPublisher(resolver, Map.of(ENDPOINT, rejectPublication));

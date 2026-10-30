@@ -100,12 +100,18 @@ public final class AeronOrderReceiver implements AutoCloseable {
     private volatile long placeAcceptedCount;
     private volatile long notOwnedCount;
 
-    /** 담당 종목이라 엔진에 넣은 PLACE 주문 수의 누적. */
+    /**
+     * 담당 종목이라 엔진에 넣은 PLACE 주문 수의 누적. 같은 orderId가 중복 도착한 주문도 센다. 중복은 이 카운터를 지난 뒤
+     * 엔진 안(MatchingEventHandler의 containsOrder)에서 걸러지므로 호가창에 들어간 주문 수와 이 값은 같지 않을 수 있다.
+     */
     public long placeAcceptedCount() {
         return placeAcceptedCount;
     }
 
-    /** 담당 종목이 아니라 접수하지 않고 거부 회신으로 돌려보낸 PLACE 주문 수의 누적. */
+    /**
+     * 담당 종목이 아니라 접수하지 않고 거부 회신 발신 queue에 넣은 PLACE 주문 수의 누적. 계좌 shard가 회신을 받은 수가
+     * 아니다. 실제로 보낸 수는 {@code RejectReplyPublisher.sentCount()}로 따로 센다.
+     */
     public long notOwnedCount() {
         return notOwnedCount;
     }
