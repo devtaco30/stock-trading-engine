@@ -195,13 +195,25 @@ public final class MatchingDestinationResolver implements MatchingTargetLookup {
 
     public void close() {
         running = false;
-        consumer.wakeup();
         try {
             if (pollThread != null) {
-                pollThread.join(Duration.ofSeconds(5).toMillis());
+                // 복구 중에는 읽기 thread가 새 consumer를 만들어 field를 바꾸므로, 한 번만 깨우면 새 consumer는 깨우지 못한다(api timeout까지 막힌다).
+                // thread가 끝날 때까지 지금 field의 consumer를 짧은 간격으로 계속 깨운다. wakeup()은 여러 thread에서 불러도 되는 유일한 메서드다.
+                long deadline = System.nanoTime() + Duration.ofSeconds(5).toNanos();
+                while (pollThread.isAlive() && System.nanoTime() < deadline) {
+                    consumer.wakeup();
+                    pollThread.join(50L);
+                }
+            } else {
+                consumer.wakeup();
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+        }
+        if (pollThread != null && pollThread.isAlive()) {
+            // 읽기 thread가 아직 consumer를 쓰는 중이다. KafkaConsumer는 thread 안전하지 않으므로 다른 thread에서 close()하지 않는다.
+            log.log(Level.WARNING, "[목적지] 읽기 thread가 5초 안에 끝나지 않아 consumer를 닫지 않고 둔다");
+            return;
         }
         consumer.close();
     }
@@ -262,6 +274,11 @@ public final class MatchingDestinationResolver implements MatchingTargetLookup {
                 }
                 Consumer<Integer, String> fresh = consumerFactory.get();
                 consumer = fresh;
+                if (!running) {
+                    // 새 consumer를 만드는 동안 close()가 왔다. 이 consumer는 이미 field에 있어 close()가 깨우거나 닫지 못할 수 있으니 여기서 닫는다.
+                    fresh.close(Duration.ofSeconds(1));
+                    return false;
+                }
                 List<PartitionInfo> partitionInfos = fresh.partitionsFor(MAP_TOPIC);
                 if (partitionInfos == null || partitionInfos.isEmpty()) {
                     throw new IllegalStateException(MAP_TOPIC + "의 파티션을 찾지 못했습니다");

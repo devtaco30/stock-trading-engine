@@ -55,7 +55,7 @@ class MatchingDestinationResolverTest {
     private MatchingDestinationResolver resolver;
 
     /** MockConsumer.poll은 기다리지 않고 바로 돌아와 poll 스레드가 CPU를 태우므로 짧게 쉰다. */
-    private static final class SleepingMockConsumer extends MockConsumer<Integer, String> {
+    private static class SleepingMockConsumer extends MockConsumer<Integer, String> {
         SleepingMockConsumer() {
             super(OffsetResetStrategy.EARLIEST);
         }
@@ -568,6 +568,147 @@ class MatchingDestinationResolverTest {
         }
     }
 
+    @Test
+    void 복구로_다시_읽는_동안에는_옛_값이_있던_종목도_알_수_없음으로_돌려준다() throws InterruptedException {
+        String staleStock = "005930";
+        String newStock = stockInDifferentSlot(staleStock);
+        int staleSlot = stockSlotHasher.slotFor(staleStock);
+        SleepingMockConsumer recovered = freshConsumerWith(stockSlotHasher.slotFor(newStock), ADDRESS_B);
+        java.util.concurrent.CountDownLatch releaseRecovery = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.CountDownLatch recoveryStarted = new java.util.concurrent.CountDownLatch(1);
+        resolver = new MatchingDestinationResolver(consumer, stockSlotHasher, ADDRESS_POOL, () -> {
+            recoveryStarted.countDown();
+            try {
+                releaseRecovery.await();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            return recovered;
+        }, 20L);
+        resolver.start();
+        publish(staleSlot, ADDRESS_A);
+        awaitEndpoint(staleStock, Optional.of(ADDRESS_A));
+
+        consumer.schedulePollTask(() -> {
+            throw new KafkaException("일시적인 브로커 오류");
+        });
+        assertTrue(recoveryStarted.await(5, java.util.concurrent.TimeUnit.SECONDS), "복구가 시작되어 새 consumer를 만드는 중이어야 한다");
+
+        assertEquals(Optional.empty(), resolver.endpointFor(staleStock), "복구가 끝나기 전에는 옛 값이 있던 종목도 알 수 없음이다");
+        assertEquals(Optional.empty(), resolver.targetFor(staleStock));
+        assertTrue(resolver.readFailure().isPresent(), "복구 중에는 읽기 실패 기록이 남아 있다");
+
+        releaseRecovery.countDown();
+        awaitEndpoint(newStock, Optional.of(ADDRESS_B));
+    }
+
+    @Test
+    void 복구한_뒤_두_번째_실패가_나면_다시_복구한다() {
+        String firstStock = "005930";
+        String secondStock = stockInDifferentSlot(firstStock);
+        String thirdStock = stockInDifferentSlot(firstStock, secondStock);
+        SleepingMockConsumer firstRecovery = freshConsumerWith(stockSlotHasher.slotFor(secondStock), ADDRESS_B);
+        SleepingMockConsumer secondRecovery = freshConsumerWith(stockSlotHasher.slotFor(thirdStock), ADDRESS_A);
+        java.util.concurrent.atomic.AtomicInteger factoryCalls = new java.util.concurrent.atomic.AtomicInteger();
+        resolver = new MatchingDestinationResolver(consumer, stockSlotHasher, ADDRESS_POOL, () -> {
+            return factoryCalls.incrementAndGet() == 1 ? firstRecovery : secondRecovery;
+        }, 20L);
+        resolver.start();
+        publish(stockSlotHasher.slotFor(firstStock), ADDRESS_A);
+        awaitEndpoint(firstStock, Optional.of(ADDRESS_A));
+
+        consumer.schedulePollTask(() -> {
+            throw new KafkaException("첫 번째 오류");
+        });
+        awaitEndpoint(secondStock, Optional.of(ADDRESS_B));
+        assertTrue(resolver.readFailure().isEmpty());
+
+        firstRecovery.schedulePollTask(() -> {
+            throw new KafkaException("복구한 뒤의 두 번째 오류");
+        });
+        awaitEndpoint(thirdStock, Optional.of(ADDRESS_A));
+        assertEquals(2, factoryCalls.get(), "두 번째 실패에도 consumer를 새로 만들어 복구한다");
+        assertEquals(Optional.empty(), resolver.endpointFor(secondStock), "두 번째 복구도 처음부터 다시 읽으므로 이전 복구의 항목이 남지 않는다");
+        assertTrue(resolver.readFailure().isEmpty());
+    }
+
+    /** partitionsFor가 wakeup()이 불릴 때까지 막히는 consumer 대역(실제 KafkaConsumer가 api timeout까지 막히는 것을 흉내 낸다). */
+    private static final class WakeupBlockedConsumer extends SleepingMockConsumer {
+        private final java.util.concurrent.CountDownLatch woken = new java.util.concurrent.CountDownLatch(1);
+        private final java.util.concurrent.CountDownLatch entered = new java.util.concurrent.CountDownLatch(1);
+
+        @Override
+        public synchronized List<PartitionInfo> partitionsFor(String topic) {
+            entered.countDown();
+            try {
+                if (!woken.await(20, java.util.concurrent.TimeUnit.SECONDS)) {
+                    throw new IllegalStateException("20초 안에 wakeup()이 오지 않았다");
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            throw new org.apache.kafka.common.errors.WakeupException();
+        }
+
+        @Override
+        public void wakeup() {
+            woken.countDown();
+        }
+    }
+
+    @Test
+    void 복구가_새_consumer를_만드는_중에_close가_와도_새_consumer가_wakeup으로_풀려_바로_끝난다() throws Exception {
+        WakeupBlockedConsumer fresh = new WakeupBlockedConsumer();
+        java.util.concurrent.CountDownLatch factoryEntered = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.CountDownLatch releaseFactory = new java.util.concurrent.CountDownLatch(1);
+        resolver = new MatchingDestinationResolver(consumer, stockSlotHasher, ADDRESS_POOL, () -> {
+            factoryEntered.countDown();
+            try {
+                releaseFactory.await();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            return fresh;
+        }, 20L);
+        resolver.start();
+        resolver.awaitInitialCatchUp(Duration.ofSeconds(10));
+        consumer.schedulePollTask(() -> {
+            throw new KafkaException("일시적인 브로커 오류");
+        });
+        assertTrue(factoryEntered.await(5, java.util.concurrent.TimeUnit.SECONDS), "복구가 새 consumer를 만드는 중이어야 한다");
+
+        java.util.concurrent.CompletableFuture<Long> closing = java.util.concurrent.CompletableFuture.supplyAsync(() -> {
+            long started = System.nanoTime();
+            resolver.close();
+            return (System.nanoTime() - started) / 1_000_000L;
+        });
+        Thread.sleep(200);
+        releaseFactory.countDown();
+
+        long closeMillis = closing.get(15, java.util.concurrent.TimeUnit.SECONDS);
+        assertTrue(closeMillis < 3_000L, "close가 join 제한(5초)을 채우지 않는다: " + closeMillis + "ms");
+        assertTrue(fresh.closed(), "새 consumer가 닫혔다");
+    }
+
+    @Test
+    void 복구가_새_consumer의_partitionsFor에서_막힌_동안_close가_와도_wakeup으로_풀려_바로_끝난다() throws Exception {
+        WakeupBlockedConsumer fresh = new WakeupBlockedConsumer();
+        resolver = new MatchingDestinationResolver(consumer, stockSlotHasher, ADDRESS_POOL, () -> fresh, 20L);
+        resolver.start();
+        resolver.awaitInitialCatchUp(Duration.ofSeconds(10));
+        consumer.schedulePollTask(() -> {
+            throw new KafkaException("일시적인 브로커 오류");
+        });
+        assertTrue(fresh.entered.await(5, java.util.concurrent.TimeUnit.SECONDS), "새 consumer가 partitionsFor에서 막힌 상태여야 한다");
+
+        long started = System.nanoTime();
+        resolver.close();
+        long closeMillis = (System.nanoTime() - started) / 1_000_000L;
+
+        assertTrue(closeMillis < 3_000L, "새 consumer가 wakeup으로 풀려 close가 join 제한(5초)을 채우지 않는다: " + closeMillis + "ms");
+        assertTrue(fresh.closed(), "새 consumer가 닫혔다");
+    }
+
     // ---- 헬퍼 ----
     private void awaitRecovered() {
         long deadline = System.currentTimeMillis() + 5_000L;
@@ -583,11 +724,15 @@ class MatchingDestinationResolverTest {
     }
 
 
-    private String stockInDifferentSlot(String stockCode) {
-        int slot = stockSlotHasher.slotFor(stockCode);
+    /** 주어진 종목들과 모두 다른 종목 slot에 놓이는 종목코드 하나. */
+    private String stockInDifferentSlot(String... stockCodes) {
+        Set<Integer> usedSlots = new java.util.HashSet<>();
+        for (String stockCode : stockCodes) {
+            usedSlots.add(stockSlotHasher.slotFor(stockCode));
+        }
         for (int candidate = 1; candidate < 1000; candidate++) {
             String candidateCode = String.format("%06d", candidate);
-            if (stockSlotHasher.slotFor(candidateCode) != slot) {
+            if (!usedSlots.contains(stockSlotHasher.slotFor(candidateCode))) {
                 return candidateCode;
             }
         }
