@@ -256,7 +256,7 @@ class AeronMatchingOrderSenderRoutingTest {
         RecordingPublication addressTwo = new RecordingPublication();
         targetByStockCode.put(stockOne, new MatchingSlotTarget(ADDRESS_ONE, false));
         sender = newSender(addressOne, addressTwo, 100);
-        sender.setRetransmitBackoff(60L, 1_000L, 10_000L);
+        sender.setRetransmitBackoff(500L, 4_000L, 10_000L);
         sender.start();
 
         long[] delayMillis = new long[3];
@@ -268,9 +268,10 @@ class AeronMatchingOrderSenderRoutingTest {
             delayMillis[round] = (System.nanoTime() - acceptedAt) / 1_000_000L;
         }
 
-        assertThat(delayMillis[0]).as("첫 거부는 바로 재전송").isLessThan(40L);
-        assertThat(delayMillis[1]).as("연속 두 번째는 기본 간격 60ms 이상").isGreaterThanOrEqualTo(55L);
-        assertThat(delayMillis[2]).as("연속 세 번째는 두 배 120ms 이상").isGreaterThanOrEqualTo(110L);
+        // 기본 간격을 500ms로 키워 두고, 첫 거부는 간격의 절반 안에, 이후는 간격의 96% 이상에 나가는지 본다(스케줄링 지연에 흔들리지 않는 여유).
+        assertThat(delayMillis[0]).as("첫 거부는 바로 재전송(기본 간격의 절반 미만)").isLessThan(250L);
+        assertThat(delayMillis[1]).as("연속 두 번째는 기본 간격 500ms 이상").isGreaterThanOrEqualTo(480L);
+        assertThat(delayMillis[2]).as("연속 세 번째는 두 배 1,000ms 이상").isGreaterThanOrEqualTo(960L);
     }
 
     @Test
@@ -326,24 +327,45 @@ class AeronMatchingOrderSenderRoutingTest {
     }
 
     @Test
+    void 보관을_비운_직후_늦게_도착한_거부_회신도_새_연속_회차로_세어_기본_간격을_둔다() throws InterruptedException {
+        RecordingPublication addressOne = new RecordingPublication();
+        RecordingPublication addressTwo = new RecordingPublication();
+        // 맵은 이미 담당(이동 중 아님)을 가리킨다. 회신을 어느 pod가 보냈는지는 알 수 없어 늦게 온 회신과 담당이 거부한 회신을 구분하지 못한다.
+        targetByStockCode.put(stockOne, new MatchingSlotTarget(ADDRESS_ONE, false));
+        sender = newSender(addressOne, addressTwo, 100);
+        sender.setRetransmitBackoff(500L, 4_000L, 10_000L);
+        sender.start();
+
+        sender.acceptRejectedOrder(placeOrder(1L, stockOne));
+        await(() -> addressOne.sent.size() == 1, "첫 거부는 바로 나간다(보관 목록이 비워졌다)");
+
+        long acceptedAt = System.nanoTime();
+        sender.acceptRejectedOrder(placeOrder(2L, stockOne));
+        Thread.sleep(150);
+        assertThat(addressOne.sent).as("비운 직후 온 두 번째 회신은 새 회차(2번째)로 세어져 기본 간격 동안 기다린다").hasSize(1);
+        await(() -> addressOne.sent.size() == 2, "기본 간격이 지난 뒤 나간다");
+        assertThat((System.nanoTime() - acceptedAt) / 1_000_000L).isGreaterThanOrEqualTo(480L);
+    }
+
+    @Test
     void 거부가_한동안_없으면_횟수가_되돌아가_다시_바로_재전송한다() throws InterruptedException {
         RecordingPublication addressOne = new RecordingPublication();
         RecordingPublication addressTwo = new RecordingPublication();
         targetByStockCode.put(stockOne, new MatchingSlotTarget(ADDRESS_ONE, false));
         sender = newSender(addressOne, addressTwo, 100);
-        sender.setRetransmitBackoff(200L, 1_000L, 150L);
+        sender.setRetransmitBackoff(600L, 2_000L, 150L);
         sender.start();
 
         sender.acceptRejectedOrder(placeOrder(1L, stockOne));
         await(() -> addressOne.sent.size() == 1, "첫 재전송");
         sender.acceptRejectedOrder(placeOrder(1L, stockOne));
-        await(() -> addressOne.sent.size() == 2, "두 번째 재전송(200ms 간격)");
+        await(() -> addressOne.sent.size() == 2, "두 번째 재전송(600ms 간격)");
         Thread.sleep(400);
 
         long acceptedAt = System.nanoTime();
         sender.acceptRejectedOrder(placeOrder(1L, stockOne));
         await(() -> addressOne.sent.size() == 3, "되돌아간 뒤 재전송");
-        assertThat((System.nanoTime() - acceptedAt) / 1_000_000L).as("조용했던 뒤의 거부는 다시 바로 재전송").isLessThan(100L);
+        assertThat((System.nanoTime() - acceptedAt) / 1_000_000L).as("조용했던 뒤의 거부는 다시 바로 재전송(기본 간격 600ms의 절반 미만)").isLessThan(300L);
     }
 
     @Test
