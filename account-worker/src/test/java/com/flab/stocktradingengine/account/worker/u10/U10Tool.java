@@ -55,7 +55,10 @@ import io.aeron.driver.ThreadingMode;
  *       {@code HIGH=a,b,c}로 출력한다.</li>
  *   <li>{@code send-bulk <channel> <accountId> <BUY|SELL> <firstPrice> <perStock> <requestIdPrefix> <stockCode...>} —
  *       종목마다 perStock건을 가격 firstPrice, firstPrice+1, …로 한 연결에서 보낸다(수량 1). 환경변수 {@code BULK_ACCOUNTS=<계좌 수>}(기본 1)를 주면
- *       종목의 i번째 주문(0부터)을 계좌 {@code accountId + (i % 계좌 수)}로 나눠 보낸다(표지 매수는 표지 계좌 그대로).</li>
+ *       종목의 i번째 주문(0부터)을 계좌 {@code accountId + (i % 계좌 수)}로 나눠 보낸다(표지 매수는 표지 계좌 그대로).
+ *       이 도구는 그 계좌들이 계좌 워커에 시드되어 있는지 확인하지 않는다: 시드되지 않은 계좌의 주문은 계좌 워커가 ACCOUNT_NOT_FOUND로 거부한다.
+ *       {@code loadtest/u10/u10-account.yml}은 계좌 90001과 90002만 시드하므로, 계좌 수를 2 이상으로 쓰려면 호출하는 쪽이 시드를 맞춘다
+ *       (c1의 {@code loadtest/s0/probe.sh}는 90002부터 계좌 수만큼 직접 시드한다).</li>
  *   <li>{@code assigned <kafkaBootstrap> <stockSlotCount>} — 맵 토픽의 종목 slot별 마지막 값을 읽어
  *       {@code ASSIGNED 배정된 수/전체 MOVING 이동 중인 수 ENDPOINTS 주소=개수,...}를 출력한다.</li>
  *   <li>{@code map-history <kafkaBootstrap>} — 맵 토픽의 모든 기록을 {@code slot<TAB>CreateTime(ms)<TAB>값} 줄로 출력한다.</li>
