@@ -492,6 +492,7 @@ class MatchingDestinationResolverTest {
         long before = System.currentTimeMillis();
         try {
             resolver.start();
+            resolver.awaitInitialCatchUp(Duration.ofSeconds(10));
             publish(stockSlotHasher.slotFor(normalStock), ADDRESS_B);
             awaitEndpoint(normalStock, Optional.of(ADDRESS_B));
             publish(movingSlot, ADDRESS_A + ";moving");
@@ -512,7 +513,75 @@ class MatchingDestinationResolverTest {
         }
     }
 
+    @Test
+    void 초기_읽기와_복구_재읽기가_다시_읽는_옛_이동_중_기록은_읽은_시각_로그를_남기지_않는다() {
+        String staleStock = "005930";
+        int staleSlot = stockSlotHasher.slotFor(staleStock);
+        // 초기 읽기에서 읽는 옛 기록: 시작 전에 이미 토픽에 있던 이동 중 값(끝 offset이 1이라 이 기록을 읽어야 초기 읽기가 끝난다).
+        int stalePartition = Math.floorMod(staleSlot, STOCK_SLOT_COUNT);
+        consumer.updateEndOffsets(Map.of(new TopicPartition(MAP_TOPIC, stalePartition), 1L));
+        consumer.schedulePollTask(() -> consumer.addRecord(
+            new ConsumerRecord<>(MAP_TOPIC, stalePartition, 0L, staleSlot, ADDRESS_A + ";moving")));
+        SleepingMockConsumer recovered = freshConsumerWith(staleSlot, ADDRESS_A + ";moving");
+        resolver = new MatchingDestinationResolver(consumer, stockSlotHasher, ADDRESS_POOL, () -> recovered, 50L);
+        List<String> movingLines = new ArrayList<>();
+        java.util.logging.Logger julLogger = java.util.logging.Logger.getLogger(MatchingDestinationResolver.class.getName());
+        Handler captureHandler = new Handler() {
+            @Override
+            public void publish(LogRecord logRecord) {
+                if (logRecord.getMessage().contains("이동 중 표시를 읽음")) {
+                    synchronized (movingLines) {
+                        movingLines.add(logRecord.getMessage());
+                    }
+                }
+            }
+
+            @Override
+            public void flush() {
+            }
+
+            @Override
+            public void close() {
+            }
+        };
+        julLogger.addHandler(captureHandler);
+        try {
+            resolver.start();
+            resolver.awaitInitialCatchUp(Duration.ofSeconds(10));
+            awaitEndpoint(staleStock, Optional.of(ADDRESS_A));
+            synchronized (movingLines) {
+                assertEquals(0, movingLines.size(), "초기 읽기가 읽는 옛 기록은 남기지 않는다: " + movingLines);
+            }
+
+            consumer.schedulePollTask(() -> {
+                throw new KafkaException("일시적인 브로커 오류");
+            });
+            awaitRecovered();
+            Thread.sleep(100);
+            synchronized (movingLines) {
+                assertEquals(0, movingLines.size(), "복구 재읽기가 다시 읽는 옛 기록은 남기지 않는다: " + movingLines);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } finally {
+            julLogger.removeHandler(captureHandler);
+        }
+    }
+
     // ---- 헬퍼 ----
+    private void awaitRecovered() {
+        long deadline = System.currentTimeMillis() + 5_000L;
+        while (resolver.readFailure().isPresent() && System.currentTimeMillis() < deadline) {
+            try {
+                Thread.sleep(10);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+        }
+        assertTrue(resolver.readFailure().isEmpty(), "복구되어 읽기 실패 기록이 지워져야 한다");
+    }
+
 
     private String stockInDifferentSlot(String stockCode) {
         int slot = stockSlotHasher.slotFor(stockCode);

@@ -214,7 +214,7 @@ public final class MatchingDestinationResolver implements MatchingTargetLookup {
                     while (running) {
                         ConsumerRecords<Integer, String> records = consumer.poll(Duration.ofMillis(500));
                         if (!records.isEmpty()) {
-                            applyRecords(records);
+                            applyRecords(records, caughtUp);
                         }
                         if (!caughtUp && isCaughtUp(partitions, endOffsets)) {
                             caughtUp = true;
@@ -276,7 +276,7 @@ public final class MatchingDestinationResolver implements MatchingTargetLookup {
                 while (running && !isCaughtUp(partitions, ends)) {
                     ConsumerRecords<Integer, String> records = fresh.poll(Duration.ofMillis(500));
                     if (!records.isEmpty()) {
-                        applyRecords(records);
+                        applyRecords(records, false);
                     }
                 }
                 if (!running) {
@@ -319,7 +319,11 @@ public final class MatchingDestinationResolver implements MatchingTargetLookup {
         return true;
     }
 
-    private void applyRecords(ConsumerRecords<Integer, String> records) {
+    /**
+     * @param live 초기 읽기를 마친 뒤 새로 올라온 기록이면 true. 시작할 때나 복구로 처음부터 다시 읽는 옛 기록은 false라서 「이동 중 표시를 읽음」 로그를 남기지 않는다
+     *             (옛 기록마다 읽은 시각을 찍으면 실제로 표시를 본 시각과 어긋난 줄이 쌓인다).
+     */
+    private void applyRecords(ConsumerRecords<Integer, String> records, boolean live) {
         MatchingSlotTarget[] updated = tableState.table().clone();
         for (ConsumerRecord<Integer, String> record : records) {
             int slot = record.key();
@@ -336,7 +340,7 @@ public final class MatchingDestinationResolver implements MatchingTargetLookup {
             try {
                 MatchingSlotTarget parsed = MatchingSlotTarget.parse(record.value());
                 updated[slot] = parsed;
-                if (parsed.moving()) {
+                if (live && parsed.moving()) {
                     // 이동 중 값은 종목 slot이 옮겨질 때 slot마다 한 번 올라오므로 slot 수 이내의 줄만 남는다. 시험이 「이동 중 표시 구간」을
                     // Kafka 기록 시각이 아니라 이 계좌 shard가 표시를 읽은 시각으로 다시 잴 때 쓴다.
                     log.log(Level.INFO, "[목적지] 이동 중 표시를 읽음: slot=" + slot + " 시각(epoch ms)=" + System.currentTimeMillis());
