@@ -554,6 +554,53 @@ class MatchingSlotMoveIntegrationTest {
         }
     }
 
+    /**
+     * U17b 운영 구성. 이동이 끝난 두 pod 중 첫째(X)를 Admin으로 그룹에서 빼면 X가 lost를 받고 둘째(Z)가 X의 종목 slot을 받는다. X는 곧
+     * 다시 가입해 일부를 되받을 수 있다. 어느 순서로 끝나든 맵 토픽의 각 종목 slot 마지막 값은 그 종목 slot을 지금 맡은 pod의 평상시 주소여야
+     * 한다(이동 중 표시가 최종 값으로 남지 않는다). 도착 순서에 따라 결함이 있어도 맞게 보일 수 있어서 결함을 확정하는 시험은 아니고,
+     * 운영 구성(요청 통로, 맵 읽기, 판정 실행기)에서 lost 경로가 맵을 어지럽히지 않는지의 확인이다. 결함을 재현하는 쪽은
+     * KafkaMatchingShardAssignmentIntegrationTest의 결정적 변형이다.
+     */
+    @Test
+    void 이동이_끝난_뒤_첫째가_그룹에서_빠져도_맵의_최종_값은_각_종목_slot을_맡은_pod의_평상시_주소다() throws Exception {
+        podA = startPod("slotmove-0", PORT_A, 8021, dirA);
+        KafkaMatchingShardAssignment assignmentA = podA.getBean(KafkaMatchingShardAssignment.class);
+        awaitUntil(() -> assignmentA.currentSlotsSnapshot().size() == 64, "A가 종목 slot 64개를 맡지 못함");
+        podB = startPod("slotmove-1", PORT_B, 8022, dirB);
+        KafkaMatchingShardAssignment assignmentB = podB.getBean(KafkaMatchingShardAssignment.class);
+        awaitUntil(() -> assignmentA.currentSlotsSnapshot().size() + assignmentB.currentSlotsSnapshot().size() == 64
+                && !assignmentA.currentSlotsSnapshot().isEmpty() && !assignmentB.currentSlotsSnapshot().isEmpty()
+                && assignmentA.slotsWaitingForMove().isEmpty() && assignmentB.slotsWaitingForMove().isEmpty(),
+            "이동이 끝나 두 pod가 64개를 나눠 맡지 못함");
+
+        try (Admin admin = Admin.create(Map.of(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, BOOTSTRAP))) {
+            admin.removeMembersFromConsumerGroup(GROUP_ID, new RemoveMembersFromConsumerGroupOptions(
+                List.of(new org.apache.kafka.clients.admin.MemberToRemove("slotmove-0")))).all().get();
+        }
+
+        Map<Integer, List<String>> history = awaitMapTopic(snapshot -> {
+            Set<Integer> aSlots = assignmentA.currentSlotsSnapshot();
+            Set<Integer> bSlots = assignmentB.currentSlotsSnapshot();
+            if (aSlots.size() + bSlots.size() != 64 || !assignmentA.slotsWaitingForMove().isEmpty()
+                    || !assignmentB.slotsWaitingForMove().isEmpty() || snapshot.size() != 64) {
+                return false;
+            }
+            for (int slot = 0; slot < 64; slot++) {
+                List<String> values = snapshot.get(slot);
+                String owner = aSlots.contains(slot) ? CHANNEL_A : CHANNEL_B;
+                if (!owner.equals(values.get(values.size() - 1))) {
+                    return false;
+                }
+            }
+            return true;
+        });
+        for (int slot = 0; slot < 64; slot++) {
+            List<String> values = history.get(slot);
+            assertThat(values.get(values.size() - 1)).as("종목 slot=" + slot + " 기록=" + values)
+                .doesNotEndWith(";moving");
+        }
+    }
+
     // ---- 도우미 ------------------------------------------------------------------------------------------------
 
     private ConfigurableApplicationContext startPod(String instanceId, int port, int archiveControlPort, Path archiveDir) {

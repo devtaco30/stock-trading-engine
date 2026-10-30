@@ -305,6 +305,76 @@ class KafkaMatchingShardAssignmentIntegrationTest {
             .doesNotContain(secondPlain + ";moving");
     }
 
+    /**
+     * U17b 결정적 변형. 그룹에서 빠진 첫째(X)가 lost를 받았을 때 X의 이동 중 쓰기가 늦게 나가는 순서를 시험이 정한다: X의 이동 중 쓰기는
+     * 시험이 여는 문에 걸려 있고, 둘째(Z)가 종목 slot을 받아 평상시 값을 올린 뒤에 문을 연다. lost가 맵에 쓰지 않으면 문이 열려도 나갈 쓰기가
+     * 없어 최종 값은 각 종목 slot의 담당 주소로 남는다. lost가 회수 콜백으로 처리되면 늦게 나간 이동 중 쓰기가 최종 값을 덮어 실패한다.
+     */
+    @Test
+    void 그룹에서_빠진_첫째의_이동_중_쓰기를_늦게_내보내도_맵의_최종_값은_각_종목_slot의_담당_주소다() throws Exception {
+        String firstPlain = "order-endpoint-of-m1";
+        String firstMoving = firstPlain + ";moving";
+        java.util.concurrent.atomic.AtomicBoolean gateArmed = new java.util.concurrent.atomic.AtomicBoolean();
+        java.util.concurrent.CountDownLatch gate = new java.util.concurrent.CountDownLatch(1);
+        List<String> firstSendsAfterArmed = java.util.Collections.synchronizedList(new ArrayList<>());
+        Producer<Integer, String> firstProducer = intercepting(buildMapProducer(), record -> {
+            if (gateArmed.get()) {
+                firstSendsAfterArmed.add(record.value());
+                if (firstMoving.equals(record.value())) {
+                    try {
+                        gate.await(60, java.util.concurrent.TimeUnit.SECONDS);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                }
+            }
+            return null;
+        });
+        KafkaMatchingShardAssignment first = newOperationalMember("m1", firstProducer);
+        first.start();
+        startConfirming(first);
+        awaitSlotCount(first, STOCK_SLOT_COUNT);
+        KafkaMatchingShardAssignment second = newOperationalMember("m2", buildMapProducer());
+        second.start();
+        startConfirming(second);
+        awaitSplit(first, second);
+        awaitCondition("두 멤버의 맵 쓰기가 모두 끝났다", () -> first.slotsWaitingForMove().isEmpty() && second.slotsWaitingForMove().isEmpty());
+        gateArmed.set(true);
+        List<String> lostLogs = new java.util.concurrent.CopyOnWriteArrayList<>();
+        java.util.logging.Logger assignmentLogger = java.util.logging.Logger.getLogger(KafkaMatchingShardAssignment.class.getName());
+        java.util.logging.Handler lostHandler = lostLogHandler(lostLogs);
+        assignmentLogger.addHandler(lostHandler);
+
+        try (Admin admin = Admin.create(adminProps())) {
+            admin.removeMembersFromConsumerGroup(groupId,
+                new RemoveMembersFromConsumerGroupOptions(List.of(new MemberToRemove("m1")))).all().get();
+        }
+        try {
+            awaitCondition("첫째가 lost 콜백을 받았다(lost 로그) 또는 이동 중 값을 보냈다",
+                () -> !lostLogs.isEmpty() || firstSendsAfterArmed.contains(firstMoving));
+            awaitCondition("두 멤버가 64개를 나눠 맡고 맵 쓰기가 끝났다", () ->
+                first.currentSlotsSnapshot().size() + second.currentSlotsSnapshot().size() == STOCK_SLOT_COUNT
+                    && first.slotsWaitingForMove().isEmpty() && second.slotsWaitingForMove().isEmpty()
+                    && MapTopicHistory.read(BOOTSTRAP, mapTopic).size() == STOCK_SLOT_COUNT);
+        } finally {
+            assignmentLogger.removeHandler(lostHandler);
+        }
+        // 둘째가 평상시 값을 올린 뒤에 첫째의 걸려 있던 쓰기를 내보낸다. lost가 맵에 쓰지 않았다면 걸려 있던 쓰기가 없다.
+        gate.countDown();
+        awaitMapWriterIdle();
+
+        Map<Integer, List<String>> history = MapTopicHistory.read(BOOTSTRAP, mapTopic);
+        Set<Integer> firstSlots = first.currentSlotsSnapshot();
+        for (int slot = 0; slot < STOCK_SLOT_COUNT; slot++) {
+            List<String> values = history.get(slot);
+            String last = values.get(values.size() - 1);
+            String expectedOwner = firstSlots.contains(slot) ? firstPlain : "order-endpoint-of-m2";
+            assertThat(last).as("종목 slot=" + slot + " 기록=" + values + " (마지막 값은 담당 주소여야 한다)").isEqualTo(expectedOwner);
+        }
+        assertThat(firstSendsAfterArmed)
+            .as("그룹에서 빠진 뒤 첫째가 보낸 값은 다시 가입해 새로 받은 종목 slot의 평상시 값뿐이다").allMatch(firstPlain::equals);
+    }
+
     private KafkaMatchingShardAssignment newMember(String instanceId, String assignmentTopicName) {
         Properties consumerProps = KafkaMatchingShardAssignment.consumerProperties(
             BOOTSTRAP, groupId, instanceId, TEST_SESSION_TIMEOUT_MS);
@@ -345,6 +415,27 @@ class KafkaMatchingShardAssignmentIntegrationTest {
         confirmer.setDaemon(true);
         confirmers.add(confirmer);
         confirmer.start();
+    }
+
+    /** 이 클래스가 lost 콜백 때만 남기는 WARNING 로그를 모으는 JUL handler. */
+    private java.util.logging.Handler lostLogHandler(List<String> lostLogs) {
+        return new java.util.logging.Handler() {
+            @Override
+            public void publish(java.util.logging.LogRecord logRecord) {
+                String message = logRecord.getMessage();
+                if (message != null && message.contains("종목 slot을 잃음")) {
+                    lostLogs.add(message);
+                }
+            }
+
+            @Override
+            public void flush() {
+            }
+
+            @Override
+            public void close() {
+            }
+        };
     }
 
     private void createMapTopic() throws Exception {
