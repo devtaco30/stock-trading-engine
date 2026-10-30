@@ -96,6 +96,20 @@ public final class AeronOrderReceiver implements AutoCloseable {
         this.notOwnedOrderListener = notOwnedOrderListener;
     }
 
+    // 폴링 thread 하나가 쓰고 계측이 읽는다. 매칭 shard마다 받은 주문 수와 담당 밖이라 버린 주문 수(8절 하네스 변경 H5).
+    private volatile long placeAcceptedCount;
+    private volatile long notOwnedCount;
+
+    /** 담당 종목이라 엔진에 넣은 PLACE 주문 수의 누적. */
+    public long placeAcceptedCount() {
+        return placeAcceptedCount;
+    }
+
+    /** 담당 종목이 아니라 접수하지 않고 거부 회신으로 돌려보낸 PLACE 주문 수의 누적. */
+    public long notOwnedCount() {
+        return notOwnedCount;
+    }
+
     /** 폴링 스레드를 기동한다. */
     public void start() {
         running.set(true);
@@ -130,11 +144,13 @@ public final class AeronOrderReceiver implements AutoCloseable {
             int sourceSessionId = header != null ? header.sessionId() : 0;
             int stockSlot = stockSlotHasher.slotFor(order.stockCode());
             if (!ownedSlots.test(stockSlot)) {
+                notOwnedCount++;
                 notOwnedOrderListener.onNotOwned(order);
                 // 접수하지 않은 주문도 이 발행자의 위치는 앞으로 나아가야 한다(11-4절 3항).
                 engine.publishPositionOnly(sourceSessionId, sourcePosition);
                 return;
             }
+            placeAcceptedCount++;
             engine.publishPlace(
                 order.orderId(), order.accountId(), order.stockCode(),
                 order.side(), order.price(), order.quantity(), order.orderAt(),

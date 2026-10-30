@@ -81,6 +81,8 @@ public class MatchingEventHandler implements EventHandler<OrderEvent> {
     private final Map<String, OrderBook> books;
     // 전량 체결되어 호가창을 떠난 주문 수의 누적(12-3절 1번 표의 「바」). 이 프로세스가 시작한 뒤 저널을 다시 적용하며 낸 체결도 센다.
     private final java.util.concurrent.atomic.LongAdder fullyFilledOrders = new java.util.concurrent.atomic.LongAdder();
+    // 이 엔진이 낸 체결 건수의 누적(8절 하네스 변경 H5). 같은 이유로 저널 재적용 중 낸 체결도 센다.
+    private final java.util.concurrent.atomic.LongAdder fills = new java.util.concurrent.atomic.LongAdder();
     private final MatchListener listener;
     private final MatchingSegmentStages stages;
     private final MatchingSnapshotSink snapshotSink;
@@ -492,6 +494,7 @@ public class MatchingEventHandler implements EventHandler<OrderEvent> {
                 break;
             }
             fullyFilledOrders.add(book.lastMatchFullyFilledCount());
+            fills.increment();
             if (!stages.isEnabled()) {
                 listener.onFill(stockCode, result.get());
                 continue;
@@ -517,6 +520,11 @@ public class MatchingEventHandler implements EventHandler<OrderEvent> {
             event.getQuantity(),
             event.getOrderAt()
         );
+    }
+
+    /** 이 엔진이 낸 체결 건수의 누적. 어느 thread에서 읽어도 된다. */
+    public long fillCount() {
+        return fills.sum();
     }
 
     /** 전량 체결되어 호가창을 떠난 주문 수의 누적. 어느 thread에서 읽어도 된다. */

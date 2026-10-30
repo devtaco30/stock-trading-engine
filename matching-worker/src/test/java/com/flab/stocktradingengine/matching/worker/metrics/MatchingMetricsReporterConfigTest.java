@@ -8,6 +8,7 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.LifecycleProcessor;
 
 import com.flab.stocktradingengine.matching.disruptor.engine.MatchingEngine;
+import com.flab.stocktradingengine.matching.disruptor.io.AeronOrderReceiver;
 import com.flab.stocktradingengine.matching.worker.config.MatchingMetricsReporterConfig;
 import com.flab.stocktradingengine.matching.worker.messaging.AccountFillPublisher;
 
@@ -18,7 +19,8 @@ class MatchingMetricsReporterConfigTest {
         .withUserConfiguration(MatchingMetricsReporterConfig.class)
         .withBean("lifecycleProcessor", LifecycleProcessor.class, MatchingMetricsReporterConfigTest::noOpProcessor)
         .withBean(MatchingEngine.class, () -> mock(MatchingEngine.class))
-        .withBean(AccountFillPublisher.class, () -> mock(AccountFillPublisher.class));
+        .withBean(AccountFillPublisher.class, () -> mock(AccountFillPublisher.class))
+        .withBean(AeronOrderReceiver.class, () -> mock(AeronOrderReceiver.class));
 
     @Test
     void 스위치가_없으면_보고기_생명주기가_없다() {

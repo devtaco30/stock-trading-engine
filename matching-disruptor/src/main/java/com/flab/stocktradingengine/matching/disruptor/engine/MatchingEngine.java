@@ -194,6 +194,11 @@ public class MatchingEngine {
         }
     }
 
+    /** 이 엔진이 낸 체결 건수의 누적(8절 하네스 변경 H5). 이 프로세스가 시작한 뒤의 값이다. */
+    public long fillCount() {
+        return matchingEventHandler.fillCount();
+    }
+
     /** 전량 체결되어 호가창을 떠난 주문 수의 누적(12-3절 1번 표의 「바」). 이 프로세스가 시작한 뒤의 값이다. */
     public long fullyFilledOrderCount() {
         return matchingEventHandler.fullyFilledOrderCount();
