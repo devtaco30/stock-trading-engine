@@ -28,8 +28,9 @@ for line in open(account_log, errors="replace"):
         m = re.search(r"accepted=(\d+) rejected=(\d+) .*acceptedTotal=(\d+)", line)
         rows.append((ts(line), int(m.group(1)), int(m.group(2)), int(m.group(3))))
     elif "account-engine ringRemaining=" in line:
-        m = re.search(r"ringRemaining=(-?\d+) ringFullWaits=(\d+) journalBackPressure=(\d+) journalOtherRetries=(\d+)", line)
-        engine.append((ts(line), *map(int, m.groups())))
+        # 옛 형식(ringFullWaitMs 없음)과 새 형식을 모두 읽는다.
+        m = re.search(r"ringRemaining=(-?\d+) ringFullWaits=(\d+) (?:ringFullWaitMs=([\d.]+) )?journalBackPressure=(\d+) journalOtherRetries=(\d+)", line)
+        engine.append((ts(line), int(m.group(1)), int(m.group(2)), float(m.group(3) or 0.0), int(m.group(4)), int(m.group(5))))
     elif "matching-send outbox=" in line:
         m = re.search(r"outbox=(\d+) enqueueWaits=(\d+) enqueueWaitMs=([\d.]+) offerRetries=(\d+)", line)
         send.append((ts(line), int(m.group(1)), int(m.group(2)), float(m.group(3)), int(m.group(4))))
@@ -60,14 +61,16 @@ else:
         result["reporter_rate_unreliable"] = "구간 %.1f초(8초 미만)" % seconds
     result["reporter_rows_in_window"] = len([r for r in rows if t0 < r[0] <= t1])
     result["rejected_in_window"] = sum(r[2] for r in rows if t0 < r[0] <= t1)
+    result["per_second_accepted"] = [r[1] for r in rows if t0 < r[0] <= t1]
     inwin = lambda t: t0 - 0.0 <= t <= t1
     eng = [e for e in engine if inwin(e[0])]
     if eng:
         result["engine_rows"] = len(eng)
         result["ring_remaining_min"] = min(e[1] for e in eng)
         result["ring_full_waits_sum"] = sum(e[2] for e in eng)
-        result["journal_back_pressure_sum"] = sum(e[3] for e in eng)
-        result["journal_other_retries_sum"] = sum(e[4] for e in eng)
+        result["ring_full_wait_ms_sum"] = round(sum(e[3] for e in eng), 1)
+        result["journal_back_pressure_sum"] = sum(e[4] for e in eng)
+        result["journal_other_retries_sum"] = sum(e[5] for e in eng)
     sd = [s for s in send if inwin(s[0])]
     if sd:
         result["outbox_max"] = max(s[1] for s in sd)
