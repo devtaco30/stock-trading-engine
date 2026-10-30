@@ -96,6 +96,16 @@ def compute(orders_path, map_path, slot_count=64):
     }
 
 
+def ownership_problem(result):
+    """주인 없는 종목 slot의 주문이 있으면 읽는 사람이 놓치지 않게 문장으로 돌려준다. 없으면 None.
+    이 주문들은 어느 shard의 몫으로도 세지 않으므로 max_ratio가 실제보다 낮게 나온다."""
+    without_owner = result["orders_without_owner"]
+    if without_owner == 0:
+        return None
+    return (f"주인 없는 종목 slot의 주문이 {without_owner}건(전체 {result['total_orders']}건)이다 — "
+            "이 주문은 어느 shard 몫으로도 세지 않아 max_ratio가 실제보다 낮게 나온다")
+
+
 def main(argv):
     if len(argv) not in (3, 4):
         print(__doc__, file=sys.stderr)
@@ -103,6 +113,10 @@ def main(argv):
     slot_count = int(argv[3]) if len(argv) == 4 else 64
     result = compute(argv[1], argv[2], slot_count)
     print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+    problem = ownership_problem(result)
+    if problem:
+        print(problem, file=sys.stderr)
+        return 1
     return 0
 
 

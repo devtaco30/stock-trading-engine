@@ -100,6 +100,11 @@ shard_args_fill() {
 # 디렉터리라 상대경로는 폴링 스레드가 엉뚱한 곳을 본다.
 E2E_RESULTS_ABS="$(pwd)/loadtest/results"
 
+# 매칭 shard 가 둘 이상이면 앱을 띄우기 전에 맵 토픽을 지워, 직전 실행이 남긴 값이 「배정 완료」로 읽히지 않게 한다.
+if [ "$MATCHING_COUNT" != "1" ]; then
+    reset_matching_map_topic || exit 1
+fi
+
 if [ "$WORKER_COUNT" = "2" ]; then
     start_app account-worker-a " --transport.account-intake.channel=aeron:udp?endpoint=localhost:20040 --transport.fill.channel=aeron:udp?endpoint=localhost:20060 --account.worker.archive.control-channel=aeron:udp?endpoint=localhost:8010$(shard_args_intake) --measure.latency.enabled=true --measure.latency.snapshot-trigger-path=${E2E_RESULTS_ABS}/latency-trigger-v2-a --measure.latency.output-path=${E2E_RESULTS_ABS}/latency-v2-account-worker-a.json" account-worker
     start_app account-worker-b " --transport.account-intake.channel=aeron:udp?endpoint=localhost:20041 --transport.fill.channel=aeron:udp?endpoint=localhost:20061 --account.worker.archive.control-channel=aeron:udp?endpoint=localhost:8012$(shard_args_intake) --measure.latency.enabled=true --measure.latency.snapshot-trigger-path=${E2E_RESULTS_ABS}/latency-trigger-v2-b --measure.latency.output-path=${E2E_RESULTS_ABS}/latency-v2-account-worker-b.json" account-worker
@@ -143,7 +148,7 @@ fi
 # 매칭 shard 가 둘 이상이면 종목 slot 64개의 주소가 맵 토픽에 모두 올라온 뒤에 READY 를 낸다(부하는 READY 뒤에 시작한다).
 # 제한 시간을 넘기면 주인 없는 종목 slot 번호를 출력하고 끝낸다.
 if [ "$MATCHING_COUNT" != "1" ]; then
-    await_matching_slots_assigned "${MATCHING_STOCK_SLOT_COUNT:-64}" "$MATCHING_ASSIGN_TIMEOUT" || exit 1
+    await_matching_slots_assigned "${MATCHING_STOCK_SLOT_COUNT:-64}" "$MATCHING_ASSIGN_TIMEOUT" "$MATCHING_COUNT" || exit 1
 fi
 
 echo -n "api HTTP(8080) 대기 중"

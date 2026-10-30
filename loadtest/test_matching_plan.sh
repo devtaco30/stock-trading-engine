@@ -126,44 +126,105 @@ test_archive_dir_absolute() {
 }
 
 # --- H8: 배정 완료 대기 ---
+# 맵 읽기 대역이 내는 "종목 slot<탭>주소" 줄들. $1~$2 범위의 종목 slot이 모두 주소 $3에 올라온 상태.
+map_lines() {
+    local slot
+    for slot in $(seq "$1" "$2"); do
+        printf '%s\t%s\n' "$slot" "$3"
+    done
+}
+
 test_await_assigned() {
-    local dir
+    local dir out A B
     dir="$(mktemp -d)"
-    # 읽기 대역: 호출할 때마다 파일에서 한 줄씩 꺼낸 "올라온 종목 slot 번호들"을 낸다.
-    printf '%s\n' "$(seq -s' ' 0 62)" "$(seq -s' ' 0 62)" "$(seq -s' ' 0 63)" > "${dir}/script"
-    matching_assigned_slots() {
-        local first
-        first="$(head -n 1 "${dir}/script")"
-        if [ "$(wc -l < "${dir}/script")" -gt 1 ]; then
-            tail -n +2 "${dir}/script" > "${dir}/script.next" && mv "${dir}/script.next" "${dir}/script"
-        fi
-        printf '%s\n' "$first"
+    A="aeron:udp?endpoint=localhost:20020"
+    B="aeron:udp?endpoint=localhost:20021"
+    # 세 번째 호출부터 두 번째 상태를 낸다.
+    matching_assigned_map() {
+        local calls
+        calls=$(( $(cat "${dir}/calls" 2> /dev/null || echo 0) + 1 ))
+        echo "$calls" > "${dir}/calls"
+        if [ "$calls" -lt 3 ]; then cat "${dir}/first"; else cat "${dir}/second"; fi
     }
-    local out
-    out="$(MATCHING_ASSIGN_POLL_SEC=0 await_matching_slots_assigned 64 5 2>&1)"
+
+    # 63개만 올라온 상태에서는 끝나지 않고, 64개가 두 shard 주소로 나뉘어 올라오면 성공한다.
+    { map_lines 0 31 "$A"; map_lines 32 62 "$B"; } > "${dir}/first"
+    { map_lines 0 31 "$A"; map_lines 32 63 "$B"; } > "${dir}/second"
+    out="$(MATCHING_ASSIGN_POLL_SEC=0 await_matching_slots_assigned 64 5 2 2>&1)"
     assert_eq "63개일 땐 시작하지 않고 64개가 되면 성공" "0" "$?"
     assert_contains "성공 메시지" "$out" "64"
+    assert_eq "세 번째 읽기에서야 끝난다" "3" "$(cat "${dir}/calls")"
+
+    # 64개가 모두 올라왔어도 주소가 하나뿐이면(다른 shard의 consumer 가입이 늦음) 기대한 shard 수가 될 때까지 끝나지 않는다.
+    echo 0 > "${dir}/calls"
+    map_lines 0 63 "$A" > "${dir}/first"
+    cp "${dir}/first" "${dir}/second"
+    out="$(MATCHING_ASSIGN_POLL_SEC=1 await_matching_slots_assigned 64 2 2 2>&1)"
+    assert_eq "주소가 하나뿐이면 실패" "1" "$?"
+    assert_contains "주소 수를 출력" "$out" "서로 다른 주소 1개, 기대 2개"
+
+    # 64개가 두 주소로 나뉘고 기대가 1개면(shard 수를 안 넘긴 경우와 달리) 기대 수를 넘는 주소도 거부한다.
+    echo 0 > "${dir}/calls"
+    { map_lines 0 31 "$A"; map_lines 32 63 "$B"; } > "${dir}/first"
+    cp "${dir}/first" "${dir}/second"
+    out="$(MATCHING_ASSIGN_POLL_SEC=1 await_matching_slots_assigned 64 2 1 2>&1)"
+    assert_eq "기대보다 주소가 많아도 실패" "1" "$?"
+    assert_contains "주소 수를 출력(많은 경우)" "$out" "서로 다른 주소 2개, 기대 1개"
 
     # 63개에서 멈추면 제한 시간 뒤 실패하고, 빠진 번호 63을 출력한다.
-    printf '%s\n' "$(seq -s' ' 0 62)" > "${dir}/script"
-    out="$(MATCHING_ASSIGN_POLL_SEC=1 await_matching_slots_assigned 64 2 2>&1)"
+    echo 0 > "${dir}/calls"
+    { map_lines 0 31 "$A"; map_lines 32 62 "$B"; } > "${dir}/first"
+    cp "${dir}/first" "${dir}/second"
+    out="$(MATCHING_ASSIGN_POLL_SEC=1 await_matching_slots_assigned 64 2 2 2>&1)"
     assert_eq "63개에서 멈추면 실패" "1" "$?"
     assert_contains "빠진 종목 slot 번호를 출력" "$out" "주인 없는 종목 slot: 63"
 
     # 여러 개가 빠지면 모두 출력한다.
-    printf '%s\n' "0 1 2 5" > "${dir}/script"
-    out="$(MATCHING_ASSIGN_POLL_SEC=1 await_matching_slots_assigned 8 2 2>&1)"
+    echo 0 > "${dir}/calls"
+    { printf '0\t%s\n1\t%s\n2\t%s\n5\t%s\n' "$A" "$A" "$B" "$B"; } > "${dir}/first"
+    cp "${dir}/first" "${dir}/second"
+    out="$(MATCHING_ASSIGN_POLL_SEC=1 await_matching_slots_assigned 8 2 2 2>&1)"
     assert_contains "빠진 번호 여럿" "$out" "주인 없는 종목 slot: 3 4 6 7"
-    unset -f matching_assigned_slots
+    unset -f matching_assigned_map
     rm -rf "$dir"
 }
 
 # --- H8: 맵 덤프 해석(같은 키는 마지막 값, null 값과 이동 중 표시는 배정 끝으로 세지 않는다) ---
 test_parse_map_dump() {
-    local dump slots
+    local dump parsed
     dump=$'0\taeron:udp?endpoint=localhost:20020\n1\taeron:udp?endpoint=localhost:20020\n1\tnull\n2\taeron:udp?endpoint=localhost:20021;moving\n3\taeron:udp?endpoint=localhost:20021\n3\taeron:udp?endpoint=localhost:20020'
-    slots="$(printf '%s\n' "$dump" | matching_parse_assigned_slots)"
-    assert_eq "마지막 값이 null이거나 이동 중이면 뺀다" "0 3" "$slots"
+    parsed="$(printf '%s\n' "$dump" | matching_parse_assigned_map)"
+    assert_eq "마지막 값이 null이거나 이동 중이면 뺀다" $'0\taeron:udp?endpoint=localhost:20020\n3\taeron:udp?endpoint=localhost:20020' "$parsed"
+}
+
+# --- H8: 시작 전 맵 토픽 초기화(직전 실행의 마지막 값이 남아 배정 완료로 읽히는 것을 막는다) ---
+test_reset_map_topic() {
+    local calls_file calls_n
+    calls_file="$(mktemp)"
+    : > "${calls_file}.n"
+    matching_kafka_topics() {
+        echo "$*" >> "$calls_file"
+        case "$*" in
+            *--list*)
+                # 삭제 직후 한 번은 아직 보이고 그다음부터 사라진다.
+                calls_n=$(( $(cat "${calls_file}.n" 2> /dev/null || echo 0) + 1 ))
+                echo "$calls_n" > "${calls_file}.n"
+                if [ "$calls_n" -lt 2 ] && [ "${FAKE_NEVER_GONE:-0}" != "1" ]; then echo "matching-shard-map"; fi
+                [ "${FAKE_NEVER_GONE:-0}" = "1" ] && echo "matching-shard-map"
+                echo "other-topic"
+                ;;
+        esac
+        return 0
+    }
+    MATCHING_TOPIC_GONE_POLL_SEC=0 reset_matching_map_topic > /dev/null 2>&1
+    assert_eq "삭제가 확인되면 성공" "0" "$?"
+    assert_contains "맵 토픽을 지운다" "$(cat "$calls_file")" "--delete --topic matching-shard-map"
+    assert_not_contains "다른 토픽은 지우지 않는다" "$(grep -- '--delete' "$calls_file")" "other-topic"
+
+    FAKE_NEVER_GONE=1 MATCHING_TOPIC_GONE_POLL_SEC=1 MATCHING_TOPIC_GONE_TIMEOUT_SEC=2 reset_matching_map_topic > /dev/null 2>&1
+    assert_eq "토픽이 사라지지 않으면 실패" "1" "$?"
+    unset -f matching_kafka_topics
+    rm -f "$calls_file" "${calls_file}.n"
 }
 
 # --- H7: stop-v2가 매칭 shard의 pid 파일까지 정리 대상으로 든다 ---
@@ -183,6 +244,12 @@ test_run_script_uses_plan() {
     assert_contains "계획 파일을 source" "$script" "source loadtest/matching-plan.sh"
     assert_contains "MATCHING_COUNT 검사" "$script" "matching_count_valid"
     assert_contains "shard마다 띄운다" "$script" "start_matching_workers"
+    assert_contains "배정 대기에 shard 수를 넘긴다" "$script" 'await_matching_slots_assigned "${MATCHING_STOCK_SLOT_COUNT:-64}" "$MATCHING_ASSIGN_TIMEOUT" "$MATCHING_COUNT"'
+    local reset_line start_line
+    reset_line="$(grep -n 'reset_matching_map_topic ||' loadtest/run-e2e-v2.sh | head -n 1 | cut -d: -f1)"
+    start_line="$(grep -n '^if \[ "\$WORKER_COUNT" = "2" \]' loadtest/run-e2e-v2.sh | head -n 1 | cut -d: -f1)"
+    assert_eq "맵 토픽 초기화 호출이 있다" "1" "$([ -n "$reset_line" ] && echo 1 || echo 0)"
+    assert_eq "맵 토픽 초기화가 앱 기동보다 앞이다" "1" "$([ -n "$reset_line" ] && [ -n "$start_line" ] && [ "$reset_line" -lt "$start_line" ] && echo 1 || echo 0)"
     assert_contains "모든 입구 포트를 기다린다" "$script" "matching_intake_ports"
 }
 
@@ -194,6 +261,7 @@ test_pool_equals_intake_endpoints
 test_archive_dir_absolute
 test_await_assigned
 test_parse_map_dump
+test_reset_map_topic
 test_stop_includes_matching_shard_pids
 test_run_script_uses_plan
 

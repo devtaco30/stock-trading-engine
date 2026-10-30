@@ -125,5 +125,26 @@ class ComputeTest(unittest.TestCase):
             self.assertEqual(10, result["orders_in_moving_slots"])
 
 
+class OwnershipCheckTest(unittest.TestCase):
+    def test_주인_없는_주문이_있으면_문제를_돌려준다(self):
+        self.assertIsNone(m.ownership_problem({"orders_without_owner": 0, "total_orders": 10}))
+        problem = m.ownership_problem({"orders_without_owner": 3, "total_orders": 10})
+        self.assertIn("3", problem)
+        self.assertIn("낮게", problem)
+
+    def test_CLI는_주인_없는_주문이_있으면_종료_코드_1(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            orders = Path(tmp) / "orders.jsonl"
+            write_orders(orders, {"A000001": 10})
+            slot_map = Path(tmp) / "map.tsv"
+            write_map(slot_map, {0: "aeron:udp?endpoint=localhost:20020"})
+            slot = m.stock_slot("A000001", 64)
+            if slot == 0:
+                self.skipTest("시험 종목이 0번 slot이라 주인 없는 경우를 만들 수 없다")
+            self.assertEqual(1, m.main(["x", str(orders), str(slot_map)]))
+            write_map(slot_map, {slot: "aeron:udp?endpoint=localhost:20020"})
+            self.assertEqual(0, m.main(["x", str(orders), str(slot_map)]))
+
+
 if __name__ == "__main__":
     unittest.main()

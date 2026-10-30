@@ -85,26 +85,51 @@ matching_map_dump() {
         --property key.deserializer=org.apache.kafka.common.serialization.IntegerDeserializer 2> /dev/null
 }
 
-# 표준입력의 덤프를 해석해 주소가 올라온 종목 slot 번호를 오름차순 한 줄(공백 구분)로 낸다.
+# 표준입력의 덤프를 해석해 "종목 slot<탭>주소" 줄을 종목 slot 오름차순으로 낸다.
 # 같은 키는 마지막 값이 유효하다(compacted 토픽). 값이 null 이거나 `;moving` 이 붙은 종목 slot은 배정이 끝난 것으로 세지 않는다.
-matching_parse_assigned_slots() {
+matching_parse_assigned_map() {
     awk -F'\t' 'NF >= 2 { last[$1] = $2 }
-        END { for (k in last) if (last[k] != "null" && last[k] != "" && last[k] !~ /;moving$/) print k }' \
-        | sort -n | tr '\n' ' ' | sed 's/ $//'
-    echo
+        END { for (k in last) if (last[k] != "null" && last[k] != "" && last[k] !~ /;moving$/) printf "%s\t%s\n", k, last[k] }' \
+        | sort -n
 }
 
-# 지금 주소가 올라온 종목 slot 번호들(공백 구분 한 줄). 테스트가 이 함수를 바꾼다.
-matching_assigned_slots() {
-    matching_map_dump | matching_parse_assigned_slots
+# 지금 주소가 올라온 종목 slot과 그 주소("종목 slot<탭>주소" 줄들). 테스트가 이 함수를 바꾼다.
+matching_assigned_map() {
+    matching_map_dump | matching_parse_assigned_map
 }
 
-# $1=종목 slot 개수, $2=제한 시간(초). 모두 올라오면 0. 제한 시간을 넘기면 주인 없는 종목 slot 번호를 출력하고 1.
+# --- 시작 전 맵 토픽 초기화 ---
+# 하네스가 쓰는 자체 broker(docker compose 컨테이너 stock-trading-kafka) 한 곳만 대상으로 한다. 테스트가 이 함수를 바꿔 Docker 없이 확인한다.
+matching_kafka_topics() {
+    docker exec stock-trading-kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 "$@"
+}
+
+# 맵 토픽은 compacted 라 죽은 pod 의 마지막 값이 지워지지 않고 남는다. 직전 실행(예: shard 8개)의 값이 남은 채로 새 shard 가 뜨기도 전에
+# 「배정 완료」로 읽히는 것을 막으려고 매칭 shard 를 띄우기 전에 이 토픽을 지운다. 사라질 때까지 기다린다(없던 토픽이면 바로 끝난다).
+reset_matching_map_topic() {
+    local timeout="${MATCHING_TOPIC_GONE_TIMEOUT_SEC:-30}" poll="${MATCHING_TOPIC_GONE_POLL_SEC:-1}" start=$SECONDS
+    matching_kafka_topics --delete --topic "$MATCHING_MAP_TOPIC" > /dev/null 2>&1
+    while matching_kafka_topics --list 2> /dev/null | grep -qx -- "$MATCHING_MAP_TOPIC"; do
+        if [ $((SECONDS - start)) -ge "$timeout" ]; then
+            echo "맵 토픽 ${MATCHING_MAP_TOPIC}이 ${timeout}초 안에 지워지지 않았다" >&2
+            return 1
+        fi
+        sleep "$poll"
+    done
+    echo "맵 토픽 ${MATCHING_MAP_TOPIC} 초기화 완료"
+}
+
+# $1=종목 slot 개수, $2=제한 시간(초), $3=매칭 shard 수.
+# 끝나는 조건은 둘이다. (1) 종목 slot 번호가 모두 평상시 주소로 올라왔다. (2) 올라온 서로 다른 주소가 매칭 shard 수와 같다.
+# (2)가 없으면 한 shard 가 먼저 모든 slot 을 받은 시점에 통과하고, 다른 shard 가 가입하면서 일어나는 재배정으로 slot 이 이동 중이 되는 동안 부하가 시작된다.
+# 제한 시간을 넘기면 원인을 출력하고 1.
 await_matching_slots_assigned() {
-    local slot_count="$1" timeout="$2" start=$SECONDS assigned missing slot
+    local slot_count="$1" timeout="$2" shard_count="$3" start=$SECONDS map assigned missing slot addresses
     local poll="${MATCHING_ASSIGN_POLL_SEC:-2}"
     while :; do
-        assigned=" $(matching_assigned_slots) "
+        map="$(matching_assigned_map)"
+        assigned=" $(printf '%s\n' "$map" | cut -f1 | tr '\n' ' ')"
+        addresses="$(printf '%s\n' "$map" | cut -f2 | grep . | sort -u | grep -c .)"
         missing=""
         for slot in $(seq 0 $((slot_count - 1))); do
             case "$assigned" in
@@ -112,12 +137,13 @@ await_matching_slots_assigned() {
                 *) missing="${missing:+${missing} }${slot}" ;;
             esac
         done
-        if [ -z "$missing" ]; then
-            echo "종목 slot ${slot_count}개 배정 완료"
+        if [ -z "$missing" ] && [ "$addresses" = "$shard_count" ]; then
+            echo "종목 slot ${slot_count}개가 매칭 shard ${shard_count}개의 주소로 배정 완료"
             return 0
         fi
         if [ $((SECONDS - start)) -ge "$timeout" ]; then
-            echo "제한 시간 ${timeout}초 안에 배정이 끝나지 않았다 — 주인 없는 종목 slot: ${missing}" >&2
+            [ -n "$missing" ] && echo "제한 시간 ${timeout}초 안에 배정이 끝나지 않았다 — 주인 없는 종목 slot: ${missing}" >&2
+            [ "$addresses" != "$shard_count" ] && echo "제한 시간 ${timeout}초 안에 shard가 다 모이지 않았다 — 서로 다른 주소 ${addresses}개, 기대 ${shard_count}개" >&2
             return 1
         fi
         sleep "$poll"
