@@ -17,7 +17,7 @@ stop_pids() {
         if kill -0 "$pid" 2>/dev/null; then
             kill "$pid" 2>/dev/null
             for _ in $(seq 1 60); do kill -0 "$pid" 2>/dev/null || break; sleep 1; done
-            kill -0 "$pid" 2>/dev/null && echo "PID $pid가 60초 안에 정상 종료하지 않았다" >&2
+            kill -0 "$pid" 2>/dev/null && echo "PID ${pid}가 60초 안에 정상 종료하지 않았다" >&2
         fi
     done < "$PID_FILE"
     : > "$PID_FILE"
@@ -32,7 +32,7 @@ cleanup() {
 check_ports() {
     if lsof -nP -iTCP:9092 -sTCP:LISTEN > /dev/null 2>&1; then fail "TCP 9092를 이미 쓰는 프로세스가 있다"; exit 1; fi
     for port in 20020 20021 20040 20060 8010 8011 8012; do
-        if lsof -nP -iUDP:"$port" > /dev/null 2>&1; then fail "UDP $port를 이미 쓰는 프로세스가 있다"; exit 1; fi
+        if lsof -nP -iUDP:"$port" > /dev/null 2>&1; then fail "UDP ${port}를 이미 쓰는 프로세스가 있다"; exit 1; fi
     done
 }
 
@@ -108,12 +108,24 @@ send_order() { # <계좌> <종목> <BUY|SELL> <가격> <수량> <requestId>
 # 기대 건수에 닿으면 바로, 못 닿으면 시도를 모두 쓴 뒤 센 건수를 출력한다. applied=false는 같은 체결이 중복 도착한 것이라 세지 않는다.
 wait_for_applied_fills() {
     local log="$1" account="$2" expected="$3" attempts="$4" interval="$5" count=0 _
+    if [ ! -f "$log" ]; then echo "로그 파일이 없다: $log" >&2; echo 0; return 0; fi
     for _ in $(seq 1 "$attempts"); do
         count=$(grep -c "체결 반영: accountId=${account} .*applied=true" "$log" || true)
         [ "$count" -ge "$expected" ] && break
         sleep "$interval"
     done
     echo "$count"
+}
+
+# flow_verdict <합계 단언 통과 1|0> <전제 모두 참 1|0> — 종료 코드를 출력한다. 합계가 틀리면 전제와 무관하게 1(실패), 합계가 맞고 전제만 거짓이면 3(미발동).
+flow_verdict() {
+    if [ "$1" != 1 ]; then echo 1; elif [ "$2" != 1 ]; then echo 3; else echo 0; fi
+}
+
+# tool_failure_reason <도구 출력> — 도구 자체가 실패했다고 알리는 표지(연결 실패, 송신 위치 미도달, 송신 위치 카운터 없음)를 찾아 출력한다. 없으면 빈 값.
+# 도구 실패는 시나리오 미발동이 아니라 별도 실패다.
+tool_failure_reason() {
+    echo "$1" | grep -oE "SENDER_POSITION_NOT_REACHED|SENDER_POSITION_COUNTER_NOT_FOUND|NOT_CONNECTED|OFFER_FAILED" | head -1
 }
 
 send_failure_count() { if [ -f "$WORK/send-failures" ]; then grep -c . "$WORK/send-failures"; else echo 0; fi; }
@@ -138,4 +150,9 @@ check_owned_slots() {
     unique=$(printf '%s,%s' "$s0" "$s1" | tr ',' '\n' | grep . | sort -u | wc -l | tr -d ' ')
     if [ "$total" = 64 ] && [ "$unique" = 64 ]; then echo "통과: 두 매칭 shard의 담당 종목 slot이 겹치지 않고 합이 64개다 (shard 0 ${c0}개, shard 1 ${c1}개)"
     else echo "실패: 담당 종목 slot 합 ${total}개, 서로 다른 값 ${unique}개 (shard 0 ${c0}개, shard 1 ${c1}개)"; OK=0; fi
+}
+
+# count_in_window <시작 epoch ms> <끝 epoch ms> — 표준 입력의 시각(한 줄에 하나) 중 [시작, 끝] 안에 든 개수를 출력한다. 숫자가 아닌 줄은 무시한다.
+count_in_window() {
+    awk -v s="$1" -v e="$2" '$1 ~ /^[0-9]+$/ && $1 + 0 >= s + 0 && $1 + 0 <= e + 0 { n++ } END { print n + 0 }'
 }

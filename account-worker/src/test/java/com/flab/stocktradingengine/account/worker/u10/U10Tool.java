@@ -59,6 +59,7 @@ import io.aeron.driver.ThreadingMode;
  *       {@code ASSIGNED 배정된 수/전체 MOVING 이동 중인 수 ENDPOINTS 주소=개수,...}를 출력한다.</li>
  *   <li>{@code map-history <kafkaBootstrap>} — 맵 토픽의 모든 기록을 {@code slot<TAB>CreateTime(ms)<TAB>값} 줄로 출력한다.</li>
  *   <li>{@code dump-account <archiveDir>} — 계좌 워커가 정상 종료할 때 쓴 스냅샷을 줄 단위로 출력한다. 스냅샷이 없으면 종료 코드 2.</li>
+ *   <li>{@code stream <channel> <기간 ms> <X 초당> <Y 초당> <X 종목> <Y 종목> <매도 계좌> <매수 계좌> <가격>} — 이동 중 주문 시험용 연속 발신. 주문마다 「ORDER 발신시각 요청번호 종류」, 끝에 「STREAM_DONE」 합계를 출력한다.</li>
  *   <li>{@code slot-of <종목 slot 수> <종목 코드...>} — 종목 코드마다 「SLOT 코드=slot」 한 줄을 출력한다.</li>
  * </ul>
  */
@@ -77,6 +78,7 @@ public final class U10Tool {
             case "codes" -> codes(Integer.parseInt(args[1]), Integer.parseInt(args[2]));
             case "codes-many" -> codesMany(Integer.parseInt(args[1]), Integer.parseInt(args[2]), Integer.parseInt(args[3]));
             case "send-bulk" -> sendBulk(args);
+            case "stream" -> stream(args);
             case "assigned" -> assigned(args[1], Integer.parseInt(args[2]));
             case "map-history" -> mapHistory(args[1]);
             case "slot-of" -> slotOf(Integer.parseInt(args[1]), java.util.Arrays.copyOfRange(args, 2, args.length));
@@ -149,6 +151,7 @@ public final class U10Tool {
         List<MapRecord> records = new ArrayList<>();
         List<PartitionInfo> infos = consumer.partitionsFor(MatchingDestinationResolver.MAP_TOPIC, Duration.ofSeconds(10));
         if (infos == null || infos.isEmpty()) {
+            err.println("MAP_TOPIC_MISSING " + MatchingDestinationResolver.MAP_TOPIC + " 토픽이 아직 없거나 파티션 정보를 받지 못했다(부분 읽기가 아님)");
             return records;
         }
         List<TopicPartition> partitions = new ArrayList<>();
@@ -192,24 +195,230 @@ public final class U10Tool {
         System.out.println("HIGH=" + String.join(",", picked));
     }
 
-    /** send-bulk의 종목 코드 목록과 선택 옵션 {@code --sentinel-buy=<계좌>:<가격>}(종목마다 매도 N건 뒤에 같은 Publication으로 보낼 표지 매수). */
-    record BulkTargets(List<String> stockCodes, long sentinelAccountId, long sentinelPrice) {
+    /** send-bulk의 종목 코드 목록과 선택 옵션 {@code --sentinel-buy=<계좌>:<가격>}(종목마다 매도 N건 뒤에 같은 Publication으로 보낼 표지 매수)와 {@code --price-step=<n>}(매도 가격을 건마다 올리는 폭, 기본 1). */
+    record BulkTargets(List<String> stockCodes, long sentinelAccountId, long sentinelPrice, long priceStep) {
     }
 
     static BulkTargets parseBulkTargets(String[] args, int firstStockIndex) {
         List<String> stockCodes = new ArrayList<>();
         long sentinelAccountId = 0L;
         long sentinelPrice = 0L;
+        long priceStep = 1L;
         for (int index = firstStockIndex; index < args.length; index++) {
             if (args[index].startsWith("--sentinel-buy=")) {
                 String[] parts = args[index].substring("--sentinel-buy=".length()).split(":");
                 sentinelAccountId = Long.parseLong(parts[0]);
                 sentinelPrice = Long.parseLong(parts[1]);
+            } else if (args[index].startsWith("--price-step=")) {
+                priceStep = Long.parseLong(args[index].substring("--price-step=".length()));
             } else {
                 stockCodes.add(args[index]);
             }
         }
-        return new BulkTargets(stockCodes, sentinelAccountId, sentinelPrice);
+        return new BulkTargets(stockCodes, sentinelAccountId, sentinelPrice, priceStep);
+    }
+
+    /** 주문 한 건을 어디로 보낼지의 추상. 실제 발신은 Aeron Publication, 시험은 기록하는 목록으로 바꾼다. */
+    @FunctionalInterface
+    interface OrderSink {
+        void accept(DecodedAccountOrder order);
+    }
+
+    /** 종목마다 매도 perStock건을 보내고 그 바로 뒤에 표지 매수(있으면)를 보낸다. 보낸 주문 수를 돌려준다. */
+    static int bulkOrders(long accountId, OrderSide side, long firstPrice, int perStock, String prefix, BulkTargets targets, OrderSink sink) {
+        int sent = 0;
+        for (String stockCode : targets.stockCodes()) {
+            for (int i = 0; i < perStock; i++) {
+                sink.accept(new DecodedAccountOrder(side, accountId, stockCode, BigDecimal.valueOf(firstPrice + i * targets.priceStep()), 1,
+                    prefix + "-" + stockCode + "-" + i, EpochNanos.now()));
+                sent++;
+            }
+            if (targets.sentinelAccountId() != 0L) {
+                sink.accept(new DecodedAccountOrder(OrderSide.BUY, targets.sentinelAccountId(), stockCode,
+                    BigDecimal.valueOf(targets.sentinelPrice()), 1, prefix + "-sentinel-" + stockCode, EpochNanos.now()));
+            }
+        }
+        return sent;
+    }
+
+    /**
+     * 발행 위치({@code targetPosition})까지 임베디드 media driver가 UDP로 내보냈는지(송신 위치 카운터) 기다린다. Aeron의 offer는 발행 버퍼에 넣을 뿐이라
+     * 바로 닫으면 아직 내보내지 못한 주문이 사라진다. 결과: REACHED, 카운터는 찾았으나 제한 시간 안에 닿지 못함(NOT_REACHED), 이 발행의 송신 위치
+     * 카운터를 찾지 못함(COUNTER_NOT_FOUND — 카운터 형식이나 타입 번호가 어긋났을 수 있어 NOT_REACHED와 구별한다).
+     */
+    enum SenderWait { REACHED, NOT_REACHED, COUNTER_NOT_FOUND }
+
+    static SenderWait awaitSenderPosition(org.agrona.concurrent.status.CountersReader counters, long registrationId, long targetPosition,
+                                          long timeoutMillis) {
+        long deadline = System.currentTimeMillis() + timeoutMillis;
+        int counterId = -1;
+        while (System.currentTimeMillis() <= deadline) {
+            if (counterId < 0) {
+                counterId = findSenderPositionCounter(counters, registrationId);
+            }
+            if (counterId >= 0 && counters.getCounterValue(counterId) >= targetPosition) {
+                return SenderWait.REACHED;
+            }
+            try {
+                Thread.sleep(1);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return counterId < 0 ? SenderWait.COUNTER_NOT_FOUND : SenderWait.NOT_REACHED;
+            }
+        }
+        return counterId < 0 ? SenderWait.COUNTER_NOT_FOUND : SenderWait.NOT_REACHED;
+    }
+
+    private static int findSenderPositionCounter(org.agrona.concurrent.status.CountersReader counters, long registrationId) {
+        int[] found = {-1};
+        counters.forEach((counterId, typeId, keyBuffer, label) -> {
+            if (typeId == io.aeron.AeronCounters.DRIVER_SENDER_POSITION_TYPE_ID && keyBuffer.getLong(0) == registrationId) {
+                found[0] = counterId;
+            }
+        });
+        return found[0];
+    }
+
+    /** 마지막 offer 뒤 닫기 전에 부른다. 내보내지 못했으면 SENDER_POSITION_NOT_REACHED(종료 코드 3), 카운터를 못 찾으면 SENDER_POSITION_COUNTER_NOT_FOUND(종료 코드 4)로 끝낸다. */
+    private static void flushOrFail(Aeron aeron, Publication publication) {
+        long target = publication.position();
+        SenderWait result = awaitSenderPosition(aeron.countersReader(), publication.registrationId(), target, 30_000L);
+        switch (result) {
+            case REACHED -> System.out.println("SENDER_POSITION_REACHED " + target);
+            case NOT_REACHED -> {
+                System.out.println("SENDER_POSITION_NOT_REACHED 발행 위치=" + target + " (30초 안에 UDP로 다 내보내지 못했다)");
+                System.exit(3);
+            }
+            case COUNTER_NOT_FOUND -> {
+                System.out.println("SENDER_POSITION_COUNTER_NOT_FOUND 이 발행(registrationId=" + publication.registrationId()
+                    + ")의 송신 위치 카운터를 찾지 못했다 — 카운터 형식이나 타입 번호를 확인해야 한다");
+                System.exit(4);
+            }
+        }
+    }
+
+    private static void offerBlocking(Publication publication, AccountOrderCodec codec, UnsafeBuffer buffer, DecodedAccountOrder order,
+                                      long timeoutMillis) {
+        int length = codec.encode(buffer, 0, order);
+        long deadline = System.currentTimeMillis() + timeoutMillis;
+        while (publication.offer(buffer, 0, length) < 0) {
+            if (System.currentTimeMillis() > deadline) {
+                System.out.println("OFFER_FAILED " + order.requestId());
+                System.exit(3);
+            }
+            try {
+                Thread.sleep(1);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException(e);
+            }
+        }
+    }
+
+    /** stream 명령의 계획: 이동하는 종목 X와 이동하지 않는 종목 Y에 같은 가격 수량 1짜리 매도와 매수를 번갈아 일정 속도로 낸다. */
+    record StreamSpec(long durationMillis, int xPerSecond, int yPerSecond, String xStock, String yStock,
+                      long sellAccount, long buyAccount, long price) {
+    }
+
+    record PlannedOrder(long offsetMillis, DecodedAccountOrder order) {
+    }
+
+    static final int INVALID_QUANTITY = 2_000_000_000;
+
+    /** 발신 계획. 계좌 잔고를 넘는 매수(잔고 초과 거부용)를 X에 기간 한가운데 한 건 섞는다. 오프셋 순으로 정렬해 돌려준다. */
+    static List<PlannedOrder> streamPlan(StreamSpec spec) {
+        List<PlannedOrder> plan = new ArrayList<>();
+        addStreamOrders(plan, spec, spec.xStock(), spec.xPerSecond(), "x");
+        addStreamOrders(plan, spec, spec.yStock(), spec.yPerSecond(), "y");
+        plan.add(new PlannedOrder(spec.durationMillis() / 2, new DecodedAccountOrder(OrderSide.BUY, spec.buyAccount(), spec.xStock(),
+            BigDecimal.valueOf(spec.price()), INVALID_QUANTITY, "u10-flow-invalid", EpochNanos.now())));
+        plan.sort(java.util.Comparator.comparingLong(PlannedOrder::offsetMillis));
+        return plan;
+    }
+
+    private static void addStreamOrders(List<PlannedOrder> plan, StreamSpec spec, String stockCode, int perSecond, String tag) {
+        if (perSecond <= 0) {
+            return;
+        }
+        long count = perSecond * spec.durationMillis() / 1000L;
+        for (long i = 0; i < count; i++) {
+            boolean sell = i % 2 == 0;
+            plan.add(new PlannedOrder(i * 1000L / perSecond, new DecodedAccountOrder(sell ? OrderSide.SELL : OrderSide.BUY,
+                sell ? spec.sellAccount() : spec.buyAccount(), stockCode, BigDecimal.valueOf(spec.price()), 1,
+                "u10-flow-" + tag + "-" + i, EpochNanos.now())));
+        }
+    }
+
+    /** 사용: stream <channel> <기간 ms> <X 초당 건수> <Y 초당 건수> <X 종목> <Y 종목> <매도 계좌> <매수 계좌> <가격>. 주문마다 발신 시각을 출력한다. */
+    private static void stream(String[] args) throws Exception {
+        String channel = args[1];
+        StreamSpec spec = new StreamSpec(Long.parseLong(args[2]), Integer.parseInt(args[3]), Integer.parseInt(args[4]), args[5], args[6],
+            Long.parseLong(args[7]), Long.parseLong(args[8]), Long.parseLong(args[9]));
+        List<PlannedOrder> plan = streamPlan(spec);
+        MediaDriver driver = MediaDriver.launchEmbedded(new MediaDriver.Context()
+            .aeronDirectoryName(CommonContext.generateRandomDirName())
+            .dirDeleteOnStart(true)
+            .threadingMode(ThreadingMode.SHARED));
+        Aeron aeron = Aeron.connect(new Aeron.Context().aeronDirectoryName(driver.aeronDirectoryName()));
+        try {
+            Publication publication = aeron.addPublication(channel, AeronStreamIds.ACCOUNT_INTAKE);
+            long connectDeadline = System.currentTimeMillis() + CONNECT_TIMEOUT_MILLIS;
+            while (!publication.isConnected() && System.currentTimeMillis() < connectDeadline) {
+                Thread.sleep(20);
+            }
+            if (!publication.isConnected()) {
+                System.out.println("NOT_CONNECTED " + channel);
+                System.exit(3);
+            }
+            AccountOrderCodec codec = new AccountOrderCodec();
+            UnsafeBuffer buffer = new UnsafeBuffer(new byte[256]);
+            long startNanos = System.nanoTime();
+            long startEpochMillis = System.currentTimeMillis();
+            System.out.println("STREAM_START " + startEpochMillis);
+            long xSells = 0;
+            long xBuys = 0;
+            long ySells = 0;
+            long yBuys = 0;
+            long invalid = 0;
+            long maxLateness = 0;
+            long totalLateness = 0;
+            for (PlannedOrder planned : plan) {
+                long targetNanos = startNanos + planned.offsetMillis() * 1_000_000L;
+                while (System.nanoTime() < targetNanos) {
+                    if (targetNanos - System.nanoTime() > 2_000_000L) {
+                        Thread.sleep(1);
+                    } else {
+                        Thread.onSpinWait();
+                    }
+                }
+                DecodedAccountOrder order = planned.order();
+                offerBlocking(publication, codec, buffer, order, 30_000L);
+                long sentEpochMillis = System.currentTimeMillis();
+                long lateness = sentEpochMillis - (startEpochMillis + planned.offsetMillis());
+                maxLateness = Math.max(maxLateness, lateness);
+                totalLateness += lateness;
+                boolean isX = order.stockCode().equals(spec.xStock());
+                String kind;
+                if (order.quantity() == INVALID_QUANTITY) {
+                    invalid++;
+                    kind = "INVALID";
+                } else if (order.type() == OrderSide.SELL) {
+                    kind = isX ? "X_SELL" : "Y_SELL";
+                    if (isX) { xSells++; } else { ySells++; }
+                } else {
+                    kind = isX ? "X_BUY" : "Y_BUY";
+                    if (isX) { xBuys++; } else { yBuys++; }
+                }
+                System.out.println("ORDER " + sentEpochMillis + " " + order.requestId() + " " + kind);
+            }
+            System.out.println("STREAM_DONE xSells=" + xSells + " xBuys=" + xBuys + " ySells=" + ySells + " yBuys=" + yBuys
+                + " invalid=" + invalid + " maxLatenessMs=" + maxLateness + " avgLatenessMs=" + (plan.isEmpty() ? 0 : totalLateness / plan.size()));
+            flushOrFail(aeron, publication);
+            Thread.sleep(500);
+        } finally {
+            CloseHelper.quietClose(aeron);
+            CloseHelper.quietClose(driver);
+        }
     }
 
     private static void sendBulk(String[] args) throws Exception {
@@ -237,41 +446,16 @@ public final class U10Tool {
             AccountOrderCodec codec = new AccountOrderCodec();
             UnsafeBuffer buffer = new UnsafeBuffer(new byte[256]);
             long started = System.currentTimeMillis();
-            int sent = 0;
             BulkTargets targets = parseBulkTargets(args, 7);
+            int sent = bulkOrders(accountId, side, firstPrice, perStock, prefix, targets,
+                order -> offerBlocking(publication, codec, buffer, order, 30_000L));
             for (String stockCode : targets.stockCodes()) {
-                for (int i = 0; i < perStock; i++) {
-                    DecodedAccountOrder order = new DecodedAccountOrder(side, accountId, stockCode,
-                        BigDecimal.valueOf(firstPrice + i), 1, prefix + "-" + stockCode + "-" + i, EpochNanos.now());
-                    int length = codec.encode(buffer, 0, order);
-                    long deadline = System.currentTimeMillis() + 30_000L;
-                    long result;
-                    while ((result = publication.offer(buffer, 0, length)) < 0) {
-                        if (System.currentTimeMillis() > deadline) {
-                            System.out.println("OFFER_FAILED " + result + " sent=" + sent);
-                            System.exit(3);
-                        }
-                        Thread.sleep(1);
-                    }
-                    sent++;
-                }
                 if (targets.sentinelAccountId() != 0L) {
-                    // 같은 Publication으로 이 종목의 매도 N건 바로 뒤에 보내므로, 이 매수가 체결되면 앞선 N건이 호가창에 들어간 것이다.
-                    DecodedAccountOrder sentinel = new DecodedAccountOrder(OrderSide.BUY, targets.sentinelAccountId(), stockCode,
-                        BigDecimal.valueOf(targets.sentinelPrice()), 1, prefix + "-sentinel-" + stockCode, EpochNanos.now());
-                    int sentinelLength = codec.encode(buffer, 0, sentinel);
-                    long sentinelDeadline = System.currentTimeMillis() + 30_000L;
-                    while (publication.offer(buffer, 0, sentinelLength) < 0) {
-                        if (System.currentTimeMillis() > sentinelDeadline) {
-                            System.out.println("OFFER_FAILED sentinel sent=" + sent);
-                            System.exit(3);
-                        }
-                        Thread.sleep(1);
-                    }
                     System.out.println("SENTINEL " + stockCode);
                 }
             }
             System.out.println("SENT_BULK " + sent + " elapsedMs=" + (System.currentTimeMillis() - started));
+            flushOrFail(aeron, publication);
             Thread.sleep(500);
         } finally {
             CloseHelper.quietClose(aeron);
@@ -361,11 +545,13 @@ public final class U10Tool {
             while ((result = publication.offer(buffer, 0, length)) < 0 && System.currentTimeMillis() < deadline) {
                 Thread.sleep(5);
             }
-            System.out.println(result < 0 ? "OFFER_FAILED " + result : "SENT " + args[7]);
             if (result < 0) {
+                System.out.println("OFFER_FAILED " + result);
                 System.exit(3);
             }
-            Thread.sleep(300); // 전송이 끝나기 전에 클라이언트가 닫혀 버리지 않게 잠깐 둔다
+            flushOrFail(aeron, publication); // 전송이 끝나기 전에 클라이언트가 닫혀 버리지 않게 송신 위치가 발행 위치에 닿을 때까지 기다린다
+            System.out.println("SENT " + args[7]);
+            Thread.sleep(300);
         } finally {
             CloseHelper.quietClose(aeron);
             CloseHelper.quietClose(driver);

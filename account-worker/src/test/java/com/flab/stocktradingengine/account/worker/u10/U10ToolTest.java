@@ -101,4 +101,104 @@ class U10ToolTest {
         assertEquals(List.of("000001"), targets.stockCodes());
         assertEquals(0L, targets.sentinelAccountId());
     }
+
+    @Test
+    void 맵_토픽이_없으면_MAP_TOPIC_MISSING을_남기고_부분_읽기_경고와_구별한다() {
+        MockConsumer<Integer, String> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
+        consumer.updatePartitions(MAP_TOPIC, List.of());
+        String err = run(stream -> assertTrue(U10Tool.readMapTopic(consumer, 300L, stream).isEmpty()));
+        assertTrue(err.contains("MAP_TOPIC_MISSING"), err);
+        assertFalse(err.contains("WARN_PARTIAL_MAP_READ"), err);
+    }
+
+    @Test
+    void send_bulk_순서는_종목마다_매도_N건_바로_뒤에_표지_매수이고_종목_순서를_지킨다() {
+        U10Tool.BulkTargets targets = new U10Tool.BulkTargets(List.of("000001", "000002"), 90001L, 20000L, 1L);
+        List<com.flab.stocktradingengine.codec.DecodedAccountOrder> sent = new ArrayList<>();
+        U10Tool.bulkOrders(90002L, com.flab.stocktradingengine.trading.entity.OrderSide.SELL, 20000L, 3, "p", targets, sent::add);
+        assertEquals(8, sent.size());
+        List<String> ids = sent.stream().map(order -> order.requestId()).toList();
+        assertEquals(List.of("p-000001-0", "p-000001-1", "p-000001-2", "p-sentinel-000001",
+            "p-000002-0", "p-000002-1", "p-000002-2", "p-sentinel-000002"), ids);
+        assertEquals(com.flab.stocktradingengine.trading.entity.OrderSide.BUY, sent.get(3).type());
+        assertEquals(90001L, sent.get(3).accountId());
+    }
+
+    @Test
+    void stream_계획은_종목마다_매도와_매수를_번갈아_정해진_속도로_내고_잔고_초과_주문을_한_건_섞는다() {
+        U10Tool.StreamSpec spec = new U10Tool.StreamSpec(1_000L, 200, 20, "000001", "000002", 90002L, 90001L, 20000L);
+        List<U10Tool.PlannedOrder> plan = U10Tool.streamPlan(spec);
+        long xSells = plan.stream().filter(p -> p.order().stockCode().equals("000001") && p.order().accountId() == 90002L).count();
+        long xBuys = plan.stream().filter(p -> p.order().stockCode().equals("000001") && p.order().accountId() == 90001L
+            && p.order().quantity() == 1).count();
+        long ySells = plan.stream().filter(p -> p.order().stockCode().equals("000002") && p.order().accountId() == 90002L).count();
+        long invalid = plan.stream().filter(p -> p.order().requestId().equals("u10-flow-invalid")).count();
+        assertEquals(100, xSells);
+        assertEquals(100, xBuys);
+        assertEquals(10, ySells);
+        assertEquals(1, invalid);
+        assertEquals(plan.size(), plan.stream().map(p -> p.order().requestId()).distinct().count(), "요청 번호가 모두 다르다");
+        long previous = -1;
+        for (U10Tool.PlannedOrder planned : plan) {
+            assertTrue(planned.offsetMillis() >= previous && planned.offsetMillis() < 1_000L, "발신 시각 오프셋은 줄지 않고 기간 안이다");
+            previous = planned.offsetMillis();
+        }
+    }
+
+    @Test
+    void send_bulk_가격_간격_옵션이_0이면_모든_매도가_같은_가격이다() {
+        U10Tool.BulkTargets targets = U10Tool.parseBulkTargets(new String[] {
+            "send-bulk", "ch", "90002", "SELL", "20000", "3", "p", "000001", "--price-step=0"}, 7);
+        assertEquals(0L, targets.priceStep());
+        List<com.flab.stocktradingengine.codec.DecodedAccountOrder> sent = new ArrayList<>();
+        U10Tool.bulkOrders(90002L, com.flab.stocktradingengine.trading.entity.OrderSide.SELL, 20000L, 3, "p", targets, sent::add);
+        assertEquals(List.of(20000L, 20000L, 20000L), sent.stream().map(order -> order.price().longValue()).toList());
+    }
+
+    private static org.agrona.concurrent.status.CountersManager newCounters() {
+        return new org.agrona.concurrent.status.CountersManager(
+            new org.agrona.concurrent.UnsafeBuffer(java.nio.ByteBuffer.allocateDirect(64 * 1024)),
+            new org.agrona.concurrent.UnsafeBuffer(java.nio.ByteBuffer.allocateDirect(16 * 1024)),
+            StandardCharsets.UTF_8);
+    }
+
+    private static int allocateSenderPosition(org.agrona.concurrent.status.CountersManager counters, long registrationId, long value) {
+        int counterId = counters.allocate("snd-pos", io.aeron.AeronCounters.DRIVER_SENDER_POSITION_TYPE_ID,
+            buffer -> buffer.putLong(0, registrationId));
+        counters.setCounterValue(counterId, value);
+        return counterId;
+    }
+
+    @Test
+    void 송신_위치가_발행_위치보다_뒤에_있으면_기다리고_따라잡으면_REACHED를_돌려준다() throws Exception {
+        org.agrona.concurrent.status.CountersManager counters = newCounters();
+        int counterId = allocateSenderPosition(counters, 77L, 100L);
+        Thread catchUp = new Thread(() -> {
+            try {
+                Thread.sleep(150);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            counters.setCounterValue(counterId, 5_000L);
+        });
+        catchUp.start();
+        long started = System.currentTimeMillis();
+        assertEquals(U10Tool.SenderWait.REACHED, U10Tool.awaitSenderPosition(counters, 77L, 5_000L, 5_000L));
+        assertTrue(System.currentTimeMillis() - started >= 100L, "송신 위치가 따라잡기 전에는 돌아오지 않는다");
+        catchUp.join();
+    }
+
+    @Test
+    void 송신_위치가_끝내_발행_위치에_닿지_못하면_NOT_REACHED다() {
+        org.agrona.concurrent.status.CountersManager counters = newCounters();
+        allocateSenderPosition(counters, 77L, 100L);
+        assertEquals(U10Tool.SenderWait.NOT_REACHED, U10Tool.awaitSenderPosition(counters, 77L, 5_000L, 300L));
+    }
+
+    @Test
+    void 이_발행의_송신_위치_카운터를_찾지_못하면_송신_위치에_못_닿은_것과_구별한다() {
+        org.agrona.concurrent.status.CountersManager counters = newCounters();
+        allocateSenderPosition(counters, 12L, 9_999L);
+        assertEquals(U10Tool.SenderWait.COUNTER_NOT_FOUND, U10Tool.awaitSenderPosition(counters, 77L, 100L, 300L), "다른 발행의 카운터가 충분히 커도 이 발행으로 세지 않는다");
+    }
 }

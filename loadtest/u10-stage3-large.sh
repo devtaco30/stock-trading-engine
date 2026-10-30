@@ -11,6 +11,7 @@ source loadtest/u10/lib.sh
 trap cleanup EXIT
 
 N=${1:?종목당 대기 매도 주문 수를 인자로 준다}
+case "$N" in ''|*[!0-9]*) echo "종목당 대기 매도 주문 수는 숫자여야 한다: $N" >&2; exit 1;; esac
 [ "$N" -ge 2 ] || { echo "종목당 대기 매도 주문은 2건 이상이어야 한다(표지 매수와 이동 뒤 매수가 각각 1건씩 체결된다)" >&2; exit 1; }
 MOVING_STOCKS=3
 OK=1
@@ -47,7 +48,10 @@ for stock in $STOCKS; do SEED_ARGS+=(--account-worker.seed-accounts[1].holdings.
 start_account "${SEED_ARGS[@]}"
 
 # 대기 매도 주문을 대량으로 쌓는다.
-BULK=$(tool send-bulk aeron:udp?endpoint=localhost:20040 90002 SELL 20000 "$N" u10-big $STOCKS --sentinel-buy=90001:20000 | grep -E "^(SENT_BULK|OFFER_FAILED|NOT_CONNECTED)" | tail -1)
+BULK_OUT=$(tool send-bulk aeron:udp?endpoint=localhost:20040 90002 SELL 20000 "$N" u10-big $STOCKS --sentinel-buy=90001:20000)
+BULK=$(echo "$BULK_OUT" | grep -E "^(SENT_BULK|OFFER_FAILED|NOT_CONNECTED)" | tail -1)
+BULK_FAILURE=$(tool_failure_reason "$BULK_OUT")
+[ -z "$BULK_FAILURE" ] || { fail "도구 실패(주문 유입 한계가 아님): 대량 매도 발신 $BULK_FAILURE"; exit 1; }
 echo "$BULK"
 echo "$BULK" | grep -q "^SENT_BULK" || { fail "대량 매도 주문을 보내지 못했다: $BULK"; exit 1; }
 # 이동 전에 호가창에 매도 N건이 모두 들어갔는지 확인한다. send-bulk가 종목마다 매도 N건 바로 뒤에 같은 Publication으로 표지 매수(20,000원 1주)를
@@ -87,7 +91,7 @@ done
 python3 - "$WORK/map-history.txt" "$LOG_DIR" <<'PY'
 import sys,re,datetime
 rows=[l.rstrip('\n').split('\t') for l in open(sys.argv[1]) if l.strip()]
-rows=[(int(s),int(t),v) for s,t,v in rows]
+rows=[(int(r[0]),int(r[1]),r[2]) for r in rows]  # 4번째 필드(timestampType)는 쓰지 않는다
 logdir=sys.argv[2]
 def ts(line):
     return int(datetime.datetime.fromisoformat(line.split(' ')[0]).timestamp()*1000)
@@ -114,6 +118,7 @@ if rcv and to1: print("RECEIVE_TO_SWITCH_MS_LOG_AND_MAP_RECORD_TIME=%d" % (max(t
 warn=all_ts(logdir+'/matching-1.log',r'적재 뒤 강제 스냅샷이 거부됨')
 if warn: print("FORCED_SNAPSHOT_REJECTED_WARN count=%d first_to_last_ms=%d" % (len(warn), max(warn)-min(warn)))
 PY
+expect "맵 기록 분석 python이 오류 없이 끝났다" "0" "$?"
 
 # 이동 한 건의 단계별 시간(종목 slot별 최소·중앙·최대)
 python3 loadtest/u10/handover-steps.py "$WORK/map-history.txt" "$LOG_DIR/matching-1.log"
@@ -142,9 +147,14 @@ for stock in $STOCKS; do
     expect "종목 $stock 이동 전 표지 매수와 이동 뒤 매수로 두 건이 체결되고 호가창에 N-2건이 남는다" "$((N - 2))" "$(resting_total "$stock")"
     expect "종목 $stock 호가창은 한쪽 pod에만 있다" "1" "$(book_pods "$stock")"
 done
+# 스냅샷의 tradeId 장부는 현재 세대와 직전 세대만 남긴다(ADR-034, 세대는 저널 적용 10,000건마다 넘어간다). 대량 매도 때문에 저널이 그보다 길어지면
+# 이른 체결의 tradeId는 설계대로 버려지므로, 스냅샷의 tradeId 개수는 세지 않는다. 반영된 체결은 계좌 로그(applied=true)와 보유 수량으로 센다.
 BUYER=$(echo "$A" | grep "ACCOUNT id=90001 " || true)
-TRADES=$(echo "$BUYER" | sed -n 's/.* tradeIds=\(.*\)$/\1/p' | tr ',' '\n' | grep . | sort -u | wc -l | tr -d ' ')
-expect "매수 계좌에 반영된 체결이 종목마다 두 건이고 tradeId가 모두 다르다" "$((MOVING_STOCKS * 2))" "$TRADES"
+TRADES=$(sed -n 's/.*체결 반영: accountId=90001 .*tradeId=\([0-9]*\) applied=true.*/\1/p' "$LOG_DIR/account.log" | sort -u | wc -l | tr -d ' ')
+expect "매수 계좌에 반영된 체결이 종목마다 두 건이고 tradeId가 모두 다르다(계좌 로그 기준)" "$((MOVING_STOCKS * 2))" "$TRADES"
+for stock in $STOCKS; do
+    expect "매수 계좌의 종목 $stock 보유가 체결 두 건만큼이다" "2" "$(echo "$BUYER" | grep -oE '[{,]'"$stock"'=[0-9]+' | grep -oE '[0-9]+$')"
+done
 
 report_send_failures
 [ "$OK" = 1 ] && RESULT=0
