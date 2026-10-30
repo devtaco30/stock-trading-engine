@@ -29,6 +29,7 @@ import com.flab.stocktradingengine.matching.worker.coordination.HandoverEndpoint
 import com.flab.stocktradingengine.matching.worker.coordination.KafkaMatchingShardAssignment;
 import com.flab.stocktradingengine.matching.worker.coordination.StuckHandoverReporter;
 import com.flab.stocktradingengine.matching.worker.coordination.MapCatchUpWaiter;
+import com.flab.stocktradingengine.matching.worker.coordination.MapReaderHealthCheck;
 import com.flab.stocktradingengine.matching.worker.coordination.MapSync;
 import com.flab.stocktradingengine.matching.worker.coordination.MatchingSlotMapReader;
 import com.flab.stocktradingengine.matching.worker.handover.HandoverBookStore;
@@ -106,7 +107,10 @@ public class MatchingHandoverConfig {
             @Value("${matching-shard.coordination.map-decision-timeout-ms:10000}") long timeoutMillis,
             // 따라오지 못한 판정이 연속 이만큼이면 읽기를 다시 시작한다. 기본값 3번과 읽기 재시작 간격 5초는 근거 없는 임의 값이다(미측정).
             @Value("${matching-shard.coordination.map-catch-up-failure-limit:3}") int catchUpFailureLimit,
-            @Value("${matching-shard.coordination.map-reader-restart-ms:5000}") long readerRestartMillis) {
+            @Value("${matching-shard.coordination.map-reader-restart-ms:5000}") long readerRestartMillis,
+            // 판정이 없어도 읽기 정지를 보는 주기 점검의 간격과, 끝에 못 닿은 채 읽은 위치가 멈춰 있는 연속 점검 한도. 둘 다 근거 없는 임의 값이다(미측정).
+            @Value("${matching-shard.coordination.map-health-check-interval-ms:10000}") long healthCheckIntervalMillis,
+            @Value("${matching-shard.coordination.map-health-check-stuck-limit:3}") int healthCheckStuckLimit) {
         org.apache.kafka.clients.admin.Admin admin = org.apache.kafka.clients.admin.Admin.create(
             java.util.Map.of(org.apache.kafka.clients.admin.AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers));
         org.apache.kafka.common.TopicPartition partition = new org.apache.kafka.common.TopicPartition(
@@ -125,7 +129,10 @@ public class MatchingHandoverConfig {
         MapCatchUpWaiter waiter = new MapCatchUpWaiter(endOffset, () -> reader.consumedOffset(0), timeoutMillis);
         reader.setRestartIntervalMillis(readerRestartMillis);
         waiter.onRepeatedFailure(catchUpFailureLimit, () -> reader.requestRestart("끝 위치를 따라오지 못한 판정이 연속 " + catchUpFailureLimit + "번"));
-        return new MapSyncResources(waiter, admin, reader::isHealthy);
+        MapReaderHealthCheck healthCheck = new MapReaderHealthCheck(
+            endOffset, () -> reader.consumedOffset(0), reader::isHealthy, healthCheckStuckLimit,
+            () -> reader.requestRestart("끝 위치에 못 닿은 채 읽은 위치가 주기 점검 " + healthCheckStuckLimit + "번 연속 멈춰 있음"));
+        return new MapSyncResources(waiter, admin, reader::isHealthy, healthCheck, healthCheckIntervalMillis);
     }
 
     /** 판정 대기 장치와 그것이 쓰는 Admin을 같이 닫기 위한 묶음. */
@@ -134,11 +141,25 @@ public class MatchingHandoverConfig {
         private final org.apache.kafka.clients.admin.Admin admin;
 
         private final java.util.function.BooleanSupplier healthy;
+        private final MapReaderHealthCheck healthCheck;
+        private final long healthCheckIntervalMillis;
 
-        MapSyncResources(MapSync delegate, org.apache.kafka.clients.admin.Admin admin, java.util.function.BooleanSupplier healthy) {
+        MapSyncResources(MapSync delegate, org.apache.kafka.clients.admin.Admin admin, java.util.function.BooleanSupplier healthy,
+                MapReaderHealthCheck healthCheck, long healthCheckIntervalMillis) {
             this.delegate = delegate;
             this.admin = admin;
             this.healthy = healthy;
+            this.healthCheck = healthCheck;
+            this.healthCheckIntervalMillis = healthCheckIntervalMillis;
+        }
+
+        /** 맵 읽기가 시작되고 초기 읽기를 마친 뒤에 부른다. */
+        void startHealthCheck() {
+            healthCheck.start(healthCheckIntervalMillis);
+        }
+
+        void stopHealthCheck() {
+            healthCheck.close();
         }
 
         @Override
@@ -153,21 +174,26 @@ public class MatchingHandoverConfig {
 
         @Override
         public void close() {
+            healthCheck.close();
             admin.close();
         }
     }
 
     @Bean
     public SmartLifecycle matchingSlotMapReaderLifecycle(
-            MatchingSlotMapReader reader, ObjectProvider<KafkaMatchingShardAssignment> assignment) {
+            MatchingSlotMapReader reader, ObjectProvider<KafkaMatchingShardAssignment> assignment, MapSyncResources mapSync) {
         return new HandoverLifecycle(MAP_READER_PHASE,
             () -> {
                 // 맵 토픽이 있어야 읽을 수 있다. 토픽 만들기는 배정 생명주기의 시작(-2)에서 하므로 읽기를 시작하기 전에 먼저 한다.
                 assignment.getObject().prepareTopics();
                 reader.start();
                 reader.awaitInitialCatchUp(Duration.ofSeconds(30));
+                mapSync.startHealthCheck();
             },
-            reader::close);
+            () -> {
+                mapSync.stopHealthCheck();
+                reader.close();
+            });
     }
 
     /**
