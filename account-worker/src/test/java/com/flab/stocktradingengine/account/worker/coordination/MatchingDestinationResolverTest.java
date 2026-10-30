@@ -283,6 +283,114 @@ class MatchingDestinationResolverTest {
         assertInstanceOf(KafkaException.class, resolver.readFailure().get());
     }
 
+    /** 복구용으로 새로 만들어 줄 consumer. 파티션 정보와 기록을 미리 채워 두고 factory가 차례로 내준다. */
+    private SleepingMockConsumer freshConsumerWith(int slot, String value) {
+        SleepingMockConsumer fresh = new SleepingMockConsumer();
+        List<PartitionInfo> partitionInfos = new ArrayList<>();
+        Map<TopicPartition, Long> beginOffsets = new HashMap<>();
+        Map<TopicPartition, Long> endOffsets = new HashMap<>();
+        for (int partition = 0; partition < STOCK_SLOT_COUNT; partition++) {
+            partitionInfos.add(new PartitionInfo(MAP_TOPIC, partition, null, null, null));
+            beginOffsets.put(new TopicPartition(MAP_TOPIC, partition), 0L);
+            endOffsets.put(new TopicPartition(MAP_TOPIC, partition), partition == slot ? 1L : 0L);
+        }
+        fresh.updatePartitions(MAP_TOPIC, partitionInfos);
+        fresh.updateBeginningOffsets(beginOffsets);
+        fresh.updateEndOffsets(endOffsets);
+        fresh.schedulePollTask(() -> fresh.addRecord(new ConsumerRecord<>(MAP_TOPIC, slot, 0L, slot, value)));
+        return fresh;
+    }
+
+    @Test
+    void 읽기_thread가_예외로_끝난_뒤_일정_간격으로_consumer를_다시_만들어_읽기를_재개한다() {
+        String staleStock = "005930";
+        String newStock = stockInDifferentSlot(staleStock);
+        int staleSlot = stockSlotHasher.slotFor(staleStock);
+        int newSlot = stockSlotHasher.slotFor(newStock);
+        SleepingMockConsumer recovered = freshConsumerWith(newSlot, ADDRESS_B);
+        java.util.concurrent.atomic.AtomicInteger factoryCalls = new java.util.concurrent.atomic.AtomicInteger();
+        resolver = new MatchingDestinationResolver(consumer, stockSlotHasher, ADDRESS_POOL, () -> {
+            factoryCalls.incrementAndGet();
+            return recovered;
+        }, 50L);
+        List<String> errors = new ArrayList<>();
+        java.util.logging.Logger julLogger = java.util.logging.Logger.getLogger(MatchingDestinationResolver.class.getName());
+        Handler captureHandler = new Handler() {
+            @Override
+            public void publish(LogRecord logRecord) {
+                synchronized (errors) {
+                    if (logRecord.getLevel().intValue() >= java.util.logging.Level.SEVERE.intValue()) {
+                        errors.add(logRecord.getMessage());
+                    }
+                }
+            }
+
+            @Override
+            public void flush() {
+            }
+
+            @Override
+            public void close() {
+            }
+        };
+        julLogger.addHandler(captureHandler);
+        try {
+            resolver.start();
+            publish(staleSlot, ADDRESS_A);
+            awaitEndpoint(staleStock, Optional.of(ADDRESS_A));
+
+            consumer.schedulePollTask(() -> {
+                throw new KafkaException("일시적인 브로커 오류");
+            });
+
+            awaitEndpoint(newStock, Optional.of(ADDRESS_B));
+            assertEquals(Optional.empty(), resolver.endpointFor(staleStock), "다시 처음부터 읽으므로 옛 표의 항목이 남지 않는다");
+            assertTrue(resolver.readFailure().isEmpty(), "복구 뒤에는 읽기 실패 기록이 지워진다");
+            assertEquals(1, factoryCalls.get());
+            synchronized (errors) {
+                assertTrue(errors.stream().anyMatch(message -> message.contains("읽기 thread가 예외로 끝났습니다")), errors.toString());
+            }
+        } finally {
+            julLogger.removeHandler(captureHandler);
+        }
+    }
+
+    @Test
+    void 복구용_consumer를_만들지_못하면_ERROR를_남기고_간격을_두고_다시_시도한다() {
+        String newStock = "005930";
+        int newSlot = stockSlotHasher.slotFor(newStock);
+        SleepingMockConsumer recovered = freshConsumerWith(newSlot, ADDRESS_B);
+        java.util.concurrent.atomic.AtomicInteger factoryCalls = new java.util.concurrent.atomic.AtomicInteger();
+        resolver = new MatchingDestinationResolver(consumer, stockSlotHasher, ADDRESS_POOL, () -> {
+            if (factoryCalls.incrementAndGet() < 3) {
+                throw new KafkaException("브로커에 아직 연결되지 않음");
+            }
+            return recovered;
+        }, 30L);
+        resolver.start();
+        resolver.awaitInitialCatchUp(Duration.ofSeconds(10));
+        consumer.schedulePollTask(() -> {
+            throw new KafkaException("일시적인 브로커 오류");
+        });
+        awaitCondition(() -> resolver.readFailure().isPresent(), "읽기 실패 기록");
+        assertEquals(Optional.empty(), resolver.endpointFor(newStock), "복구 전에는 담당을 모른다");
+
+        awaitEndpoint(newStock, Optional.of(ADDRESS_B));
+        assertEquals(3, factoryCalls.get(), "두 번 실패하고 세 번째에 성공");
+    }
+
+    @Test
+    void 복구_consumer_없이_만든_resolver는_읽기_thread가_끝나면_그대로_멈춘다() throws InterruptedException {
+        resolver.start();
+        resolver.awaitInitialCatchUp(Duration.ofSeconds(10));
+        consumer.schedulePollTask(() -> {
+            throw new KafkaException("브로커 오류");
+        });
+        awaitCondition(() -> resolver.readFailure().isPresent(), "읽기 실패 기록");
+        Thread.sleep(200);
+        assertTrue(resolver.readFailure().isPresent(), "factory가 없으면 복구를 시도하지 않는다(기존 동작)");
+    }
+
     @Test
     void 한_번에_받은_변경_둘은_읽는_쪽에_섞여_보이지_않고_이미_읽은_표는_바뀌지_않는다() throws Exception {
         String firstStock = "005930";

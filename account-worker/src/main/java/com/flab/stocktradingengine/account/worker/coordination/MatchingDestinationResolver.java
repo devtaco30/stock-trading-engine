@@ -9,6 +9,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -47,7 +48,10 @@ public final class MatchingDestinationResolver implements MatchingTargetLookup {
 
     public static final String MAP_TOPIC = "matching-shard-map";
 
-    private final Consumer<Integer, String> consumer;
+    private volatile Consumer<Integer, String> consumer;
+    // 읽기 thread가 예외로 끝난 뒤 새 consumer를 만들어 처음부터 다시 읽게 하는 공급자와 시도 간격. 공급자가 없으면 복구하지 않는다.
+    private final Supplier<Consumer<Integer, String>> consumerFactory;
+    private final long recoveryIntervalMillis;
     private final StockSlotHasher stockSlotHasher;
     private final Set<String> addressPool;
 
@@ -74,6 +78,18 @@ public final class MatchingDestinationResolver implements MatchingTargetLookup {
      */
     public MatchingDestinationResolver(Consumer<Integer, String> consumer, StockSlotHasher stockSlotHasher,
                                        Set<String> addressPool) {
+        this(consumer, stockSlotHasher, addressPool, null, 0L);
+    }
+
+    /**
+     * 초기 읽기를 마친 뒤 읽기 thread가 예외로 끝나면 {@code recoveryIntervalMillis}마다 {@code consumerFactory}로 새 consumer를
+     * 만들어 맵 토픽을 처음부터 다시 읽는다. 다 읽을 때까지는 담당을 모르는 상태로 두고(보관), 다 읽으면 읽기 실패 기록을 지운다.
+     */
+    public MatchingDestinationResolver(Consumer<Integer, String> consumer, StockSlotHasher stockSlotHasher,
+                                       Set<String> addressPool, Supplier<Consumer<Integer, String>> consumerFactory,
+                                       long recoveryIntervalMillis) {
+        this.consumerFactory = consumerFactory;
+        this.recoveryIntervalMillis = recoveryIntervalMillis;
         this.consumer = consumer;
         this.stockSlotHasher = stockSlotHasher;
         this.addressPool = Set.copyOf(addressPool);
@@ -194,29 +210,103 @@ public final class MatchingDestinationResolver implements MatchingTargetLookup {
         boolean caughtUp = false;
         try {
             while (running) {
-                ConsumerRecords<Integer, String> records = consumer.poll(Duration.ofMillis(500));
-                if (!records.isEmpty()) {
-                    applyRecords(records);
+                try {
+                    while (running) {
+                        ConsumerRecords<Integer, String> records = consumer.poll(Duration.ofMillis(500));
+                        if (!records.isEmpty()) {
+                            applyRecords(records);
+                        }
+                        if (!caughtUp && isCaughtUp(partitions, endOffsets)) {
+                            caughtUp = true;
+                            initialCatchUpLatch.countDown();
+                        }
+                    }
+                } catch (WakeupException e) {
+                    // close()가 의도적으로 poll을 깨운 것 — 정상 종료 경로.
+                    return;
+                } catch (RuntimeException e) {
+                    log.log(Level.ERROR, "[목적지] " + MAP_TOPIC + " 읽기 thread가 예외로 끝났습니다 — 이후 모든 종목 slot의 담당을 "
+                        + "알 수 없음으로 돌려줍니다", e);
+                    readFailureCause = e;
+                    if (!caughtUp) {
+                        // 초기 읽기를 마치기 전이면 대기 중인 호출자가 정상 반환하지 않고 실패로 알게 한다.
+                        initialCatchUpFailure = e;
+                        return;
+                    }
+                    if (consumerFactory == null || !recoverReading()) {
+                        return;
+                    }
                 }
-                if (!caughtUp && isCaughtUp(partitions, endOffsets)) {
-                    caughtUp = true;
-                    initialCatchUpLatch.countDown();
-                }
-            }
-        } catch (WakeupException e) {
-            // close()가 의도적으로 poll을 깨운 것 — 정상 종료 경로.
-        } catch (RuntimeException e) {
-            // 초기 읽기를 마치기 전이면 대기 중인 호출자가 정상 반환하지 않고 실패로 알게 한다.
-            log.log(Level.ERROR, "[목적지] " + MAP_TOPIC + " 읽기 thread가 예외로 끝났습니다 — 이후 모든 종목 slot의 담당을 "
-                + "알 수 없음으로 돌려줍니다", e);
-            readFailureCause = e;
-            if (!caughtUp) {
-                initialCatchUpFailure = e;
             }
         } finally {
             // 정상 종료 경로에서도 대기 중인 awaitInitialCatchUp 호출자가 영원히 안 깨는 일이 없게 한다.
             initialCatchUpLatch.countDown();
         }
+    }
+
+    /**
+     * 간격을 두고 새 consumer를 만들어 맵 토픽을 처음부터 끝까지 다시 읽는다. 읽는 동안 표는 빈 표에서 새로 쌓고, 다 읽은 뒤에야 읽기 실패 기록을
+     * 지워 view가 다시 값을 돌려주게 한다. 시도가 실패하면 ERROR를 남기고 같은 간격으로 다시 시도한다. close()로 멈추면 false를 돌려준다.
+     */
+    private boolean recoverReading() {
+        while (running) {
+            if (!sleepWhileRunning(recoveryIntervalMillis)) {
+                return false;
+            }
+            try {
+                Consumer<Integer, String> old = consumer;
+                try {
+                    old.close(Duration.ofSeconds(1));
+                } catch (RuntimeException closeFailure) {
+                    log.log(Level.WARNING, "[목적지] 옛 consumer를 닫지 못했다(무시하고 새로 만든다): " + closeFailure.getMessage());
+                }
+                Consumer<Integer, String> fresh = consumerFactory.get();
+                consumer = fresh;
+                List<PartitionInfo> partitionInfos = fresh.partitionsFor(MAP_TOPIC);
+                if (partitionInfos == null || partitionInfos.isEmpty()) {
+                    throw new IllegalStateException(MAP_TOPIC + "의 파티션을 찾지 못했습니다");
+                }
+                List<TopicPartition> partitions = partitionInfos.stream()
+                    .map(info -> new TopicPartition(MAP_TOPIC, info.partition()))
+                    .toList();
+                fresh.assign(partitions);
+                fresh.seekToBeginning(partitions);
+                Map<TopicPartition, Long> ends = fresh.endOffsets(partitions);
+                tableState = newTableState(new MatchingSlotTarget[stockSlotHasher.stockSlotCount()]);
+                while (running && !isCaughtUp(partitions, ends)) {
+                    ConsumerRecords<Integer, String> records = fresh.poll(Duration.ofMillis(500));
+                    if (!records.isEmpty()) {
+                        applyRecords(records);
+                    }
+                }
+                if (!running) {
+                    return false;
+                }
+                readFailureCause = null;
+                log.log(Level.INFO, "[목적지] " + MAP_TOPIC + " 읽기를 처음부터 다시 읽어 재개했습니다");
+                return true;
+            } catch (WakeupException e) {
+                return false;
+            } catch (RuntimeException e) {
+                log.log(Level.ERROR, "[목적지] " + MAP_TOPIC + " 읽기 복구 시도가 실패했습니다 — " + recoveryIntervalMillis
+                    + "ms 뒤 다시 시도합니다", e);
+            }
+        }
+        return false;
+    }
+
+    /** close()가 오래 기다리지 않게 짧게 나눠 쉰다. 쉬는 도중 멈추면 false. */
+    private boolean sleepWhileRunning(long millis) {
+        long deadline = System.nanoTime() + millis * 1_000_000L;
+        while (running && System.nanoTime() < deadline) {
+            try {
+                Thread.sleep(Math.min(20L, Math.max(1L, millis)));
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return false;
+            }
+        }
+        return running;
     }
 
     /** consumer.position()은 이 poll 스레드에서만 부른다 — KafkaConsumer는 여러 스레드에서 동시에 쓸 수 없다. */

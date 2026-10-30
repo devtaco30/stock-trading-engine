@@ -74,11 +74,15 @@ public class MatchingShardRoutingConfig {
     public MatchingDestinationResolver matchingDestinationResolver(
             Consumer<Integer, String> matchingShardMapConsumer,
             StockSlotHasher matchingStockSlotHasher,
-            MatchingShardRoutingProperties properties) {
-        log.info("[계좌] 매칭 담당 소스: matching-shard-map 구독 — 종목 slot {}개, 주소 풀 {}개",
-            matchingStockSlotHasher.stockSlotCount(), properties.endpoints().size());
+            MatchingShardRoutingProperties properties,
+            @Value("${spring.kafka.bootstrap-servers:}") String bootstrapServers,
+            @Value("${matching-shard-routing.map-read-recovery-interval-ms:5000}") long mapReadRecoveryIntervalMillis) {
+        log.info("[계좌] 매칭 담당 소스: matching-shard-map 구독 — 종목 slot {}개, 주소 풀 {}개, 읽기 복구 간격 {}ms",
+            matchingStockSlotHasher.stockSlotCount(), properties.endpoints().size(), mapReadRecoveryIntervalMillis);
+        // 읽기 thread가 예외로 끝나면 이 간격마다 새 consumer를 만들어 맵 토픽을 처음부터 다시 읽는다.
         return new MatchingDestinationResolver(matchingShardMapConsumer, matchingStockSlotHasher,
-            Set.copyOf(properties.endpoints()));
+            Set.copyOf(properties.endpoints()),
+            () -> new KafkaConsumer<>(matchingShardMapConsumerProperties(bootstrapServers)), mapReadRecoveryIntervalMillis);
     }
 
     @Bean
