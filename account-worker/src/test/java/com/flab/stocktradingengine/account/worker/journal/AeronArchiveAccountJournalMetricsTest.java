@@ -23,19 +23,26 @@ import io.aeron.Publication;
 class AeronArchiveAccountJournalMetricsTest {
 
     @Test
-    void offer가_밀려_다시_시도한_횟수를_센다() {
+    void offer가_밀려_다시_시도한_횟수를_BACK_PRESSURED와_그_밖으로_나눠_센다() {
         ExclusivePublication publication = mock(ExclusivePublication.class);
         when(publication.offer(any(DirectBuffer.class), anyInt(), anyInt()))
-            .thenReturn(Publication.BACK_PRESSURED, Publication.BACK_PRESSURED, Publication.ADMIN_ACTION, 100L, 200L);
+            .thenReturn(Publication.BACK_PRESSURED, Publication.BACK_PRESSURED, Publication.ADMIN_ACTION, 100L,
+                Publication.NOT_CONNECTED, 200L, 300L);
         AeronArchiveAccountJournal journal = new AeronArchiveAccountJournal(publication);
-        assertThat(journal.offerRetryCount()).isZero();
+        assertThat(journal.offerBackPressureCount()).isZero();
+        assertThat(journal.offerOtherRetryCount()).isZero();
 
         journal.append(entry(1L));
-        assertThat(journal.offerRetryCount()).as("첫 엔트리는 offer가 세 번 되돌아온 뒤 성공했다").isEqualTo(3);
+        assertThat(journal.offerBackPressureCount()).as("첫 엔트리: BACK_PRESSURED 두 번").isEqualTo(2);
+        assertThat(journal.offerOtherRetryCount()).as("첫 엔트리: ADMIN_ACTION 한 번").isEqualTo(1);
 
         journal.append(entry(2L));
+        assertThat(journal.offerBackPressureCount()).isEqualTo(2);
+        assertThat(journal.offerOtherRetryCount()).as("둘째 엔트리: NOT_CONNECTED 한 번이 그 밖에 더해진다").isEqualTo(2);
+
         journal.append(entry(3L));
-        assertThat(journal.offerRetryCount()).as("다시 시도하지 않은 엔트리는 횟수를 늘리지 않는다").isEqualTo(3);
+        assertThat(journal.offerBackPressureCount()).as("다시 시도하지 않은 엔트리는 어느 쪽도 늘리지 않는다").isEqualTo(2);
+        assertThat(journal.offerOtherRetryCount()).isEqualTo(2);
     }
 
     @Test
@@ -46,7 +53,8 @@ class AeronArchiveAccountJournalMetricsTest {
         AeronArchiveAccountJournal journal = new AeronArchiveAccountJournal(publication);
 
         assertThatThrownBy(() -> journal.append(entry(1L))).isInstanceOf(IllegalStateException.class);
-        assertThat(journal.offerRetryCount()).isEqualTo(1);
+        assertThat(journal.offerBackPressureCount()).isEqualTo(1);
+        assertThat(journal.offerOtherRetryCount()).isZero();
     }
 
     private AccountJournalEntry entry(long orderId) {
