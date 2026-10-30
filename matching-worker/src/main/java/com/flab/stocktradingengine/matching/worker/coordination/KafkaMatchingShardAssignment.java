@@ -637,12 +637,26 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
         List<Integer> toRequest = new java.util.ArrayList<>();
         List<Integer> toAcquire = new java.util.ArrayList<>();
         List<TopicPartition> firstAssigned = new java.util.ArrayList<>();
+        boolean readerStoppedDuringClassification = false;
         synchronized (this) {
+            // 맵 항목을 먼저 모두 읽어 분류하고, 그 사이에 맵 읽기가 멈췄는지 확인한 뒤에 상태를 바꾼다. 따라왔다는 답을 받은 뒤 조회하기 전에 읽는 thread가
+            // 예외를 만나면 조회가 낡은 값을 막으려고 빈 값을 돌려주는데, 이를 항목 없음(첫 배정)으로 읽으면 맵에 이동 중으로 남은 종목 slot을 빈
+            // 호가창으로 켜 이전 담당과 호가창이 두 곳에 생긴다. 읽기는 다시 정상이 될 때까지 비정상으로 남으므로 이 확인이 그 경우를 잡는다.
+            java.util.Map<Integer, Kind> kinds = new java.util.HashMap<>();
             for (int slot : slots) {
+                if (awaitingDecision.contains(slot)) {
+                    kinds.put(slot, classify(slot));
+                }
+            }
+            if (mapSync != null && !mapSync.healthy()) {
+                readerStoppedDuringClassification = true;
+                log.log(Level.ERROR, "[매칭] 맵 항목을 읽는 사이 맵 읽기가 멈춰 분류를 버리고 판정을 미룸 — 첫 배정으로 가정하지 않고 담당을 켜지 않은 채 둔다: 종목 slot=" + slots);
+            }
+            for (int slot : readerStoppedDuringClassification ? List.<Integer>of() : slots) {
                 if (!awaitingDecision.remove(slot)) {
                     continue; // 판정 전에 회수되었다.
                 }
-                switch (classify(slot)) {
+                switch (kinds.get(slot)) {
                     case MOVED_IN -> {
                         // 이전 담당이 넘기는 중인 종목 slot이다. 맵은 호가창 적재가 끝날 때까지 이동 중으로 남기므로 자기 주소를 올리지 않고,
                         // 호가창을 요청하며, 적재와 스냅샷 확정이 끝나기 전에는 담당 표시를 켜지 않는다.
@@ -662,6 +676,10 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
                     }
                 }
             }
+        }
+        if (readerStoppedDuringClassification) {
+            scheduleRedecision(slots);
+            return;
         }
         // 호가창을 요청하는 중이면 이 종목 slot의 담당이 아님이 확실하다. 재시작 때 저널의 받음만 보고 담당으로 복원한 종목 slot이 그 사이 다른
         // pod에 배정되었다가 이동해 오는 경우에, 엔진이 담당으로 알고 있으면 도착하는 적재를 거부하므로 요청하기 전에 넘김을 저널에 남긴다.

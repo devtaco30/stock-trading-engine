@@ -51,6 +51,8 @@ class KafkaMatchingShardAssignmentDecisionTest {
     private final AtomicReference<Optional<MatchingSlotTarget>> mapEntry = new AtomicReference<>(Optional.empty());
     private final AtomicReference<Boolean> caughtUp = new AtomicReference<>(true);
     private final AtomicReference<Boolean> mapReaderHealthy = new AtomicReference<>(true);
+    // 켜 두면 다음 따라오기 확인이 true를 돌려준 직후 맵 읽기가 비정상이 된다(true 반환과 조회 사이에 읽는 thread가 예외를 만나는 경쟁).
+    private final java.util.concurrent.atomic.AtomicBoolean readerFailsRightAfterCatchUp = new java.util.concurrent.atomic.AtomicBoolean();
     private final java.util.concurrent.atomic.AtomicInteger awaitCalls = new java.util.concurrent.atomic.AtomicInteger();
     private final List<String> order = new CopyOnWriteArrayList<>();
     private MatchingEngine engine;
@@ -83,14 +85,19 @@ class KafkaMatchingShardAssignmentDecisionTest {
         };
         IntFunction<Optional<MatchingSlotTarget>> lookup = slot -> {
             order.add("lookup");
-            return mapEntry.get();
+            // 실제 MatchingSlotMapReader.targetFor는 읽기가 비정상인 동안 낡은 값을 막으려고 빈 값을 돌려준다.
+            return mapReaderHealthy.get() ? mapEntry.get() : Optional.empty();
         };
         MapSync mapSync = new MapSync() {
             @Override
             public boolean awaitCaughtUp() {
                 order.add("sync");
                 awaitCalls.incrementAndGet();
-                return caughtUp.get();
+                boolean result = caughtUp.get();
+                if (readerFailsRightAfterCatchUp.getAndSet(false)) {
+                    mapReaderHealthy.set(false);
+                }
+                return result;
             }
 
             @Override
@@ -115,6 +122,27 @@ class KafkaMatchingShardAssignmentDecisionTest {
     void tearDown() {
         assignment.close();
         engine.shutdown();
+    }
+
+    @Test
+    void 따라왔다는_답_직후_읽기가_멈춰_조회가_빈_값을_주면_첫_배정으로_보지_않고_판정을_미룬다() throws Exception {
+        // 맵에 「이전 담당;moving」이 있는 종목 slot이다. 빈 값을 항목 없음으로 읽어 첫 배정으로 처리하면 빈 호가창으로 담당을 켜고 평상시 값을
+        // 올려, 이전 담당이 호가창을 지킨 채 이 pod도 빈 호가창으로 담당이 된다.
+        mapEntry.set(Optional.of(new MatchingSlotTarget(PREVIOUS_OWNER, true)));
+        readerFailsRightAfterCatchUp.set(true);
+
+        listener.onPartitionsAssigned(partitions(5));
+
+        assertThat(mapProducer.history()).as("첫 배정으로 보고 평상시 값을 올리면 안 된다").isEmpty();
+        assertThat(requests.drainTo(engine)).as("받음 요청을 남기면 안 된다").isZero();
+        assertThat(assignment.slotsAwaitingDecision()).as("판정을 미루고 대기 상태로 남는다").containsExactly(5);
+
+        mapReaderHealthy.set(true);
+        long deadline = System.nanoTime() + 3_000_000_000L;
+        while (handoverRequested.isEmpty() && System.nanoTime() < deadline) {
+            Thread.sleep(5);
+        }
+        assertThat(handoverRequested).as("읽기가 복구된 뒤 다시 판정해 이동으로 받는다").containsExactly(5);
     }
 
     @Test
