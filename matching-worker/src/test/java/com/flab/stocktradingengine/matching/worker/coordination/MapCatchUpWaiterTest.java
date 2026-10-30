@@ -71,4 +71,33 @@ class MapCatchUpWaiterTest {
         waiter.awaitCaughtUp();
         assertThat(restarts.get()).isEqualTo(2);
     }
+
+    @Test
+    void 기다리는_도중_읽기가_정상이_아니게_되면_바로_false로_돌아오고_실패로_세지_않는다() throws Exception {
+        // 읽기가 재시작해 새 consumer로 처음부터 다시 읽는 동안 읽은 위치는 0부터 다시 올라온다. 이 동안의 대기는 시간을 채워도 정지의 증거가 아니다.
+        java.util.concurrent.atomic.AtomicBoolean healthy = new java.util.concurrent.atomic.AtomicBoolean(true);
+        java.util.concurrent.atomic.AtomicInteger restarts = new java.util.concurrent.atomic.AtomicInteger();
+        MapCatchUpWaiter waiter = new MapCatchUpWaiter(() -> 10L, () -> 0L, 5_000L);
+        waiter.setReaderHealthy(healthy::get);
+        waiter.onRepeatedFailure(2, restarts::incrementAndGet);
+
+        for (int i = 0; i < 5; i++) {
+            Thread restartLater = new Thread(() -> {
+                try {
+                    Thread.sleep(50);
+                } catch (InterruptedException e) {
+                    return;
+                }
+                healthy.set(false);
+            });
+            healthy.set(true);
+            restartLater.start();
+            long startedAt = System.nanoTime();
+
+            assertThat(waiter.awaitCaughtUp()).isFalse();
+
+            assertThat((System.nanoTime() - startedAt) / 1_000_000L).as("한도(5초)를 채우지 않고 돌아온다").isLessThan(2_000L);
+        }
+        assertThat(restarts).as("읽기가 이미 재시작 중이라 따라오지 못한 판정으로 세지 않는다").hasValue(0);
+    }
 }

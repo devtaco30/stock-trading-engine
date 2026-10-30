@@ -127,6 +127,7 @@ public class MatchingHandoverConfig {
             }
         };
         MapCatchUpWaiter waiter = new MapCatchUpWaiter(endOffset, () -> reader.consumedOffset(0), timeoutMillis);
+        waiter.setReaderHealthy(reader::isHealthy);
         reader.setRestartIntervalMillis(readerRestartMillis);
         waiter.onRepeatedFailure(catchUpFailureLimit, () -> reader.requestRestart("끝 위치를 따라오지 못한 판정이 연속 " + catchUpFailureLimit + "번"));
         MapReaderHealthCheck healthCheck = new MapReaderHealthCheck(

@@ -261,7 +261,8 @@ public final class MatchingSlotMapReader {
     /** 옛 consumer를 닫고 새로 만들어 모든 파티션을 처음부터 읽게 하고, 그때의 끝 위치를 돌려준다. */
     private Map<TopicPartition, Long> rebuildConsumer(List<TopicPartition> partitions) {
         try {
-            consumer.close();
+            // 브로커가 끊긴 상태에서 기본 대기(약 30초)만큼 읽는 thread가 멈추지 않도록 짧은 한도로 닫는다.
+            consumer.close(Duration.ofSeconds(1));
         } catch (RuntimeException e) {
             log.log(Level.WARNING, "[맵] " + mapTopic + " 옛 consumer를 닫다 예외(새로 만들어 계속함): " + e);
         }

@@ -2,6 +2,7 @@ package com.flab.stocktradingengine.matching.worker.coordination;
 
 import java.lang.System.Logger;
 import java.lang.System.Logger.Level;
+import java.util.function.BooleanSupplier;
 import java.util.function.LongSupplier;
 
 /**
@@ -18,6 +19,7 @@ public final class MapCatchUpWaiter implements MapSync {
     private final java.util.concurrent.atomic.AtomicInteger consecutiveFailures = new java.util.concurrent.atomic.AtomicInteger();
     private volatile int failureLimit;
     private volatile Runnable failureAction = () -> { };
+    private volatile BooleanSupplier readerHealthy = () -> true;
 
     /**
      * @param endOffset 맵 토픽의 지금 끝 위치를 알아내는 함수(브로커에 묻는다)
@@ -39,11 +41,21 @@ public final class MapCatchUpWaiter implements MapSync {
         this.failureAction = action;
     }
 
+    /**
+     * 맵 읽기가 정상인지 알려 주는 함수. 기다리는 도중 정상이 아니게 되면(읽기가 멈춰 재시작하는 중이고, 새 consumer로 처음부터 다시 읽는 동안
+     * 읽은 위치가 0부터 다시 올라온다) 기다리지 않고 false로 돌아오며, 이것은 정지의 증거가 아니므로 연속 실패로 세지 않는다.
+     */
+    public void setReaderHealthy(BooleanSupplier readerHealthy) {
+        this.readerHealthy = readerHealthy;
+    }
+
     @Override
     public boolean awaitCaughtUp() {
         boolean caughtUp = awaitCaughtUpOnce();
         if (caughtUp) {
             consecutiveFailures.set(0);
+        } else if (!readerHealthy.getAsBoolean()) {
+            return false; // 읽기가 이미 재시작 중이라 따라오지 못한 것은 정지의 증거가 아니다
         } else if (failureLimit > 0 && consecutiveFailures.incrementAndGet() >= failureLimit) {
             consecutiveFailures.set(0);
             failureAction.run();
@@ -61,6 +73,9 @@ public final class MapCatchUpWaiter implements MapSync {
         }
         long deadline = System.nanoTime() + timeoutMillis * 1_000_000L;
         while (consumedOffset.getAsLong() < end) {
+            if (!readerHealthy.getAsBoolean()) {
+                return false;
+            }
             if (System.nanoTime() > deadline) {
                 log.log(Level.ERROR, "[맵] 맵 읽기가 " + timeoutMillis + "ms 안에 끝 위치 " + end + "까지 따라오지 못함: 읽은 위치="
                     + consumedOffset.getAsLong());

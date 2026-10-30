@@ -212,7 +212,8 @@ class MatchingSlotMapReaderTest {
 
         awaitUntil(() -> !supplied.isHealthy());
         awaitUntil(() -> supplied.isHealthy() && supplied.targetFor(3).isPresent());
-        org.mockito.Mockito.verify(first).close();
+        // 브로커가 끊긴 상태에서 닫기가 기본 대기(약 30초) 동안 읽는 thread를 멈추지 않도록 짧은 한도로 닫는다.
+        org.mockito.Mockito.verify(first).close(java.time.Duration.ofSeconds(1));
         org.mockito.Mockito.verify(second).seekToBeginning(List.of(new TopicPartition(TOPIC, 0)));
         assertThat(supplied.targetFor(3)).contains(new MatchingSlotTarget(X, false));
         supplied.close();
