@@ -59,6 +59,39 @@ class AccountFillOrderIndependenceTest {
         assertEquals(0, shuffledState.reservedSellQuantity(STOCK), "뒤섞은 순서 적용 후 매도 예약이 완전히 소진되지 않았다");
     }
 
+    @Test
+    @DisplayName("매수 부분체결의 체결별 미수금은 적용 순서에 따라 1원씩 다를 수 있지만 합은 같다")
+    void 매수_부분체결의_체결별_미수금은_순서에_따라_달라도_합은_같다() {
+        // 101 × 10 × 0.45: 예약액은 q주마다 올림(455, 364, 137, ...)이라 체결 하나가 떼는 증거금은 그때 남은 수량에 따라 정해진다.
+        // 수량 2·5·3을 이 순서로 적용하면 수량 3 체결이 137, 수량 5 체결이 227을 떼고, 3·5·2 순서에서는 136, 228을 뗀다.
+        Map<Integer, BigDecimal> unpaidByQuantityArrival = unpaidThisByFillQuantity(List.of(2, 5, 3));
+        Map<Integer, BigDecimal> unpaidByQuantityReverse = unpaidThisByFillQuantity(List.of(3, 5, 2));
+
+        assertEquals(0, sum(unpaidByQuantityArrival).compareTo(sum(unpaidByQuantityReverse)),
+            "체결별 미수금의 합(계좌 미수금)은 순서와 무관하다");
+        assertEquals(0, unpaidByQuantityArrival.get(2).compareTo(unpaidByQuantityReverse.get(2)), "수량 2 체결은 두 순서에서 같다");
+        BigDecimal difference3 = unpaidByQuantityArrival.get(3).subtract(unpaidByQuantityReverse.get(3)).abs();
+        BigDecimal difference5 = unpaidByQuantityArrival.get(5).subtract(unpaidByQuantityReverse.get(5)).abs();
+        assertEquals(0, difference3.compareTo(BigDecimal.ONE), "수량 3 체결의 미수금은 순서에 따라 1원 다르다(올림이 남은 수량에 묶여 있기 때문)");
+        assertEquals(0, difference5.compareTo(BigDecimal.ONE), "수량 5 체결의 미수금도 1원 다르다");
+    }
+
+    private static Map<Integer, BigDecimal> unpaidThisByFillQuantity(List<Integer> fillQuantities) {
+        AccountState state = new AccountState(1L, new BigDecimal("1000000"), new BigDecimal("0.45"));
+        state.tryReserve(1L, new BigDecimal("101"), 10);
+        Map<Integer, BigDecimal> unpaidByQuantity = new java.util.HashMap<>();
+        long tradeId = 9201L;
+        for (int fillQty : fillQuantities) {
+            BuyFillResult result = state.applyBuyFill(tradeId++, 1L, STOCK, new BigDecimal("101"), fillQty);
+            unpaidByQuantity.put(fillQty, result.unpaidThis());
+        }
+        return unpaidByQuantity;
+    }
+
+    private static BigDecimal sum(Map<Integer, BigDecimal> values) {
+        return values.values().stream().reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
     private static AccountState applyBuyFillsInOrder(List<Integer> fillQuantities) {
         AccountState state = new AccountState(1L, new BigDecimal("1000000"), new BigDecimal("0.45"));
         state.tryReserve(1L, new BigDecimal("101"), 10);
