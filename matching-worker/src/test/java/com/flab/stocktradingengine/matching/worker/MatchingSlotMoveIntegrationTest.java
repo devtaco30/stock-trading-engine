@@ -57,6 +57,7 @@ import com.flab.stocktradingengine.matching.worker.coordination.KafkaMatchingSha
 import com.flab.stocktradingengine.matching.worker.coordination.MatchingSlotMapReader;
 import com.flab.stocktradingengine.matching.worker.handover.HandoverBookStore;
 import com.flab.stocktradingengine.matching.worker.messaging.RejectReplyPublisher;
+import com.flab.stocktradingengine.matching.worker.testsupport.MapTopicHistory;
 import com.flab.stocktradingengine.trading.entity.OrderSide;
 import com.flab.stocktradingengine.trading.matching.FillResult;
 import com.flab.stocktradingengine.trading.matching.OrderBook;
@@ -528,6 +529,31 @@ class MatchingSlotMoveIntegrationTest {
             .containsExactly(sellOne, sellOne + 1);
     }
 
+    /**
+     * U17a. 운영 종료 경로(Spring 컨텍스트 종료가 배정 생명주기의 stop()을 거쳐 close()를 부른다)로 컨슈머를 닫으면, 맡고 있던 종목 slot
+     * 전체에 회수 콜백이 불려 맵 토픽에 {@code 주소;moving}이 한 번씩 올라온다. close() 주석이 적은 동작이고 지금까지 시험이 없었다.
+     * 이 시험이 실패하면(맵 값이 평상시에 머물면) 운영 종료 때 맵이 이동 중으로 바뀌지 않아 다른 pod의 판정이 달라진다.
+     */
+    @Test
+    void 컨텍스트를_닫으면_맡은_종목_slot_전체의_맵에_이동_중_표시가_올라온다() {
+        podA = startPod("slotmove-0", PORT_A, 8021, dirA);
+        KafkaMatchingShardAssignment assignmentA = podA.getBean(KafkaMatchingShardAssignment.class);
+        awaitUntil(() -> assignmentA.currentSlotsSnapshot().size() == 64, "A가 종목 slot 64개를 맡지 못함");
+        Map<Integer, List<String>> before = awaitMapTopic(history -> history.size() == 64
+            && history.values().stream().allMatch(values -> values.equals(List.of(CHANNEL_A))));
+        assertThat(before).as("닫기 전에는 종목 slot마다 평상시 값 하나뿐이다").hasSize(64);
+
+        podA.close();
+        podA = null;
+
+        String moving = new MatchingSlotTarget(CHANNEL_A, true).encode();
+        Map<Integer, List<String>> after = awaitMapTopic(history -> history.size() == 64
+            && history.values().stream().allMatch(values -> values.size() >= 2 && values.get(values.size() - 1).equals(moving)));
+        for (int slot = 0; slot < 64; slot++) {
+            assertThat(after.get(slot)).as("종목 slot=" + slot).containsExactly(CHANNEL_A, moving);
+        }
+    }
+
     // ---- 도우미 ------------------------------------------------------------------------------------------------
 
     private ConfigurableApplicationContext startPod(String instanceId, int port, int archiveControlPort, Path archiveDir) {
@@ -572,6 +598,25 @@ class MatchingSlotMoveIntegrationTest {
         UnsafeBuffer buffer = new UnsafeBuffer(ByteBuffer.allocateDirect(256));
         int length = codec.encode(buffer, 0, order);
         awaitUntil(() -> publication.offer(buffer, 0, length) > 0, "주문 발행 실패: " + order.orderId());
+    }
+
+    /** 맵 토픽을 처음부터 다시 읽는 일을 조건이 참이 될 때까지 되풀이한다(닫힌 pod 안의 맵 읽기를 쓸 수 없어 별도 consumer로 읽는다). */
+    private Map<Integer, List<String>> awaitMapTopic(java.util.function.Predicate<Map<Integer, List<String>>> condition) {
+        long deadline = System.nanoTime() + 30_000_000_000L;
+        Map<Integer, List<String>> history = MapTopicHistory.read(BOOTSTRAP, KafkaMatchingShardAssignment.MAP_TOPIC);
+        while (!condition.test(history)) {
+            if (System.nanoTime() > deadline) {
+                throw new AssertionError("30초 안에 맵 토픽이 기대한 상태가 되지 않음: " + history);
+            }
+            try {
+                Thread.sleep(200);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new AssertionError("맵 토픽 대기 중 인터럽트됨", e);
+            }
+            history = MapTopicHistory.read(BOOTSTRAP, KafkaMatchingShardAssignment.MAP_TOPIC);
+        }
+        return history;
     }
 
     private static void awaitUntil(BooleanSupplier condition, String failureMessage) {

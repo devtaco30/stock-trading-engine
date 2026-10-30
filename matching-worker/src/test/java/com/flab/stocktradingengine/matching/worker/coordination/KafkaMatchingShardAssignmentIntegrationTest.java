@@ -23,6 +23,8 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.junit.jupiter.api.AfterEach;
@@ -53,6 +55,7 @@ class KafkaMatchingShardAssignmentIntegrationTest {
     private String mapTopic;
     private String groupId;
     private final List<KafkaMatchingShardAssignment> members = new ArrayList<>();
+    private final List<Thread> confirmers = new ArrayList<>();
 
     @BeforeEach
     void setUp() {
@@ -64,6 +67,7 @@ class KafkaMatchingShardAssignmentIntegrationTest {
 
     @AfterEach
     void tearDown() {
+        confirmers.forEach(Thread::interrupt);
         members.forEach(KafkaMatchingShardAssignment::close);
     }
 
@@ -197,6 +201,84 @@ class KafkaMatchingShardAssignmentIntegrationTest {
         assertThat(slotsWithMovingRecord).hasSize(STOCK_SLOT_COUNT - keptSlots.size());
     }
 
+    /**
+     * U17c. 같은 종목 slot의 맵 쓰기 순서를 실제 Kafka 토픽으로 확인한다. 회수가 낸 이동 중 쓰기가 브로커 오류로 포기되어 queue 뒤로 간 사이
+     * 같은 pod가 되받아 낸 평상시 값을 넣으면, 포기됐던 오래된 쓰기는 일련번호가 달라 버려지고 토픽에는 평상시 값만 남아야 한다.
+     * 지금까지는 MockProducer 단위 시험만 있었다.
+     */
+    @Test
+    void 포기된_오래된_쓰기는_같은_종목_slot의_더_새로운_쓰기를_실제_토픽에서_덮지_않는다() throws Exception {
+        createMapTopic();
+        int slot = 5;
+        String plain = "order-endpoint-of-m1";
+        String moving = plain + ";moving";
+        int failureLimit = 2;
+        java.util.concurrent.atomic.AtomicInteger movingAttempts = new java.util.concurrent.atomic.AtomicInteger();
+        Producer<Integer, String> producer = intercepting(buildMapProducer(), record -> {
+            if (record.value().equals(moving) && movingAttempts.incrementAndGet() <= failureLimit) {
+                return java.util.concurrent.CompletableFuture.failedFuture(new IllegalStateException("브로커 오류 흉내"));
+            }
+            return null;
+        });
+        KafkaMatchingShardAssignment member = newOperationalMember("m1", producer);
+        member.setMapWriteFailureLimit(failureLimit);
+        member.setMapWriteRetryMillis(1_000L);
+
+        member.enqueueMapWrite(slot, moving, 0);
+        awaitCondition("이동 중 쓰기가 실패 한도(" + failureLimit + "번)까지 보내졌다", () -> movingAttempts.get() >= failureLimit);
+        // 포기되어 재시도 간격 동안 쉬는 사이에 같은 종목 slot의 더 새로운 쓰기를 넣는다.
+        member.enqueueMapWrite(slot, plain, 0);
+
+        awaitCondition("종목 slot의 마지막 값이 평상시 값이다",
+            () -> MapTopicHistory.read(BOOTSTRAP, mapTopic).getOrDefault(slot, List.of()).contains(plain));
+        awaitCondition("오래된 쓰기가 버려져 대기에서 빠졌다", () -> member.slotsWaitingForMove().isEmpty());
+        assertThat(MapTopicHistory.read(BOOTSTRAP, mapTopic).get(slot))
+            .as("포기된 이동 중 쓰기는 보내지지 않아 토픽에는 평상시 값 하나뿐이다").containsExactly(plain);
+        assertThat(movingAttempts.get()).as("버려진 쓰기는 실패 한도 뒤로 더 보내지지 않는다").isEqualTo(failureLimit);
+    }
+
+    /**
+     * U17d. 둘째 멤버를 Admin으로 그룹에서 뺀 뒤 둘째가 lost를 받아도, 둘째가 맵 토픽에 자기 이동 중 표시를 올리지 않는다. 맵 토픽의 최종 값은
+     * 도착 순서에 따라 결함이 있어도 맞게 보일 수 있어서 단언은 둘째가 보낸 이동 중 값의 개수에 건다.
+     */
+    @Test
+    void 그룹에서_빠진_둘째가_lost를_받아도_맵_토픽에_둘째의_이동_중_표시를_올리지_않는다() throws Exception {
+        String secondMoving = "order-endpoint-of-m2;moving";
+        List<String> secondMovingSends = new java.util.concurrent.CopyOnWriteArrayList<>();
+        Producer<Integer, String> secondProducer = intercepting(buildMapProducer(), record -> {
+            if (record.value().equals(secondMoving)) {
+                secondMovingSends.add(record.key() + ":" + record.value());
+            }
+            return null;
+        });
+        KafkaMatchingShardAssignment first = newOperationalMember("m1", buildMapProducer());
+        first.start();
+        startConfirming(first);
+        awaitSlotCount(first, STOCK_SLOT_COUNT);
+        KafkaMatchingShardAssignment second = newOperationalMember("m2", secondProducer);
+        second.start();
+        startConfirming(second);
+        awaitSplit(first, second);
+        awaitCondition("둘째의 맵 쓰기가 모두 끝났다", () -> second.slotsWaitingForMove().isEmpty() && first.slotsWaitingForMove().isEmpty());
+        assertThat(secondMovingSends).as("그룹에서 빼기 전 둘째는 회수를 받은 적이 없다").isEmpty();
+
+        try (Admin admin = Admin.create(adminProps())) {
+            admin.removeMembersFromConsumerGroup(groupId,
+                new RemoveMembersFromConsumerGroupOptions(List.of(new MemberToRemove("m2")))).all().get();
+        }
+
+        awaitCondition("그룹에서 빠진 둘째의 담당 표시가 모두 꺼졌다(lost 또는 회수 콜백이 불렸다)",
+            () -> second.currentSlotsSnapshot().size() < STOCK_SLOT_COUNT - first.currentSlotsSnapshot().size()
+                || second.currentSlotsSnapshot().isEmpty());
+        awaitCondition("첫째가 둘째의 종목 slot까지 받았다 또는 둘째가 다시 가입했다",
+            () -> first.currentSlotsSnapshot().size() + second.currentSlotsSnapshot().size() >= STOCK_SLOT_COUNT);
+        assertThat(secondMovingSends)
+            .as("lost를 받은 둘째가 맵에 이동 중 표시를 올렸다면 회수 콜백(onPartitionsRevoked)이 불린 것이다")
+            .isEmpty();
+        assertThat(MapTopicHistory.read(BOOTSTRAP, mapTopic).values().stream().flatMap(List::stream))
+            .doesNotContain(secondMoving);
+    }
+
     private KafkaMatchingShardAssignment newMember(String instanceId, String assignmentTopicName) {
         Properties consumerProps = KafkaMatchingShardAssignment.consumerProperties(
             BOOTSTRAP, groupId, instanceId, TEST_SESSION_TIMEOUT_MS);
@@ -205,6 +287,75 @@ class KafkaMatchingShardAssignmentIntegrationTest {
             STOCK_SLOT_COUNT, "order-endpoint-of-" + instanceId, assignmentTopicName, mapTopic);
         members.add(member);
         return member;
+    }
+
+    /** 운영 열두 인자 생성자로 만든다. 맵 조회는 항상 비어 있어 모든 배정이 첫 배정이고, 요청 통로는 아무것도 하지 않는다. 담당은 {@link #startConfirming}이 켠다. */
+    private KafkaMatchingShardAssignment newOperationalMember(String instanceId, Producer<Integer, String> mapProducer) {
+        Properties consumerProps = KafkaMatchingShardAssignment.consumerProperties(
+            BOOTSTRAP, groupId, instanceId, TEST_SESSION_TIMEOUT_MS);
+        KafkaMatchingShardAssignment member = new KafkaMatchingShardAssignment(
+            new KafkaConsumer<>(consumerProps), mapProducer, Admin.create(adminProps()),
+            STOCK_SLOT_COUNT, "order-endpoint-of-" + instanceId, assignmentTopic, mapTopic,
+            new com.flab.stocktradingengine.matching.disruptor.io.SlotEventRequests(),
+            slot -> java.util.Optional.empty(), slot -> { }, null, null);
+        members.add(member);
+        return member;
+    }
+
+    /** 엔진이 받음 기록을 저널에 남긴 뒤 부르는 confirmAcquired를 시험이 대신 주기로 부른다(엔진 없이 담당을 켠다). */
+    private void startConfirming(KafkaMatchingShardAssignment member) {
+        Thread confirmer = new Thread(() -> {
+            while (!Thread.currentThread().isInterrupted()) {
+                for (int slot : member.slotsWaitingForMove()) {
+                    member.confirmAcquired(slot);
+                }
+                try {
+                    Thread.sleep(20);
+                } catch (InterruptedException e) {
+                    return;
+                }
+            }
+        }, "test-confirmer");
+        confirmer.setDaemon(true);
+        confirmers.add(confirmer);
+        confirmer.start();
+    }
+
+    private void createMapTopic() throws Exception {
+        try (Admin admin = Admin.create(adminProps())) {
+            admin.createTopics(List.of(new NewTopic(mapTopic, 1, (short) 1))).all().get();
+        }
+    }
+
+    /** {@code send(record)} 호출을 가로채는 Producer. 가로채기 함수가 null을 돌려주면 실제 Producer로 넘긴다. */
+    @SuppressWarnings("unchecked")
+    private Producer<Integer, String> intercepting(
+            Producer<Integer, String> real,
+            java.util.function.Function<ProducerRecord<Integer, String>, java.util.concurrent.Future<RecordMetadata>> onSend) {
+        return (Producer<Integer, String>) java.lang.reflect.Proxy.newProxyInstance(
+            getClass().getClassLoader(), new Class<?>[] {Producer.class}, (proxy, method, args) -> {
+                if (method.getName().equals("send") && args != null && args.length == 1) {
+                    java.util.concurrent.Future<RecordMetadata> replaced = onSend.apply((ProducerRecord<Integer, String>) args[0]);
+                    if (replaced != null) {
+                        return replaced;
+                    }
+                }
+                try {
+                    return method.invoke(real, args);
+                } catch (java.lang.reflect.InvocationTargetException e) {
+                    throw e.getCause();
+                }
+            });
+    }
+
+    private void awaitCondition(String description, java.util.function.BooleanSupplier condition) {
+        long deadline = System.nanoTime() + Duration.ofSeconds(60).toNanos();
+        while (!condition.getAsBoolean()) {
+            if (System.nanoTime() > deadline) {
+                throw new AssertionError("60초 안에 조건이 충족되지 않음: " + description);
+            }
+            sleep(50);
+        }
     }
 
     private Producer<Integer, String> buildMapProducer() {
