@@ -85,7 +85,7 @@ expect "종목 X의 slot이 맵 기록으로 pod 0에서 pod 1로 바뀌었다" 
 python3 - "$WORK/map-history.txt" "$LOG_DIR" <<'PY'
 import sys,re,datetime
 rows=[l.rstrip('\n').split('\t') for l in open(sys.argv[1]) if l.strip()]
-rows=[(int(s),int(t),v) for s,t,v in rows]
+rows=[(int(r[0]),int(r[1]),r[2]) for r in rows]  # 4번째 필드(timestampType)는 쓰지 않는다
 logdir=sys.argv[2]
 def ts(line):
     return int(datetime.datetime.fromisoformat(line.split(' ')[0]).timestamp()*1000)
@@ -115,6 +115,7 @@ if rev and rcv:
 else:
     print("REVOKE_TO_RECEIVE_MS_LOG=계산 불가")
 PY
+expect "맵 기록 분석 python이 오류 없이 끝났다" "0" "$?"
 
 # 4. 정상 종료 → 스냅샷 판독
 # 이동 한 건의 단계별 시간(종목 slot별 최소·중앙·최대)
