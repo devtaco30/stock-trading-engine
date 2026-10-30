@@ -102,7 +102,7 @@ public class AccountEngine {
     private final IntPredicate ownedSlots;
     private final MatchingOrderSender matchingOrderSender;
     private final AccountOrderIdGenerator orderIdGenerator;
-    private RingBuffer<AccountEvent> ringBuffer;
+    private volatile RingBuffer<AccountEvent> ringBuffer;
 
     /**
      * @param nodeId orderId 발급기(2b-0, {@link AccountOrderIdGenerator})의 노드 구분자. 카운터는
@@ -399,6 +399,15 @@ public class AccountEngine {
         if (ringBuffer != null) {
             throw new IllegalStateException("start() 이후에는 호출할 수 없습니다 — 소비자 스레드와 경쟁합니다");
         }
+    }
+
+    /**
+     * 링버퍼에 남은 빈 칸 수(계측용, 12-3절 2번 표의 3단계). 시작 전에는 링버퍼가 없어 -1이다. 어느 thread에서 읽어도 되고 읽는 순간의 근삿값이다.
+     * 용량에 가까울수록 소비자가 따라가고 있고, 0에 닿으면 발행하는 thread가 빈 칸을 기다린다.
+     */
+    public long ringBufferRemainingCapacity() {
+        RingBuffer<AccountEvent> buffer = ringBuffer;
+        return buffer == null ? -1L : buffer.remainingCapacity();
     }
 
     /** 소비자 스레드를 기동하고 링버퍼를 준비한다. */
