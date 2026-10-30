@@ -242,6 +242,37 @@ class MatchingSlotMapReaderTest {
     }
 
     @Test
+    void 다시_읽는_중_새_consumer_생성이_예외면_낡은_값을_막은_채_간격_뒤_다시_만든다() throws Exception {
+        Consumer<Integer, String> first = replayConsumer(ConsumerRecords.empty(), 0L);
+        Consumer<Integer, String> second = replayConsumer(records(record(3, X)), 1L);
+        java.util.concurrent.atomic.AtomicInteger calls = new java.util.concurrent.atomic.AtomicInteger();
+        MatchingSlotMapReader supplied = new MatchingSlotMapReader(() -> {
+            int call = calls.incrementAndGet();
+            if (call == 1) {
+                return first;
+            }
+            if (call == 2) {
+                throw new IllegalStateException("브로커에 연결할 수 없음");
+            }
+            return second;
+        }, 64, TOPIC);
+        supplied.setRestartIntervalMillis(100L);
+        supplied.applyRecords(records(record(3, Y)));
+        supplied.start();
+        awaitUntil(supplied::isHealthy);
+
+        supplied.requestRestart("끝 위치를 따라오지 못함");
+
+        awaitUntil(() -> calls.get() >= 2);
+        assertThat(supplied.isHealthy()).as("새 consumer 생성이 실패한 동안 정상으로 보이면 안 된다").isFalse();
+        assertThat(supplied.targetFor(3)).as("낡은 값을 돌려주지 않는다").isEmpty();
+        awaitUntil(() -> supplied.isHealthy() && supplied.targetFor(3).isPresent());
+        assertThat(calls.get()).isEqualTo(3);
+        assertThat(supplied.targetFor(3)).contains(new MatchingSlotTarget(X, false));
+        supplied.close();
+    }
+
+    @Test
     void 옛_중간_값이_다시_재생돼도_보관본에_정리가_요청되지_않는다() throws Exception {
         // slot 5는 X(이 pod)가 Y에게 넘겨 보관했다가 도로 받았다. 맵의 최종 값은 X이고, 토픽에는 옛 중간 값 Y가 아직 남아 있다.
         com.flab.stocktradingengine.matching.worker.handover.HandoverBookStore store =
