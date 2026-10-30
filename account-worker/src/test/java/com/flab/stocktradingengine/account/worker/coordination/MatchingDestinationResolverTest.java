@@ -2,6 +2,7 @@ package com.flab.stocktradingengine.account.worker.coordination;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -686,7 +687,7 @@ class MatchingDestinationResolverTest {
         releaseFactory.countDown();
 
         long closeMillis = closing.get(15, java.util.concurrent.TimeUnit.SECONDS);
-        assertTrue(closeMillis < 3_000L, "close가 join 제한(5초)을 채우지 않는다: " + closeMillis + "ms");
+        assertTrue(closeMillis < 4_500L, "close가 join 제한(5초)을 채우지 않는다(실패 신호는 5초 이상): " + closeMillis + "ms");
         assertTrue(fresh.closed(), "새 consumer가 닫혔다");
     }
 
@@ -705,8 +706,59 @@ class MatchingDestinationResolverTest {
         resolver.close();
         long closeMillis = (System.nanoTime() - started) / 1_000_000L;
 
-        assertTrue(closeMillis < 3_000L, "새 consumer가 wakeup으로 풀려 close가 join 제한(5초)을 채우지 않는다: " + closeMillis + "ms");
+        assertTrue(closeMillis < 4_500L, "새 consumer가 wakeup으로 풀려 close가 join 제한(5초)을 채우지 않는다(실패 신호는 5초 이상): " + closeMillis + "ms");
         assertTrue(fresh.closed(), "새 consumer가 닫혔다");
+    }
+
+    /** wakeup()을 무시하고 release()가 불릴 때까지 partitionsFor에서 막히는 consumer 대역(close()의 5초 join 제한을 넘기는 읽기 thread를 만든다). */
+    private static final class WakeupIgnoringConsumer extends SleepingMockConsumer {
+        private final java.util.concurrent.CountDownLatch entered = new java.util.concurrent.CountDownLatch(1);
+        private final java.util.concurrent.CountDownLatch release = new java.util.concurrent.CountDownLatch(1);
+        private volatile boolean closedByReadThread;
+
+        @Override
+        public List<PartitionInfo> partitionsFor(String topic) {
+            entered.countDown();
+            try {
+                release.await();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            return super.partitionsFor(topic);
+        }
+
+        @Override
+        public void wakeup() {
+            // 일부러 무시한다.
+        }
+
+        @Override
+        public void close(Duration timeout) {
+            closedByReadThread = true;
+            super.close(timeout);
+        }
+    }
+
+    @Test
+    void close가_5초_안에_읽기_thread를_못_멈춰도_thread가_끝나면서_consumer를_닫는다() throws Exception {
+        WakeupIgnoringConsumer fresh = new WakeupIgnoringConsumer();
+        resolver = new MatchingDestinationResolver(consumer, stockSlotHasher, ADDRESS_POOL, () -> fresh, 20L);
+        resolver.start();
+        resolver.awaitInitialCatchUp(Duration.ofSeconds(10));
+        consumer.schedulePollTask(() -> {
+            throw new KafkaException("일시적인 브로커 오류");
+        });
+        assertTrue(fresh.entered.await(5, java.util.concurrent.TimeUnit.SECONDS));
+
+        resolver.close();
+        assertFalse(fresh.closed(), "읽기 thread가 아직 쓰는 중이라 close()는 다른 thread에서 consumer를 닫지 않는다");
+
+        fresh.release.countDown();
+        long deadline = System.currentTimeMillis() + 5_000L;
+        while (!fresh.closed() && System.currentTimeMillis() < deadline) {
+            Thread.sleep(20);
+        }
+        assertTrue(fresh.closed(), "읽기 thread가 끝나면서 consumer를 닫는다");
     }
 
     // ---- 헬퍼 ----

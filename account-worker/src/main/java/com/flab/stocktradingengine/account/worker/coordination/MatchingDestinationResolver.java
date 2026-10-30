@@ -253,6 +253,11 @@ public final class MatchingDestinationResolver implements MatchingTargetLookup {
         } finally {
             // 정상 종료 경로에서도 대기 중인 awaitInitialCatchUp 호출자가 영원히 안 깨는 일이 없게 한다.
             initialCatchUpLatch.countDown();
+            if (!running) {
+                // close()가 5초 안에 이 thread를 멈추지 못해 consumer를 닫지 않고 돌아간 경우에도, 이 thread가 끝나면서 자기 consumer를 닫는다.
+                // KafkaConsumer.close()를 close()와 이 곳에서 두 번 불러도 해롭지 않다.
+                closeConsumerQuietly(consumer);
+            }
         }
     }
 
@@ -324,6 +329,14 @@ public final class MatchingDestinationResolver implements MatchingTargetLookup {
             }
         }
         return running;
+    }
+
+    private void closeConsumerQuietly(Consumer<Integer, String> target) {
+        try {
+            target.close(Duration.ofSeconds(1));
+        } catch (RuntimeException closeFailure) {
+            log.log(Level.WARNING, "[목적지] consumer를 닫지 못했다: " + closeFailure.getMessage());
+        }
     }
 
     /** consumer.position()은 이 poll 스레드에서만 부른다 — KafkaConsumer는 여러 스레드에서 동시에 쓸 수 없다. */
