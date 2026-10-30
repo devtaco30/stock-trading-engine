@@ -9,6 +9,8 @@ set -uo pipefail
 cd "$(dirname "$0")/../.."
 N=${ACCTS:?}; PREFILL=${PREFILL_PER_STOCK:-0}; PER=${PER_STOCK:?}; OLOG=${ORDER_LOG:-on}; OUT=${OUT:?}
 STOCK_COUNT=3
+for p in 20020 20040 20060 8010 8011 8012; do lsof -nP -iUDP:$p >/dev/null 2>&1 && { echo "PORT_BUSY UDP $p"; exit 5; }; done
+lsof -nP -iTCP:19092 -sTCP:LISTEN >/dev/null 2>&1 && { echo "PORT_BUSY TCP 19092"; exit 5; }
 W=/tmp/s0b; LOG=$W/logs; rm -rf $W; mkdir -p $LOG "$OUT"; : > $W/pids
 JO=(--add-opens java.base/jdk.internal.misc=ALL-UNNAMED --add-opens java.base/sun.nio.ch=ALL-UNNAMED)
 KB=--spring.kafka.bootstrap-servers=localhost:19092
@@ -21,7 +23,9 @@ docker run -d --name s0b-kafka -p 19092:19092 \
  -e KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1 -e KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1 \
  -e KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0 apache/kafka@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837 >/dev/null
 for _ in $(seq 1 60); do docker exec s0b-kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:19092 --list >/dev/null 2>&1 && break; sleep 1; done
-cleanup(){ while read -r p; do kill $p 2>/dev/null; done < $W/pids; sleep 3; docker rm -f s0b-kafka >/dev/null 2>&1; }
+cleanup(){ while read -r p; do kill $p 2>/dev/null; done < $W/pids; sleep 3; docker rm -f s0b-kafka >/dev/null 2>&1
+  mkdir -p "$OUT"; rm -rf "$OUT/logs"; cp -R $LOG "$OUT/logs" 2>/dev/null; cp $W/prefill-start $W/prefill-end $W/measure-start $W/measure-end "$OUT/" 2>/dev/null
+  printf 'ACCTS=%s PREFILL_PER_STOCK=%s PER_STOCK=%s ORDER_LOG=%s HOLD=%s\n' "$N" "$PREFILL" "$PER" "$OLOG" "${HOLD:-0}" > "$OUT/params.txt"; }
 trap cleanup EXIT
 if [ "${SKIP_BUILD:-0}" != 1 ]; then
   ./gradlew --offline -q :matching-worker:bootJar :account-worker:bootJar > $LOG/build.log 2>&1 || { echo BUILD_FAIL; tail -20 $LOG/build.log; exit 1; }
@@ -31,6 +35,7 @@ sed "s#/tmp/u10#$W#" loadtest/u10/u10-matching-0.yml > $W/m0.yml
 sed "s#/tmp/u10#$W#" loadtest/u10/u10-account.yml > $W/acc.yml
 java "${JO[@]}" -Xlog:gc*:file=$LOG/gc-matching.log:time,uptime -jar $MJ --spring.config.additional-location=file:$W/m0.yml $KB > $LOG/matching-0.log 2>&1 & echo $! >> $W/pids; MP=$!
 for _ in $(seq 1 60); do grep -q "Started MatchingWorkerApplication" $LOG/matching-0.log && break; sleep 2; done
+grep -q "Started MatchingWorkerApplication" $LOG/matching-0.log || { echo START_FAIL matching; exit 6; }
 sleep 8
 STOCKS=$(./gradlew --offline -q :account-worker:u10Tool -Pu10Args="codes-many 64 32 3" 2>&1 | grep '^HIGH=' | tail -1 | sed 's/^HIGH=//' | tr ',' ' ')
 echo "종목: $STOCKS"
@@ -42,6 +47,7 @@ LOGARG=()
 java "${JO[@]}" -Xlog:gc*:file=$LOG/gc-account.log:time,uptime -jar $AJ --spring.config.additional-location=file:$W/acc.yml,file:$W/seed.yml $KB \
   --account-worker.metrics.enabled=true ${LOGARG[@]+"${LOGARG[@]}"} > $LOG/account.log 2>&1 & echo $! >> $W/pids; AP=$!
 for _ in $(seq 1 60); do grep -q "Started AccountWorkerApplication" $LOG/account.log && break; sleep 2; done
+grep -q "Started AccountWorkerApplication" $LOG/account.log || { echo START_FAIL account; exit 6; }
 echo "MP=$MP AP=$AP"
 accepted_total() { grep -o "acceptedTotal=[0-9]*" $LOG/account.log | tail -1 | sed 's/acceptedTotal=//'; }
 send() { # <종목당 주문 수> <prefix> -> 출력에서 송신 위치 도달을 확인한다
@@ -68,6 +74,3 @@ wait_accepted $EXPECT || { echo "ACCEPTED_MISMATCH 기대 $EXPECT 실제 $(accep
 date +%s.%N > $W/measure-end
 sleep 3
 echo "VALID accepted=$EXPECT"
-# 원자료 보존: 로그와 시각 파일, 설정 값
-cp -R $LOG "$OUT/logs"; cp $W/prefill-start $W/prefill-end $W/measure-start $W/measure-end "$OUT/" 2>/dev/null
-printf 'ACCTS=%s PREFILL_PER_STOCK=%s PER_STOCK=%s ORDER_LOG=%s HOLD=%s\n' "$N" "$PREFILL" "$PER" "$OLOG" "$HOLD" > "$OUT/params.txt"
