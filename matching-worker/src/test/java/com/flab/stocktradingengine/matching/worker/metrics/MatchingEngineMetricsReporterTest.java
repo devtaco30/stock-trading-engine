@@ -16,11 +16,11 @@ class MatchingEngineMetricsReporterTest {
 
     @Test
     void 누적_값은_구간_증가분으로_남은_칸과_queue_깊이는_현재_값으로_한_줄을_만든다() {
-        MatchingEngineMetrics previous = new MatchingEngineMetrics(1024, 3, 10, 4, 7, 2);
-        MatchingEngineMetrics current = new MatchingEngineMetrics(0, 8, 25, 9, 65536, 5);
+        MatchingEngineMetrics previous = new MatchingEngineMetrics(1024, 3, 10, 4, 7, 2, 100);
+        MatchingEngineMetrics current = new MatchingEngineMetrics(0, 8, 25, 9, 65536, 5, 160);
 
         assertThat(MatchingEngineMetricsReporter.formatLine(previous, current)).isEqualTo(
-            "matching-engine ringRemaining=0 ringFullWaits=5 journalBackPressure=15 journalOtherRetries=5 fillQueueDepth=65536 fillEnqueueWaits=3");
+            "matching-engine ringRemaining=0 ringFullWaits=5 journalBackPressure=15 journalOtherRetries=5 fillQueueDepth=65536 fillEnqueueWaits=3 fullyFilledOrders=60 fullyFilledOrdersTotal=160");
     }
 
     @Test

@@ -194,6 +194,11 @@ public class MatchingEngine {
         }
     }
 
+    /** 전량 체결되어 호가창을 떠난 주문 수의 누적(12-3절 1번 표의 「바」). 이 프로세스가 시작한 뒤의 값이다. */
+    public long fullyFilledOrderCount() {
+        return matchingEventHandler.fullyFilledOrderCount();
+    }
+
     /** 빈 칸이 없어 발행 호출이 기다린 누적 횟수(발행 호출 단위, 시간이 아니다). 짧게 0에 닿았다 풀린 구간도 남는다. */
     public long ringFullWaitCount() {
         return ringFullWaitCount.sum();

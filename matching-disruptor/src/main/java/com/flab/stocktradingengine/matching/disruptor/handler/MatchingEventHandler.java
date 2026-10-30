@@ -79,6 +79,8 @@ public class MatchingEventHandler implements EventHandler<OrderEvent> {
     // 저널을 재적용할 때도 같은 맵을 공유해야 라이브 매칭이 그 위에서 이어진다
     // (account-disruptor AccountEventHandler 의 accounts 맵과 같은 이유).
     private final Map<String, OrderBook> books;
+    // 전량 체결되어 호가창을 떠난 주문 수의 누적(12-3절 1번 표의 「바」). 이 프로세스가 시작한 뒤 저널을 다시 적용하며 낸 체결도 센다.
+    private final java.util.concurrent.atomic.LongAdder fullyFilledOrders = new java.util.concurrent.atomic.LongAdder();
     private final MatchListener listener;
     private final MatchingSegmentStages stages;
     private final MatchingSnapshotSink snapshotSink;
@@ -489,6 +491,7 @@ public class MatchingEventHandler implements EventHandler<OrderEvent> {
             if (result.isEmpty()) {
                 break;
             }
+            fullyFilledOrders.add(book.lastMatchFullyFilledCount());
             if (!stages.isEnabled()) {
                 listener.onFill(stockCode, result.get());
                 continue;
@@ -514,5 +517,10 @@ public class MatchingEventHandler implements EventHandler<OrderEvent> {
             event.getQuantity(),
             event.getOrderAt()
         );
+    }
+
+    /** 전량 체결되어 호가창을 떠난 주문 수의 누적. 어느 thread에서 읽어도 된다. */
+    public long fullyFilledOrderCount() {
+        return fullyFilledOrders.sum();
     }
 }

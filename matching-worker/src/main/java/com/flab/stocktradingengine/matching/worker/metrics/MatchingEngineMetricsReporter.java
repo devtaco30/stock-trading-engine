@@ -45,19 +45,21 @@ public class MatchingEngineMetricsReporter implements AutoCloseable {
             otherRetries = aeronJournal.offerOtherRetryCount();
         }
         return new MatchingEngineMetrics(engine.ringBufferRemainingCapacity(), engine.ringFullWaitCount(), backPressure, otherRetries,
-            fillQueueDepth.getAsLong(), fillEnqueueWaits.getAsLong());
+            fillQueueDepth.getAsLong(), fillEnqueueWaits.getAsLong(), engine.fullyFilledOrderCount());
     }
 
     /** 누적 값은 구간 증가분으로, 남은 칸과 queue 깊이는 현재 값으로 한 줄을 만든다. */
     static String formatLine(MatchingEngineMetrics previous, MatchingEngineMetrics current) {
         return String.format(
-            "matching-engine ringRemaining=%d ringFullWaits=%d journalBackPressure=%d journalOtherRetries=%d fillQueueDepth=%d fillEnqueueWaits=%d",
+            "matching-engine ringRemaining=%d ringFullWaits=%d journalBackPressure=%d journalOtherRetries=%d fillQueueDepth=%d fillEnqueueWaits=%d fullyFilledOrders=%d fullyFilledOrdersTotal=%d",
             current.ringRemaining(),
             current.ringFullWaits() - previous.ringFullWaits(),
             current.journalBackPressure() - previous.journalBackPressure(),
             current.journalOtherRetries() - previous.journalOtherRetries(),
             current.fillQueueDepth(),
-            current.fillEnqueueWaits() - previous.fillEnqueueWaits());
+            current.fillEnqueueWaits() - previous.fillEnqueueWaits(),
+            current.fullyFilledOrders() - previous.fullyFilledOrders(),
+            current.fullyFilledOrders());
     }
 
     public void start() {
