@@ -203,6 +203,117 @@ class AeronMatchingOrderSenderRoutingTest {
     }
 
     @Test
+    void 담당이_아니라는_거부_회신을_받은_횟수를_센다() {
+        RecordingPublication addressOne = new RecordingPublication();
+        RecordingPublication addressTwo = new RecordingPublication();
+        targetByStockCode.put(stockOne, new MatchingSlotTarget(ADDRESS_ONE, true));
+        sender = newSender(addressOne, addressTwo, 100);
+        sender.start();
+        assertThat(sender.rejectedReplyCount()).isZero();
+
+        sender.acceptRejectedOrder(placeOrder(1L, stockOne));
+        sender.acceptRejectedOrder(placeOrder(1L, stockOne));
+        sender.acceptRejectedOrder(placeOrder(2L, stockTwo));
+
+        assertThat(sender.rejectedReplyCount()).as("같은 주문이 두 번 거부되면 두 건으로 센다(이벤트 단위)").isEqualTo(3L);
+    }
+
+    @Test
+    void 거부_회신의_첫_수신과_마지막_수신_시각과_보관_목록_최대_개수를_기록한다() throws InterruptedException {
+        RecordingPublication addressOne = new RecordingPublication();
+        RecordingPublication addressTwo = new RecordingPublication();
+        targetByStockCode.put(stockOne, new MatchingSlotTarget(ADDRESS_ONE, true));
+        sender = newSender(addressOne, addressTwo, 100);
+        sender.start();
+        assertThat(sender.firstRejectedReplyEpochMillis()).isZero();
+        long before = System.currentTimeMillis();
+
+        sender.acceptRejectedOrder(placeOrder(1L, stockOne));
+        Thread.sleep(30);
+        sender.acceptRejectedOrder(placeOrder(2L, stockOne));
+        await(() -> sender.maxHeldOrderTotal() == 2, "두 주문이 보관 목록으로 옮겨지기");
+
+        assertThat(sender.firstRejectedReplyEpochMillis()).isBetween(before, System.currentTimeMillis());
+        assertThat(sender.lastRejectedReplyEpochMillis()).isGreaterThan(sender.firstRejectedReplyEpochMillis());
+        assertThat(sender.maxHeldOrderTotal()).isEqualTo(2);
+    }
+
+    @Test
+    void 재전송_간격은_첫_거부는_0이고_이후_두_배씩_늘다_상한에서_멈춘다() {
+        long base = 20_000_000L;
+        long cap = 100_000_000L;
+        assertThat(AeronMatchingOrderSender.retransmitDelayNanos(1, base, cap)).isZero();
+        assertThat(AeronMatchingOrderSender.retransmitDelayNanos(2, base, cap)).isEqualTo(base);
+        assertThat(AeronMatchingOrderSender.retransmitDelayNanos(3, base, cap)).isEqualTo(2 * base);
+        assertThat(AeronMatchingOrderSender.retransmitDelayNanos(4, base, cap)).isEqualTo(4 * base);
+        assertThat(AeronMatchingOrderSender.retransmitDelayNanos(5, base, cap)).isEqualTo(cap);
+        assertThat(AeronMatchingOrderSender.retransmitDelayNanos(60, base, cap)).as("큰 횟수에서도 넘치지 않고 상한").isEqualTo(cap);
+    }
+
+    @Test
+    void 담당이_있는_pod가_같은_slot의_주문을_계속_거부해도_재전송은_간격을_두고_나간다() {
+        RecordingPublication addressOne = new RecordingPublication();
+        RecordingPublication addressTwo = new RecordingPublication();
+        targetByStockCode.put(stockOne, new MatchingSlotTarget(ADDRESS_ONE, false));
+        sender = newSender(addressOne, addressTwo, 100);
+        sender.setRetransmitBackoff(60L, 1_000L, 10_000L);
+        sender.start();
+
+        long[] delayMillis = new long[3];
+        for (int round = 0; round < 3; round++) {
+            long acceptedAt = System.nanoTime();
+            sender.acceptRejectedOrder(placeOrder(1L, stockOne));
+            int expectedSends = round + 1;
+            await(() -> addressOne.sent.size() == expectedSends, "재전송 " + expectedSends + "번째가 나가기");
+            delayMillis[round] = (System.nanoTime() - acceptedAt) / 1_000_000L;
+        }
+
+        assertThat(delayMillis[0]).as("첫 거부는 바로 재전송").isLessThan(40L);
+        assertThat(delayMillis[1]).as("연속 두 번째는 기본 간격 60ms 이상").isGreaterThanOrEqualTo(55L);
+        assertThat(delayMillis[2]).as("연속 세 번째는 두 배 120ms 이상").isGreaterThanOrEqualTo(110L);
+    }
+
+    @Test
+    void 재전송_대기_중인_slot에_새_주문이_들어와도_재전송이_먼저_나간다() throws InterruptedException {
+        RecordingPublication addressOne = new RecordingPublication();
+        RecordingPublication addressTwo = new RecordingPublication();
+        targetByStockCode.put(stockOne, new MatchingSlotTarget(ADDRESS_ONE, false));
+        sender = newSender(addressOne, addressTwo, 100);
+        sender.setRetransmitBackoff(300L, 1_000L, 10_000L);
+        sender.start();
+
+        sender.acceptRejectedOrder(placeOrder(1L, stockOne));
+        await(() -> addressOne.sent.size() == 1, "첫 재전송");
+        sender.acceptRejectedOrder(placeOrder(2L, stockOne));
+        Thread.sleep(50);
+        sender.forwardPlace(3L, ACCOUNT_ID, stockOne, OrderSide.BUY, new BigDecimal("10000"), 1);
+
+        await(() -> addressOne.sent.size() == 3, "대기가 끝난 뒤 두 건이 나가기");
+        assertThat(addressOne.sentOrderIds()).as("재전송 주문(2)이 새 주문(3)보다 먼저").containsExactly(1L, 2L, 3L);
+    }
+
+    @Test
+    void 거부가_한동안_없으면_횟수가_되돌아가_다시_바로_재전송한다() throws InterruptedException {
+        RecordingPublication addressOne = new RecordingPublication();
+        RecordingPublication addressTwo = new RecordingPublication();
+        targetByStockCode.put(stockOne, new MatchingSlotTarget(ADDRESS_ONE, false));
+        sender = newSender(addressOne, addressTwo, 100);
+        sender.setRetransmitBackoff(200L, 1_000L, 150L);
+        sender.start();
+
+        sender.acceptRejectedOrder(placeOrder(1L, stockOne));
+        await(() -> addressOne.sent.size() == 1, "첫 재전송");
+        sender.acceptRejectedOrder(placeOrder(1L, stockOne));
+        await(() -> addressOne.sent.size() == 2, "두 번째 재전송(200ms 간격)");
+        Thread.sleep(400);
+
+        long acceptedAt = System.nanoTime();
+        sender.acceptRejectedOrder(placeOrder(1L, stockOne));
+        await(() -> addressOne.sent.size() == 3, "되돌아간 뒤 재전송");
+        assertThat((System.nanoTime() - acceptedAt) / 1_000_000L).as("조용했던 뒤의 거부는 다시 바로 재전송").isLessThan(100L);
+    }
+
+    @Test
     void 맵이_이미_바뀐_뒤_도착한_거부_회신은_보관하지_않고_바로_보낸다() throws InterruptedException {
         RecordingPublication addressOne = new RecordingPublication();
         RecordingPublication addressTwo = new RecordingPublication();

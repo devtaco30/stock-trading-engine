@@ -108,10 +108,23 @@ public class AeronMatchingOrderSender implements MatchingOrderSender, AutoClosea
     private final OneToOneConcurrentArrayQueue<JournaledOrder> rejectedInbox = new OneToOneConcurrentArrayQueue<>(REJECTED_INBOX_CAPACITY);
     private final IdleStrategy rejectedEnqueueIdleStrategy = new BackoffIdleStrategy();
     private int heldOrderTotal;
+    // 거부 회신으로 돌아온 주문의 재전송 간격. 첫 거부는 바로 보내고, 같은 종목 slot에서 거부가 이어지면 기본 간격부터 두 배씩 늘려 상한까지 둔다.
+    // 매칭 pod가 재시작해 맵에는 평상시 값이 남았는데 담당 표시는 꺼져 있는 동안 거부와 재전송이 쉬지 않고 도는 것을 막는다. 값은 publisherThread만 읽고
+    // 시험이 시작 전에 바꾼다.
+    private long retransmitBackoffBaseNanos = 20_000_000L;
+    private long retransmitBackoffCapNanos = 1_000_000_000L;
+    private long retransmitResetNanos = 2_000_000_000L;
     // 계측(설계서 3-6절) — 계좌 엔진 스레드와 publisherThread가 올리고 리포터 스레드가 읽는다.
     private final LongAdder enqueueWaitCount = new LongAdder();
     private final LongAdder enqueueWaitNanos = new LongAdder();
     private final LongAdder offerRetryCount = new LongAdder();
+    // 매칭 pod가 「담당이 아니다」라며 돌려보낸 회신을 받은 횟수(이벤트 단위, 같은 주문이 여러 번 거부되면 여러 번 센다).
+    private final LongAdder rejectedReplyCount = new LongAdder();
+    // 첫 거부 회신과 마지막 거부 회신을 받은 시각(epoch ms, 받기 전에는 0). 시험이 이동 중 구간과 겹치는지 본다.
+    private final java.util.concurrent.atomic.AtomicLong firstRejectedReplyEpochMillis = new java.util.concurrent.atomic.AtomicLong();
+    private volatile long lastRejectedReplyEpochMillis;
+    // 보관 목록에 동시에 있었던 주문 수의 최대(publisherThread가 올린다).
+    private volatile int maxHeldOrderTotal;
     private final OrderCodec codec = new OrderCodec();
     private final OneToOneConcurrentArrayQueue<JournaledOrder> outbox = new OneToOneConcurrentArrayQueue<>(OUTBOX_CAPACITY);
     private final IdleStrategy enqueueIdleStrategy = new BackoffIdleStrategy();
@@ -164,9 +177,46 @@ public class AeronMatchingOrderSender implements MatchingOrderSender, AutoClosea
         return holdingCounts.get(slot) < holdingCapacityPerSlot;
     }
 
+    public long firstRejectedReplyEpochMillis() {
+        return firstRejectedReplyEpochMillis.get();
+    }
+
+    public long lastRejectedReplyEpochMillis() {
+        return lastRejectedReplyEpochMillis;
+    }
+
+    /** 보관 목록(재전송 대기 + 신규)에 동시에 있었던 주문 수의 최대. */
+    public int maxHeldOrderTotal() {
+        return maxHeldOrderTotal;
+    }
+
+    /** 테스트용 — 재전송 간격(기본, 상한)과 거부가 없으면 횟수를 되돌리는 시간을 바꾼다. start() 전에만 부른다. */
+    void setRetransmitBackoff(long baseMillis, long capMillis, long resetMillis) {
+        this.retransmitBackoffBaseNanos = baseMillis * 1_000_000L;
+        this.retransmitBackoffCapNanos = capMillis * 1_000_000L;
+        this.retransmitResetNanos = resetMillis * 1_000_000L;
+    }
+
+    /** 같은 종목 slot에서 {@code rejectRound}번째 연속 거부 뒤 재전송까지 두는 간격. 첫 거부는 0, 이후 기본 간격에서 두 배씩 늘어 상한에서 멈춘다. */
+    static long retransmitDelayNanos(int rejectRound, long baseNanos, long capNanos) {
+        if (rejectRound <= 1) {
+            return 0L;
+        }
+        int shift = rejectRound - 2;
+        if (shift >= 32 || (baseNanos << shift) >= capNanos || (baseNanos << shift) < 0) {
+            return capNanos;
+        }
+        return baseNanos << shift;
+    }
+
     /** 테스트용 — 이 종목 slot의 보관 목록에 있는 주문 수(재전송 대기 + 신규). */
     int holdingCount(String stockCode) {
         return holdingCounts.get(stockSlotHasher.slotFor(stockCode));
+    }
+
+    /** 매칭 pod의 「담당이 아니다」 거부 회신을 받은 누적 횟수. 종료할 때 INFO 로그로도 남는다. */
+    public long rejectedReplyCount() {
+        return rejectedReplyCount.sum();
     }
 
     /** 테스트용 — 아직 보관 목록으로 옮기지 않은 거부 회신 주문 수. */
@@ -180,6 +230,17 @@ public class AeronMatchingOrderSender implements MatchingOrderSender, AutoClosea
      */
     public void acceptRejectedOrder(JournaledOrder order) {
         throwIfFatal();
+        rejectedReplyCount.increment();
+        long receivedAt = System.currentTimeMillis();
+        lastRejectedReplyEpochMillis = receivedAt;
+        if (log.isDebugEnabled()) {
+            // 거부 회신마다 시각을 남긴다(시험이 이동 중 표시 구간 안의 거부 건수를 직접 세는 데 쓴다). DEBUG를 켠 시험에서만 출력된다.
+            log.debug("[계좌] 「담당 아님」 거부 회신 수신: 시각(epoch ms)={}", receivedAt);
+        }
+        if (firstRejectedReplyEpochMillis.compareAndSet(0L, receivedAt)) {
+            // 강제 종료되어 종료 로그가 없어도 이 줄은 남는다.
+            log.info("[계좌] 매칭 pod의 「담당 아님」 거부 회신을 처음 받음: 시각(epoch ms)={}", receivedAt);
+        }
         rejectedEnqueueIdleStrategy.reset();
         while (!rejectedInbox.offer(order)) {
             throwIfFatal();
@@ -259,11 +320,17 @@ public class AeronMatchingOrderSender implements MatchingOrderSender, AutoClosea
 
     private void route(MatchingTargetView view, JournaledOrder order) {
         MatchingSlotTarget target = findTarget(view, order.stockCode());
-        if (target == null || target.moving()) {
+        if (target == null || target.moving() || slotHasHeldOrders(order.stockCode())) {
+            // 같은 종목 slot에 재전송 대기 중인 주문이 있으면(재전송 간격 동안) 새 주문이 앞질러 나가지 않도록 뒤에 보관한다.
             hold(order, false);
             return;
         }
         publish(target.endpoint(), order);
+    }
+
+    private boolean slotHasHeldOrders(String stockCode) {
+        SlotHold hold = slotHolds[stockSlotHasher.slotFor(stockCode)];
+        return hold != null && !hold.isEmpty();
     }
 
     /** 담당이 생긴 종목 slot의 보관 목록을 비운다. 재전송 대기 목록을 먼저, 신규 보관 목록을 그다음에 보낸다. */
@@ -281,6 +348,10 @@ public class AeronMatchingOrderSender implements MatchingOrderSender, AutoClosea
             if (target == null || target.moving()) {
                 continue;
             }
+            if (System.nanoTime() - hold.notBeforeNanos < 0) {
+                continue; // 재전송 간격이 아직 지나지 않았다
+            }
+            hold.rejectedSinceFlush = false;
             JournaledOrder held;
             while ((held = hold.pollFirst()) != null) {
                 publish(target.endpoint(), held);
@@ -301,10 +372,24 @@ public class AeronMatchingOrderSender implements MatchingOrderSender, AutoClosea
         }
         if (retransmit) {
             hold.retransmit.addLast(order);
+            long now = System.nanoTime();
+            if (!hold.rejectedSinceFlush) {
+                // 한 번 비운 뒤 처음 돌아온 거부 회신만 새 연속 거부 한 회차로 센다(같은 회차에 몰려 온 회신은 한 회차).
+                if (now - hold.lastRejectNanos > retransmitResetNanos) {
+                    hold.consecutiveRejects = 0;
+                }
+                hold.consecutiveRejects++;
+                hold.rejectedSinceFlush = true;
+                hold.notBeforeNanos = now + retransmitDelayNanos(hold.consecutiveRejects, retransmitBackoffBaseNanos, retransmitBackoffCapNanos);
+            }
+            hold.lastRejectNanos = now;
         } else {
             hold.fresh.addLast(order);
         }
         heldOrderTotal++;
+        if (heldOrderTotal > maxHeldOrderTotal) {
+            maxHeldOrderTotal = heldOrderTotal;
+        }
         holdingCounts.incrementAndGet(slot);
     }
 
@@ -356,6 +441,10 @@ public class AeronMatchingOrderSender implements MatchingOrderSender, AutoClosea
     private static final class SlotHold {
         final ArrayDeque<JournaledOrder> retransmit = new ArrayDeque<>();
         final ArrayDeque<JournaledOrder> fresh = new ArrayDeque<>();
+        int consecutiveRejects;
+        boolean rejectedSinceFlush;
+        long lastRejectNanos = Long.MIN_VALUE / 2;
+        long notBeforeNanos;
 
         boolean isEmpty() {
             return retransmit.isEmpty() && fresh.isEmpty();
@@ -405,6 +494,8 @@ public class AeronMatchingOrderSender implements MatchingOrderSender, AutoClosea
         for (int slot = 0; slot < holdingCounts.length(); slot++) {
             heldRemaining += holdingCounts.get(slot);
         }
+        log.info("[계좌] 매칭 발신 종료: 담당 아님 거부 회신 수신 {}건(첫 수신 {} 마지막 수신 {} epoch ms), 보관 목록 최대 {}건, 보관 목록에 남은 주문 {}건",
+            rejectedReplyCount.sum(), firstRejectedReplyEpochMillis.get(), lastRejectedReplyEpochMillis, maxHeldOrderTotal, heldRemaining);
         if (heldRemaining > 0 && !publisherThread.isAlive()) {
             log.error("[계좌] 담당 매칭 pod를 찾지 못해 보관 중이던 주문 {}건이 종료와 함께 사라집니다", heldRemaining);
         }
