@@ -7,7 +7,11 @@ set -uo pipefail
 #   MATCHING_COUNT              시작 shard 수(1~7)
 #   MATCHING_EXPAND_AT_SEC      부하 시작 뒤 증설까지 기다리는 초
 #   MATCHING_ASSIGN_TIMEOUT     새 shard 의 주소가 맵에 올라오기를 기다리는 제한 시간(초)
-# 기록: 증설 shard 기동 시각과 새 주소가 맵 토픽에 올라온 시각(epoch ms)을 loadtest/logs/expansion.txt 에 남긴다.
+# 기록(loadtest/logs/expansion.txt, epoch ms):
+#   EXPANSION_LAUNCH_COMMAND_AT_MS          gradlew 를 띄우기 직전 시각. JVM 이 뜬 시각이 아니다.
+#   EXPANSION_ADDRESS_FIRST_RECORD_AT_MS    새 shard 의 주소가 평상시 값으로 맵 토픽에 처음 쓰인 레코드의 시각.
+#   EXPANSION_ADDRESS_OBSERVED_AT_MS        이 스크립트가 그것을 확인한 시각(수 초 늦다).
+# 두 번째 시각은 「증설 완료」가 아니다. 새 shard 가 받는 모든 종목 slot 의 호가창 이동이 끝난 시각은 따로 재야 한다.
 cd "$(dirname "$0")/.."
 source loadtest/matching-plan.sh
 
@@ -30,7 +34,7 @@ nohup ./gradlew ":matching-worker:bootRun" --args="--spring.profiles.active=udp,
 echo $! > "${PID_DIR}/${NEW_LABEL}.pid"
 echo "${NEW_LABEL} 기동 시작(런처 PID $(cat "${PID_DIR}/${NEW_LABEL}.pid"), 로그 ${LOG_DIR}/${NEW_LABEL}.log)"
 {
-    echo "EXPANSION_STARTED_AT_MS=${STARTED_AT_MS}"
+    echo "EXPANSION_LAUNCH_COMMAND_AT_MS=${STARTED_AT_MS}"
     echo "EXPANSION_SHARD=${NEW_LABEL} ${NEW_ENDPOINT}"
 } > "${LOG_DIR}/expansion.txt"
 

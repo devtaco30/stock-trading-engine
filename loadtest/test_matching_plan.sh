@@ -299,10 +299,15 @@ test_expansion_pool() {
 }
 
 test_expansion_validation() {
-    matching_expansion_valid 2 30 2> /dev/null
-    assert_eq "시작 2개, 30초 뒤 증설 허용" "0" "$?"
     local start delay
-    for start in 0 8 abc ""; do
+    # 시작 shard 수는 MATCHING_COUNT 검사(1·2·4·8)와 같아야 하고, 증설 뒤 8개 이하여야 하므로 1·2·4만 허용한다.
+    for start in 1 2 4; do
+        matching_expansion_valid "$start" 30 2> /dev/null
+        assert_eq "시작 ${start}개, 30초 뒤 증설 허용" "0" "$?"
+        matching_count_valid "$start" 2> /dev/null
+        assert_eq "증설 허용 값은 MATCHING_COUNT 검사도 통과한다(${start})" "0" "$?"
+    done
+    for start in 0 3 5 6 7 8 abc ""; do
         matching_expansion_valid "$start" 30 2> /dev/null
         assert_eq "시작 shard 수 [${start}] 거부" "1" "$?"
     done
@@ -310,8 +315,13 @@ test_expansion_validation() {
         matching_expansion_valid 2 "$delay" 2> /dev/null
         assert_eq "증설 시각 [${delay}] 거부" "1" "$?"
     done
-    matching_expansion_valid 7 10 2> /dev/null
-    assert_eq "시작 7개면 8번째까지 증설 허용" "0" "$?"
+}
+
+test_parse_first_record_ms() {
+    local dump
+    dump=$'CreateTime:1000\t5\taeron:udp?endpoint=localhost:20020\nCreateTime:2000\t6\taeron:udp?endpoint=localhost:20021;moving\nCreateTime:1500\t7\taeron:udp?endpoint=localhost:20021\nCreateTime:3000\t8\taeron:udp?endpoint=localhost:20021\nNO_TIMESTAMP\t9\taeron:udp?endpoint=localhost:20021'
+    assert_eq "이동 중 표시가 없는 첫 레코드의 시각" "1500" "$(printf '%s\n' "$dump" | matching_parse_first_record_ms "aeron:udp?endpoint=localhost:20021")"
+    assert_eq "없는 주소는 빈 값" "" "$(printf '%s\n' "$dump" | matching_parse_first_record_ms "aeron:udp?endpoint=localhost:29999")"
 }
 
 test_await_shard_address() {
@@ -325,16 +335,20 @@ test_await_shard_address() {
         echo "$calls" > "${dir}/calls"
         if [ "$calls" -lt 3 ]; then cat "${dir}/first"; else cat "${dir}/second"; fi
     }
+    matching_map_dump_timestamped() { printf 'CreateTime:1500\t7\t%s\n' "$B"; }
     map_lines 0 63 "$A" > "${dir}/first"
     { map_lines 0 31 "$A"; map_lines 32 63 "$B"; } > "${dir}/second"
     out="$(MATCHING_ASSIGN_POLL_SEC=0 await_matching_shard_address "$B" 5 2>&1)"
     assert_eq "새 주소가 맵에 올라오면 성공" "0" "$?"
-    assert_contains "올라온 시각(epoch ms)을 출력" "$out" "EXPANSION_ADDRESS_SEEN_AT_MS="
+    assert_contains "레코드가 쓰인 시각(Kafka 레코드 timestamp)을 출력" "$out" "EXPANSION_ADDRESS_FIRST_RECORD_AT_MS=1500"
+    assert_contains "관찰한 시각을 따로 출력" "$out" "EXPANSION_ADDRESS_OBSERVED_AT_MS="
+    assert_not_contains "예전 이름은 쓰지 않는다" "$out" "SEEN_AT"
+    assert_not_contains "증설 완료라고 쓰지 않는다" "$out" "증설 완료"
     echo 0 > "${dir}/calls"
     map_lines 0 63 "$A" > "${dir}/second"
     MATCHING_ASSIGN_POLL_SEC=1 await_matching_shard_address "$B" 2 > /dev/null 2>&1
     assert_eq "끝내 안 올라오면 실패" "1" "$?"
-    unset -f matching_assigned_map
+    unset -f matching_assigned_map matching_map_dump_timestamped
     rm -rf "$dir"
 }
 
@@ -345,6 +359,8 @@ test_expand_script() {
     assert_contains "증설 shard의 인자" "$script" 'matching_args "$((MATCHING_COUNT + 1))" "$MATCHING_COUNT"'
     assert_contains "대기 뒤에 띄운다" "$script" 'sleep "$MATCHING_EXPAND_AT_SEC"'
     assert_contains "새 주소가 맵에 올라온 시각을 기록" "$script" "await_matching_shard_address"
+    assert_contains "gradlew를 띄우기 직전 시각은 JVM 기동 시각이 아닌 이름으로 적는다" "$script" "EXPANSION_LAUNCH_COMMAND_AT_MS"
+    assert_not_contains "예전 이름을 쓰지 않는다" "$script" "EXPANSION_STARTED_AT_MS"
 }
 
 test_count_validation
@@ -360,6 +376,7 @@ test_stop_includes_matching_shard_pids
 test_run_script_uses_plan
 test_expansion_pool
 test_expansion_validation
+test_parse_first_record_ms
 test_await_shard_address
 test_expand_script
 

@@ -57,8 +57,11 @@ matching_endpoint_pool() {
 }
 
 # 호가창 이동 주소 풀에 넣을 주소 개수. 증설(MATCHING_EXPAND_AT_SEC)이 있으면 증설할 shard의 입구 주소까지 시작 때부터 넣는다.
-# 풀은 기동 때 고정이다: HandoverRequester·HandoverResponder 생성자가 풀의 peer마다 Publication을 열고, 풀에 없는 주소가 맵에 나오면
-# HandoverEndpointPool.requireInPool 이 예외로 멈춘다. 아직 뜨지 않은 상대가 풀에 있는 것은 허용된다(2 shard 실제 기동에서 확인).
+# 풀은 기동 때 고정이다: HandoverRequester·HandoverResponder 생성자가 풀의 peer마다 Publication을 한 번 연다. 풀에 없는 shard가 생기면 두 쪽이 다르게 실패한다.
+#   - 요청하는 쪽(HandoverRequester.request의 requireInPool): 예외를 던지고 HandoverCoordinator가 ERROR 로그만 남기고 간격을 두고 재시도한다.
+#   - 응답하는 쪽(HandoverResponder.handleRequest): 요청한 shard의 회신 주소가 자기 풀에 없으면 requestsRejectedByPool을 올리고 요청을 버려
+#     응답이 가지 않으므로 호가창 이동이 끝나지 않는다. 증설에서 실제로 생기는 실패는 이쪽이다(이동하는 호가창을 가진 기존 shard의 풀에 새 shard가 없는 경우).
+# 아직 뜨지 않은 상대가 풀에 있는 것은 허용된다. 2 shard 실제 기동에서 확인한 것은 이 점뿐이고, 풀에 없는 shard가 생겼을 때의 동작은 코드로만 읽었다.
 matching_pool_count() {
     if [ -n "${MATCHING_EXPAND_AT_SEC:-}" ]; then
         echo $(($1 + 1))
@@ -67,13 +70,14 @@ matching_pool_count() {
     fi
 }
 
-# 실행 중 증설(H9) 인자 검사. $1=시작 shard 수(1~7, 증설 뒤 8개 이하), $2=증설 시각(부하 시작 뒤 몇 초, 1 이상 정수).
+# 실행 중 증설(H9) 인자 검사. $1=시작 shard 수, $2=증설 시각(부하 시작 뒤 몇 초, 1 이상 정수).
+# 시작 shard 수는 MATCHING_COUNT 검사(1·2·4·8)와 같은 값 중 증설 뒤 8개 이하가 되는 1·2·4만 허용한다.
 # 증설 시각의 값은 정해지지 않았다. 호출하는 쪽이 정해서 넘긴다.
 matching_expansion_valid() {
-    case "${1:-}" in
-        [1-7]) ;;
-        *) echo "증설하려면 시작 shard 수는 1~7이어야 한다 (받은 값: ${1:-})" >&2; return 1 ;;
-    esac
+    matching_count_valid "${1:-}" 2> /dev/null && [ "$1" != "8" ] || {
+        echo "증설하려면 시작 shard 수는 1·2·4여야 한다 (받은 값: ${1:-})" >&2
+        return 1
+    }
     case "${2:-}" in
         ""|*[!0-9]*|0) echo "증설 시각은 1 이상의 정수(초)여야 한다 (받은 값: ${2:-})" >&2; return 1 ;;
     esac
@@ -185,15 +189,32 @@ await_matching_slots_assigned() {
     done
 }
 
-# 맵 토픽에 주소 $1이 평상시 값으로 올라올 때까지 기다린다(증설한 shard가 종목 slot을 받은 시각 기록용).
-# $2=제한 시간(초). 올라오면 `EXPANSION_ADDRESS_SEEN_AT_MS=<epoch ms>`를 출력하고 0, 제한 시간을 넘기면 1.
-# 시각은 poll 간격(MATCHING_ASSIGN_POLL_SEC)과 맵 덤프 시간만큼 늦게 찍힌다.
+# 맵 토픽을 처음부터 읽되 레코드의 Kafka timestamp를 앞에 붙여 "CreateTime:<ms><탭>종목 slot<탭>값" 줄로 낸다. 테스트가 이 함수를 바꾼다.
+matching_map_dump_timestamped() {
+    docker exec stock-trading-kafka /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 \
+        --topic "$MATCHING_MAP_TOPIC" --from-beginning --timeout-ms 3000 \
+        --property print.timestamp=true --property print.key=true --property key.separator=$'\t' \
+        --property key.deserializer=org.apache.kafka.common.serialization.IntegerDeserializer 2> /dev/null
+}
+
+# 표준입력의 timestamp 붙은 덤프에서 주소 $1이 `;moving` 없이 처음 쓰인 레코드의 timestamp(ms)를 낸다. 없으면 빈 값.
+matching_parse_first_record_ms() {
+    awk -F'\t' -v address="$1" '$1 ~ /^CreateTime:/ && $3 == address { sub(/^CreateTime:/, "", $1); if (min == "" || $1 + 0 < min + 0) min = $1 }
+        END { if (min != "") print min }'
+}
+
+# 맵 토픽에 주소 $1이 평상시 값으로 올라올 때까지 기다린다. $2=제한 시간(초). 올라오면 0, 제한 시간을 넘기면 1.
+# 출력하는 두 시각은 증설이 끝난 시각이 아니다. 새 shard의 주소가 평상시 값으로 처음 맵 토픽에 올라온 때를 가리킨다.
+#   EXPANSION_ADDRESS_FIRST_RECORD_AT_MS: 그 레코드가 쓰인 시각(Kafka 레코드 timestamp). 기록에는 이 값을 쓴다.
+#   EXPANSION_ADDRESS_OBSERVED_AT_MS:     이 함수가 확인한 시각. poll 간격과 맵 덤프 읽기 시간(timeout 3초 포함)만큼 늦다.
+# 새 shard의 모든 종목 slot 이동이 끝난 시각은 이 값으로 알 수 없다.
 await_matching_shard_address() {
     local address="$1" timeout="$2" start=$SECONDS
     local poll="${MATCHING_ASSIGN_POLL_SEC:-2}"
     while :; do
         if matching_assigned_map | cut -f2 | grep -qxF -- "$address"; then
-            echo "EXPANSION_ADDRESS_SEEN_AT_MS=$(python3 -I -c 'import time; print(int(time.time()*1000))')"
+            echo "EXPANSION_ADDRESS_FIRST_RECORD_AT_MS=$(matching_map_dump_timestamped | matching_parse_first_record_ms "$address")"
+            echo "EXPANSION_ADDRESS_OBSERVED_AT_MS=$(python3 -I -c 'import time; print(int(time.time()*1000))')"
             return 0
         fi
         if [ $((SECONDS - start)) -ge "$timeout" ]; then
