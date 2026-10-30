@@ -8,7 +8,8 @@ set -uo pipefail
 # 시나리오가 실제로 이동 중 주문을 받았는지 전제를 단언한다(발신 속도 조건 포함 네 개). 하나라도 거짓이면 통과가 아니라 「미발동」이고 최대 3회 다시 시도한다.
 #   1. 종목 X의 slot이 맵 기록으로 pod 0에서 pod 1로 바뀌었다
 #   2. 「이동 중」 표시가 붙은 구간(X의 slot이 이동 중으로 표시된 시각 ~ pod 1 주소로 바뀐 시각)에 발신한 주문이 1건 이상이다
-#   3. 이동 중 표시를 본 종목 slot의 새 주문이 계좌 shard의 보관 목록에 쌓였다(동시 보관 최대 1건 이상, 설계서 10-1절 수정본 3번의 구간 안 동작)
+#   3. 이동 중 표시를 본 종목 slot이라 보관 목록에 둔 새 주문이 1건 이상이다(계좌 워커 종료 로그의 「보관 이유별 이동 중 표시」 건수, 설계서 10-1절 수정본 3번의 구간 안 동작).
+#      동시 보관 최대는 이 이유와 담당 없음·재전송 대기 뒤·거부 회신 보관을 구분하지 않으므로 전제로 쓰지 않는다.
 #      거부 회신은 전제가 아니다: 맵에 이동 중이 표시되기 전에 이미 나가 있던 주문이 이전 pod에 도착했을 때만 생기며 실행마다 0건일 수 있다.
 #      이 시험은 거부 경로의 end-to-end 증명이 아니다(거부 경로는 단위 시험이 맡는다). 거부 회신 건수와 구간 시작과의 시각 차는 보고 수치로만 출력한다.
 # 값(발신 속도, 사전 매도 수)의 근거: 이전 측정에서 「이동 중」 표시 구간이 중앙 약 99ms, 최대 약 146ms였으므로 X에 초당 200건이면
@@ -132,8 +133,12 @@ run_attempt() {
     # 전제 1: X의 slot이 pod 0에서 pod 1로 바뀌었고 이동 표시가 한 번만 올라왔다(여러 번 오가면 구간이 넓어져 전제 2·3이 의미를 잃는다)
     local premise_moved=0 premise_window=0 premise_hold=0 premise_rate=0
     python3 loadtest/u10/assert-moved.py "$WORK/map-history.txt" "$xslot" "$POD0" "$POD1" && premise_moved=1
-    local window_info window_count window_start window_end move_marks
-    window_info=$(python3 - "$WORK/map-history.txt" "$WORK/stream.txt" "$xslot" "$POD1" <<'PY'
+    local window_info window_count window_start window_end move_marks account_read_at window_start_source
+    # 구간의 시작: 계좌 shard가 X slot의 이동 중 표시를 읽은 시각(계좌 워커 로그 「이동 중 표시를 읽음」). 그 줄이 없으면 Kafka에 기록된 이동 중 값의 시각을 쓴다.
+    account_read_at=$(sed -n 's/.*이동 중 표시를 읽음: slot='"$xslot"' 시각(epoch ms)=\([0-9]*\).*/\1/p' "$LOG_DIR/account.log" | head -1)
+    window_start_source="계좌 shard가 표시를 읽은 시각"
+    if [ -z "$account_read_at" ]; then account_read_at=0; window_start_source="Kafka 기록 시각(읽은 시각 로그 없음)"; fi
+    window_info=$(python3 - "$WORK/map-history.txt" "$WORK/stream.txt" "$xslot" "$POD1" "$account_read_at" <<'PY'
 import sys
 rows = [l.rstrip('\n').split('\t') for l in open(sys.argv[1]) if l.strip()]
 slot, pod1 = int(sys.argv[3]), sys.argv[4]
@@ -143,6 +148,8 @@ to_pod1 = [t for t, v in xs if v == pod1]
 if not moving or not to_pod1:
     print("0 0 0 %d" % len(moving)); sys.exit()
 start, end = min(moving), max(to_pod1)
+if int(sys.argv[5]) > 0:
+    start = int(sys.argv[5])
 sent = [int(l.split()[1]) for l in open(sys.argv[2]) if l.startswith('ORDER ')]
 print("%d %d %d %d" % (sum(1 for t in sent if start <= t <= end), start, end, len(moving)))
 PY
@@ -171,12 +178,14 @@ PY
     reject_offset_list=$(echo "$reject_times" | reject_offsets "$window_start" | paste -sd, -)
     held_left=$(sed -n 's/.*보관 목록에 남은 주문 \([0-9]*\)건.*/\1/p' "$LOG_DIR/account.log" | tail -1)
     held_max=$(sed -n 's/.*보관 목록 최대 \([0-9]*\)건.*/\1/p' "$LOG_DIR/account.log" | tail -1)
-    if [ -z "$held_max" ]; then echo "계좌 워커 종료 로그가 없다(강제 종료로 보임): 동시 보관 최대를 알 수 없어 전제 3은 거짓이다"; fi
-    premise_hold=$(held_premise "$held_max")
-    echo "전제: X slot 이동=$premise_moved / 이동 중 표시 구간(${window_start}~${window_end} epoch ms)에 발신한 주문=${window_count:-0}건 / 이동 중 동시 보관 최대=${held_max:-없음}건(1건 이상이어야 참, 참=$premise_hold)"
-    echo "보고 수치(판정에 쓰지 않음): 담당 아님 거부 회신 수신=${reject_count:-없음}건, 그중 구간 안에서 받은 건수=${reject_in_window:-0}건, 각 수신 시각 − 구간 시작(ms, 음수는 구간 앞)=${reject_offset_list:-없음}. 구간 시작은 Kafka에 기록된 이동 중 값의 시각이라 계좌 shard가 그 표시를 읽은 시각과 다를 수 있다"
+    local held_moving
+    held_moving=$(sed -n 's/.*보관 이유별 이동 중 표시 \([0-9]*\)건.*/\1/p' "$LOG_DIR/account.log" | tail -1)
+    if [ -z "$held_moving" ]; then echo "계좌 워커 종료 로그가 없다(강제 종료로 보임): 이동 중 표시 때문에 보관한 주문 수를 알 수 없어 전제 3은 거짓이다"; fi
+    premise_hold=$(held_premise "$held_moving")
+    echo "전제: X slot 이동=$premise_moved / 이동 중 표시 구간(${window_start}~${window_end} epoch ms, 시작=${window_start_source})에 발신한 주문=${window_count:-0}건 / 이동 중 표시 때문에 보관한 새 주문=${held_moving:-없음}건(1건 이상이어야 참, 참=$premise_hold)"
+    echo "보고 수치(판정에 쓰지 않음): 담당 아님 거부 회신 수신=${reject_count:-없음}건, 그중 구간 안에서 받은 건수=${reject_in_window:-0}건, 각 수신 시각 − 구간 시작(ms, 음수는 구간 앞)=${reject_offset_list:-없음}. 구간 시작은 ${window_start_source}이다"
     echo "구분: 잔고 초과 주문(계좌가 거부)=${invalid}건, 담당 아님 거부 회신(이벤트)=${reject_count:-없음}건 — 서로 다른 항목이며 주문 수에 더하지 않는다. 같은 주문이 여러 번 거부되면 여러 번 센다"
-    echo "보관 목록: 이동 중 동시에 보관된 주문 최대 ${held_max:-없음}건, 종료 때 남은 주문 ${held_left:-없음}건"
+    echo "보관 목록(보고 수치): 보관 이유를 가리지 않은 동시 보관 최대 ${held_max:-없음}건, 종료 때 남은 주문 ${held_left:-없음}건"
 
     local a d0 d1 buyer seller
     a=$(dump_account); d0=$(dump_matching /tmp/u10/matching-0); d1=$(dump_matching /tmp/u10/matching-1)
