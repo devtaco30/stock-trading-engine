@@ -86,17 +86,27 @@ class HandoverResponderBatchTest {
     }
 
     @Test
-    void 정리한_뒤_늦게_온_중복_요청과_실제_보관_없음을_나누어_센다() throws Exception {
+    void 정리한_뒤_이미_응답한_요청이_다시_오면_중복으로_세고_처음_보는_요청은_실제_보관_없음으로_센다() throws Exception {
         store.put(SLOT, List.of(new byte[] {1}));
-        store.remove(SLOT); // 맵이 바뀌어 정리된 뒤
         sendRequest(301L, SLOT);
-        sendRequest(302L, SLOT + 7); // 한 번도 보관한 적 없는 종목 slot
         Thread.sleep(300);
+        responder.pollOnce();
+        assertThat(readResponses(300)).as("정리 전에는 응답한다").containsExactly(301L);
 
+        store.remove(SLOT); // 맵이 바뀌어 정리된 뒤
+        sendRequest(301L, SLOT); // 이미 응답한 같은 요청(같은 응답 주소, 같은 이동 번호)의 재전송이 늦게 도착한다
+        Thread.sleep(300);
+        responder.pollOnce();
+        assertThat(responder.requestsAfterCleanup()).as("이미 응답한 요청의 중복").isEqualTo(1);
+        assertThat(responder.requestsWithoutBook()).isZero();
+
+        sendRequest(302L, SLOT); // 새 담당이 재시작해 새 이동 번호로 다시 요청했다. 정리된 뒤라 응답할 수 없는 실제 실패이다.
+        sendRequest(303L, SLOT + 7); // 한 번도 보관한 적 없는 종목 slot
+        Thread.sleep(300);
         responder.pollOnce();
 
-        assertThat(responder.requestsAfterCleanup()).isEqualTo(1);
-        assertThat(responder.requestsWithoutBook()).isEqualTo(1);
+        assertThat(responder.requestsAfterCleanup()).as("처음 보는 이동 번호는 중복이 아니다").isEqualTo(1);
+        assertThat(responder.requestsWithoutBook()).as("정리 뒤 온 새 요청과 보관한 적 없는 종목 slot").isEqualTo(2);
     }
 
     private void sendRequest(long transferId, int slot) {

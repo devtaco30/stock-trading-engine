@@ -48,6 +48,12 @@ public final class HandoverResponder implements AutoCloseable {
     // 한 번의 poll에서 읽은 요청 중 종목 slot별로 마지막 하나. 이 thread만 쓴다.
     private final Map<Integer, HandoverRequest> collected = new java.util.LinkedHashMap<>();
     private final AtomicLong requestsAfterCleanup = new AtomicLong();
+    // 종목 slot별로 마지막에 응답한 요청(응답 주소와 이동 번호). 정리한 뒤 같은 요청이 늦게 다시 오면 중복이고, 다른 요청이면 새 담당이 다시 요청한 것이라 구분한다.
+    // 이동 번호는 pod마다 앞 비트가 달라 서로 크기를 비교할 수 없으므로 같은지만 본다. 이 thread만 쓴다.
+    private record Answered(String replyChannel, long transferId) {
+    }
+
+    private final Map<Integer, Answered> lastAnswered = new HashMap<>();
     // 같은 종목 slot의 보관 없음 로그를 10초에 한 번으로 줄인다(근거 없는 임의 간격). 카운터는 건너뛴 로그와 무관하게 센다.
     private final RateLimitedLog noBookLog = new RateLimitedLog(10_000L);
     private final RateLimitedLog afterCleanupLog = new RateLimitedLog(10_000L);
@@ -126,7 +132,8 @@ public final class HandoverResponder implements AutoCloseable {
         }
         Optional<List<byte[]>> stored = store.get(request.stockSlot());
         if (stored.isEmpty()) {
-            if (store.wasRemoved(request.stockSlot())) {
+            if (store.wasRemoved(request.stockSlot())
+                && new Answered(request.replyChannel(), request.transferId()).equals(lastAnswered.get(request.stockSlot()))) {
                 requestsAfterCleanup.incrementAndGet();
                 int suppressed = afterCleanupLog.tryAcquire(request.stockSlot());
                 String suffix = suppressed > 0 ? " (같은 로그 " + suppressed + "건을 건너뜀)" : "";
@@ -138,11 +145,13 @@ public final class HandoverResponder implements AutoCloseable {
                 int suppressed = noBookLog.tryAcquire(request.stockSlot());
                 String suffix = suppressed > 0 ? " (같은 로그 " + suppressed + "건을 건너뜀)" : "";
                 if (suppressed >= 0) {
-                    log.log(Level.WARNING, "[호가창 이동] 보관한 호가창이 없어 응답하지 못함: " + request + suffix);
+                    String why = store.wasRemoved(request.stockSlot()) ? "정리한 뒤 새로 도착한 요청이라" : "보관한 호가창이 없어";
+                    log.log(Level.WARNING, "[호가창 이동] " + why + " 응답하지 못함: " + request + suffix);
                 }
             }
             return;
         }
+        lastAnswered.put(request.stockSlot(), new Answered(request.replyChannel(), request.transferId()));
         send(reply, request, stored.get());
     }
 
@@ -160,7 +169,7 @@ public final class HandoverResponder implements AutoCloseable {
         }
     }
 
-    /** 정리한 뒤 늦게 도착해 응답하지 않은 중복 요청 수. */
+    /** 정리한 뒤 늦게 도착해 응답하지 않은 중복 요청 수(이미 응답한 요청과 응답 주소·이동 번호가 같은 요청). */
     public long requestsAfterCleanup() {
         return requestsAfterCleanup.get();
     }
