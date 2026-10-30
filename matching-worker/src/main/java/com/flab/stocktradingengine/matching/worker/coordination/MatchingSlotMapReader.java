@@ -9,6 +9,7 @@ import java.util.Optional;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -30,7 +31,10 @@ public final class MatchingSlotMapReader {
 
     private static final Logger log = System.getLogger(MatchingSlotMapReader.class.getName());
 
-    private final Consumer<Integer, String> consumer;
+    // 재시작 때 새 consumer로 바뀔 수 있어 읽는 thread 밖에서도 보이게 volatile로 둔다.
+    private volatile Consumer<Integer, String> consumer;
+    // null이면 재시작에도 같은 consumer로 poll을 이어간다. 있으면 재시작마다 consumer를 닫고 새로 만들어 처음부터 다시 읽는다.
+    private final Supplier<Consumer<Integer, String>> consumerSupplier;
     private final String mapTopic;
 
     private volatile MatchingSlotTarget[] slotToTarget;
@@ -51,6 +55,18 @@ public final class MatchingSlotMapReader {
 
     public MatchingSlotMapReader(Consumer<Integer, String> consumer, int stockSlotCount, String mapTopic) {
         this.consumer = consumer;
+        this.consumerSupplier = null;
+        this.mapTopic = mapTopic;
+        this.slotToTarget = new MatchingSlotTarget[stockSlotCount];
+    }
+
+    /**
+     * 재시작 때 consumer를 닫고 새로 만들어 맵 토픽을 처음부터 다시 읽는다. 다시 읽는 동안에는 관찰자를 부르지 않고, 끝 위치까지
+     * 따라온 뒤 이전 값과 달라진 종목 slot만 한 번씩 알린다. 토픽에 compaction 전의 옛 중간 값이 남아 있어도 관찰자가 그 값을 보지 않게 하기 위해서다.
+     */
+    public MatchingSlotMapReader(Supplier<Consumer<Integer, String>> consumerSupplier, int stockSlotCount, String mapTopic) {
+        this.consumerSupplier = consumerSupplier;
+        this.consumer = consumerSupplier.get();
         this.mapTopic = mapTopic;
         this.slotToTarget = new MatchingSlotTarget[stockSlotCount];
     }
@@ -115,8 +131,8 @@ public final class MatchingSlotMapReader {
     }
 
     /**
-     * 읽기를 다시 시작하게 한다. 읽기 thread가 다음 반복에서 예외로 멈춘 것과 같은 경로(낡은 값 차단, 간격 뒤 다시 시작)를 탄다. consumer를
-     * 새로 만들지는 않는다. 끝 위치를 따라오지 못하는 정지를 판정 쪽이 알아챘을 때 부른다.
+     * 읽기를 다시 시작하게 한다. 읽기 thread가 다음 반복에서 예외로 멈춘 것과 같은 경로(낡은 값 차단, 간격 뒤 다시 시작)를 탄다.
+     * consumer를 Supplier로 받았으면 간격 뒤 새로 만들어 처음부터 다시 읽는다. 끝 위치를 따라오지 못하는 정지를 판정 쪽이 알아챘을 때 부른다.
      */
     public void requestRestart(String reason) {
         log.log(Level.ERROR, "[맵] " + mapTopic + " 읽기 재시작 요청: " + reason);
@@ -171,8 +187,12 @@ public final class MatchingSlotMapReader {
         consumer.close();
     }
 
-    private void pollLoop(List<TopicPartition> partitions, Map<TopicPartition, Long> endOffsets) {
+    private void pollLoop(List<TopicPartition> partitions, Map<TopicPartition, Long> initialEndOffsets) {
         boolean caughtUp = false;
+        Map<TopicPartition, Long> endOffsets = initialEndOffsets;
+        // consumer를 새로 만들 차례인지, 새로 만든 뒤 처음부터 다시 읽는 중이면 그 결과를 모으는 배열(끝까지 읽기 전에는 공개하지 않는다)
+        boolean rebuildNeeded = false;
+        MatchingSlotTarget[] replayed = null;
         try {
             while (running) {
                 try {
@@ -183,12 +203,28 @@ public final class MatchingSlotMapReader {
                         }
                         // 쉬는 동안 들어온 요청이라 이미 반영된 것과 같다.
                     }
+                    if (rebuildNeeded) {
+                        endOffsets = rebuildConsumer(partitions);
+                        replayed = new MatchingSlotTarget[slotToTarget.length];
+                        rebuildNeeded = false;
+                    }
                     ConsumerRecords<Integer, String> records = consumer.poll(Duration.ofMillis(500));
                     if (!records.isEmpty()) {
-                        applyRecords(records);
+                        if (replayed != null) {
+                            applyTo(replayed, records, new java.util.ArrayList<>());
+                        } else {
+                            applyRecords(records);
+                        }
                     }
                     for (TopicPartition partition : partitions) {
                         consumedOffsets.set(partition.partition(), consumer.position(partition));
+                    }
+                    if (replayed != null) {
+                        if (!isCaughtUp(partitions, endOffsets)) {
+                            continue;
+                        }
+                        publishReplayed(replayed);
+                        replayed = null;
                     }
                     if (!caughtUp && isCaughtUp(partitions, endOffsets)) {
                         caughtUp = true;
@@ -211,12 +247,40 @@ public final class MatchingSlotMapReader {
                         return;
                     }
                     resumedAtNanos = System.nanoTime();
+                    rebuildNeeded = consumerSupplier != null;
+                    replayed = null;
                 }
             }
         } catch (WakeupException e) {
             // close()가 poll을 깨운 것이다.
         } finally {
             initialCatchUpLatch.countDown();
+        }
+    }
+
+    /** 옛 consumer를 닫고 새로 만들어 모든 파티션을 처음부터 읽게 하고, 그때의 끝 위치를 돌려준다. */
+    private Map<TopicPartition, Long> rebuildConsumer(List<TopicPartition> partitions) {
+        try {
+            consumer.close();
+        } catch (RuntimeException e) {
+            log.log(Level.WARNING, "[맵] " + mapTopic + " 옛 consumer를 닫다 예외(새로 만들어 계속함): " + e);
+        }
+        Consumer<Integer, String> fresh = consumerSupplier.get();
+        consumer = fresh;
+        fresh.assign(partitions);
+        fresh.seekToBeginning(partitions);
+        log.log(Level.WARNING, "[맵] " + mapTopic + " consumer를 새로 만들어 처음부터 다시 읽음");
+        return fresh.endOffsets(partitions);
+    }
+
+    /** 다시 읽기를 마친 결과를 공개하고, 이전 값과 달라진 종목 slot만 관찰자에게 알린다. */
+    private void publishReplayed(MatchingSlotTarget[] replayed) {
+        MatchingSlotTarget[] previous = slotToTarget;
+        slotToTarget = replayed;
+        for (int slot = 0; slot < replayed.length; slot++) {
+            if (!java.util.Objects.equals(previous[slot], replayed[slot])) {
+                notifyListeners(slot, Optional.ofNullable(replayed[slot]));
+            }
         }
     }
 
@@ -234,6 +298,16 @@ public final class MatchingSlotMapReader {
         MatchingSlotTarget[] updated = slotToTarget.clone();
         // 반영한 항목마다 그 시점의 값을 모아 두었다가 배열을 교체한 뒤 관찰자에게 알린다.
         List<Map.Entry<Integer, Optional<MatchingSlotTarget>>> changes = new java.util.ArrayList<>();
+        applyTo(updated, records, changes);
+        slotToTarget = updated;
+        for (Map.Entry<Integer, Optional<MatchingSlotTarget>> change : changes) {
+            notifyListeners(change.getKey(), change.getValue());
+        }
+    }
+
+    private void applyTo(
+            MatchingSlotTarget[] updated, ConsumerRecords<Integer, String> records,
+            List<Map.Entry<Integer, Optional<MatchingSlotTarget>>> changes) {
         for (ConsumerRecord<Integer, String> record : records) {
             int slot = record.key();
             if (slot < 0 || slot >= updated.length) {
@@ -252,14 +326,14 @@ public final class MatchingSlotMapReader {
             }
             changes.add(Map.entry(slot, Optional.ofNullable(updated[slot])));
         }
-        slotToTarget = updated;
-        for (Map.Entry<Integer, Optional<MatchingSlotTarget>> change : changes) {
-            for (MapChangeListener listener : listeners) {
-                try {
-                    listener.onChange(change.getKey(), change.getValue());
-                } catch (RuntimeException e) {
-                    log.log(Level.ERROR, "[맵] 관찰자 처리 중 예외(읽기는 계속함): 종목 slot=" + change.getKey() + " 원인=" + e);
-                }
+    }
+
+    private void notifyListeners(int stockSlot, Optional<MatchingSlotTarget> target) {
+        for (MapChangeListener listener : listeners) {
+            try {
+                listener.onChange(stockSlot, target);
+            } catch (RuntimeException e) {
+                log.log(Level.ERROR, "[맵] 관찰자 처리 중 예외(읽기는 계속함): 종목 slot=" + stockSlot + " 원인=" + e);
             }
         }
     }

@@ -82,7 +82,7 @@ public class MatchingHandoverConfig {
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, IntegerDeserializer.class.getName());
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
-        return new MatchingSlotMapReader(new KafkaConsumer<>(props), stockSlotHasher.stockSlotCount(),
+        return new MatchingSlotMapReader(() -> new KafkaConsumer<Integer, String>(props), stockSlotHasher.stockSlotCount(),
             KafkaMatchingShardAssignment.MAP_TOPIC);
     }
 

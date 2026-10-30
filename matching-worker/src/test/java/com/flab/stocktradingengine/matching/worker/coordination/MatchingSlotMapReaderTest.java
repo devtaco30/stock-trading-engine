@@ -176,6 +176,99 @@ class MatchingSlotMapReaderTest {
         quietReader.close();
     }
 
+    private static final String Y = "aeron:udp?endpoint=localhost:20030";
+
+    /** 위치 0에서 시작해 한 번 poll로 주어진 기록을 모두 읽으면 끝 위치(기록 수)에 닿는 가짜 consumer. */
+    @SuppressWarnings("unchecked")
+    private static Consumer<Integer, String> replayConsumer(ConsumerRecords<Integer, String> firstPoll, long endOffset) {
+        Consumer<Integer, String> consumer = mock(Consumer.class);
+        TopicPartition partition = new TopicPartition(TOPIC, 0);
+        org.mockito.Mockito.when(consumer.partitionsFor(TOPIC))
+            .thenReturn(List.of(new org.apache.kafka.common.PartitionInfo(TOPIC, 0, null, null, null)));
+        org.mockito.Mockito.when(consumer.endOffsets(List.of(partition))).thenReturn(Map.of(partition, endOffset));
+        java.util.concurrent.atomic.AtomicBoolean polled = new java.util.concurrent.atomic.AtomicBoolean();
+        org.mockito.Mockito.when(consumer.position(partition)).thenAnswer(invocation -> polled.get() ? endOffset : 0L);
+        org.mockito.Mockito.when(consumer.poll(org.mockito.ArgumentMatchers.any(java.time.Duration.class)))
+            .thenAnswer(invocation -> {
+                if (polled.compareAndSet(false, true)) {
+                    return firstPoll;
+                }
+                return ConsumerRecords.empty();
+            });
+        return consumer;
+    }
+
+    @Test
+    void 다시_시작하면_옛_consumer를_닫고_새로_만들어_처음부터_다시_읽는다() throws Exception {
+        Consumer<Integer, String> first = replayConsumer(ConsumerRecords.empty(), 0L);
+        Consumer<Integer, String> second = replayConsumer(records(record(3, X)), 1L);
+        java.util.Iterator<Consumer<Integer, String>> consumers = List.of(first, second).iterator();
+        MatchingSlotMapReader supplied = new MatchingSlotMapReader(consumers::next, 64, TOPIC);
+        supplied.setRestartIntervalMillis(100L);
+        supplied.start();
+        awaitUntil(supplied::isHealthy);
+
+        supplied.requestRestart("끝 위치를 따라오지 못함");
+
+        awaitUntil(() -> !supplied.isHealthy());
+        awaitUntil(() -> supplied.isHealthy() && supplied.targetFor(3).isPresent());
+        org.mockito.Mockito.verify(first).close();
+        org.mockito.Mockito.verify(second).seekToBeginning(List.of(new TopicPartition(TOPIC, 0)));
+        assertThat(supplied.targetFor(3)).contains(new MatchingSlotTarget(X, false));
+        supplied.close();
+    }
+
+    @Test
+    void 다시_읽는_동안에는_관찰자를_부르지_않고_따라온_뒤_값이_달라진_slot만_한_번씩_알린다() throws Exception {
+        Consumer<Integer, String> first = replayConsumer(ConsumerRecords.empty(), 0L);
+        // 처음부터 다시 읽으면 slot 5는 X, X;moving, Y를 차례로 재생하지만 최종 값은 이미 알고 있던 Y와 같다. slot 3만 새로 생긴다.
+        Consumer<Integer, String> second = replayConsumer(
+            records(record(5, X), record(5, X + ";moving"), record(5, Y), record(3, X)), 4L);
+        java.util.Iterator<Consumer<Integer, String>> consumers = List.of(first, second).iterator();
+        MatchingSlotMapReader supplied = new MatchingSlotMapReader(consumers::next, 64, TOPIC);
+        supplied.setRestartIntervalMillis(100L);
+        supplied.applyRecords(records(record(5, Y)));
+        List<String> seen = new java.util.concurrent.CopyOnWriteArrayList<>();
+        supplied.addListener((slot, target) -> seen.add(slot + ":" + target.map(MatchingSlotTarget::encode).orElse("없음")));
+        supplied.start();
+        awaitUntil(supplied::isHealthy);
+
+        supplied.requestRestart("끝 위치를 따라오지 못함");
+
+        awaitUntil(() -> !supplied.isHealthy());
+        awaitUntil(() -> supplied.isHealthy() && supplied.targetFor(3).isPresent());
+        assertThat(seen).containsExactly("3:" + X);
+        supplied.close();
+    }
+
+    @Test
+    void 옛_중간_값이_다시_재생돼도_보관본에_정리가_요청되지_않는다() throws Exception {
+        // slot 5는 X(이 pod)가 Y에게 넘겨 보관했다가 도로 받았다. 맵의 최종 값은 X이고, 토픽에는 옛 중간 값 Y가 아직 남아 있다.
+        com.flab.stocktradingengine.matching.worker.handover.HandoverBookStore store =
+            new com.flab.stocktradingengine.matching.worker.handover.HandoverBookStore();
+        store.put(5, List.of(new byte[] {1}));
+        List<Integer> cleanupRequests = new java.util.concurrent.CopyOnWriteArrayList<>();
+        com.flab.stocktradingengine.matching.worker.handover.HandoverCleanupTrigger trigger =
+            new com.flab.stocktradingengine.matching.worker.handover.HandoverCleanupTrigger(X, store, cleanupRequests::add);
+        Consumer<Integer, String> first = replayConsumer(ConsumerRecords.empty(), 0L);
+        Consumer<Integer, String> second = replayConsumer(records(record(5, Y), record(5, X)), 2L);
+        java.util.Iterator<Consumer<Integer, String>> consumers = List.of(first, second).iterator();
+        MatchingSlotMapReader supplied = new MatchingSlotMapReader(consumers::next, 64, TOPIC);
+        supplied.setRestartIntervalMillis(100L);
+        supplied.applyRecords(records(record(5, X)));
+        supplied.addListener(trigger::onMapChange);
+        supplied.start();
+        awaitUntil(supplied::isHealthy);
+
+        supplied.requestRestart("끝 위치를 따라오지 못함");
+
+        awaitUntil(() -> !supplied.isHealthy());
+        awaitUntil(supplied::isHealthy);
+        assertThat(supplied.targetFor(5)).contains(new MatchingSlotTarget(X, false));
+        assertThat(cleanupRequests).isEmpty();
+        supplied.close();
+    }
+
     private static void awaitUntil(java.util.function.BooleanSupplier condition) throws InterruptedException {
         long deadline = System.nanoTime() + 3_000_000_000L;
         while (!condition.getAsBoolean() && System.nanoTime() < deadline) {
