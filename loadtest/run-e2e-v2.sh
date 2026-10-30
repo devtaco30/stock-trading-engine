@@ -24,8 +24,14 @@ fi
 
 MATCHING_COUNT="${MATCHING_COUNT:-1}"
 matching_count_valid "$MATCHING_COUNT" || exit 1
+# 실행 중 증설(MATCHING_EXPAND_AT_SEC)이 있으면 증설할 shard의 주소까지 시작 shard의 호가창 이동 주소 풀에 넣는다(matching_pool_count).
+# 증설 자체는 부하가 시작된 뒤 loadtest/expand-matching.sh 가 한다.
+MATCHING_POOL_COUNT="$(matching_pool_count "$MATCHING_COUNT")"
+if [ -n "${MATCHING_EXPAND_AT_SEC:-}" ]; then
+    matching_expansion_valid "$MATCHING_COUNT" "$MATCHING_EXPAND_AT_SEC" || exit 1
+fi
 # 정할 조건: 배정 완료를 기다리는 제한 시간(초). 값은 아직 정하지 않았다. 매칭 shard가 2개 이상일 때만 필요하다.
-if [ "$MATCHING_COUNT" != "1" ] && [ -z "${MATCHING_ASSIGN_TIMEOUT:-}" ]; then
+if [ "$MATCHING_POOL_COUNT" != "1" ] && [ -z "${MATCHING_ASSIGN_TIMEOUT:-}" ]; then
     echo "MATCHING_COUNT=${MATCHING_COUNT}에는 MATCHING_ASSIGN_TIMEOUT(배정 완료 대기 제한 시간, 초)이 필요하다 — 값은 정해지지 않았다" >&2
     exit 1
 fi
@@ -69,7 +75,7 @@ start_app() {
 start_matching_workers() {
     local common_args="$1" index
     for index in $(seq 0 $((MATCHING_COUNT - 1))); do
-        start_app "$(matching_label "$MATCHING_COUNT" "$index")" "${common_args}$(matching_args "$MATCHING_COUNT" "$index")" matching-worker
+        start_app "$(matching_label "$MATCHING_COUNT" "$index" "$MATCHING_POOL_COUNT")" "${common_args}$(matching_args "$MATCHING_COUNT" "$index" "$MATCHING_POOL_COUNT")" matching-worker
     done
 }
 
@@ -101,7 +107,7 @@ shard_args_fill() {
 E2E_RESULTS_ABS="$(pwd)/loadtest/results"
 
 # 매칭 shard 가 둘 이상이면 앱을 띄우기 전에 맵 토픽을 지워, 직전 실행이 남긴 값이 「배정 완료」로 읽히지 않게 한다.
-if [ "$MATCHING_COUNT" != "1" ]; then
+if [ "$MATCHING_POOL_COUNT" != "1" ]; then
     reset_matching_map_topic || exit 1
 fi
 
@@ -147,7 +153,7 @@ fi
 
 # 매칭 shard 가 둘 이상이면 종목 slot 64개의 주소가 맵 토픽에 모두 올라온 뒤에 READY 를 낸다(부하는 READY 뒤에 시작한다).
 # 제한 시간을 넘기면 주인 없는 종목 slot 번호를 출력하고 끝낸다.
-if [ "$MATCHING_COUNT" != "1" ]; then
+if [ "$MATCHING_POOL_COUNT" != "1" ]; then
     await_matching_slots_assigned "${MATCHING_STOCK_SLOT_COUNT:-64}" "$MATCHING_ASSIGN_TIMEOUT" "$MATCHING_COUNT" || exit 1
 fi
 

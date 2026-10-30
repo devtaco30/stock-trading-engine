@@ -253,6 +253,76 @@ test_run_script_uses_plan() {
     assert_contains "모든 입구 포트를 기다린다" "$script" "matching_intake_ports"
 }
 
+# --- H9: 실행 중 증설. 시작 shard는 증설할 shard의 입구 주소까지 포함한 풀로 떠야 한다 ---
+test_expansion_pool() {
+    local a b new
+    # 풀은 기동 때 고정이고(HandoverRequester·Responder 생성자가 풀의 peer마다 Publication을 연다), 풀에 없는 주소가 맵에 나오면 멈춘다.
+    a="$(matching_args 1 0 2)"
+    assert_contains "shard 1개로 시작해도 증설하면 조정 모드" "$a" "--matching-shard.coordination.enabled=true"
+    assert_contains "시작 shard의 풀에 증설할 shard 주소가 있다" "$a" "--matching-shard.handover.endpoints[1]=aeron:udp?endpoint=localhost:20021"
+    assert_eq "증설하는 경우 라벨에 순번이 붙는다" "matching-worker-0" "$(matching_label 1 0 2)"
+    b="$(matching_args 2 1 3)"
+    assert_contains "시작 shard 1의 풀에 증설 shard(2)" "$b" "--matching-shard.handover.endpoints[2]=aeron:udp?endpoint=localhost:20022"
+    assert_not_contains "풀은 증설 뒤 개수까지만" "$b" "handover.endpoints[3]"
+    new="$(matching_args 3 2)"
+    assert_contains "증설 shard의 신원" "$new" "--matching-worker.instance-id=matching-2"
+    assert_contains "증설 shard의 입구" "$new" "--transport.matching-intake.channel=aeron:udp?endpoint=localhost:20022"
+    assert_eq "증설 shard의 풀은 시작 shard의 풀과 같다" \
+        "$(printf '%s' "$b" | grep -o 'handover.endpoints\[[0-9]*\]=[^ ]*' | sort)" \
+        "$(printf '%s' "$new" | grep -o 'handover.endpoints\[[0-9]*\]=[^ ]*' | sort)"
+    assert_eq "증설이 없으면 풀 개수는 시작 개수" "2" "$(unset MATCHING_EXPAND_AT_SEC; matching_pool_count 2)"
+    assert_eq "증설이 있으면 풀 개수는 시작 개수 + 1" "3" "$(MATCHING_EXPAND_AT_SEC=30 matching_pool_count 2)"
+}
+
+test_expansion_validation() {
+    matching_expansion_valid 2 30 2> /dev/null
+    assert_eq "시작 2개, 30초 뒤 증설 허용" "0" "$?"
+    local start delay
+    for start in 0 8 abc ""; do
+        matching_expansion_valid "$start" 30 2> /dev/null
+        assert_eq "시작 shard 수 [${start}] 거부" "1" "$?"
+    done
+    for delay in 0 -5 abc ""; do
+        matching_expansion_valid 2 "$delay" 2> /dev/null
+        assert_eq "증설 시각 [${delay}] 거부" "1" "$?"
+    done
+    matching_expansion_valid 7 10 2> /dev/null
+    assert_eq "시작 7개면 8번째까지 증설 허용" "0" "$?"
+}
+
+test_await_shard_address() {
+    local dir out A B
+    dir="$(mktemp -d)"
+    A="aeron:udp?endpoint=localhost:20020"
+    B="aeron:udp?endpoint=localhost:20021"
+    matching_assigned_map() {
+        local calls
+        calls=$(( $(cat "${dir}/calls" 2> /dev/null || echo 0) + 1 ))
+        echo "$calls" > "${dir}/calls"
+        if [ "$calls" -lt 3 ]; then cat "${dir}/first"; else cat "${dir}/second"; fi
+    }
+    map_lines 0 63 "$A" > "${dir}/first"
+    { map_lines 0 31 "$A"; map_lines 32 63 "$B"; } > "${dir}/second"
+    out="$(MATCHING_ASSIGN_POLL_SEC=0 await_matching_shard_address "$B" 5 2>&1)"
+    assert_eq "새 주소가 맵에 올라오면 성공" "0" "$?"
+    assert_contains "올라온 시각(epoch ms)을 출력" "$out" "EXPANSION_ADDRESS_SEEN_AT_MS="
+    echo 0 > "${dir}/calls"
+    map_lines 0 63 "$A" > "${dir}/second"
+    MATCHING_ASSIGN_POLL_SEC=1 await_matching_shard_address "$B" 2 > /dev/null 2>&1
+    assert_eq "끝내 안 올라오면 실패" "1" "$?"
+    unset -f matching_assigned_map
+    rm -rf "$dir"
+}
+
+test_expand_script() {
+    local script
+    script="$(cat loadtest/expand-matching.sh 2> /dev/null)"
+    assert_contains "증설 검사" "$script" "matching_expansion_valid"
+    assert_contains "증설 shard의 인자" "$script" 'matching_args "$((MATCHING_COUNT + 1))" "$MATCHING_COUNT"'
+    assert_contains "대기 뒤에 띄운다" "$script" 'sleep "$MATCHING_EXPAND_AT_SEC"'
+    assert_contains "새 주소가 맵에 올라온 시각을 기록" "$script" "await_matching_shard_address"
+}
+
 test_count_validation
 test_default_args_unchanged
 test_two_shards_args
@@ -264,6 +334,10 @@ test_parse_map_dump
 test_reset_map_topic
 test_stop_includes_matching_shard_pids
 test_run_script_uses_plan
+test_expansion_pool
+test_expansion_validation
+test_await_shard_address
+test_expand_script
 
 echo "통과 ${PASSES}, 실패 ${FAILS}"
 [ "$FAILS" -eq 0 ]

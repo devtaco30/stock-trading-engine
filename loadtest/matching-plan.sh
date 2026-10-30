@@ -29,9 +29,9 @@ matching_control_port() { echo $((MATCHING_CONTROL_BASE_PORT + $1)); }
 matching_instance_id() { echo "matching-$1"; }
 matching_intake_endpoint() { echo "aeron:udp?endpoint=localhost:$(matching_intake_port "$1")"; }
 
-# pid·로그 파일 라벨. 1개일 때는 기존 이름을 그대로 쓴다.
+# pid·로그 파일 라벨. 1개이고 증설도 없을 때만 기존 이름을 그대로 쓴다. $3=풀 개수(기본은 $1).
 matching_label() {
-    if [ "$1" = "1" ]; then
+    if [ "${3:-$1}" = "1" ]; then
         echo "matching-worker"
     else
         echo "matching-worker-$2"
@@ -56,11 +56,35 @@ matching_endpoint_pool() {
     echo "$out"
 }
 
-# shard 하나의 추가 기동 인자. 1개면 빈 문자열(기본 application-udp.yml 값 그대로).
-# 서버 번호는 신원(matching-<순번>)에서 계산되므로 따로 주지 않는다.
+# 호가창 이동 주소 풀에 넣을 주소 개수. 증설(MATCHING_EXPAND_AT_SEC)이 있으면 증설할 shard의 입구 주소까지 시작 때부터 넣는다.
+# 풀은 기동 때 고정이다: HandoverRequester·HandoverResponder 생성자가 풀의 peer마다 Publication을 열고, 풀에 없는 주소가 맵에 나오면
+# HandoverEndpointPool.requireInPool 이 예외로 멈춘다. 아직 뜨지 않은 상대가 풀에 있는 것은 허용된다(2 shard 실제 기동에서 확인).
+matching_pool_count() {
+    if [ -n "${MATCHING_EXPAND_AT_SEC:-}" ]; then
+        echo $(($1 + 1))
+    else
+        echo "$1"
+    fi
+}
+
+# 실행 중 증설(H9) 인자 검사. $1=시작 shard 수(1~7, 증설 뒤 8개 이하), $2=증설 시각(부하 시작 뒤 몇 초, 1 이상 정수).
+# 증설 시각의 값은 정해지지 않았다. 호출하는 쪽이 정해서 넘긴다.
+matching_expansion_valid() {
+    case "${1:-}" in
+        [1-7]) ;;
+        *) echo "증설하려면 시작 shard 수는 1~7이어야 한다 (받은 값: ${1:-})" >&2; return 1 ;;
+    esac
+    case "${2:-}" in
+        ""|*[!0-9]*|0) echo "증설 시각은 1 이상의 정수(초)여야 한다 (받은 값: ${2:-})" >&2; return 1 ;;
+    esac
+    return 0
+}
+
+# shard 하나의 추가 기동 인자. 1개이고 증설도 없으면 빈 문자열(기본 application-udp.yml 값 그대로).
+# 서버 번호는 신원(matching-<순번>)에서 계산되므로 따로 주지 않는다. $3=풀 개수(기본은 $1).
 matching_args() {
-    local count="$1" index="$2" i
-    if [ "$count" = "1" ]; then
+    local count="$1" index="$2" pool="${3:-$1}" i
+    if [ "$count" = "1" ] && [ "$pool" = "1" ]; then
         return 0
     fi
     local archive_root="${MATCHING_ARCHIVE_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/loadtest/archives}"
@@ -69,7 +93,7 @@ matching_args() {
     printf -- ' --transport.matching-intake.channel=%s' "$(matching_intake_endpoint "$index")"
     printf -- ' --matching.worker.archive.control-channel=aeron:udp?endpoint=localhost:%s' "$(matching_control_port "$index")"
     printf -- ' --matching.worker.archive-dir=%s/matching-%s' "$archive_root" "$index"
-    for i in $(seq 0 $((count - 1))); do
+    for i in $(seq 0 $((pool - 1))); do
         printf -- ' --matching-shard.handover.endpoints[%s]=%s' "$i" "$(matching_intake_endpoint "$i")"
     done
 }
@@ -144,6 +168,25 @@ await_matching_slots_assigned() {
         if [ $((SECONDS - start)) -ge "$timeout" ]; then
             [ -n "$missing" ] && echo "제한 시간 ${timeout}초 안에 배정이 끝나지 않았다 — 주인 없는 종목 slot: ${missing}" >&2
             [ "$addresses" != "$shard_count" ] && echo "제한 시간 ${timeout}초 안에 shard가 다 모이지 않았다 — 서로 다른 주소 ${addresses}개, 기대 ${shard_count}개" >&2
+            return 1
+        fi
+        sleep "$poll"
+    done
+}
+
+# 맵 토픽에 주소 $1이 평상시 값으로 올라올 때까지 기다린다(증설한 shard가 종목 slot을 받은 시각 기록용).
+# $2=제한 시간(초). 올라오면 `EXPANSION_ADDRESS_SEEN_AT_MS=<epoch ms>`를 출력하고 0, 제한 시간을 넘기면 1.
+# 시각은 poll 간격(MATCHING_ASSIGN_POLL_SEC)과 맵 덤프 시간만큼 늦게 찍힌다.
+await_matching_shard_address() {
+    local address="$1" timeout="$2" start=$SECONDS
+    local poll="${MATCHING_ASSIGN_POLL_SEC:-2}"
+    while :; do
+        if matching_assigned_map | cut -f2 | grep -qxF -- "$address"; then
+            echo "EXPANSION_ADDRESS_SEEN_AT_MS=$(python3 -I -c 'import time; print(int(time.time()*1000))')"
+            return 0
+        fi
+        if [ $((SECONDS - start)) -ge "$timeout" ]; then
+            echo "제한 시간 ${timeout}초 안에 맵 토픽에 ${address} 가 올라오지 않았다" >&2
             return 1
         fi
         sleep "$poll"
