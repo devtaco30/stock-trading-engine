@@ -106,6 +106,8 @@ public class AccountEngine {
     private volatile RingBuffer<AccountEvent> ringBuffer;
     // 빈 칸이 없어 발행이 기다린 횟수(발행 thread가 여럿일 수 있어 LongAdder).
     private final java.util.concurrent.atomic.LongAdder ringFullWaitCount = new java.util.concurrent.atomic.LongAdder();
+    // 빈 칸이 없어 발행이 기다린 총 시간(나노초). 기다린 횟수는 기다린 에피소드 수라 얼마나 오래 막혔는지는 이 값으로 본다.
+    private final java.util.concurrent.atomic.LongAdder ringFullWaitNanos = new java.util.concurrent.atomic.LongAdder();
 
     /**
      * @param nodeId orderId 발급기(2b-0, {@link AccountOrderIdGenerator})의 노드 구분자. 카운터는
@@ -409,6 +411,11 @@ public class AccountEngine {
         return ringFullWaitCount.sum();
     }
 
+    /** 빈 칸이 없어 발행이 기다린 총 시간(나노초, 누적). {@link #ringFullWaitCount()}가 센 에피소드마다 기다린 시간의 합이다. */
+    public long ringFullWaitNanos() {
+        return ringFullWaitNanos.sum();
+    }
+
     /**
      * 링버퍼 칸 하나를 얻는다. 빈 칸이 없으면 기다린 발행 한 번으로 세고 칸이 날 때까지 기다린다. {@code tryNext()}는 칸이 있을 때 {@code next()}와 같은 비용이라
      * 평상시 발행 경로에 호출이 늘지 않는다. 읽는 순간의 남은 칸 수는 짧게 0에 닿았다 풀린 구간을 주기 표본이 놓치므로, 그 구간은 이 누적 횟수로 본다.
@@ -418,17 +425,22 @@ public class AccountEngine {
             return ringBuffer.tryNext();
         } catch (InsufficientCapacityException full) {
             ringFullWaitCount.increment();
-            return ringBuffer.next();
+            long waitStartNanos = System.nanoTime();
+            long sequence = ringBuffer.next();
+            ringFullWaitNanos.add(System.nanoTime() - waitStartNanos);
+            return sequence;
         }
     }
 
     /**
-     * 링버퍼에 남은 빈 칸 수(계측용, 12-3절 2번 표의 3단계). 시작 전에는 링버퍼가 없어 -1이다. 어느 thread에서 읽어도 되고 읽는 순간의 근삿값이다.
+     * 링버퍼에 남은 빈 칸 수(계측용, 12-3절 2번 표의 3단계). 시작 전에는 링버퍼가 없어 -1이고, 가득 차면 0이다. 어느 thread에서 읽어도 되고 읽는 순간의 근삿값이다.
      * 용량에 가까울수록 소비자가 따라가고 있고, 0에 닿으면 발행하는 thread가 빈 칸을 기다린다.
      */
     public long ringBufferRemainingCapacity() {
         RingBuffer<AccountEvent> buffer = ringBuffer;
-        return buffer == null ? -1L : buffer.remainingCapacity();
+        // MULTI 생산자의 remainingCapacity()는 소비 위치를 먼저 읽고 생산 위치를 다시 읽어, 가득 찬 근처에서 생산자가 한 칸 더 잡으면 음수(-1)를 낸다.
+        // 그 값은 「가득 참」이므로 0으로 맞춰 「시작 전」(-1)과 겹치지 않게 한다.
+        return buffer == null ? -1L : Math.max(0L, buffer.remainingCapacity());
     }
 
     /** 소비자 스레드를 기동하고 링버퍼를 준비한다. */

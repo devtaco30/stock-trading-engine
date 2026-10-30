@@ -35,14 +35,17 @@ public class AccountEngineMetricsReporter implements AutoCloseable {
             backPressure = aeronJournal.offerBackPressureCount();
             otherRetries = aeronJournal.offerOtherRetryCount();
         }
-        return new AccountEngineMetrics(engine.ringBufferRemainingCapacity(), engine.ringFullWaitCount(), backPressure, otherRetries);
+        return new AccountEngineMetrics(engine.ringBufferRemainingCapacity(), engine.ringFullWaitCount(), engine.ringFullWaitNanos(), backPressure,
+            otherRetries);
     }
 
     /** 누적 값은 구간 증가분으로, 남은 칸은 현재 값으로 한 줄을 만든다. */
     static String formatLine(AccountEngineMetrics previous, AccountEngineMetrics current) {
-        return String.format("account-engine ringRemaining=%d ringFullWaits=%d journalBackPressure=%d journalOtherRetries=%d",
+        return String.format(java.util.Locale.ROOT,
+            "account-engine ringRemaining=%d ringFullWaits=%d ringFullWaitMs=%.1f journalBackPressure=%d journalOtherRetries=%d",
             current.ringRemaining(),
             current.ringFullWaits() - previous.ringFullWaits(),
+            (current.ringFullWaitNanos() - previous.ringFullWaitNanos()) / 1_000_000.0,
             current.journalBackPressure() - previous.journalBackPressure(),
             current.journalOtherRetries() - previous.journalOtherRetries());
     }

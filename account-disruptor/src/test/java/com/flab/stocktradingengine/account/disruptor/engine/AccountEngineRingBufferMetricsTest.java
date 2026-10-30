@@ -53,6 +53,7 @@ class AccountEngineRingBufferMetricsTest {
             }
             assertEquals(0L, engine.ringFullWaitCount(), "칸이 남아 있는 동안은 기다리지 않는다");
             assertEquals(0L, engine.ringBufferRemainingCapacity(), "엔진 thread가 첫 건에서 막혀 네 건이 소비되지 않았고 링버퍼 네 칸이 가득 찼다");
+            assertEquals(0L, engine.ringFullWaitNanos(), "기다린 적이 없으면 시간도 0이다");
 
             java.util.concurrent.CompletableFuture<Void> blockedPublish = java.util.concurrent.CompletableFuture.runAsync(
                 () -> engine.publishBuy(1L, "005930", new java.math.BigDecimal("10000"), 1, "r4"));
@@ -62,10 +63,13 @@ class AccountEngineRingBufferMetricsTest {
             }
             assertEquals(1L, engine.ringFullWaitCount(), "빈 칸이 없어 기다린 발행 한 번을 센다");
             assertFalse(blockedPublish.isDone(), "발행은 칸이 날 때까지 기다린다");
+            Thread.sleep(150);
 
             release.countDown();
             blockedPublish.get(5, java.util.concurrent.TimeUnit.SECONDS);
             assertEquals(1L, engine.ringFullWaitCount(), "기다린 뒤 성공한 발행도 한 번으로 센다");
+            assertTrue(engine.ringFullWaitNanos() >= 50_000_000L,
+                "막혀서 기다린 총 시간을 센다(발행이 막힌 뒤 풀리기까지 최소 수십 ms): " + engine.ringFullWaitNanos() + "ns");
         } finally {
             release.countDown();
             engine.shutdown();
