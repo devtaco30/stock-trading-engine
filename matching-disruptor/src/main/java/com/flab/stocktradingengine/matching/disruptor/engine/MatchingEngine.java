@@ -93,7 +93,7 @@ public class MatchingEngine {
     private final StockSlotHasher stockSlotHasher;
     private final SlotEventListener slotEventListener;
     private final AcquireConfirmations acquireConfirmations;
-    private RingBuffer<OrderEvent> ringBuffer;
+    private volatile RingBuffer<OrderEvent> ringBuffer;
     private final MatchingSegmentStages stages;
 
     /**
@@ -178,6 +178,15 @@ public class MatchingEngine {
     /** 기본 대기 전략({@link BlockingWaitStrategy}) + 기본 저널({@link InMemoryJournal})로 생성한다. */
     public MatchingEngine(int bufferSize, MatchListener listener) {
         this(bufferSize, new BlockingWaitStrategy(), listener);
+    }
+
+    /**
+     * 링버퍼에 남은 빈 칸 수(계측용, 12-3절 2번 표의 7단계). 시작 전에는 링버퍼가 없어 -1이다. 어느 thread에서 읽어도 되고 읽는 순간의 근삿값이다.
+     * 용량에 가까울수록 소비자가 따라가고 있고, 0에 닿으면 발행하는 thread가 빈 칸을 기다린다.
+     */
+    public long ringBufferRemainingCapacity() {
+        RingBuffer<OrderEvent> buffer = ringBuffer;
+        return buffer == null ? -1L : buffer.remainingCapacity();
     }
 
     /** 소비자 스레드를 기동하고 링버퍼를 준비한다. */
