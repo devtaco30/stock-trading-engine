@@ -6,7 +6,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -20,20 +19,17 @@ import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.MemberToRemove;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.RemoveMembersFromConsumerGroupOptions;
-import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.IntegerSerializer;
-import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import com.flab.stocktradingengine.matching.worker.testsupport.MapTopicHistory;
 
 /**
  * 실제 Kafka 브로커에 붙어 {@link KafkaMatchingShardAssignment}가 컨슈머 그룹 배정을 종목 slot 판정과
@@ -226,28 +222,8 @@ class KafkaMatchingShardAssignmentIntegrationTest {
         return props;
     }
 
-    /** 맵 토픽을 처음부터 끝까지 읽어 종목 slot별로 쌓인 값을 순서대로 모은다(tombstone은 null). */
     private Map<Integer, List<String>> readMapTopicHistory() {
-        Properties props = new Properties();
-        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, BOOTSTRAP);
-        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
-        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
-        Map<Integer, List<String>> history = new HashMap<>();
-        TopicPartition partition = new TopicPartition(mapTopic, 0);
-        try (KafkaConsumer<byte[], String> reader = new KafkaConsumer<>(props,
-            new org.apache.kafka.common.serialization.ByteArrayDeserializer(), new StringDeserializer())) {
-            reader.assign(List.of(partition));
-            reader.seekToBeginning(List.of(partition));
-            long endOffset = reader.endOffsets(List.of(partition)).get(partition);
-            while (reader.position(partition) < endOffset) {
-                ConsumerRecords<byte[], String> records = reader.poll(Duration.ofMillis(500));
-                for (ConsumerRecord<byte[], String> record : records) {
-                    int slot = java.nio.ByteBuffer.wrap(record.key()).getInt();
-                    history.computeIfAbsent(slot, key -> new ArrayList<>()).add(record.value());
-                }
-            }
-        }
-        return history;
+        return MapTopicHistory.read(BOOTSTRAP, mapTopic);
     }
 
     /** 담당 표시는 맵 토픽 발행보다 먼저 켜지므로, 발행이 조건을 채울 때까지 맵 토픽을 다시 읽는다. */
