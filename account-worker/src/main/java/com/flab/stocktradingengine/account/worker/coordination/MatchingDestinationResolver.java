@@ -334,7 +334,13 @@ public final class MatchingDestinationResolver implements MatchingTargetLookup {
                 continue;
             }
             try {
-                updated[slot] = MatchingSlotTarget.parse(record.value());
+                MatchingSlotTarget parsed = MatchingSlotTarget.parse(record.value());
+                updated[slot] = parsed;
+                if (parsed.moving()) {
+                    // 이동 중 값은 종목 slot이 옮겨질 때 slot마다 한 번 올라오므로 slot 수 이내의 줄만 남는다. 시험이 「이동 중 표시 구간」을
+                    // Kafka 기록 시각이 아니라 이 계좌 shard가 표시를 읽은 시각으로 다시 잴 때 쓴다.
+                    log.log(Level.INFO, "[목적지] 이동 중 표시를 읽음: slot=" + slot + " 시각(epoch ms)=" + System.currentTimeMillis());
+                }
             } catch (IllegalArgumentException e) {
                 // 형식이 깨진 값 하나 때문에 나머지 배정까지 잃지 않는다. 그 종목 slot만 목적지 없음으로
                 // 둔다.

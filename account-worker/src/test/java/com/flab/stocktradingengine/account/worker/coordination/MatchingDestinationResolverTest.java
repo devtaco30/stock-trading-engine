@@ -465,6 +465,53 @@ class MatchingDestinationResolverTest {
         assertEquals(Optional.of(new MatchingSlotTarget(ADDRESS_A, true)), resolver.targetFor(stockCode));
     }
 
+    @Test
+    void 이동_중_표시를_읽으면_그_종목_slot과_읽은_시각을_INFO_한_줄로_남기고_평상시_값은_남기지_않는다() {
+        String movingStock = "005930";
+        String normalStock = stockInDifferentSlot(movingStock);
+        int movingSlot = stockSlotHasher.slotFor(movingStock);
+        List<String> infoMessages = new ArrayList<>();
+        java.util.logging.Logger julLogger = java.util.logging.Logger.getLogger(MatchingDestinationResolver.class.getName());
+        Handler captureHandler = new Handler() {
+            @Override
+            public void publish(LogRecord logRecord) {
+                synchronized (infoMessages) {
+                    infoMessages.add(logRecord.getMessage());
+                }
+            }
+
+            @Override
+            public void flush() {
+            }
+
+            @Override
+            public void close() {
+            }
+        };
+        julLogger.addHandler(captureHandler);
+        long before = System.currentTimeMillis();
+        try {
+            resolver.start();
+            publish(stockSlotHasher.slotFor(normalStock), ADDRESS_B);
+            awaitEndpoint(normalStock, Optional.of(ADDRESS_B));
+            publish(movingSlot, ADDRESS_A + ";moving");
+            awaitEndpoint(movingStock, Optional.of(ADDRESS_A));
+            long after = System.currentTimeMillis();
+
+            List<String> movingLines;
+            synchronized (infoMessages) {
+                movingLines = infoMessages.stream().filter(message -> message.contains("이동 중 표시를 읽음")).toList();
+            }
+            assertEquals(1, movingLines.size(), movingLines.toString());
+            String line = movingLines.get(0);
+            assertTrue(line.contains("slot=" + movingSlot + " "), line);
+            long readAt = Long.parseLong(line.replaceAll(".*시각\\(epoch ms\\)=(\\d+).*", "$1"));
+            assertTrue(readAt >= before && readAt <= after, "읽은 시각은 반영 직전·직후 사이다: " + readAt);
+        } finally {
+            julLogger.removeHandler(captureHandler);
+        }
+    }
+
     // ---- 헬퍼 ----
 
     private String stockInDifferentSlot(String stockCode) {
