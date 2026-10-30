@@ -73,6 +73,8 @@ class FillOutbox {
     // 큐가 가득 차 enqueue가 기다린 횟수(기다리기 시작한 호출 수)와 그 총 시간. 쓰는 thread는 매칭 소비자 하나다.
     private volatile long enqueueWaitCount;
     private volatile long enqueueWaitNanos;
+    // 지금 기다리는 중이면 기다리기 시작한 시각(System.nanoTime), 아니면 0. 읽는 쪽이 진행 중인 대기 시간을 볼 수 있게 한다.
+    private volatile long enqueueWaitStartedAtNanos;
 
     FillOutbox(String endpoint, ExclusivePublication publication, FillCodec codec) {
         this(endpoint, publication, codec, new StageLatencyRegistry(false));
@@ -104,6 +106,7 @@ class FillOutbox {
         }
         enqueueWaitCount++;
         long waitStartedAtNanos = System.nanoTime();
+        enqueueWaitStartedAtNanos = waitStartedAtNanos;
         enqueueIdleStrategy.reset();
         try {
             while (!queue.offer(trade)) {
@@ -112,6 +115,7 @@ class FillOutbox {
             }
         } finally {
             enqueueWaitNanos += System.nanoTime() - waitStartedAtNanos;
+            enqueueWaitStartedAtNanos = 0L;
         }
     }
 
@@ -125,8 +129,15 @@ class FillOutbox {
         return enqueueWaitCount;
     }
 
+    /** 끝난 대기의 총 시간. 지금 기다리는 중인 시간은 {@link #currentEnqueueWaitNanos}로 읽는다. */
     long enqueueWaitNanos() {
         return enqueueWaitNanos;
+    }
+
+    /** 지금 기다리는 중이면 그 대기가 시작된 뒤 지난 시간, 기다리는 중이 아니면 0. */
+    long currentEnqueueWaitNanos() {
+        long startedAt = enqueueWaitStartedAtNanos;
+        return startedAt == 0L ? 0L : System.nanoTime() - startedAt;
     }
 
     private void throwIfFatal() {

@@ -24,19 +24,24 @@ import io.aeron.Publication;
 class AeronArchiveMatchingJournalMetricsTest {
 
     @Test
-    void offer가_밀려_다시_시도한_횟수를_센다() {
+    void offer가_밀린_횟수는_종류별로_센다() {
+        // BACK_PRESSURED는 소비가 늦다는 신호다. ADMIN_ACTION(term 교체)과 NOT_CONNECTED는 소비가 밀리지 않아도 나올 수 있어 따로 센다.
         ExclusivePublication publication = mock(ExclusivePublication.class);
         when(publication.offer(any(DirectBuffer.class), anyInt(), anyInt()))
-            .thenReturn(Publication.BACK_PRESSURED, Publication.BACK_PRESSURED, Publication.ADMIN_ACTION, 100L, 200L);
+            .thenReturn(Publication.BACK_PRESSURED, Publication.BACK_PRESSURED, Publication.ADMIN_ACTION,
+                Publication.NOT_CONNECTED, 100L, 200L);
         AeronArchiveMatchingJournal journal = new AeronArchiveMatchingJournal(publication);
-        assertThat(journal.offerRetryCount()).isZero();
+        assertThat(journal.offerBackPressureCount()).isZero();
+        assertThat(journal.offerOtherRetryCount()).isZero();
 
         journal.append(order(1L));
-        assertThat(journal.offerRetryCount()).as("첫 주문은 offer가 세 번 되돌아온 뒤 성공했다").isEqualTo(3);
+        assertThat(journal.offerBackPressureCount()).as("BACK_PRESSURED가 두 번").isEqualTo(2);
+        assertThat(journal.offerOtherRetryCount()).as("ADMIN_ACTION과 NOT_CONNECTED").isEqualTo(2);
 
         journal.append(order(2L));
         journal.append(order(3L));
-        assertThat(journal.offerRetryCount()).as("다시 시도하지 않은 주문은 횟수를 늘리지 않는다").isEqualTo(3);
+        assertThat(journal.offerBackPressureCount()).as("다시 시도하지 않은 주문은 횟수를 늘리지 않는다").isEqualTo(2);
+        assertThat(journal.offerOtherRetryCount()).isEqualTo(2);
     }
 
     private JournaledOrder order(long orderId) {

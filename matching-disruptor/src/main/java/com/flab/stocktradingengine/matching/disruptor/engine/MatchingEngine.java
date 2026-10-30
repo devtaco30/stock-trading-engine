@@ -180,6 +180,25 @@ public class MatchingEngine {
         this(bufferSize, new BlockingWaitStrategy(), listener);
     }
 
+    private final java.util.concurrent.atomic.LongAdder ringFullWaitCount = new java.util.concurrent.atomic.LongAdder();
+
+    /**
+     * 링버퍼 칸을 예약한다. 빈 칸이 없으면 기다린 호출 수를 하나 올리고 {@code next()}로 기다린다. 평상시 경로는 {@code tryNext()} 한 번이라 호출이 늘지 않는다.
+     */
+    private long claimNext() {
+        try {
+            return ringBuffer.tryNext();
+        } catch (com.lmax.disruptor.InsufficientCapacityException e) {
+            ringFullWaitCount.increment();
+            return ringBuffer.next();
+        }
+    }
+
+    /** 빈 칸이 없어 발행 호출이 기다린 누적 횟수(발행 호출 단위, 시간이 아니다). 짧게 0에 닿았다 풀린 구간도 남는다. */
+    public long ringFullWaitCount() {
+        return ringFullWaitCount.sum();
+    }
+
     /**
      * 링버퍼에 남은 빈 칸 수(계측용, 12-3절 2번 표의 7단계). 시작 전에는 링버퍼가 없어 -1이다. 어느 thread에서 읽어도 되고 읽는 순간의 근삿값이다.
      * 용량에 가까울수록 소비자가 따라가고 있고, 0에 닿으면 발행하는 thread가 빈 칸을 기다린다.
@@ -385,7 +404,7 @@ public class MatchingEngine {
                              OrderSide side, BigDecimal price, int quantity, Instant orderAt,
                              long sourcePosition, int sourceSessionId,
                              long originNanos, long receivedAtNanos, long acceptedAtNanos, long matchReceivedAtNanos) {
-        long sequence = ringBuffer.next();
+        long sequence = claimNext();
         try {
             OrderEvent event = ringBuffer.get(sequence);
             event.setPlace(orderId, accountId, stockCode, side, price, quantity, orderAt, sourcePosition, sourceSessionId);
@@ -404,7 +423,7 @@ public class MatchingEngine {
      * 발행자는 주문 수신 폴링 thread 하나뿐이라 단일 프로듀서 전제가 유지된다.
      */
     public void publishPositionOnly(int sourceSessionId, long sourcePosition) {
-        long sequence = ringBuffer.next();
+        long sequence = claimNext();
         try {
             OrderEvent event = ringBuffer.get(sequence);
             event.setPositionOnly(sourcePosition, sourceSessionId);
@@ -435,7 +454,7 @@ public class MatchingEngine {
      * {@link SlotEventListener#onBooksLoadedDurable}가 {@link #pollLoadCompletions}를 부른 thread에서 불린다.
      */
     public void publishBookLoad(long transferId, int stockSlot, List<byte[]> bookBytesPerStock) {
-        long sequence = ringBuffer.next();
+        long sequence = claimNext();
         try {
             OrderEvent event = ringBuffer.get(sequence);
             event.setBookLoad(transferId, stockSlot, bookBytesPerStock);
@@ -449,7 +468,7 @@ public class MatchingEngine {
      * 불러야 한다. 저널에는 기록하지 않는다.
      */
     public void publishSlotCleanup(int stockSlot) {
-        long sequence = ringBuffer.next();
+        long sequence = claimNext();
         try {
             ringBuffer.get(sequence).setSlotCleanup(stockSlot);
         } finally {
@@ -469,7 +488,7 @@ public class MatchingEngine {
             handled += acquireConfirmations.confirmRecorded(slotEventListener);
         }
         if (matchingEventHandler.claimForceSnapshotRetry()) {
-            long sequence = ringBuffer.next();
+            long sequence = claimNext();
             try {
                 ringBuffer.get(sequence).setForceSnapshot();
             } finally {
@@ -481,7 +500,7 @@ public class MatchingEngine {
     }
 
     private void publishSlotEvent(EventType slotEventType, int stockSlot) {
-        long sequence = ringBuffer.next();
+        long sequence = claimNext();
         try {
             OrderEvent event = ringBuffer.get(sequence);
             event.setSlotEvent(slotEventType, stockSlot);
@@ -497,7 +516,7 @@ public class MatchingEngine {
 
     /** 주문 취소를 링버퍼에 발행한다. */
     public void publishCancel(long orderId, String stockCode) {
-        long sequence = ringBuffer.next();
+        long sequence = claimNext();
         try {
             OrderEvent event = ringBuffer.get(sequence);
             event.setCancel(orderId, stockCode);

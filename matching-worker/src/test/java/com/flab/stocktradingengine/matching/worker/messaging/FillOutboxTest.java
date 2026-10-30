@@ -123,6 +123,8 @@ class FillOutboxTest {
         }
         assertThat(outbox.enqueueWaitCount()).as("가득 찬 큐에 넣으려고 기다리기 시작한 횟수").isEqualTo(1);
 
+        assertThat(outbox.currentEnqueueWaitNanos()).as("기다리는 중에는 진행 중인 대기 시간이 보인다").isPositive();
+
         outbox.start();
         blockedProducer.join(3000);
         outbox.close(5000);
@@ -130,6 +132,7 @@ class FillOutboxTest {
         assertThat(blockedProducer.isAlive()).isFalse();
         assertThat(outbox.enqueueWaitNanos()).as("기다린 총 시간").isPositive();
         assertThat(outbox.queueDepth()).isZero();
+        assertThat(outbox.currentEnqueueWaitNanos()).as("기다림이 끝나면 진행 중인 대기는 없다").isZero();
     }
 
     private FilledTrade sampleTrade(long seed) {
