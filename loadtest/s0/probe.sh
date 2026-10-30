@@ -4,6 +4,7 @@ set -uo pipefail
 # 사용: ACCTS=<계좌 수> loadtest/s0/probe.sh <종목당 주문 수> [송신 뒤 대기 초]   (시험 잠금 안에서 실행)
 # 전제: 이 저장소 작업 트리에 loadtest/s0/u10tool-bulk-accounts-and-drain.patch를 적용한 상태여야 한다
 #   (패치는 ab6b667 기준이라 그 뒤 바뀐 U10Tool에는 손으로 합쳐야 할 수 있다. account-worker의 U10Tool에 BULK_ACCOUNTS와 송신 완료 대기를 더하는 변경. U10Tool은 ec 소관이라 이 커밋은 패치 파일만 둔다).
+# 송신 완료 확인은 U10Tool의 SENDER_POSITION_REACHED / _NOT_REACHED(종료 코드 3) / _COUNTER_NOT_FOUND(종료 코드 4) 출력을 따른다(ec의 00be543 방식). 패치의 DRAINED 줄은 쓰지 않는다.
 # 자체 Kafka(도커, 19092)와 /tmp/probe 아래 작업 폴더를 쓰고 끝나면 정리한다.
 cd "$(dirname "$0")/../.."
 N=${1:?}
@@ -49,7 +50,7 @@ echo "MP=$MP AP=$AP"; echo "$MP $AP" > $W/jvm
  done
 ) & SAMP=$!
 date +%s.%N > $W/send-start
-./gradlew --offline -q :account-worker:u10Tool -Pu10Args="send-bulk aeron:udp?endpoint=localhost:20040 90002 SELL 20000 $N probe $STOCKS" 2>&1 | grep -E "SENT_BULK|OFFER_FAILED|NOT_CONNECTED"
+./gradlew --offline -q :account-worker:u10Tool -Pu10Args="send-bulk aeron:udp?endpoint=localhost:20040 90002 SELL 20000 $N probe $STOCKS" 2>&1 | grep -E "SENT_BULK|OFFER_FAILED|NOT_CONNECTED|SENDER_POSITION"
 date +%s.%N > $W/send-end
 sleep ${2:-20}; date +%s.%N > $W/settle-end
 kill $SAMP 2>/dev/null
