@@ -9,6 +9,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.IntPredicate;
 
 import com.lmax.disruptor.BlockingWaitStrategy;
+import com.lmax.disruptor.InsufficientCapacityException;
 import com.lmax.disruptor.RingBuffer;
 import com.lmax.disruptor.TimeoutException;
 import com.lmax.disruptor.WaitStrategy;
@@ -103,6 +104,8 @@ public class AccountEngine {
     private final MatchingOrderSender matchingOrderSender;
     private final AccountOrderIdGenerator orderIdGenerator;
     private volatile RingBuffer<AccountEvent> ringBuffer;
+    // 빈 칸이 없어 발행이 기다린 횟수(발행 thread가 여럿일 수 있어 LongAdder).
+    private final java.util.concurrent.atomic.LongAdder ringFullWaitCount = new java.util.concurrent.atomic.LongAdder();
 
     /**
      * @param nodeId orderId 발급기(2b-0, {@link AccountOrderIdGenerator})의 노드 구분자. 카운터는
@@ -401,6 +404,24 @@ public class AccountEngine {
         }
     }
 
+    /** 빈 칸이 없어 발행이 기다린 횟수의 누적(발행 호출 단위, 계측용, 12-3절 2번 표의 3단계). 0에서 늘기 시작하면 계좌 ring buffer에서 기다리는 것이다. */
+    public long ringFullWaitCount() {
+        return ringFullWaitCount.sum();
+    }
+
+    /**
+     * 링버퍼 칸 하나를 얻는다. 빈 칸이 없으면 기다린 발행 한 번으로 세고 칸이 날 때까지 기다린다. {@code tryNext()}는 칸이 있을 때 {@code next()}와 같은 비용이라
+     * 평상시 발행 경로에 호출이 늘지 않는다. 읽는 순간의 남은 칸 수는 짧게 0에 닿았다 풀린 구간을 주기 표본이 놓치므로, 그 구간은 이 누적 횟수로 본다.
+     */
+    private long claimSequence() {
+        try {
+            return ringBuffer.tryNext();
+        } catch (InsufficientCapacityException full) {
+            ringFullWaitCount.increment();
+            return ringBuffer.next();
+        }
+    }
+
     /**
      * 링버퍼에 남은 빈 칸 수(계측용, 12-3절 2번 표의 3단계). 시작 전에는 링버퍼가 없어 -1이다. 어느 thread에서 읽어도 되고 읽는 순간의 근삿값이다.
      * 용량에 가까울수록 소비자가 따라가고 있고, 0에 닿으면 발행하는 thread가 빈 칸을 기다린다.
@@ -450,7 +471,7 @@ public class AccountEngine {
     /** 구간 분해 측정용 — 수신 폴링 스레드가 읽은 시각(W-P2)을 함께 싣는다. 계측이 꺼져 있으면 무시한다. */
     public void publishBuy(long accountId, String stockCode, BigDecimal price, int quantity, String requestId,
                            long publishedAtEpochNanos, long receivedAtNanos) {
-        long sequence = ringBuffer.next();
+        long sequence = claimSequence();
         try {
             AccountEvent event = ringBuffer.get(sequence);
             event.setBuy(accountId, stockCode, price, quantity, requestId, publishedAtEpochNanos);
@@ -478,7 +499,7 @@ public class AccountEngine {
     /** 구간 분해 측정용 — {@link #publishBuy(long, String, BigDecimal, int, String, long, long)}과 같다. */
     public void publishSell(long accountId, String stockCode, BigDecimal price, int quantity, String requestId,
                             long publishedAtEpochNanos, long receivedAtNanos) {
-        long sequence = ringBuffer.next();
+        long sequence = claimSequence();
         try {
             AccountEvent event = ringBuffer.get(sequence);
             event.setSell(accountId, stockCode, price, quantity, requestId, publishedAtEpochNanos);
@@ -527,7 +548,7 @@ public class AccountEngine {
     public long publishBuyFill(long tradeId, long orderId, long accountId, String stockCode, BigDecimal matchPrice, int quantity,
                                long sourcePosition, int sourceSessionId,
                                long receivedAtNanos, long emittedAtNanos, long aggressorOriginNanos) {
-        long sequence = ringBuffer.next();
+        long sequence = claimSequence();
         try {
             AccountEvent event = ringBuffer.get(sequence);
             event.setBuyFill(tradeId, orderId, accountId, stockCode, matchPrice, quantity, sourcePosition, sourceSessionId);
@@ -557,7 +578,7 @@ public class AccountEngine {
     public long publishSellFill(long tradeId, long orderId, long accountId, String stockCode, int quantity,
                                 long sourcePosition, int sourceSessionId,
                                 long receivedAtNanos, long emittedAtNanos, long aggressorOriginNanos) {
-        long sequence = ringBuffer.next();
+        long sequence = claimSequence();
         try {
             AccountEvent event = ringBuffer.get(sequence);
             event.setSellFill(tradeId, orderId, accountId, stockCode, quantity, sourcePosition, sourceSessionId);
@@ -570,7 +591,7 @@ public class AccountEngine {
 
     /** 정산(T+2) 되돌림을 링버퍼에 발행한다. settlementRef 는 정산 신원(멱등키). {@link #publishBuyFill}과 같은 이유로 발행 시퀀스를 돌려준다. */
     public long publishSettlement(long settlementRef, long accountId, BigDecimal amount) {
-        long sequence = ringBuffer.next();
+        long sequence = claimSequence();
         try {
             AccountEvent event = ringBuffer.get(sequence);
             event.setSettlement(settlementRef, accountId, amount);
