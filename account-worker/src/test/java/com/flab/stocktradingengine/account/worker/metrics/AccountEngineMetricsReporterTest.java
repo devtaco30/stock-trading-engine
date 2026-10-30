@@ -25,12 +25,12 @@ class AccountEngineMetricsReporterTest {
 
     @Test
     void 이전_값과의_차이와_현재_남은_칸을_한_줄로_만든다() {
-        AccountEngineMetrics previous = new AccountEngineMetrics(1024L, 2L, 10L, 4L);
-        AccountEngineMetrics current = new AccountEngineMetrics(0L, 5L, 25L, 4L);
+        AccountEngineMetrics previous = new AccountEngineMetrics(1024L, 2L, 1_000_000L, 10L, 4L);
+        AccountEngineMetrics current = new AccountEngineMetrics(0L, 5L, 251_000_000L, 25L, 4L);
 
         String line = AccountEngineMetricsReporter.formatLine(previous, current);
 
-        assertThat(line).isEqualTo("account-engine ringRemaining=0 ringFullWaits=3 journalBackPressure=15 journalOtherRetries=0");
+        assertThat(line).isEqualTo("account-engine ringRemaining=0 ringFullWaits=3 ringFullWaitMs=250.0 journalBackPressure=15 journalOtherRetries=0");
     }
 
     @Test
@@ -42,6 +42,7 @@ class AccountEngineMetricsReporterTest {
 
         assertThat(metrics.ringRemaining()).isEqualTo(-1L);
         assertThat(metrics.ringFullWaits()).isZero();
+        assertThat(metrics.ringFullWaitNanos()).isZero();
         assertThat(metrics.journalBackPressure()).as("Aeron 저널이 아니면 저널 재시도는 0이다").isZero();
         assertThat(metrics.journalOtherRetries()).isZero();
     }
