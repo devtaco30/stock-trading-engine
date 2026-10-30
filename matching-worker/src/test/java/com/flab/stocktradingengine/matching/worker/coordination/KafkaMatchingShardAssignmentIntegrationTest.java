@@ -232,8 +232,8 @@ class KafkaMatchingShardAssignmentIntegrationTest {
         awaitCondition("종목 slot의 마지막 값이 평상시 값이다",
             () -> MapTopicHistory.read(BOOTSTRAP, mapTopic).getOrDefault(slot, List.of()).contains(plain));
         // 쓰기 thread는 하나라 포기한 쓰기를 쉬었다가 queue 뒤에 다시 넣은 뒤에야 다음 쓰기(평상시 값)를 처리한다. 평상시 값이 토픽에 보였다면
-        // 포기됐던 쓰기는 이미 queue에 있다. 그 쓰기를 처리하고(버리거나 보내고) queue가 빈 채 쓰기 thread가 기다리는 상태가 된 뒤에 단언한다.
-        awaitMapWriterIdle();
+        // 포기됐던 쓰기는 이미 queue에 있다. 넣은 쓰기가 하나도 남지 않을 때까지(버리거나 보낸 뒤) 기다린 다음에 단언한다.
+        awaitCondition("넣은 맵 쓰기가 모두 끝났다(포기했다 다시 넣은 쓰기 포함)", member::mapWritesIdle);
         assertThat(MapTopicHistory.read(BOOTSTRAP, mapTopic).get(slot))
             .as("포기된 이동 중 쓰기는 보내지지 않아 토픽에는 평상시 값 하나뿐이다").containsExactly(plain);
         assertThat(movingAttempts.get()).as("버려진 쓰기는 실패 한도 뒤로 더 보내지지 않는다").isEqualTo(failureLimit);
@@ -352,16 +352,18 @@ class KafkaMatchingShardAssignmentIntegrationTest {
         try {
             awaitCondition("첫째가 lost 콜백을 받았다(lost 로그) 또는 이동 중 값을 보냈다",
                 () -> !lostLogs.isEmpty() || firstSendsAfterArmed.contains(firstMoving));
-            awaitCondition("두 멤버가 64개를 나눠 맡고 맵 쓰기가 끝났다", () ->
+            // 첫째의 맵 쓰기는 조건에 넣지 않는다. 수정 전 코드에서는 첫째의 이동 중 쓰기가 문에 걸려 끝나지 않으므로, 넣으면 결함이 단언이 아니라
+            // 이 대기의 시간 초과로 드러난다. 문을 연 뒤 덮어쓰기를 직접 본다.
+            awaitCondition("두 멤버가 64개를 나눠 맡고 둘째의 맵 쓰기가 끝났다", () ->
                 first.currentSlotsSnapshot().size() + second.currentSlotsSnapshot().size() == STOCK_SLOT_COUNT
-                    && first.slotsWaitingForMove().isEmpty() && second.slotsWaitingForMove().isEmpty()
+                    && second.slotsWaitingForMove().isEmpty()
                     && MapTopicHistory.read(BOOTSTRAP, mapTopic).size() == STOCK_SLOT_COUNT);
         } finally {
             assignmentLogger.removeHandler(lostHandler);
         }
         // 둘째가 평상시 값을 올린 뒤에 첫째의 걸려 있던 쓰기를 내보낸다. lost가 맵에 쓰지 않았다면 걸려 있던 쓰기가 없다.
         gate.countDown();
-        awaitMapWriterIdle();
+        awaitCondition("문을 연 뒤 두 멤버의 넣은 맵 쓰기가 모두 끝났다", () -> first.mapWritesIdle() && second.mapWritesIdle());
 
         Map<Integer, List<String>> history = MapTopicHistory.read(BOOTSTRAP, mapTopic);
         Set<Integer> firstSlots = first.currentSlotsSnapshot();
@@ -463,15 +465,6 @@ class KafkaMatchingShardAssignmentIntegrationTest {
                     throw e.getCause();
                 }
             });
-    }
-
-    /** 맵 쓰기 thread(이름 matching-shard-map-writer)가 모두 queue에서 꺼낼 것을 기다리는 상태(WAITING)가 되기를 기다린다. */
-    private void awaitMapWriterIdle() {
-        awaitCondition("맵 쓰기 thread가 queue가 빈 채 기다리는 상태다", () -> {
-            List<Thread> writers = Thread.getAllStackTraces().keySet().stream()
-                .filter(thread -> thread.getName().equals("matching-shard-map-writer") && thread.isAlive()).toList();
-            return !writers.isEmpty() && writers.stream().allMatch(thread -> thread.getState() == Thread.State.WAITING);
-        });
     }
 
     private void awaitCondition(String description, java.util.function.BooleanSupplier condition) {

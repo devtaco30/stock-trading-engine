@@ -98,6 +98,8 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
     private final java.util.concurrent.atomic.AtomicIntegerArray mapWriteGeneration;
     // 종목 slot별로 마지막으로 넣은 맵 쓰기의 순서 번호.
     private final java.util.concurrent.atomic.AtomicIntegerArray mapWriteSeq;
+    // 넣었지만 아직 끝나지 않은 맵 쓰기 수(queue에 있는 것, 쓰기 thread가 꺼내 보내는 중인 것, 포기해 쉬었다가 다시 넣을 것을 모두 센다). 끝난 것은 finishMapWrite에서 뺀다.
+    private final java.util.concurrent.atomic.AtomicInteger mapWritesOutstanding = new java.util.concurrent.atomic.AtomicInteger();
     // 아직 끝나지 않은(queue에 있거나 보내는 중이거나 queue 뒤로 밀린) 맵 쓰기가 있는 종목 slot.
     private final java.util.Set<Integer> pendingMapWriteSlots = ConcurrentHashMap.newKeySet();
     // 보내는 호출이 예외를 던지는 쓰기를 포기하기까지의 시도 횟수. 근거 없는 임의 값이다.
@@ -263,6 +265,7 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
             // 순서 번호를 올리고 대기에 넣는 것을 한 덩어리로 해야, 그 사이에 앞 쓰기의 완료 처리가 새 쓰기를 대기에서 빼지 못한다.
             int seq = mapWriteSeq.incrementAndGet(stockSlot);
             pendingMapWriteSlots.add(stockSlot);
+            mapWritesOutstanding.incrementAndGet();
             mapWriteQueue.add(new MapWrite(stockSlot, value, generation, seq, done));
         }
         return done;
@@ -293,6 +296,7 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
 
     /** 쓰기가 끝났다(성공, 버림, 포기). 그 종목 slot에 더 새로운 쓰기가 남아 있지 않을 때만 대기에서 뺀다. */
     private synchronized void finishMapWrite(MapWrite write) {
+        mapWritesOutstanding.decrementAndGet();
         if (mapWriteSeq.get(write.stockSlot()) == write.seq()) {
             pendingMapWriteSlots.remove(write.stockSlot());
         }
@@ -406,6 +410,11 @@ public final class KafkaMatchingShardAssignment implements IntPredicate {
     /** 이동으로 받는 도중 판정이나 호가창 적재를 기다리며 담당이 켜지지 않은 종목 slot과, 맵 쓰기를 포기해 맵이 실제 상태와 어긋난 종목 slot의 수. 포기한 이동은 자동으로 풀리지 않으므로 0이 아니면 확인이 필요하다. */
     public int stuckSlotCount() {
         return awaitingDecision.size() + awaitingLoad.size() + abandonedMapWrites.size();
+    }
+
+    /** 넣은 맵 쓰기가 모두 끝났는지(시험용). queue에 있거나 보내는 중이거나 포기해 쉬었다가 다시 넣을 쓰기가 하나도 없을 때만 true이다. */
+    boolean mapWritesIdle() {
+        return mapWritesOutstanding.get() == 0;
     }
 
     /** 지금 이동 중 어느 대기 상태에든 있는 종목 slot(판정, 호가창 적재, 받음 기록 확인, 맵 전환, 포기한 맵 쓰기). 멈춤 신호가 머문 시간을 센다. */

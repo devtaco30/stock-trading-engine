@@ -573,9 +573,36 @@ class MatchingSlotMoveIntegrationTest {
                 && assignmentA.slotsWaitingForMove().isEmpty() && assignmentB.slotsWaitingForMove().isEmpty(),
             "이동이 끝나 두 pod가 64개를 나눠 맡지 못함");
 
+        // 제거 전의 안정된 상태에서는 아래 맵 조건이 이미 참이라, 첫째가 그룹에서 빠진 것을 알고 lost 콜백을 받은 뒤에 평가해야 한다.
+        List<String> lostLogs = new CopyOnWriteArrayList<>();
+        java.util.logging.Logger assignmentLogger = java.util.logging.Logger.getLogger(KafkaMatchingShardAssignment.class.getName());
+        java.util.logging.Handler lostHandler = new java.util.logging.Handler() {
+            @Override
+            public void publish(java.util.logging.LogRecord logRecord) {
+                String message = logRecord.getMessage();
+                if (message != null && message.contains("종목 slot을 잃음")) {
+                    lostLogs.add(message);
+                }
+            }
+
+            @Override
+            public void flush() {
+            }
+
+            @Override
+            public void close() {
+            }
+        };
+        assignmentLogger.addHandler(lostHandler);
         try (Admin admin = Admin.create(Map.of(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, BOOTSTRAP))) {
             admin.removeMembersFromConsumerGroup(GROUP_ID, new RemoveMembersFromConsumerGroupOptions(
                 List.of(new org.apache.kafka.clients.admin.MemberToRemove("slotmove-0")))).all().get();
+        }
+        try {
+            awaitUntil(() -> !lostLogs.isEmpty(),
+                "첫째가 lost 콜백을 받지 못함(lost 로그 없음). 그룹에서 뺀 정적 멤버에게 Kafka가 회수 콜백을 불렀거나 콜백이 오지 않은 것이다");
+        } finally {
+            assignmentLogger.removeHandler(lostHandler);
         }
 
         Map<Integer, List<String>> history = awaitMapTopic(snapshot -> {
