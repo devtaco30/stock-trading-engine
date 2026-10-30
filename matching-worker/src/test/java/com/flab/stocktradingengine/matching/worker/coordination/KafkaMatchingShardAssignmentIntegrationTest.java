@@ -247,7 +247,8 @@ class KafkaMatchingShardAssignmentIntegrationTest {
     void 그룹에서_빠진_둘째가_lost를_받아도_맵_토픽에_둘째의_이동_중_표시를_올리지_않는다() throws Exception {
         String secondPlain = "order-endpoint-of-m2";
         // 둘째가 보낸 모든 값(tombstone이면 null)을 기록한다. 평상시 값이 아닌 값이 하나라도 있으면 회수 콜백이 맵에 쓴 것이다.
-        List<String> secondSends = java.util.Collections.synchronizedList(new ArrayList<>());
+        // 쓰기 thread가 추가하는 동안 시험 thread가 훑으므로 복사 후 쓰는 목록을 쓴다(null 값을 담을 수 있다).
+        List<String> secondSends = new java.util.concurrent.CopyOnWriteArrayList<>();
         Producer<Integer, String> secondProducer = intercepting(buildMapProducer(), record -> {
             secondSends.add(record.value());
             return null;
@@ -316,7 +317,7 @@ class KafkaMatchingShardAssignmentIntegrationTest {
         String firstMoving = firstPlain + ";moving";
         java.util.concurrent.atomic.AtomicBoolean gateArmed = new java.util.concurrent.atomic.AtomicBoolean();
         java.util.concurrent.CountDownLatch gate = new java.util.concurrent.CountDownLatch(1);
-        List<String> firstSendsAfterArmed = java.util.Collections.synchronizedList(new ArrayList<>());
+        List<String> firstSendsAfterArmed = new java.util.concurrent.CopyOnWriteArrayList<>();
         Producer<Integer, String> firstProducer = intercepting(buildMapProducer(), record -> {
             if (gateArmed.get()) {
                 firstSendsAfterArmed.add(record.value());
