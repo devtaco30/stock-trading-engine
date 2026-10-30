@@ -101,6 +101,37 @@ class FillOutboxTest {
         verify(publication, times(FillOutbox.QUEUE_CAPACITY + 1)).offer(any(DirectBuffer.class), anyInt(), anyInt());
     }
 
+    @Test
+    void 큐에_쌓인_개수와_가득_차_기다린_횟수와_시간을_읽을_수_있다() throws InterruptedException {
+        ExclusivePublication publication = mock(ExclusivePublication.class);
+        when(publication.offer(any(DirectBuffer.class), anyInt(), anyInt())).thenReturn(100L);
+        FillOutbox outbox = new FillOutbox(ENDPOINT, publication, codec);
+        assertThat(outbox.queueDepth()).isZero();
+        assertThat(outbox.enqueueWaitCount()).isZero();
+        for (int i = 0; i < FillOutbox.QUEUE_CAPACITY; i++) {
+            outbox.enqueueNeverDrop(sampleTrade(i));
+        }
+        assertThat(outbox.queueDepth()).as("소비하는 쪽이 없는 동안 쌓인 개수").isEqualTo(FillOutbox.QUEUE_CAPACITY);
+        assertThat(outbox.enqueueWaitCount()).as("가득 차기 전에는 기다리지 않았다").isZero();
+
+        Thread blockedProducer = new Thread(() -> outbox.enqueueNeverDrop(sampleTrade(999_999)));
+        blockedProducer.setDaemon(true);
+        blockedProducer.start();
+        long deadline = System.nanoTime() + 3_000_000_000L;
+        while (outbox.enqueueWaitCount() == 0 && System.nanoTime() < deadline) {
+            Thread.sleep(5);
+        }
+        assertThat(outbox.enqueueWaitCount()).as("가득 찬 큐에 넣으려고 기다리기 시작한 횟수").isEqualTo(1);
+
+        outbox.start();
+        blockedProducer.join(3000);
+        outbox.close(5000);
+
+        assertThat(blockedProducer.isAlive()).isFalse();
+        assertThat(outbox.enqueueWaitNanos()).as("기다린 총 시간").isPositive();
+        assertThat(outbox.queueDepth()).isZero();
+    }
+
     private FilledTrade sampleTrade(long seed) {
         return new FilledTrade(seed, "005930", seed, 1L, seed, 2L, 4, new BigDecimal("10000"));
     }

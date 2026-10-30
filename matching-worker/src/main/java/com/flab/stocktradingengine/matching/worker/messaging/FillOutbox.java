@@ -70,6 +70,9 @@ class FillOutbox {
     private final LatencyHistogram fillOfferStage;
 
     private Thread publisherThread;
+    // 큐가 가득 차 enqueue가 기다린 횟수(기다리기 시작한 호출 수)와 그 총 시간. 쓰는 thread는 매칭 소비자 하나다.
+    private volatile long enqueueWaitCount;
+    private volatile long enqueueWaitNanos;
 
     FillOutbox(String endpoint, ExclusivePublication publication, FillCodec codec) {
         this(endpoint, publication, codec, new StageLatencyRegistry(false));
@@ -96,11 +99,34 @@ class FillOutbox {
      */
     void enqueueNeverDrop(FilledTrade trade) {
         throwIfFatal();
-        enqueueIdleStrategy.reset();
-        while (!queue.offer(trade)) {
-            throwIfFatal();
-            enqueueIdleStrategy.idle();
+        if (queue.offer(trade)) {
+            return;
         }
+        enqueueWaitCount++;
+        long waitStartedAtNanos = System.nanoTime();
+        enqueueIdleStrategy.reset();
+        try {
+            while (!queue.offer(trade)) {
+                throwIfFatal();
+                enqueueIdleStrategy.idle();
+            }
+        } finally {
+            enqueueWaitNanos += System.nanoTime() - waitStartedAtNanos;
+        }
+    }
+
+    /** 지금 큐에 쌓여 있는 체결 수(12-3절 2번 표의 9단계). */
+    int queueDepth() {
+        return queue.size();
+    }
+
+    /** 큐가 가득 차 enqueue가 기다린 횟수. 0이 아니면 이 endpoint로 가는 체결 발신이 매칭 소비자를 막은 것이다. */
+    long enqueueWaitCount() {
+        return enqueueWaitCount;
+    }
+
+    long enqueueWaitNanos() {
+        return enqueueWaitNanos;
     }
 
     private void throwIfFatal() {

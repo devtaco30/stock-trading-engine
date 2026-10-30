@@ -43,6 +43,8 @@ public class AeronArchiveMatchingJournal implements Journal {
     private final OrderCodec codec = new OrderCodec();
     private final UnsafeBuffer buffer = new UnsafeBuffer(ByteBuffer.allocateDirect(ENCODE_BUFFER_SIZE));
     private final IdleStrategy idleStrategy = new BackoffIdleStrategy();
+    // offer가 음수로 되돌아와 다시 시도한 횟수. 쓰는 thread는 저널러 하나라 값을 읽는 쪽(계측)만 volatile로 본다.
+    private volatile long offerRetryCount;
 
     public AeronArchiveMatchingJournal(ExclusivePublication journalPublication) {
         this.journalPublication = journalPublication;
@@ -59,8 +61,14 @@ public class AeronArchiveMatchingJournal implements Journal {
                 throw new IllegalStateException(
                     "매칭 저널 스트림이 복구 불가 상태입니다(offer 결과=" + result + "): 리플레이 신뢰가 깨지므로 소비자를 멈춥니다");
             }
+            offerRetryCount++;
             idleStrategy.idle();
         }
+    }
+
+    /** offer가 되돌아와 다시 시도한 누적 횟수. 0에서 늘기 시작하면 저널 발행 단계에서 기다리는 것이다. */
+    public long offerRetryCount() {
+        return offerRetryCount;
     }
 
     /** 읽기(read-back)는 2c-2 리플레이가 Archive 에서 직접 하므로 여기서는 지원하지 않는다. */
