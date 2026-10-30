@@ -13,10 +13,20 @@ cd "$(dirname "$0")/.."
 # 구간 분해 측정(MEASURE_STAGES=1)이면 프로세스마다 --measure.stages.* 인자를 붙인다. 기본은 끔이라 기존 인자와 같다.
 # 계좌 워커를 둘 띄우는 WORKER_COUNT=2 분기는 계측 대상이 아니다(묶음 C는 워커 하나).
 source loadtest/stage-args.sh
+# 매칭 shard 여러 개(MATCHING_COUNT)의 기동 인자 계산과 배정 완료 대기. 기본(1)은 기존 인자와 같다.
+source loadtest/matching-plan.sh
 
 WORKER_COUNT="${WORKER_COUNT:-1}"
 if [ "$WORKER_COUNT" != "1" ] && [ "$WORKER_COUNT" != "2" ]; then
     echo "WORKER_COUNT는 1 또는 2만 지원한다 (받은 값: ${WORKER_COUNT})" >&2
+    exit 1
+fi
+
+MATCHING_COUNT="${MATCHING_COUNT:-1}"
+matching_count_valid "$MATCHING_COUNT" || exit 1
+# 정할 조건: 배정 완료를 기다리는 제한 시간(초). 값은 아직 정하지 않았다. 매칭 shard가 2개 이상일 때만 필요하다.
+if [ "$MATCHING_COUNT" != "1" ] && [ -z "${MATCHING_ASSIGN_TIMEOUT:-}" ]; then
+    echo "MATCHING_COUNT=${MATCHING_COUNT}에는 MATCHING_ASSIGN_TIMEOUT(배정 완료 대기 제한 시간, 초)이 필요하다 — 값은 정해지지 않았다" >&2
     exit 1
 fi
 
@@ -55,6 +65,14 @@ start_app() {
     echo "${label} 기동 시작(런처 PID $(cat "${PID_DIR}/${label}.pid"), 로그 ${LOG_DIR}/${label}.log)"
 }
 
+# 매칭 shard 를 MATCHING_COUNT 개 띄운다. $1=shard 공통 추가 인자(단계 계측 등). 1개면 라벨·인자가 기존과 같다.
+start_matching_workers() {
+    local common_args="$1" index
+    for index in $(seq 0 $((MATCHING_COUNT - 1))); do
+        start_app "$(matching_label "$MATCHING_COUNT" "$index")" "${common_args}$(matching_args "$MATCHING_COUNT" "$index")" matching-worker
+    done
+}
+
 # DB 를 쓰는 v2 워커(settlement-worker, account-projection-worker)용. 두 모듈에는 udp·e2e 프로파일이 없고(프로파일을 붙여도 아무 설정도
 # 바뀌지 않는다) Postgres 접속은 application-local.yml(gitignore, Jack 관리)에 있다. 그 파일을 만들지 않고 api 의 e2e 설정과 같은
 # 접속 값을 명령행 인자로 준다. account-projection-worker 는 이 인자가 없으면 인메모리 H2 에 경고 없이 기록하므로,
@@ -85,11 +103,11 @@ E2E_RESULTS_ABS="$(pwd)/loadtest/results"
 if [ "$WORKER_COUNT" = "2" ]; then
     start_app account-worker-a " --transport.account-intake.channel=aeron:udp?endpoint=localhost:20040 --transport.fill.channel=aeron:udp?endpoint=localhost:20060 --account.worker.archive.control-channel=aeron:udp?endpoint=localhost:8010$(shard_args_intake) --measure.latency.enabled=true --measure.latency.snapshot-trigger-path=${E2E_RESULTS_ABS}/latency-trigger-v2-a --measure.latency.output-path=${E2E_RESULTS_ABS}/latency-v2-account-worker-a.json" account-worker
     start_app account-worker-b " --transport.account-intake.channel=aeron:udp?endpoint=localhost:20041 --transport.fill.channel=aeron:udp?endpoint=localhost:20061 --account.worker.archive.control-channel=aeron:udp?endpoint=localhost:8012$(shard_args_intake) --measure.latency.enabled=true --measure.latency.snapshot-trigger-path=${E2E_RESULTS_ABS}/latency-trigger-v2-b --measure.latency.output-path=${E2E_RESULTS_ABS}/latency-v2-account-worker-b.json" account-worker
-    start_app matching-worker "$(shard_args_fill)" matching-worker
+    start_matching_workers "$(shard_args_fill)"
     start_app api "$(shard_args_intake)" api
 else
     start_app account-worker " --measure.latency.enabled=true --measure.latency.snapshot-trigger-path=${E2E_RESULTS_ABS}/latency-trigger-v2 --measure.latency.output-path=${E2E_RESULTS_ABS}/latency-v2-account-worker.json$(stage_args v2 account-worker)" account-worker
-    start_app matching-worker "$(stage_args v2 matching-worker)" matching-worker
+    start_matching_workers "$(stage_args v2 matching-worker)"
     start_app api "$(stage_args v2 api)" api
     start_worker settlement-worker settlement-worker ""
     start_worker account-projection-worker account-projection-worker "$(stage_args v2 account-projection-worker)"
@@ -113,11 +131,19 @@ await_udp_port() {
 }
 
 await_udp_port 20040 "account-worker(A) account-intake"
-await_udp_port 20020 "matching-worker matching-intake"
+for matching_port in $(matching_intake_ports "$MATCHING_COUNT"); do
+    await_udp_port "$matching_port" "matching-worker matching-intake"
+done
 await_udp_port 20060 "account-worker(A) fill"
 if [ "$WORKER_COUNT" = "2" ]; then
     await_udp_port 20041 "account-worker(B) account-intake"
     await_udp_port 20061 "account-worker(B) fill"
+fi
+
+# 매칭 shard 가 둘 이상이면 종목 slot 64개의 주소가 맵 토픽에 모두 올라온 뒤에 READY 를 낸다(부하는 READY 뒤에 시작한다).
+# 제한 시간을 넘기면 주인 없는 종목 slot 번호를 출력하고 끝낸다.
+if [ "$MATCHING_COUNT" != "1" ]; then
+    await_matching_slots_assigned "${MATCHING_STOCK_SLOT_COUNT:-64}" "$MATCHING_ASSIGN_TIMEOUT" || exit 1
 fi
 
 echo -n "api HTTP(8080) 대기 중"

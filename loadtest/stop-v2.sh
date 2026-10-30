@@ -26,6 +26,21 @@ main_class_for() {
     esac
 }
 
+# 모듈 하나의 pid 파일 경로(있는 것만, 한 줄에 하나). 계좌 워커 둘(-a, -b)과 매칭 shard 여럿(-0~-7, MATCHING_COUNT>1일 때
+# matching-plan.sh 의 라벨)을 포함한다. pid 파일명은 모듈 이름 뒤에 한 글자 접미사만 허용해 다른 모듈 파일을 건드리지 않는다.
+module_pid_files() {
+    local module="$1" file
+    for file in "${PID_DIR}/${module}.pid" "${PID_DIR}/${module}-a.pid" "${PID_DIR}/${module}-b.pid" "${PID_DIR}/${module}"-[0-9].pid; do
+        [ -e "$file" ] && echo "$file"
+    done
+    return 0
+}
+
+# 시험이 위 함수만 불러 확인하도록 source 할 때는 여기서 멈춘다(아래는 실제 프로세스를 종료한다).
+if [ "${STOP_V2_SOURCE_ONLY:-0}" = "1" ]; then
+    return 0 2> /dev/null || exit 0
+fi
+
 for module in api matching-worker account-worker settlement-worker account-projection-worker; do
     main_class=$(main_class_for "$module")
     # main_class_for가 아는 모듈만 case에 있다 — 빈 문자열이면 pkill -f ""가 전체 프로세스를
@@ -35,7 +50,9 @@ for module in api matching-worker account-worker settlement-worker account-proje
     if [ -n "$main_class" ] && pkill -f "$main_class" 2>/dev/null; then
         echo "${module} 정지(${main_class})"
     fi
-    rm -f "${PID_DIR}/${module}.pid" "${PID_DIR}/${module}-a.pid" "${PID_DIR}/${module}-b.pid"
+    while read -r pid_file; do
+        rm -f "$pid_file"
+    done < <(module_pid_files "$module")
 done
 
 echo "v2 프로세스 정지 완료 (인프라는 유지 — 인프라까지 내리려면 docker compose -f docker-compose.yml -f docker-compose.loadtest.yml down)"
