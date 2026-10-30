@@ -49,12 +49,27 @@ public final class MapCatchUpWaiter implements MapSync {
         this.readerHealthy = readerHealthy;
     }
 
+    /** 읽기가 정상인지. 정상이 아니면 재시작 전에 쌓인 연속 실패 횟수를 버린다(복구 뒤 판정 한 번의 실패가 옛 횟수와 합쳐지지 않게 한다). */
+    @Override
+    public boolean healthy() {
+        boolean healthy = readerHealthy.getAsBoolean();
+        if (!healthy) {
+            consecutiveFailures.set(0);
+        }
+        return healthy;
+    }
+
+    /** 연속 실패 횟수를 처음부터 센다. 읽기 재시작을 요청할 때 부른다. */
+    public void resetFailures() {
+        consecutiveFailures.set(0);
+    }
+
     @Override
     public boolean awaitCaughtUp() {
         boolean caughtUp = awaitCaughtUpOnce();
         if (caughtUp) {
             consecutiveFailures.set(0);
-        } else if (!readerHealthy.getAsBoolean()) {
+        } else if (!healthy()) {
             return false; // 읽기가 이미 재시작 중이라 따라오지 못한 것은 정지의 증거가 아니다
         } else if (failureLimit > 0 && consecutiveFailures.incrementAndGet() >= failureLimit) {
             consecutiveFailures.set(0);

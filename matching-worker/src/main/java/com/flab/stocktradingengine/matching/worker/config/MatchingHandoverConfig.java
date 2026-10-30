@@ -132,7 +132,10 @@ public class MatchingHandoverConfig {
         waiter.onRepeatedFailure(catchUpFailureLimit, () -> reader.requestRestart("끝 위치를 따라오지 못한 판정이 연속 " + catchUpFailureLimit + "번"));
         MapReaderHealthCheck healthCheck = new MapReaderHealthCheck(
             endOffset, () -> reader.consumedOffset(0), reader::isHealthy, healthCheckStuckLimit,
-            () -> reader.requestRestart("끝 위치에 못 닿은 채 읽은 위치가 주기 점검 " + healthCheckStuckLimit + "번 연속 멈춰 있음"));
+            () -> {
+                waiter.resetFailures();
+                reader.requestRestart("끝 위치에 못 닿은 채 읽은 위치가 주기 점검 " + healthCheckStuckLimit + "번 연속 멈춰 있음");
+            });
         return new MapSyncResources(waiter, admin, reader::isHealthy, healthCheck, healthCheckIntervalMillis);
     }
 
@@ -165,7 +168,7 @@ public class MatchingHandoverConfig {
 
         @Override
         public boolean healthy() {
-            return healthy.getAsBoolean();
+            return delegate.healthy();
         }
 
         @Override
