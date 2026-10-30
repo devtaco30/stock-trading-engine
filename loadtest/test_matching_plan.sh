@@ -317,6 +317,14 @@ test_expansion_validation() {
     done
 }
 
+test_dump_timeout_configurable() {
+    local body
+    body="$(declare -f matching_map_dump matching_map_dump_timestamped)"
+    assert_not_contains "덤프 timeout 3000을 박아 두지 않는다" "$body" "--timeout-ms 3000"
+    assert_contains "덤프 timeout은 설정으로 바꿀 수 있다" "$body" 'MATCHING_MAP_DUMP_TIMEOUT_MS'
+    assert_eq "기본 timeout은 기동이 느린 consumer도 첫 레코드를 받을 만큼 길다(10초)" "10000" "$MATCHING_MAP_DUMP_TIMEOUT_MS"
+}
+
 test_parse_first_record_ms() {
     local dump
     dump=$'CreateTime:1000\t5\taeron:udp?endpoint=localhost:20020\nCreateTime:2000\t6\taeron:udp?endpoint=localhost:20021;moving\nCreateTime:1500\t7\taeron:udp?endpoint=localhost:20021\nCreateTime:3000\t8\taeron:udp?endpoint=localhost:20021\nNO_TIMESTAMP\t9\taeron:udp?endpoint=localhost:20021'
@@ -348,6 +356,29 @@ test_await_shard_address() {
     map_lines 0 63 "$A" > "${dir}/second"
     MATCHING_ASSIGN_POLL_SEC=1 await_matching_shard_address "$B" 2 > /dev/null 2>&1
     assert_eq "끝내 안 올라오면 실패" "1" "$?"
+
+    # 주소는 보이는데 timestamp 덤프가 끝내 비어 있으면(별개의 읽기가 시간 안에 못 읽음) 성공으로 끝내지 않는다.
+    echo 0 > "${dir}/calls"
+    { map_lines 0 31 "$A"; map_lines 32 63 "$B"; } > "${dir}/first"
+    cp "${dir}/first" "${dir}/second"
+    matching_map_dump_timestamped() { :; }
+    out="$(MATCHING_ASSIGN_POLL_SEC=0 await_matching_shard_address "$B" 2 2>&1)"
+    assert_eq "첫 레코드 시각을 못 읽으면 실패" "1" "$?"
+    assert_not_contains "빈 값을 기록으로 내지 않는다" "$out" "FIRST_RECORD_AT_MS="
+    assert_contains "원인을 알린다" "$out" "timestamp"
+
+    # 처음 몇 번은 비어 있다가 읽히면 성공한다.
+    echo 0 > "${dir}/calls"
+    echo 0 > "${dir}/tcalls"
+    matching_map_dump_timestamped() {
+        local n=$(( $(cat "${dir}/tcalls") + 1 ))
+        echo "$n" > "${dir}/tcalls"
+        [ "$n" -ge 3 ] && printf 'CreateTime:1500\t7\t%s\n' "$B"
+        return 0
+    }
+    out="$(MATCHING_ASSIGN_POLL_SEC=0 await_matching_shard_address "$B" 5 2>&1)"
+    assert_eq "다시 읽어 시각을 얻으면 성공" "0" "$?"
+    assert_contains "얻은 시각" "$out" "EXPANSION_ADDRESS_FIRST_RECORD_AT_MS=1500"
     unset -f matching_assigned_map matching_map_dump_timestamped
     rm -rf "$dir"
 }
@@ -359,6 +390,8 @@ test_expand_script() {
     assert_contains "증설 shard의 인자" "$script" 'matching_args "$((MATCHING_COUNT + 1))" "$MATCHING_COUNT"'
     assert_contains "대기 뒤에 띄운다" "$script" 'sleep "$MATCHING_EXPAND_AT_SEC"'
     assert_contains "새 주소가 맵에 올라온 시각을 기록" "$script" "await_matching_shard_address"
+    assert_contains "머리 주석의 시작 shard 수가 검사와 같다" "$script" "시작 shard 수(1·2·4)"
+    assert_not_contains "예전 범위를 남기지 않는다" "$script" "(1~7)"
     assert_contains "gradlew를 띄우기 직전 시각은 JVM 기동 시각이 아닌 이름으로 적는다" "$script" "EXPANSION_LAUNCH_COMMAND_AT_MS"
     assert_not_contains "예전 이름을 쓰지 않는다" "$script" "EXPANSION_STARTED_AT_MS"
 }
@@ -376,6 +409,7 @@ test_stop_includes_matching_shard_pids
 test_run_script_uses_plan
 test_expansion_pool
 test_expansion_validation
+test_dump_timeout_configurable
 test_parse_first_record_ms
 test_await_shard_address
 test_expand_script

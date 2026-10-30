@@ -4,7 +4,7 @@ set -uo pipefail
 # 실행 중 증설(H9)의 매칭 쪽. MATCHING_COUNT 개로 시작해 부하를 건 뒤, MATCHING_EXPAND_AT_SEC 초 뒤에 matching-<MATCHING_COUNT> 를 같은 방식으로 띄운다.
 # 사전 조건: run-e2e-v2.sh 를 같은 MATCHING_COUNT·MATCHING_EXPAND_AT_SEC 로 실행해 시작 shard 들의 호가창 이동 주소 풀에 새 shard 의 주소가 이미 들어 있어야 한다.
 # 부하(k6)를 시작한 직후 이 스크립트를 부른다. 값(증설 시각, 제한 시간)은 정해지지 않았으므로 환경 변수로 받는다.
-#   MATCHING_COUNT              시작 shard 수(1~7)
+#   MATCHING_COUNT              시작 shard 수(1·2·4)
 #   MATCHING_EXPAND_AT_SEC      부하 시작 뒤 증설까지 기다리는 초
 #   MATCHING_ASSIGN_TIMEOUT     새 shard 의 주소가 맵에 올라오기를 기다리는 제한 시간(초)
 # 기록(loadtest/logs/expansion.txt, epoch ms):

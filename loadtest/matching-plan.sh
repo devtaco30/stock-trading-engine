@@ -14,6 +14,12 @@
 MATCHING_INTAKE_BASE_PORT=20020
 MATCHING_CONTROL_BASE_PORT=8100
 MATCHING_MAP_TOPIC="matching-shard-map"
+# 하네스의 broker(docker compose 컨테이너)와 컨테이너 안에서 본 주소. 기본값은 run-e2e-v2.sh 가 쓰는 broker 이고, 확인용으로 바꿔 쓸 수 있다.
+MATCHING_KAFKA_CONTAINER="${MATCHING_KAFKA_CONTAINER:-stock-trading-kafka}"
+MATCHING_KAFKA_BOOTSTRAP="${MATCHING_KAFKA_BOOTSTRAP:-localhost:9092}"
+# 맵 토픽 덤프 한 번의 console consumer 무수신 종료 시간(ms). consumer JVM 기동과 첫 poll이 3초를 넘기는 환경이 있어(실제 broker 확인, apache/kafka 4.3.1)
+# 3초에서는 덤프가 빈 채로 끝난 적이 있다. 10초는 그 환경에서 읽힌 값이 아니라 3초의 몇 배로 잡은 값이다(측정 전).
+MATCHING_MAP_DUMP_TIMEOUT_MS="${MATCHING_MAP_DUMP_TIMEOUT_MS:-10000}"
 MATCHING_MAX_COUNT=8
 
 # 1·2·4·8 이외는 거부. 최대 8은 호가창 이동 주소 풀의 상한(HandoverEndpointPool.MAX_ENDPOINTS)과 같다.
@@ -107,8 +113,8 @@ matching_args() {
 # 맵 토픽을 처음부터 끝까지 읽어 "종목 slot<탭>값" 줄로 낸다. 테스트가 이 함수를 바꿔 Docker 없이 확인한다.
 # 키는 Integer, 값은 String(MatchingShardOwnershipConfig). 값이 없는 레코드(삭제 표시)는 null 로 찍힌다.
 matching_map_dump() {
-    docker exec stock-trading-kafka /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 \
-        --topic "$MATCHING_MAP_TOPIC" --from-beginning --timeout-ms 3000 \
+    docker exec "$MATCHING_KAFKA_CONTAINER" /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server "$MATCHING_KAFKA_BOOTSTRAP" \
+        --topic "$MATCHING_MAP_TOPIC" --from-beginning --timeout-ms "$MATCHING_MAP_DUMP_TIMEOUT_MS" \
         --property print.key=true --property key.separator=$'\t' \
         --property key.deserializer=org.apache.kafka.common.serialization.IntegerDeserializer 2> /dev/null
 }
@@ -129,7 +135,7 @@ matching_assigned_map() {
 # --- 시작 전 맵 토픽 초기화 ---
 # 하네스가 쓰는 자체 broker(docker compose 컨테이너 stock-trading-kafka) 한 곳만 대상으로 한다. 테스트가 이 함수를 바꿔 Docker 없이 확인한다.
 matching_kafka_topics() {
-    docker exec stock-trading-kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 "$@"
+    docker exec "$MATCHING_KAFKA_CONTAINER" /opt/kafka/bin/kafka-topics.sh --bootstrap-server "$MATCHING_KAFKA_BOOTSTRAP" "$@"
 }
 
 # 맵 토픽은 compacted 라 죽은 pod 의 마지막 값이 지워지지 않고 남는다. 직전 실행(예: shard 8개)의 값이 남은 채로 새 shard 가 뜨기도 전에
@@ -191,8 +197,8 @@ await_matching_slots_assigned() {
 
 # 맵 토픽을 처음부터 읽되 레코드의 Kafka timestamp를 앞에 붙여 "CreateTime:<ms><탭>종목 slot<탭>값" 줄로 낸다. 테스트가 이 함수를 바꾼다.
 matching_map_dump_timestamped() {
-    docker exec stock-trading-kafka /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 \
-        --topic "$MATCHING_MAP_TOPIC" --from-beginning --timeout-ms 3000 \
+    docker exec "$MATCHING_KAFKA_CONTAINER" /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server "$MATCHING_KAFKA_BOOTSTRAP" \
+        --topic "$MATCHING_MAP_TOPIC" --from-beginning --timeout-ms "$MATCHING_MAP_DUMP_TIMEOUT_MS" \
         --property print.timestamp=true --property print.key=true --property key.separator=$'\t' \
         --property key.deserializer=org.apache.kafka.common.serialization.IntegerDeserializer 2> /dev/null
 }
@@ -211,11 +217,22 @@ matching_parse_first_record_ms() {
 await_matching_shard_address() {
     local address="$1" timeout="$2" start=$SECONDS
     local poll="${MATCHING_ASSIGN_POLL_SEC:-2}"
+    local first_ms
     while :; do
         if matching_assigned_map | cut -f2 | grep -qxF -- "$address"; then
-            echo "EXPANSION_ADDRESS_FIRST_RECORD_AT_MS=$(matching_map_dump_timestamped | matching_parse_first_record_ms "$address")"
-            echo "EXPANSION_ADDRESS_OBSERVED_AT_MS=$(python3 -I -c 'import time; print(int(time.time()*1000))')"
-            return 0
+            # 확인용 덤프와 timestamp 덤프는 별개의 읽기라 두 번째가 시간 안에 못 읽을 수 있다. 빈 값을 성공으로 기록하지 않는다.
+            first_ms="$(matching_map_dump_timestamped | matching_parse_first_record_ms "$address")"
+            if [ -n "$first_ms" ]; then
+                echo "EXPANSION_ADDRESS_FIRST_RECORD_AT_MS=${first_ms}"
+                echo "EXPANSION_ADDRESS_OBSERVED_AT_MS=$(python3 -I -c 'import time; print(int(time.time()*1000))')"
+                return 0
+            fi
+            if [ $((SECONDS - start)) -ge "$timeout" ]; then
+                echo "맵 토픽에서 ${address} 는 보이지만 레코드 timestamp를 읽지 못했다(timestamp 덤프가 비었거나 형식이 다르다)" >&2
+                return 1
+            fi
+            sleep "$poll"
+            continue
         fi
         if [ $((SECONDS - start)) -ge "$timeout" ]; then
             echo "제한 시간 ${timeout}초 안에 맵 토픽에 ${address} 가 올라오지 않았다" >&2
