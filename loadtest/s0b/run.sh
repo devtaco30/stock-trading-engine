@@ -5,7 +5,7 @@ set -uo pipefail
 #   1단계: PREFILL_PER_STOCK건씩 종목 3개에 매도를 쌓고 접수가 끝날 때까지 기다린다(0이면 건너뜀).
 #   2단계: PER_STOCK건씩 더 보낸다. 고정 m 측정은 이 단계만 본다(analyze.py).
 # 주문 i는 계좌 90002 + (i % N)로 간다. 가격은 20000+i 이고 수량 1, 매도만이라 체결이 없다. 계좌마다 종목별 보유는 (두 단계에서 받을 수 + 5)로 시딩한다.
-# SKIP_BUILD=1이면 bootJar 빌드를 건너뛴다(한 번 빌드한 뒤 여러 번 돌릴 때). 자체 Kafka(도커 19092)와 /tmp/s0b 작업 폴더를 쓰고 끝나면 정리한다. 종료 코드: 0 유효, 3 송신 위치 미확인, 4 접수 합계 어긋남(무효), 그 밖은 실패.
+# ACCOUNT_JAR·MATCHING_JAR로 실행할 jar를 직접 고를 수 있다(변형 빌드 비교용). SKIP_BUILD=1이면 bootJar 빌드를 건너뛴다(한 번 빌드한 뒤 여러 번 돌릴 때). 자체 Kafka(도커 19092)와 /tmp/s0b 작업 폴더를 쓰고 끝나면 정리한다. 종료 코드: 0 유효, 3 송신 위치 미확인, 4 접수 합계 어긋남(무효), 그 밖은 실패.
 cd "$(dirname "$0")/../.."
 N=${ACCTS:?}; PREFILL=${PREFILL_PER_STOCK:-0}; PER=${PER_STOCK:?}; OLOG=${ORDER_LOG:-on}; OUT=${OUT:?}
 STOCK_COUNT=3
@@ -30,7 +30,7 @@ trap cleanup EXIT
 if [ "${SKIP_BUILD:-0}" != 1 ]; then
   ./gradlew --offline -q :matching-worker:bootJar :account-worker:bootJar > $LOG/build.log 2>&1 || { echo BUILD_FAIL; tail -20 $LOG/build.log; exit 1; }
 fi
-MJ=$(ls matching-worker/build/libs/*.jar | grep -v plain | head -1); AJ=$(ls account-worker/build/libs/*.jar | grep -v plain | head -1)
+MJ=${MATCHING_JAR:-$(ls matching-worker/build/libs/*.jar | grep -v plain | head -1)}; AJ=${ACCOUNT_JAR:-$(ls account-worker/build/libs/*.jar | grep -v plain | head -1)}
 sed "s#/tmp/u10#$W#" loadtest/u10/u10-matching-0.yml > $W/m0.yml
 sed "s#/tmp/u10#$W#" loadtest/u10/u10-account.yml > $W/acc.yml
 java "${JO[@]}" -Xlog:gc*:file=$LOG/gc-matching.log:time,uptime -jar $MJ --spring.config.additional-location=file:$W/m0.yml $KB > $LOG/matching-0.log 2>&1 & echo $! >> $W/pids; MP=$!
