@@ -231,7 +231,9 @@ class KafkaMatchingShardAssignmentIntegrationTest {
 
         awaitCondition("종목 slot의 마지막 값이 평상시 값이다",
             () -> MapTopicHistory.read(BOOTSTRAP, mapTopic).getOrDefault(slot, List.of()).contains(plain));
-        awaitCondition("오래된 쓰기가 버려져 대기에서 빠졌다", () -> member.slotsWaitingForMove().isEmpty());
+        // 쓰기 thread는 하나라 포기한 쓰기를 쉬었다가 queue 뒤에 다시 넣은 뒤에야 다음 쓰기(평상시 값)를 처리한다. 평상시 값이 토픽에 보였다면
+        // 포기됐던 쓰기는 이미 queue에 있다. 그 쓰기를 처리하고(버리거나 보내고) queue가 빈 채 쓰기 thread가 기다리는 상태가 된 뒤에 단언한다.
+        awaitMapWriterIdle();
         assertThat(MapTopicHistory.read(BOOTSTRAP, mapTopic).get(slot))
             .as("포기된 이동 중 쓰기는 보내지지 않아 토픽에는 평상시 값 하나뿐이다").containsExactly(plain);
         assertThat(movingAttempts.get()).as("버려진 쓰기는 실패 한도 뒤로 더 보내지지 않는다").isEqualTo(failureLimit);
@@ -243,14 +245,34 @@ class KafkaMatchingShardAssignmentIntegrationTest {
      */
     @Test
     void 그룹에서_빠진_둘째가_lost를_받아도_맵_토픽에_둘째의_이동_중_표시를_올리지_않는다() throws Exception {
-        String secondMoving = "order-endpoint-of-m2;moving";
-        List<String> secondMovingSends = new java.util.concurrent.CopyOnWriteArrayList<>();
+        String secondPlain = "order-endpoint-of-m2";
+        // 둘째가 보낸 모든 값(tombstone이면 null)을 기록한다. 평상시 값이 아닌 값이 하나라도 있으면 회수 콜백이 맵에 쓴 것이다.
+        List<String> secondSends = java.util.Collections.synchronizedList(new ArrayList<>());
         Producer<Integer, String> secondProducer = intercepting(buildMapProducer(), record -> {
-            if (record.value().equals(secondMoving)) {
-                secondMovingSends.add(record.key() + ":" + record.value());
-            }
+            secondSends.add(record.value());
             return null;
         });
+        // lost 콜백이 불렸다는 직접 신호: 이 클래스가 lost 때만 남기는 WARNING 로그.
+        List<String> lostLogs = new java.util.concurrent.CopyOnWriteArrayList<>();
+        java.util.logging.Logger assignmentLogger = java.util.logging.Logger.getLogger(KafkaMatchingShardAssignment.class.getName());
+        java.util.logging.Handler lostHandler = new java.util.logging.Handler() {
+            @Override
+            public void publish(java.util.logging.LogRecord logRecord) {
+                String message = logRecord.getMessage();
+                if (message != null && message.contains("종목 slot을 잃음")) {
+                    lostLogs.add(message);
+                }
+            }
+
+            @Override
+            public void flush() {
+            }
+
+            @Override
+            public void close() {
+            }
+        };
+        assignmentLogger.addHandler(lostHandler);
         KafkaMatchingShardAssignment first = newOperationalMember("m1", buildMapProducer());
         first.start();
         startConfirming(first);
@@ -260,23 +282,27 @@ class KafkaMatchingShardAssignmentIntegrationTest {
         startConfirming(second);
         awaitSplit(first, second);
         awaitCondition("둘째의 맵 쓰기가 모두 끝났다", () -> second.slotsWaitingForMove().isEmpty() && first.slotsWaitingForMove().isEmpty());
-        assertThat(secondMovingSends).as("그룹에서 빼기 전 둘째는 회수를 받은 적이 없다").isEmpty();
+        assertThat(secondSends).as("그룹에서 빼기 전 둘째가 보낸 값은 자기 평상시 값뿐이다").allMatch(secondPlain::equals);
 
         try (Admin admin = Admin.create(adminProps())) {
             admin.removeMembersFromConsumerGroup(groupId,
                 new RemoveMembersFromConsumerGroupOptions(List.of(new MemberToRemove("m2")))).all().get();
         }
 
-        awaitCondition("그룹에서 빠진 둘째의 담당 표시가 모두 꺼졌다(lost 또는 회수 콜백이 불렸다)",
-            () -> second.currentSlotsSnapshot().size() < STOCK_SLOT_COUNT - first.currentSlotsSnapshot().size()
-                || second.currentSlotsSnapshot().isEmpty());
-        awaitCondition("첫째가 둘째의 종목 slot까지 받았다 또는 둘째가 다시 가입했다",
-            () -> first.currentSlotsSnapshot().size() + second.currentSlotsSnapshot().size() >= STOCK_SLOT_COUNT);
-        assertThat(secondMovingSends)
-            .as("lost를 받은 둘째가 맵에 이동 중 표시를 올렸다면 회수 콜백(onPartitionsRevoked)이 불린 것이다")
-            .isEmpty();
+        try {
+            awaitCondition("둘째가 lost 콜백을 받았다(lost 로그) 또는 회수 콜백을 받았다(평상시가 아닌 값을 보냄)",
+                () -> !lostLogs.isEmpty() || secondSends.stream().anyMatch(value -> !secondPlain.equals(value)));
+            awaitCondition("첫째가 둘째의 종목 slot까지 받았다 또는 둘째가 다시 가입했다",
+                () -> first.currentSlotsSnapshot().size() + second.currentSlotsSnapshot().size() >= STOCK_SLOT_COUNT);
+        } finally {
+            assignmentLogger.removeHandler(lostHandler);
+        }
+        assertThat(lostLogs).as("Kafka가 그룹에서 뺀 정적 멤버에게 부른 콜백이 lost여야 한다").isNotEmpty();
+        assertThat(secondSends)
+            .as("lost를 받은 둘째가 맵에 평상시 값이 아닌 값(이동 중 표시나 tombstone)을 올렸다면 회수 콜백이 불린 것이다")
+            .allMatch(secondPlain::equals);
         assertThat(MapTopicHistory.read(BOOTSTRAP, mapTopic).values().stream().flatMap(List::stream))
-            .doesNotContain(secondMoving);
+            .doesNotContain(secondPlain + ";moving");
     }
 
     private KafkaMatchingShardAssignment newMember(String instanceId, String assignmentTopicName) {
@@ -346,6 +372,15 @@ class KafkaMatchingShardAssignmentIntegrationTest {
                     throw e.getCause();
                 }
             });
+    }
+
+    /** 맵 쓰기 thread(이름 matching-shard-map-writer)가 모두 queue에서 꺼낼 것을 기다리는 상태(WAITING)가 되기를 기다린다. */
+    private void awaitMapWriterIdle() {
+        awaitCondition("맵 쓰기 thread가 queue가 빈 채 기다리는 상태다", () -> {
+            List<Thread> writers = Thread.getAllStackTraces().keySet().stream()
+                .filter(thread -> thread.getName().equals("matching-shard-map-writer") && thread.isAlive()).toList();
+            return !writers.isEmpty() && writers.stream().allMatch(thread -> thread.getState() == Thread.State.WAITING);
+        });
     }
 
     private void awaitCondition(String description, java.util.function.BooleanSupplier condition) {
