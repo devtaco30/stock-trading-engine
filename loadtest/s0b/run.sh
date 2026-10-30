@@ -24,7 +24,7 @@ docker run -d --name s0b-kafka -p 19092:19092 \
  -e KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0 apache/kafka@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837 >/dev/null
 for _ in $(seq 1 60); do docker exec s0b-kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:19092 --list >/dev/null 2>&1 && break; sleep 1; done
 cleanup(){ while read -r p; do kill $p 2>/dev/null; done < $W/pids; sleep 3; docker rm -f s0b-kafka >/dev/null 2>&1
-  mkdir -p "$OUT"; rm -rf "$OUT/logs"; cp -R $LOG "$OUT/logs" 2>/dev/null; cp $W/prefill-start $W/prefill-end $W/measure-start $W/measure-end "$OUT/" 2>/dev/null
+  mkdir -p "$OUT"; rm -rf "$OUT/logs"; cp -R $LOG "$OUT/logs" 2>/dev/null; cp $W/prefill-start $W/prefill-end $W/measure-start $W/measure-end "$OUT/" 2>/dev/null; [ -d $W/js ] && cp -R $W/js "$OUT/js"
   printf 'ACCTS=%s PREFILL_PER_STOCK=%s PER_STOCK=%s ORDER_LOG=%s HOLD=%s\n' "$N" "$PREFILL" "$PER" "$OLOG" "${HOLD:-0}" > "$OUT/params.txt"; }
 trap cleanup EXIT
 if [ "${SKIP_BUILD:-0}" != 1 ]; then
@@ -68,9 +68,17 @@ if [ "$PREFILL" -gt 0 ]; then
   date +%s.%N > $W/prefill-end
 fi
 date +%s.%N > $W/measure-start
+# JSTACK_INTERVAL(초)이 있으면 측정 단계 동안 그 간격으로 계좌 JVM의 thread dump를 뜬다(jstack 한 번이 수십~수백 ms 걸려 실제 간격은 더 길다). 덤프마다 시각 파일을 남긴다.
+SAMPLER=""
+if [ -n "${JSTACK_INTERVAL:-}" ]; then
+  mkdir -p $W/js
+  ( i=0; while true; do i=$((i+1)); date +%s.%N > $W/js/$i.ts; jstack $AP > $W/js/$i.txt 2>&1; sleep $JSTACK_INTERVAL; done ) & SAMPLER=$!
+  echo $SAMPLER >> $W/pids
+fi
 send "$PER" run || { echo SEND_NOT_CONFIRMED; exit 3; }
 EXPECT=$((EXPECT + PER * STOCK_COUNT))
 wait_accepted $EXPECT || { echo "ACCEPTED_MISMATCH 기대 $EXPECT 실제 $(accepted_total)"; exit 4; }
 date +%s.%N > $W/measure-end
+[ -n "$SAMPLER" ] && kill $SAMPLER 2>/dev/null
 sleep 3
 echo "VALID accepted=$EXPECT"
