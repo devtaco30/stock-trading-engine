@@ -32,7 +32,7 @@ for line in open(account_log, errors="replace"):
         m = re.search(r"accepted=(\d+) rejected=(\d+) .*acceptedTotal=(\d+)", line)
         report.append((log_ts(line), int(m.group(1)), int(m.group(2)), int(m.group(3))))
     elif "account-engine ringRemaining=" in line:
-        m = re.search(r"ringRemaining=(-?\d+) ringFullWaits=(\d+) journalBackPressure=(\d+) journalOtherRetries=(\d+)", line)
+        m = re.search(r"ringRemaining=(-?\d+) ringFullWaits=(\d+) (?:ringFullWaitMs=[\d.]+ )?journalBackPressure=(\d+) journalOtherRetries=(\d+)", line)
         report.append((log_ts(line), "E", *map(int, m.groups())))
 
 result = {"params": params}
