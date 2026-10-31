@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -85,6 +86,26 @@ class AccountEngineOpenOrderLimitRecoveryTest {
         assertEquals(2, recovered.accountState(1L).openOrderCount());
     }
 
+    @Test
+    @DisplayName("매도도 같은 상한 값으로 복구하면 원래 접수된 주문 수와 같다")
+    void 매도도_같은_상한으로_복구하면_판정이_같다() throws InterruptedException {
+        InMemoryAccountJournal journal = journalOfThreeSellsUnderLimit(2);
+
+        recovered = recoverSellsWith(2, journal.entries());
+
+        assertEquals(2, recovered.accountState(1L).openOrderCount());
+    }
+
+    @Test
+    @DisplayName("매도를 더 작은 상한 값으로 복구하면 원래 접수된 주문이 거부되어 판정이 달라진다")
+    void 매도를_상한을_낮춰_복구하면_접수가_거부로_바뀐다() throws InterruptedException {
+        InMemoryAccountJournal journal = journalOfThreeSellsUnderLimit(2);
+
+        recovered = recoverSellsWith(1, journal.entries());
+
+        assertEquals(1, recovered.accountState(1L).openOrderCount());
+    }
+
     /** limit이 0이면 상한을 설정하지 않은 엔진으로 세 주문을 접수시키고 그 저널을 돌려준다. */
     private InMemoryAccountJournal journalOfThreeBuysUnderLimit(int limit) throws InterruptedException {
         InMemoryAccountJournal journal = new InMemoryAccountJournal();
@@ -100,6 +121,29 @@ class AccountEngineOpenOrderLimitRecoveryTest {
         live.publishBuy(1L, STOCK, PRICE, 1, "r3");
         assertTrue(done.await(2, TimeUnit.SECONDS));
         return journal;
+    }
+
+    /** 보유 10주를 시드한 계좌에서 매도 세 건을 접수시키고(상한 limit) 그 저널을 돌려준다. */
+    private InMemoryAccountJournal journalOfThreeSellsUnderLimit(int limit) throws InterruptedException {
+        InMemoryAccountJournal journal = new InMemoryAccountJournal();
+        CountDownLatch done = new CountDownLatch(3);
+        live = new AccountEngine(1024, new BlockingWaitStrategy(), ProducerType.SINGLE, NODE_ID, new NoopSender(), new CountingListener(done), journal);
+        live.setOpenOrderLimit(limit);
+        live.seed(1L, new BigDecimal("1000000"), new BigDecimal("0.40"), Map.of(STOCK, 10));
+        live.start();
+        live.publishSell(1L, STOCK, PRICE, 1, "s1");
+        live.publishSell(1L, STOCK, PRICE, 1, "s2");
+        live.publishSell(1L, STOCK, PRICE, 1, "s3");
+        assertTrue(done.await(2, TimeUnit.SECONDS));
+        return journal;
+    }
+
+    private AccountEngine recoverSellsWith(int limit, Iterable<AccountJournalEntry> entries) {
+        AccountEngine engine = new AccountEngine(1024, NODE_ID, new NoopSender(), new CountingListener(new CountDownLatch(0)));
+        engine.setOpenOrderLimit(limit);
+        engine.seed(1L, new BigDecimal("1000000"), new BigDecimal("0.40"), Map.of(STOCK, 10));
+        engine.recover(entries);
+        return engine;
     }
 
     private AccountEngine recoverWith(int limit, Iterable<AccountJournalEntry> entries) {

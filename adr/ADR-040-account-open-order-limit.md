@@ -21,8 +21,8 @@
 상한에 이른 계좌의 새 주문은 거부하고, 기존 주문은 그대로 두며, 체결로 줄면 다시 접수한다. 이 동작은 정해져 있다. 정할 것은 복구가 상한 값을 어디서 받느냐다.
 
 1. **엔진 설정값에서만 읽는다(채택).** 재적용도 지금 설정값으로 판정한다. 저널 형식은 바뀌지 않는다.
-2. **접수 시점의 상한 값을 저널 엔트리에 싣는다.** 코덱 flags에 비트 하나를 추가하고 그 비트가 서면 4바이트를 붙인다. 비트가 없는 옛 엔트리는 상한 없음으로 읽힌다.
-3. **거부 판정 자체를 `holdingFull`처럼 수신 thread가 저널에 싣는다.** 쓸 수 없다. 미체결 개수는 계좌 상태 안에 있고 그 상태는 처리 thread만 고친다. 수신 thread가 이벤트를 링버퍼에 올리는 시점에는 앞에 쌓인 주문이 아직 반영되기 전이라 맞는 개수를 알 수 없다.
+2. **접수 시점의 상한 값을 저널 엔트리에 싣는다.** `AccountJournalEntryCodec`의 flags 비트(쓰는 중인 것은 `PRICE_PRESENT`, `STOCK_CODE_PRESENT`, `REQUEST_ID_PRESENT`, `HOLDING_FULL`이고 `AccountJournalEntryCodec.java:33-37`) 하나를 더하고, 그 비트가 서면 int 4바이트를 price 뒤, stockCode 앞에서 읽는다(읽기 순서 `:99-116`, requestId가 맨 뒤라 그 뒤에는 둘 수 없다). 비트가 없는 옛 엔트리는 상한 없음으로 읽힌다.
+3. **거부 판정 자체를 `holdingFull`처럼 수신 thread가 저널에 싣는다.** 쓸 수 없다. 미체결 개수는 계좌 상태 안에 있고 그 상태는 처리 thread만 고친다. 수신 thread가 이벤트를 링버퍼에 올리는 시점에는 앞에 쌓인 주문이 아직 반영되기 전이라 맞는 개수를 알 수 없다. 또 저널 핸들러가 기록한 뒤에 비즈니스 핸들러가 읽는 순서라(`AccountEngine.java:176`, `handleEventsWith(journalHandler).then(businessHandler)`), 거부 여부라는 처리 결과는 저널을 기록하는 시점에 아직 존재하지 않는다.
 
 ## 트레이드오프
 
@@ -60,9 +60,11 @@
 - 같은 상한 값으로 복구하면 원래와 같은 개수로 복원되고, 더 낮추거나 올리거나 상한 없던 저널을 상한을 두고 복구하면 달라진다(`AccountEngineOpenOrderLimitRecoveryTest`, 4건). 운영 규칙 1·2의 근거다.
 - 필수 설정 검증(`AccountWorkerPropertiesTest`, 4건), 설정값이 엔진에 적용되는지(`AccountEngineConfigTest`), `AccountState`의 개수 계산(3건), 하네스 스크립트의 필수 변수(`test_v2_workers.sh`).
 
-알려진 대가가 둘이다.
+알려진 대가가 넷이다.
 
 - 상한으로 거부된 요청의 `requestId`도 장부에 남는다(`AccountState.isDuplicateRequest`가 확인과 동시에 기록한다). 같은 번호로 다시 보내면 중복으로 처리되므로 클라이언트는 새 번호를 써야 한다. 장부에는 보존 상한이 있어(`boundedSet`) 아주 오래되면 빠질 수 있다.
 - 취소가 없어 상한에 닿은 계좌는 체결로 줄어들 때까지 새 주문을 받지 못한다. 풀 방법이 없다.
+- 매칭 pod가 담당이 아니라며 돌려보낸 주문은 재전송 대기 목록에 들어가 담당이 생기면 다시 나간다(`AeronMatchingOrderSender.java:428`의 `hold(order, true)`, 매칭 쪽도 회신을 버리지 않는다고 `RejectReplyPublisher.java` 클래스 주석에 적혀 있다). 그래서 예약은 풀리지 않고, 담당이 없는 종목 slot의 주문은 보관 목록에서 기다리는 동안에도 미체결로 센다. 예약을 푸는 코드는 체결로 잔량이 0이 될 때(`AccountState.java:272`, `:336`)뿐이다. 이 범위 밖인 매칭 쪽 폐기 경로는 확인하지 못했다.
+- 감지 장치가 없다. 상한 값은 저널(`AccountJournalEntry`에 필드가 없다)과 스냅샷(`AccountSnapshot`은 `accountsById`, `generatorCounter`, `journalPosition`뿐)에 남지 않고, 시작할 때 이전 값과 비교하는 검사도 없다. 운영 규칙을 어기고 값을 바꿔 이어서 시작해도 경고나 기동 거부 없이 판정이 달라진다.
 
 이 결정으로 달라지지 않은 것: 상한 숫자는 정하지 않았다. 숫자가 처리량에 주는 영향은 재지 않았다. 같은 계좌의 미체결을 매수와 매도로 따로 세지 않고 하나로 센다.
