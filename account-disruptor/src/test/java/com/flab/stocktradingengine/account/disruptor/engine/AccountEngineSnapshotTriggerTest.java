@@ -100,8 +100,8 @@ class AccountEngineSnapshotTriggerTest {
     }
 
     @Test
-    @DisplayName("싱크가 durable을 보고하면 두 세대 전 tradeId는 가지치기되어 재도착 시 다시 반영된다")
-    void durable_보고되면_두세대전_가지치기된다() throws InterruptedException {
+    @DisplayName("싱크가 durable을 보고한 뒤 다음 스냅샷 시점에 두 세대 전 tradeId가 가지치기된다")
+    void durable_보고되면_다음_스냅샷에서_두세대전_가지치기된다() throws InterruptedException {
         RecordingSnapshotSink sink = new RecordingSnapshotSink();
         engine = new AccountEngine(1024, new BlockingWaitStrategy(), ProducerType.SINGLE, NODE_ID,
             NO_OP_SENDER, NoOpAccountResultListener.INSTANCE, new com.flab.stocktradingengine.account.disruptor.journal.InMemoryAccountJournal(), sink);
@@ -118,18 +118,90 @@ class AccountEngineSnapshotTriggerTest {
 
         sink.durableSeq.set(sink.offers.get(0).appliedSeq()); // 첫 스냅샷이 durable해졌다고 보고
 
-        // pruneIfDurable은 "이번 이벤트를 다 처리한 뒤"에 실행된다(다음 이벤트의 가지치기 여부를
-        // 정하는 것이지, durableSeq를 올린 그 순간 즉시 과거로 소급 적용되지 않는다) — 그래서
-        // durableSeq를 올린 뒤 진짜(중복 아닌) 체결을 하나 흘려보내 가지치기를 한 번 통과시킨다.
+        // 가지치기는 스냅샷 시점(세대 경계를 여는 이벤트)에만 일어난다 — 세 번째 경계를 넘긴다.
+        fillDummyEvents(SNAPSHOT_INTERVAL);
+        awaitOfferCount(sink, 3);
+
+        // 세 번째 offer는 가지치기 직전에 나가므로, 엔진을 멈춰(소비 thread 종료) 가지치기가 끝난 상태를 읽는다.
+        engine.shutdown();
+
+        assertFalse(isTradeIdRemembered(1L, 9001L),
+            "durable 보고 뒤 세 번째 경계에서 두 세대 전(첫 세대)의 tradeId가 가지치기돼야 한다");
+    }
+
+    @Test
+    @DisplayName("durable을 보고한 뒤에도 스냅샷 경계가 아닌 일반 이벤트는 가지치기하지 않는다")
+    void 일반_이벤트로는_가지치기하지_않는다() throws InterruptedException {
+        RecordingSnapshotSink sink = new RecordingSnapshotSink();
+        engine = new AccountEngine(1024, new BlockingWaitStrategy(), ProducerType.SINGLE, NODE_ID,
+            NO_OP_SENDER, NoOpAccountResultListener.INSTANCE, new com.flab.stocktradingengine.account.disruptor.journal.InMemoryAccountJournal(), sink);
+        engine.seed(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
+        engine.start();
+
+        engine.publishBuy(1L, STOCK, new BigDecimal("10000"), 5, "r1");
+        awaitAccountSeq(1L, 1L);
+        long orderId = orderId(1);
+        engine.publishBuyFill(9001L, orderId, 1L, STOCK, new BigDecimal("10000"), 2, 100L);
+
+        fillDummyEvents(2 * SNAPSHOT_INTERVAL); // 3세대 존재, 세 번째 경계는 아직 안 넘음
+        awaitOfferCount(sink, 2);
+        // offer는 가지치기 판정 직전에 나가므로, 이벤트 하나를 더 처리시켜 두 번째 경계가 완전히 끝난 뒤에 durable을 올린다.
+        engine.publishBuyFill(9003L, orderId, 1L, STOCK, new BigDecimal("10000"), 1, 220L);
+        awaitFillPosition(220L);
+        sink.durableSeq.set(sink.offers.get(0).appliedSeq());
+
+        // 경계를 넘기지 않는 일반 체결 이벤트 — 예전에는 이 이벤트가 끝날 때마다 가지치기를 돌렸다.
         engine.publishBuyFill(9002L, orderId, 1L, STOCK, new BigDecimal("10000"), 1, 250L);
         awaitFillPosition(250L);
 
-        BigDecimal balanceBeforeReplay = engine.accountState(1L).balance();
-        engine.publishBuyFill(9001L, orderId, 1L, STOCK, new BigDecimal("10000"), 1, 300L); // 같은 tradeId, 남은 잔량 2
-        awaitBalanceChanged(balanceBeforeReplay);
+        engine.shutdown(); // 소비 thread가 멈춘 뒤 읽는다
 
-        assertFalse(engine.accountState(1L).balance().compareTo(balanceBeforeReplay) == 0,
-            "가지치기된 tradeId 재도착은 새 체결로 취급돼 잔고가 바뀌어야 한다");
+        assertTrue(isTradeIdRemembered(1L, 9001L),
+            "스냅샷 경계 전이므로 두 세대 전 tradeId가 아직 남아 있어야 한다");
+    }
+
+    @Test
+    @DisplayName("durableSeq 조회와 가지치기는 이벤트마다가 아니라 스냅샷 경계에서만 일어난다")
+    void durableSeq는_스냅샷_경계에서만_조회한다() throws InterruptedException {
+        RecordingSnapshotSink sink = new RecordingSnapshotSink();
+        engine = new AccountEngine(1024, new BlockingWaitStrategy(), ProducerType.SINGLE, NODE_ID,
+            NO_OP_SENDER, NoOpAccountResultListener.INSTANCE, new com.flab.stocktradingengine.account.disruptor.journal.InMemoryAccountJournal(), sink);
+        engine.seed(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
+        engine.start();
+
+        engine.publishBuy(1L, STOCK, new BigDecimal("10000"), 5, "r1");
+        awaitAccountSeq(1L, 1L);
+        fillDummyEvents(2 * SNAPSHOT_INTERVAL);
+        awaitOfferCount(sink, 2);
+        engine.publishBuyFill(9002L, orderId(1), 1L, STOCK, new BigDecimal("10000"), 1, 250L);
+        awaitFillPosition(250L);
+
+        assertTrue(sink.durableSeqCalls.get() <= sink.offers.size(),
+            "durableSeq는 스냅샷 경계마다 많아야 한 번 조회돼야 한다: 조회 " + sink.durableSeqCalls.get() + "회, 스냅샷 " + sink.offers.size() + "회");
+    }
+
+    @Test
+    @DisplayName("이벤트가 없는 계좌도 스냅샷 경계에서 가지치기돼 세대 수가 keep(2)을 넘지 않는다")
+    void 이벤트_없는_계좌의_세대_수도_keep을_넘지_않는다() throws InterruptedException {
+        RecordingSnapshotSink sink = new RecordingSnapshotSink();
+        sink.durableSeq.set(1L); // 처음부터 durable 스냅샷이 있다고 보고
+        engine = new AccountEngine(1024, new BlockingWaitStrategy(), ProducerType.SINGLE, NODE_ID,
+            NO_OP_SENDER, NoOpAccountResultListener.INSTANCE, new com.flab.stocktradingengine.account.disruptor.journal.InMemoryAccountJournal(), sink);
+        engine.seed(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
+        engine.seed(2L, new BigDecimal("1000000"), new BigDecimal("0.40")); // 이후 이벤트를 받지 않는 계좌
+        engine.start();
+
+        engine.publishBuy(1L, STOCK, new BigDecimal("10000"), 5, "r1");
+        awaitAccountSeq(1L, 1L);
+        fillDummyEvents(4 * SNAPSHOT_INTERVAL); // 경계 네 번
+        awaitOfferCount(sink, 4);
+        engine.publishBuyFill(9002L, orderId(1), 1L, STOCK, new BigDecimal("10000"), 1, 250L);
+        awaitFillPosition(250L);
+
+        engine.shutdown();
+        int generationsOfIdleAccount = engine.accountState(2L).toSnapshot().tradeIdGenerations().size();
+        assertTrue(generationsOfIdleAccount <= 2,
+            "이벤트가 없는 계좌의 세대 수는 keep(2) 이하여야 한다: " + generationsOfIdleAccount);
     }
 
     @Test
@@ -148,6 +220,12 @@ class AccountEngineSnapshotTriggerTest {
         }
 
         assertTrue(sink.offers.isEmpty(), "트리거를 꺼두면 N건 경계를 두 번 넘어가도 offer가 없어야 한다(복구 replay 낭비 제거)");
+    }
+
+    /** 엔진을 멈춘 뒤(소비 thread 종료 후)에만 부른다 — 어느 세대에든 이 tradeId가 남아 있는지. */
+    private boolean isTradeIdRemembered(long accountId, long tradeId) {
+        return engine.accountState(accountId).toSnapshot().tradeIdGenerations().stream()
+            .anyMatch(generation -> generation.tradeIds().contains(tradeId));
     }
 
     /** 이미 처리된 requestId("r1")를 반복 재전송해 appliedSeq만 밀어 올린다 — 매번 빠른 dup 경로(빠름). */
@@ -206,6 +284,7 @@ class AccountEngineSnapshotTriggerTest {
     private static final class RecordingSnapshotSink implements AccountSnapshotSink {
         private final List<Offer> offers = new CopyOnWriteArrayList<>();
         private final AtomicLong durableSeq = new AtomicLong(0L);
+        private final AtomicLong durableSeqCalls = new AtomicLong(0L);
 
         @Override
         public boolean offer(byte[] snapshotBytes, Map<Integer, Long> fillPositions, long journalPosition, long appliedSeq) {
@@ -215,6 +294,7 @@ class AccountEngineSnapshotTriggerTest {
 
         @Override
         public long durableSeq() {
+            durableSeqCalls.incrementAndGet();
             return durableSeq.get();
         }
 

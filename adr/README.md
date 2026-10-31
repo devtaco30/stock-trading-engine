@@ -50,5 +50,6 @@
 | | 035 | [체결·정산·주문 접수 기록이 무한히 쌓이는 현상 방어](ADR-035-idempotency-ledger-bounds.md) | |
 | ★ | 036 | [주문 하나가 잔고 예약까지 끝난 시점에서 v1과 v2를 비교한다](ADR-036-v1-v2-measurement-design.md) | v1/v2 속도 수치의 근거. 비교 지점은 ADR-038이 대체 |
 | ★ | 038 | [v1과 v2는 주문 발행부터 체결 완료까지로 비교하고, v2는 수신 스레드의 최대 대기 시간을 50µs로 줄인다](ADR-038-v1-v2-compare-to-match-complete-and-thread-wait.md) | ADR-036의 비교 지점을 대체 |
+| | 039 | [체결 번호 구간 정리는 이벤트마다가 아니라 스냅샷 경계에서 한 번만 한다](ADR-039-prune-at-snapshot-boundary.md) | ADR-034의 정리 호출 시점을 대체 |
 
 번호가 빈 자리(022·024·026·029)는 `decision_records/`에만 남은 결정이다. ADR로 올릴 때 그 번호를 쓴다.

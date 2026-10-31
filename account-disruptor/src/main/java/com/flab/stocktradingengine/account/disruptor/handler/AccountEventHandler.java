@@ -235,7 +235,6 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
         if (snapshotTriggerEnabled && appliedSeq % SNAPSHOT_INTERVAL_JOURNAL_ENTRIES == 0) {
             takeSnapshotAndStartNewGeneration();
         }
-        pruneIfDurable();
     }
 
     /**
@@ -255,14 +254,18 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
         if (!offered) {
             log.log(Level.WARNING, "[계좌] 스냅샷 쓰기 큐가 가득 차 이번 회차 스킵: appliedSeq=" + appliedSeq);
         }
+        pruneIfDurable();
     }
 
     /**
-     * durable하다고 보고된 스냅샷이 하나라도 있으면(durableSeq&gt;0) 두 세대 전을 가지치기한다.
-     * durableSeq 값 자체과 비교해 "새로 진행된 경계만" 가지치기하지 않는다 — 세대가 여러 번
+     * 스냅샷 경계({@link #takeSnapshotAndStartNewGeneration})에서만 부른다. durable하다고 보고된
+     * 스냅샷이 하나라도 있으면(durableSeq&gt;0) 모든 계좌의 두 세대 전을 가지치기한다.
+     * 세대는 이 경계에서만 늘어나므로 가지치기도 이 경계에서 한 번이면 충분하다. 이벤트마다
+     * 전체 계좌를 순회하면 계좌 수에 비례해 이벤트당 비용이 커진다(계좌 3,000개에서 업무
+     * thread 시간의 58%, ADR-039).
+     * durableSeq 값 자체와 비교해 "새로 진행된 경계만" 가지치기하지 않는다 — 세대가 여러 번
      * 열린 뒤에야 durableSeq가 갱신될 수 있어(쓰기 스레드가 느림), 그렇게 하면 이미 안전한데도
-     * 미뤄지는 세대가 생긴다. {@link AccountState#pruneOlderThan}은 세대 수가 keep 이하면 즉시
-     * 반환하므로(1-4), 매 이벤트마다 불러도 비용이 무해하다.
+     * 미뤄지는 세대가 생긴다. {@link AccountState#pruneOlderThan}은 세대 수가 keep 이하면 즉시 반환한다.
      */
     private void pruneIfDurable() {
         if (snapshotSink.durableSeq() > 0) {
