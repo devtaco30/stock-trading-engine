@@ -233,6 +233,23 @@ public final class U10Tool {
         return bulkOrders(accountId, side, firstPrice, perStock, 1, prefix, targets, sink);
     }
 
+    /** 환경변수 U10_SENDER_WAIT_MS 값을 읽는다. 없거나 비면 30초(30_000)이고, 양의 정수가 아니면 거부한다. 느린 계좌 워커로 보내는 긴 실행은 더 길게 준다. */
+    static long parseSenderWaitMillis(String value) {
+        if (value == null || value.isEmpty()) {
+            return 30_000L;
+        }
+        long millis;
+        try {
+            millis = Long.parseLong(value);
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("U10_SENDER_WAIT_MS는 양의 정수여야 한다: " + value, e);
+        }
+        if (millis < 1) {
+            throw new IllegalArgumentException("U10_SENDER_WAIT_MS는 양의 정수여야 한다: " + value);
+        }
+        return millis;
+    }
+
     /** 환경변수 BULK_ACCOUNTS 값을 읽는다. 없거나 비면 1(계좌 하나)이고, 양의 정수가 아니면 거부한다. */
     static int parseBulkAccounts(String value) {
         if (value == null || value.isEmpty()) {
@@ -313,11 +330,12 @@ public final class U10Tool {
     /** 마지막 offer 뒤 닫기 전에 부른다. 내보내지 못했으면 SENDER_POSITION_NOT_REACHED(종료 코드 3), 카운터를 못 찾으면 SENDER_POSITION_COUNTER_NOT_FOUND(종료 코드 4)로 끝낸다. */
     private static void flushOrFail(Aeron aeron, Publication publication) {
         long target = publication.position();
-        SenderWait result = awaitSenderPosition(aeron.countersReader(), publication.registrationId(), target, 30_000L);
+        long waitMillis = parseSenderWaitMillis(System.getenv("U10_SENDER_WAIT_MS"));
+        SenderWait result = awaitSenderPosition(aeron.countersReader(), publication.registrationId(), target, waitMillis);
         switch (result) {
             case REACHED -> System.out.println("SENDER_POSITION_REACHED " + target);
             case NOT_REACHED -> {
-                System.out.println("SENDER_POSITION_NOT_REACHED 발행 위치=" + target + " (30초 안에 UDP로 다 내보내지 못했다)");
+                System.out.println("SENDER_POSITION_NOT_REACHED 발행 위치=" + target + " (" + (waitMillis / 1000) + "초 안에 UDP로 다 내보내지 못했다)");
                 System.exit(3);
             }
             case COUNTER_NOT_FOUND -> {

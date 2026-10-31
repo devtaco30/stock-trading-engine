@@ -55,8 +55,8 @@ send() { # <종목당 주문 수> <prefix> -> 출력에서 송신 위치 도달�
   echo "$out" | grep -E "SENT_BULK|OFFER_FAILED|NOT_CONNECTED|SENDER_POSITION"
   grep -q SENDER_POSITION_REACHED <<<"$out"
 }
-wait_accepted() { # <기대 누적> — 보고기의 acceptedTotal이 기대값에 닿을 때까지(최대 180초)
-  for _ in $(seq 1 180); do [ "$(accepted_total)" = "$1" ] && return 0; sleep 1; done; return 1
+wait_accepted() { # <기대 누적> — 보고기의 acceptedTotal이 기대값에 닿을 때까지(최대 ACCEPT_WAIT_SECS초, 기본 180초. 느린 실행은 길게 준다)
+  for _ in $(seq 1 "${ACCEPT_WAIT_SECS:-180}"); do [ "$(accepted_total)" = "$1" ] && return 0; sleep 1; done; return 1
 }
 EXPECT=0
 if [ "$PREFILL" -gt 0 ]; then

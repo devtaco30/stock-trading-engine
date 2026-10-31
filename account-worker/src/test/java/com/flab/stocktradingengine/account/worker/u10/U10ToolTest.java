@@ -164,6 +164,16 @@ class U10ToolTest {
     }
 
     @Test
+    void U10_SENDER_WAIT_MS_값은_없으면_30초이고_양의_정수가_아니면_거부한다() {
+        assertEquals(30_000L, U10Tool.parseSenderWaitMillis(null));
+        assertEquals(30_000L, U10Tool.parseSenderWaitMillis(""));
+        assertEquals(600_000L, U10Tool.parseSenderWaitMillis("600000"));
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> U10Tool.parseSenderWaitMillis("0"));
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> U10Tool.parseSenderWaitMillis("-5"));
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> U10Tool.parseSenderWaitMillis("abc"));
+    }
+
+    @Test
     void stream_계획은_종목마다_매도와_매수를_번갈아_정해진_속도로_내고_잔고_초과_주문을_한_건_섞는다() {
         U10Tool.StreamSpec spec = new U10Tool.StreamSpec(1_000L, 200, 20, "000001", "000002", 90002L, 90001L, 20000L);
         List<U10Tool.PlannedOrder> plan = U10Tool.streamPlan(spec);
