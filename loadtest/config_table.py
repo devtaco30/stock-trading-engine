@@ -17,7 +17,7 @@ UNDECIDED = "정할 조건"
 
 
 def achievement(completed_rps, baseline_rps, max_ratio):
-    if not completed_rps or not baseline_rps or not max_ratio or baseline_rps <= 0 or max_ratio <= 0:
+    if completed_rps is None or not baseline_rps or not max_ratio or baseline_rps <= 0 or max_ratio <= 0:
         return None
     return completed_rps / (baseline_rps * (1 / max_ratio))
 

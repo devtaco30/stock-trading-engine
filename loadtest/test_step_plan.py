@@ -2,6 +2,7 @@
 """12-4절 단계 길이 하한과 H4 입력 크기 계산 시험. 숫자 값은 설계서 12-4절의 예시를 그대로 쓴다.
 실행: python3 -I loadtest/test_step_plan.py   (저장소 루트에서)
 """
+import subprocess
 import sys
 import unittest
 from pathlib import Path
@@ -31,6 +32,37 @@ class StepFloorTest(unittest.TestCase):
         self.assertEqual(65536, sp.ring_capacity(65536))
         self.assertEqual(1024, sp.ring_capacity(1024))
         self.assertEqual(1, sp.ring_capacity(1))
+
+
+class FloorMessageTest(unittest.TestCase):
+    def test_CLI는_설정값을_2의_거듭제곱으로_올려_합산한다(self):
+        # 50000 -> 65536, 합 65,536 ÷ 2,000 = 32.77
+        self.assertIn("32.77초", sp.floor_message([50000], 7000, 5000))
+
+    def test_하한_메시지에_Aeron_구간_제외와_모자랄_수_있음을_적는다(self):
+        message = sp.floor_message([1024], 7000, 5000)
+        self.assertIn("Aeron 구간 제외", message)
+        self.assertIn("이 값 이상이어도 모자랄 수 있다", message)
+
+    def test_큐가_차지_않으면_그_사실을_알린다(self):
+        self.assertIn("큐가 차지 않는다", sp.floor_message([1024], 5000, 5000))
+
+    def test_docstring에도_모자랄_수_있음을_적는다(self):
+        self.assertIn("이 값 이상이어도 모자랄 수 있다", sp.__doc__)
+
+
+class CliTest(unittest.TestCase):
+    def run_cli(self, *args):
+        script = Path(__file__).resolve().parent / "step_plan.py"
+        return subprocess.run([sys.executable, "-I", str(script), *args], capture_output=True, text=True)
+
+    def test_floor_CLI_출력은_설정값_50000을_65536으로_올려_계산한다(self):
+        result = self.run_cli("floor", "7000", "5000", "50000", "1024")
+        self.assertEqual(0, result.returncode)
+        self.assertIn("33.28초", result.stdout)
+
+    def test_floor_CLI_출력에_모자랄_수_있음을_적는다(self):
+        self.assertIn("이 값 이상이어도 모자랄 수 있다", self.run_cli("floor", "7000", "5000", "1024").stdout)
 
 
 class RequiredOrdersTest(unittest.TestCase):

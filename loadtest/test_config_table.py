@@ -18,6 +18,9 @@ class AchievementTest(unittest.TestCase):
     def test_비율_0_267이면_상한_3_75배(self):
         self.assertAlmostEqual(7500 / (2000 * (1 / 0.2667)), ct.achievement(7500, 2000, 0.2667), places=4)
 
+    def test_완료_RPS가_0이면_None이_아니라_0이다(self):
+        self.assertEqual(0.0, ct.achievement(0, 4000, 0.5))
+
     def test_입력이_없거나_0이면_None(self):
         self.assertIsNone(ct.achievement(6000, 4000, None))
         self.assertIsNone(ct.achievement(6000, 0, 0.5))
@@ -47,6 +50,11 @@ class RenderTest(unittest.TestCase):
         rows = self.rows()
         rows[1]["saturated"] = "예"
         self.assertIn("| 1×2 | 8000 | 6000 | 예 | 0.500 | 0.750 |", ct.render(rows, baseline_config="1×1"))
+
+    def test_완료_RPS가_0이면_달성률_칸에_0_000을_찍는다(self):
+        rows = self.rows()
+        rows[1]["completed_rps"] = 0
+        self.assertIn("| 1×2 | 8000 | 0 | 정할 조건 | 0.500 | 0.000 |", ct.render(rows, baseline_config="1×1"))
 
     def test_기준_구성이_없으면_달성률_칸은_비워_두고_이유를_알린다(self):
         table = ct.render(self.rows(), baseline_config="2×1")
