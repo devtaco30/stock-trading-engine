@@ -22,6 +22,8 @@ public class AccountEvent {
     private String requestId;
     private long tradeId;
     private boolean holdingFull;
+    // BUY·SELL을 올릴 때 적용된 계좌 미체결 상한. 0이면 상한 없음.
+    private int openOrderLimit;
     private long sourcePosition;
     private int sourceSessionId;
     private long journaledPosition;
@@ -120,6 +122,11 @@ public class AccountEvent {
         this.holdingFull = holdingFull;
     }
 
+    /** 수신 스레드가 BUY·SELL을 올릴 때 엔진에 설정된 계좌 미체결 상한(0이면 상한 없음). */
+    public void setOpenOrderLimit(int openOrderLimit) {
+        this.openOrderLimit = openOrderLimit;
+    }
+
     /** 저널 핸들러가 기록을 마친 뒤 그 시점의 저널 위치를 슬롯에 남긴다(1-2). 비즈니스 핸들러가 읽는다. */
     public void setJournaledPosition(long journaledPosition) {
         this.journaledPosition = journaledPosition;
@@ -167,6 +174,7 @@ public class AccountEvent {
         this.requestId = null;
         this.tradeId = 0L;
         this.holdingFull = false;
+        this.openOrderLimit = 0;
         this.sourcePosition = 0L;
         this.sourceSessionId = 0;
         this.journaledPosition = 0L;
@@ -214,6 +222,10 @@ public class AccountEvent {
 
     public boolean isHoldingFull() {
         return holdingFull;
+    }
+
+    public int getOpenOrderLimit() {
+        return openOrderLimit;
     }
 
     public long getSourcePosition() {

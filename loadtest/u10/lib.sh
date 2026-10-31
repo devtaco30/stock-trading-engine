@@ -91,6 +91,9 @@ shard_of() { case "$1" in *20020) echo 0;; *20021) echo 1;; *) echo "?";; esac; 
 
 # start_account [추가 인자...] — 기동이 끝날 때까지 기다린다.
 start_account() {
+    # u10-account.yml이 ${MAX_OPEN_ORDERS}를 읽는다. 기본값을 두지 않으므로 값이 없으면 앱을 띄우기 전에 멈춘다.
+    : "${MAX_OPEN_ORDERS:?MAX_OPEN_ORDERS를 지정해 주세요(계좌당 미체결 주문 수 상한, 기본값 없음. 상한 없는 비교용은 1000000)}"
+    export MAX_OPEN_ORDERS
     start_app account "$ACCOUNT_JAR" loadtest/u10/u10-account.yml "$@"
     for _ in $(seq 1 60); do grep -q "Started AccountWorkerApplication" "$LOG_DIR/account.log" && break; sleep 2; done
     grep -q "Started AccountWorkerApplication" "$LOG_DIR/account.log" || { fail "계좌 워커가 기동하지 않았다(로그 $LOG_DIR/account.log)"; exit 1; }

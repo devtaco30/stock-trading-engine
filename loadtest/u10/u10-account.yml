@@ -15,6 +15,9 @@ account:
     archive:
       control-channel: aeron:udp?endpoint=localhost:8010
 account-worker:
+  # 계좌당 미체결 상한. 기본값 없음 — 실행하는 쪽이 MAX_OPEN_ORDERS 환경변수로 넘긴다(없으면 기동 실패).
+  # 상한 없는 비교 측정은 1000000을 명시한다(「상한 없음에 해당하는 비교용」 값이며 운영 상한이 아니다).
+  max-open-orders-per-account: ${MAX_OPEN_ORDERS}
   seed-accounts:
     - account-id: 90001
       balance: 100000000

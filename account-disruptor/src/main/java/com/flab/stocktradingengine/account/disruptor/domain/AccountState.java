@@ -415,6 +415,11 @@ public final class AccountState {
         return holdings.getOrDefault(stockCode, 0);
     }
 
+    /** 미체결 주문 수 — 매수 예약과 매도 예약의 개수 합. 부분체결된 주문은 예약이 남아 있어 미체결로 센다. */
+    public int openOrderCount() {
+        return reservations.size() + sellReservations.size();
+    }
+
     /** 현재 보유 전체의 불변 스냅샷(계좌 상태 영속/프로젝션 트랙 Unit 2) — full-state 캡처용. */
     public Map<String, Integer> holdings() {
         return Map.copyOf(holdings);

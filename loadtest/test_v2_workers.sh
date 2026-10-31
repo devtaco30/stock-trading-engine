@@ -173,6 +173,30 @@ test_start_script() {
     assert_not_contains "워커에는 udp,e2e 프로파일이 없다" "$worker_fn" "spring.profiles.active"
 }
 
+test_max_open_orders_required() {
+    # 계좌 미체결 상한은 필수 설정이다. 하네스 스크립트 안에 기본값을 두면 상한 숫자를 스크립트가 정해 버리므로,
+    # 값이 없으면 어떤 부작용(도커 기동, 앱 기동, 폴더 생성)보다도 먼저 멈춰야 한다.
+    # ⚠️ 스크립트를 실제로 실행하지 않고 글자와 줄 순서만 본다 — 검사가 빠진 스크립트를 실행하면 인프라와 앱이 뜬다.
+    local script body check_line effect_line
+    for script in loadtest/run-e2e-v2.sh loadtest/run-v2.sh; do
+        body="$(cat "$script")"
+        check_line="$(grep -n 'MAX_OPEN_ORDERS:?' "$script" | head -1 | cut -d: -f1)"
+        effect_line="$(grep -nE 'mkdir -p|docker |nohup |start_app |source loadtest' "$script" | grep -v '^[0-9]*:[[:space:]]*#' | head -1 | cut -d: -f1)"
+        assert_eq "${script}: MAX_OPEN_ORDERS 필수 검사가 있다" "1" "$([ -n "$check_line" ] && echo 1 || echo 0)"
+        assert_eq "${script}: 필수 검사가 첫 부작용보다 앞이다" "1" "$([ -n "$check_line" ] && [ -n "$effect_line" ] && [ "$check_line" -lt "$effect_line" ] && echo 1 || echo 0)"
+        assert_contains "${script}: 오류 메시지가 변수 이름을 알려 준다" "$body" 'MAX_OPEN_ORDERS를 지정'
+        assert_contains "${script}: 계좌 워커에 상한 인자를 넘긴다" "$body" '--account-worker.max-open-orders-per-account=${MAX_OPEN_ORDERS}'
+        assert_not_contains "${script}: 기본값 문법이 없다" "$body" 'MAX_OPEN_ORDERS:-'
+        assert_not_contains "${script}: 기본값 대입이 없다" "$body" 'MAX_OPEN_ORDERS:='
+    done
+    local yml lib
+    yml="$(cat loadtest/u10/u10-account.yml)"
+    lib="$(cat loadtest/u10/lib.sh)"
+    assert_contains "u10 계좌 설정이 환경변수에서 상한을 읽는다" "$yml" 'max-open-orders-per-account: ${MAX_OPEN_ORDERS}'
+    assert_contains "u10 start_account가 변수를 요구한다" "$lib" ': "${MAX_OPEN_ORDERS:?'
+    assert_not_contains "u10 설정에 기본값 문법이 없다" "$yml" 'MAX_OPEN_ORDERS:-'
+}
+
 test_prepare_condition_order() {
     local body topics_line state_line app_line await_line
     body="$(declare -f prepare_condition)"
@@ -236,6 +260,7 @@ test_await_quiescent_v2
 test_await_v2_workers
 test_process_lists
 test_start_script
+test_max_open_orders_required
 test_prepare_condition_order
 test_round_uses_v2_quiescence
 test_v2_group_lag

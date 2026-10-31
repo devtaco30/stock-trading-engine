@@ -51,5 +51,6 @@
 | ★ | 036 | [주문 하나가 잔고 예약까지 끝난 시점에서 v1과 v2를 비교한다](ADR-036-v1-v2-measurement-design.md) | v1/v2 속도 수치의 근거. 비교 지점은 ADR-038이 대체 |
 | ★ | 038 | [v1과 v2는 주문 발행부터 체결 완료까지로 비교하고, v2는 수신 스레드의 최대 대기 시간을 50µs로 줄인다](ADR-038-v1-v2-compare-to-match-complete-and-thread-wait.md) | ADR-036의 비교 지점을 대체 |
 | | 039 | [체결 번호 구간 정리는 스냅샷 경계에서 한 번만 한다](ADR-039-prune-at-snapshot-boundary.md) | ADR-034의 정리 호출 시점을 대체 |
+| | 040 | [계좌당 미체결 주문 수에 상한을 두고, 복구는 엔진 설정값으로 판정한다](ADR-040-account-open-order-limit.md) | 상한 숫자는 미정. 값을 바꾸려면 저널·스냅샷을 비우고 시작 |
 
 번호가 빈 자리(022·024·026·029)는 `decision_records/`에만 남은 결정이다. ADR로 올릴 때 그 번호를 쓴다.

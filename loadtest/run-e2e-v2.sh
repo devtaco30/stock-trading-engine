@@ -9,6 +9,10 @@ set -euo pipefail
 # 기본값(WORKER_COUNT 안 주거나 1)은 기존 동작과 바이트 단위로 동일 — shard-routing 인자를
 # 아예 안 붙인다. 슬롯 경계(0~127/128~255)는 LLD D1(256칸 고정) 그대로.
 cd "$(dirname "$0")/.."
+# 계좌 미체결 상한(계좌 하나의 미체결 주문 수). 기본값을 두지 않는다 — 실행하는 쪽이 값을 정해 넘긴다.
+# 상한 없는 비교 측정이 필요하면 1000000을 명시한다(「상한 없음에 해당하는 비교용」 값이며 운영 상한이 아니다).
+: "${MAX_OPEN_ORDERS:?MAX_OPEN_ORDERS를 지정해 주세요(계좌당 미체결 주문 수 상한, 기본값 없음)}"
+MAX_OPEN_ORDERS_ARG=" --account-worker.max-open-orders-per-account=${MAX_OPEN_ORDERS}"
 
 # 구간 분해 측정(MEASURE_STAGES=1)이면 프로세스마다 --measure.stages.* 인자를 붙인다. 기본은 끔이라 기존 인자와 같다.
 # 계좌 워커를 둘 띄우는 WORKER_COUNT=2 분기는 계측 대상이 아니다(묶음 C는 워커 하나).
@@ -83,12 +87,12 @@ shard_args_fill() {
 E2E_RESULTS_ABS="$(pwd)/loadtest/results"
 
 if [ "$WORKER_COUNT" = "2" ]; then
-    start_app account-worker-a " --transport.account-intake.channel=aeron:udp?endpoint=localhost:20040 --transport.fill.channel=aeron:udp?endpoint=localhost:20060 --account.worker.archive.control-channel=aeron:udp?endpoint=localhost:8010$(shard_args_intake) --measure.latency.enabled=true --measure.latency.snapshot-trigger-path=${E2E_RESULTS_ABS}/latency-trigger-v2-a --measure.latency.output-path=${E2E_RESULTS_ABS}/latency-v2-account-worker-a.json" account-worker
-    start_app account-worker-b " --transport.account-intake.channel=aeron:udp?endpoint=localhost:20041 --transport.fill.channel=aeron:udp?endpoint=localhost:20061 --account.worker.archive.control-channel=aeron:udp?endpoint=localhost:8012$(shard_args_intake) --measure.latency.enabled=true --measure.latency.snapshot-trigger-path=${E2E_RESULTS_ABS}/latency-trigger-v2-b --measure.latency.output-path=${E2E_RESULTS_ABS}/latency-v2-account-worker-b.json" account-worker
+    start_app account-worker-a " --transport.account-intake.channel=aeron:udp?endpoint=localhost:20040 --transport.fill.channel=aeron:udp?endpoint=localhost:20060 --account.worker.archive.control-channel=aeron:udp?endpoint=localhost:8010$(shard_args_intake) --measure.latency.enabled=true --measure.latency.snapshot-trigger-path=${E2E_RESULTS_ABS}/latency-trigger-v2-a --measure.latency.output-path=${E2E_RESULTS_ABS}/latency-v2-account-worker-a.json${MAX_OPEN_ORDERS_ARG}" account-worker
+    start_app account-worker-b " --transport.account-intake.channel=aeron:udp?endpoint=localhost:20041 --transport.fill.channel=aeron:udp?endpoint=localhost:20061 --account.worker.archive.control-channel=aeron:udp?endpoint=localhost:8012$(shard_args_intake) --measure.latency.enabled=true --measure.latency.snapshot-trigger-path=${E2E_RESULTS_ABS}/latency-trigger-v2-b --measure.latency.output-path=${E2E_RESULTS_ABS}/latency-v2-account-worker-b.json${MAX_OPEN_ORDERS_ARG}" account-worker
     start_app matching-worker "$(shard_args_fill)" matching-worker
     start_app api "$(shard_args_intake)" api
 else
-    start_app account-worker " --measure.latency.enabled=true --measure.latency.snapshot-trigger-path=${E2E_RESULTS_ABS}/latency-trigger-v2 --measure.latency.output-path=${E2E_RESULTS_ABS}/latency-v2-account-worker.json$(stage_args v2 account-worker)" account-worker
+    start_app account-worker " --measure.latency.enabled=true --measure.latency.snapshot-trigger-path=${E2E_RESULTS_ABS}/latency-trigger-v2 --measure.latency.output-path=${E2E_RESULTS_ABS}/latency-v2-account-worker.json$(stage_args v2 account-worker)${MAX_OPEN_ORDERS_ARG}" account-worker
     start_app matching-worker "$(stage_args v2 matching-worker)" matching-worker
     start_app api "$(stage_args v2 api)" api
     start_worker settlement-worker settlement-worker ""

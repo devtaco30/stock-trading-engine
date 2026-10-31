@@ -311,6 +311,11 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
             return;
         }
 
+        if (isOpenOrderLimitReached(state, event.getOpenOrderLimit())) {
+            listener.onRejected(accountId, orderId, requestId, RejectReason.OPEN_ORDER_LIMIT_EXCEEDED);
+            return;
+        }
+
         ReserveResult result = state.tryReserve(orderId, price, event.getQuantity());
         if (result.accepted()) {
             latencyHistogram.record(event.getPublishedAtEpochNanos());
@@ -372,6 +377,11 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
             return;
         }
 
+        if (isOpenOrderLimitReached(state, event.getOpenOrderLimit())) {
+            listener.onRejected(accountId, orderId, requestId, RejectReason.OPEN_ORDER_LIMIT_EXCEEDED);
+            return;
+        }
+
         SellReserveResult result = state.trySellReserve(orderId, event.getStockCode(), event.getQuantity());
         if (result.accepted()) {
             latencyHistogram.record(event.getPublishedAtEpochNanos());
@@ -383,6 +393,11 @@ public class AccountEventHandler implements EventHandler<AccountEvent> {
         } else {
             listener.onRejected(accountId, orderId, requestId, result.reason());
         }
+    }
+
+    /** 상한이 0이면 상한 없음. 미체결 주문 수가 이미 상한 이상이면 새 주문을 받지 않는다. */
+    private static boolean isOpenOrderLimitReached(AccountState state, int openOrderLimit) {
+        return openOrderLimit > 0 && state.openOrderCount() >= openOrderLimit;
     }
 
     private void handleBuyFill(AccountEvent event) {

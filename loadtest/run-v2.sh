@@ -5,6 +5,9 @@ set -euo pipefail
 # 접수 경로만 본다 — settlement-worker·account-projection-worker는 이 경로 밖이라 안 띄운다.
 # 매칭도 안 일어난다(전부 같은 종목 매수만, 매도 없음) — 순수 접수 처리량 측정.
 cd "$(dirname "$0")/.."
+# 계좌 미체결 상한(계좌 하나의 미체결 주문 수). 기본값을 두지 않는다 — 실행하는 쪽이 값을 정해 넘긴다.
+# 상한 없는 비교 측정이 필요하면 1000000을 명시한다(「상한 없음에 해당하는 비교용」 값이며 운영 상한이 아니다).
+: "${MAX_OPEN_ORDERS:?MAX_OPEN_ORDERS를 지정해 주세요(계좌당 미체결 주문 수 상한, 기본값 없음)}"
 
 LOG_DIR="loadtest/logs"
 PID_DIR="loadtest/pids"
@@ -30,8 +33,11 @@ if [ "$seeded" != true ]; then
 fi
 
 start_app() {
-    local module="$1"
-    nohup ./gradlew ":${module}:bootRun" --args='--spring.profiles.active=udp,loadtest' \
+    local module="$1" extra_args=""
+    if [ "$module" = account-worker ]; then
+        extra_args=" --account-worker.max-open-orders-per-account=${MAX_OPEN_ORDERS}"
+    fi
+    nohup ./gradlew ":${module}:bootRun" --args="--spring.profiles.active=udp,loadtest${extra_args}" \
         > "${LOG_DIR}/${module}.log" 2>&1 &
     echo $! > "${PID_DIR}/${module}.pid"
     echo "${module} 기동 시작(런처 PID $(cat "${PID_DIR}/${module}.pid"), 로그 ${LOG_DIR}/${module}.log)"

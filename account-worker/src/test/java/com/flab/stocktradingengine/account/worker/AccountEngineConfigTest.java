@@ -44,7 +44,8 @@ class AccountEngineConfigTest {
         .withPropertyValues(
             "account-worker.seed-accounts[0].account-id=1",
             "account-worker.seed-accounts[0].balance=1000000",
-            "account-worker.seed-accounts[0].margin-rate=0.40"
+            "account-worker.seed-accounts[0].margin-rate=0.40",
+            "account-worker.max-open-orders-per-account=100000"
         );
 
     @Test
@@ -80,6 +81,40 @@ class AccountEngineConfigTest {
                 assertThat(events).hasSize(1);
                 assertThat(events.get(0).accepted()).isTrue();
                 assertThat(events.get(0).orderId()).as("결정론적 발급기(2b-0)가 낸 orderId는 0이 아니어야 한다").isNotZero();
+
+                assertShutsDownCleanly(context);
+            });
+    }
+
+    @Test
+    void 설정한_계좌_미체결_상한이_엔진에_적용된다() throws InterruptedException {
+        List<Recorded> events = new CopyOnWriteArrayList<>();
+        CountDownLatch latch = new CountDownLatch(2);
+
+        contextRunner
+            .withPropertyValues("account-worker.max-open-orders-per-account=1")
+            .withBean(AccountResultListener.class, () -> new Recorder(events, latch))
+            .withBean(MatchingOrderSender.class, () -> (orderId, accountId, stockCode, side, price, quantity) -> {})
+            .withBean(AccountJournal.class, InMemoryAccountJournal::new)
+            .withBean(AccountSnapshotSink.class, () -> new AccountSnapshotSink() {
+                @Override
+                public boolean offer(byte[] snapshotBytes, Map<Integer, Long> fillPositions, long journalPosition, long appliedSeq) {
+                    return true;
+                }
+
+                @Override
+                public long durableSeq() {
+                    return 0L;
+                }
+            })
+            .run(context -> {
+                AccountEngine engine = context.getBean(AccountEngine.class);
+
+                engine.publishBuy(1L, STOCK, new BigDecimal("10000"), 1, "r1");
+                engine.publishBuy(1L, STOCK, new BigDecimal("10000"), 1, "r2");
+                assertThat(latch.await(1, TimeUnit.SECONDS)).as("1초 안에 결과 두 건이 도착해야 한다").isTrue();
+
+                assertThat(events).extracting(Recorded::accepted).containsExactly(true, false);
 
                 assertShutsDownCleanly(context);
             });

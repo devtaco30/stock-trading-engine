@@ -103,6 +103,8 @@ public class AccountEngine {
     private final IntPredicate ownedSlots;
     private final MatchingOrderSender matchingOrderSender;
     private final AccountOrderIdGenerator orderIdGenerator;
+    // 계좌의 미체결 주문 수(매수 예약 + 매도 예약) 상한. 0이면 상한 없음. 시작 전에만 설정한다.
+    private int openOrderLimit;
     private volatile RingBuffer<AccountEvent> ringBuffer;
     // 빈 칸이 없어 발행이 기다린 횟수(발행 thread가 여럿일 수 있어 LongAdder).
     private final java.util.concurrent.atomic.LongAdder ringFullWaitCount = new java.util.concurrent.atomic.LongAdder();
@@ -264,6 +266,21 @@ public class AccountEngine {
     }
 
     /**
+     * 계좌의 미체결 주문 수(매수 예약과 매도 예약의 합) 상한을 정한다. 이 수에 이른 계좌의 새 주문은
+     * {@link com.flab.stocktradingengine.account.disruptor.domain.RejectReason#OPEN_ORDER_LIMIT_EXCEEDED}로
+     * 거부한다. 부르지 않으면 상한이 없다. 반드시 {@link #start} 전에 호출한다.
+     *
+     * @param openOrderLimit 1 이상
+     */
+    public void setOpenOrderLimit(int openOrderLimit) {
+        requireNotStarted();
+        if (openOrderLimit < 1) {
+            throw new IllegalArgumentException("계좌 미체결 상한은 1 이상이어야 합니다: " + openOrderLimit);
+        }
+        this.openOrderLimit = openOrderLimit;
+    }
+
+    /**
      * 계좌 상태를 미리 넣는다. 반드시 {@link #start} 전에 호출한다(기동 후엔 소비자와 경쟁).
      */
     public void seed(long accountId, BigDecimal balance, BigDecimal marginRate) {
@@ -378,17 +395,25 @@ public class AccountEngine {
         }
     }
 
-    /** 저널 엔트리 하나를 스크래치 슬롯에 채운다 — {@code AccountEvent}의 타입별 setter와 1:1 대응. */
+    /**
+     * 저널 엔트리 하나를 스크래치 슬롯에 채운다 — {@code AccountEvent}의 타입별 setter와 1:1 대응.
+     *
+     * <p>BUY·SELL의 계좌 미체결 상한은 저널에 실려 있지 않아 이 엔진의 설정값({@link #openOrderLimit})으로 판정한다.
+     * 그래서 복구는 원래 실행과 같은 상한 값일 때만 같은 접수·거부를 되풀이한다. 상한을 바꾸려면 저널과 스냅샷을
+     * 비우고 새로 시작해야 한다(ADR-040).</p>
+     */
     private void applyToScratch(AccountEvent event, AccountJournalEntry entry) {
         switch (entry.type()) {
             // 저널 엔트리엔 발행 시각도 없다(리플레이 대상은 저널이지 발행 스트림이 아니다) — 0으로 채운다.
             case BUY -> {
                 event.setBuy(entry.accountId(), entry.stockCode(), entry.price(), entry.quantity(), entry.requestId(), 0L);
                 event.setHoldingFull(entry.holdingFull());
+                event.setOpenOrderLimit(openOrderLimit);
             }
             case SELL -> {
                 event.setSell(entry.accountId(), entry.stockCode(), entry.price(), entry.quantity(), entry.requestId(), 0L);
                 event.setHoldingFull(entry.holdingFull());
+                event.setOpenOrderLimit(openOrderLimit);
             }
             // 저널 엔트리엔 sourcePosition·sourceSessionId가 없다(리플레이 대상 자체가 저널이지
             // 체결 수신 스트림이 아니다) — 0으로 채운다. start() 전에만 도는 복구 경로라 이후 라이브
@@ -488,6 +513,7 @@ public class AccountEngine {
             AccountEvent event = ringBuffer.get(sequence);
             event.setBuy(accountId, stockCode, price, quantity, requestId, publishedAtEpochNanos);
             event.setHoldingFull(!matchingOrderSender.hasHoldingRoom(stockCode));
+            event.setOpenOrderLimit(openOrderLimit);
             stampReceived(event, receivedAtNanos);
         } finally {
             ringBuffer.publish(sequence);
@@ -516,6 +542,7 @@ public class AccountEngine {
             AccountEvent event = ringBuffer.get(sequence);
             event.setSell(accountId, stockCode, price, quantity, requestId, publishedAtEpochNanos);
             event.setHoldingFull(!matchingOrderSender.hasHoldingRoom(stockCode));
+            event.setOpenOrderLimit(openOrderLimit);
             stampReceived(event, receivedAtNanos);
         } finally {
             ringBuffer.publish(sequence);

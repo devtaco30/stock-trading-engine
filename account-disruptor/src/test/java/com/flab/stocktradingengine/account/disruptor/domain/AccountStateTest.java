@@ -22,6 +22,44 @@ class AccountStateTest {
 
     private static final String STOCK = "005930";
 
+    // ---------- 미체결 주문 수 (계좌 미체결 상한) ----------
+
+    @Test
+    @DisplayName("미체결 주문 수는 매수 예약과 매도 예약의 개수를 합친 값이다")
+    void 미체결_주문_수는_매수와_매도_예약을_합친다() {
+        AccountState state = new AccountState(1L, new BigDecimal("1000000"), new BigDecimal("0.40"), Map.of(STOCK, 10));
+        assertEquals(0, state.openOrderCount());
+
+        state.tryReserve(1L, new BigDecimal("10000"), 1);
+        state.trySellReserve(2L, STOCK, 3);
+
+        assertEquals(2, state.openOrderCount());
+    }
+
+    @Test
+    @DisplayName("부분체결된 주문은 미체결로 남고, 전량 체결되면 미체결에서 빠진다")
+    void 부분체결은_남고_전량체결은_빠진다() {
+        AccountState state = new AccountState(1L, new BigDecimal("1000000"), new BigDecimal("0.40"));
+        state.tryReserve(1L, new BigDecimal("10000"), 10);
+
+        state.applyBuyFill(9001L, 1L, STOCK, new BigDecimal("10000"), 4);
+        assertEquals(1, state.openOrderCount());
+
+        state.applyBuyFill(9002L, 1L, STOCK, new BigDecimal("10000"), 6);
+        assertEquals(0, state.openOrderCount());
+    }
+
+    @Test
+    @DisplayName("거부된 예약 시도는 미체결 주문 수를 늘리지 않는다")
+    void 거부된_예약은_개수를_늘리지_않는다() {
+        AccountState state = new AccountState(1L, new BigDecimal("1000"), new BigDecimal("0.40"));
+
+        ReserveResult result = state.tryReserve(1L, new BigDecimal("10000"), 10);
+
+        assertFalse(result.accepted());
+        assertEquals(0, state.openOrderCount());
+    }
+
     // ---------- 초기 보유 시드 ----------
 
     @Test
