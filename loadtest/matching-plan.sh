@@ -62,6 +62,22 @@ matching_endpoint_pool() {
     echo "$out"
 }
 
+# 계좌 워커의 추가 기동 인자. $1=풀 개수(matching_pool_count 값). 풀이 1개면 빈 문자열이라 지금의 Publication 1개 경로 그대로다.
+# 계좌 쪽 풀은 기동 때 고정이다(MatchingShardRoutingConfig가 endpoints를 한 번 돌며 Publication을 연다, ec가 코드로 읽은 사실). 그래서
+# 증설할 shard 주소도 처음부터 넣는다. 이 풀을 켜면 spring.kafka.bootstrap-servers가 필수(기본값 없음)이고, 맵 토픽은 자동 생성이 꺼져 있다.
+# bootstrap 주소는 호스트에서 본 broker 주소다. 기본값은 MATCHING_KAFKA_BOOTSTRAP(하네스 broker가 호스트에 연 9092)이다.
+# 이 인자를 run-e2e-v2.sh의 계좌 워커 기동에 붙이는 일은 ec의 정리 호출 수정 뒤이고 아직 붙이지 않았다.
+matching_account_args() {
+    local pool="$1" i
+    if [ "$pool" = "1" ]; then
+        return 0
+    fi
+    for i in $(seq 0 $((pool - 1))); do
+        printf -- ' --matching-shard-routing.endpoints[%s]=%s' "$i" "$(matching_intake_endpoint "$i")"
+    done
+    printf -- ' --spring.kafka.bootstrap-servers=%s' "$MATCHING_KAFKA_BOOTSTRAP"
+}
+
 # 호가창 이동 주소 풀에 넣을 주소 개수. 증설(MATCHING_EXPAND_AT_SEC)이 있으면 증설할 shard의 입구 주소까지 시작 때부터 넣는다.
 # 풀은 기동 때 고정이다: HandoverRequester·HandoverResponder 생성자가 풀의 peer마다 Publication을 한 번 연다. 풀에 없는 shard가 생기면 두 쪽이 다르게 실패한다.
 #   - 요청하는 쪽(HandoverRequester.request의 requireInPool): 예외를 던지고 HandoverCoordinator가 ERROR 로그만 남기고 간격을 두고 재시도한다.

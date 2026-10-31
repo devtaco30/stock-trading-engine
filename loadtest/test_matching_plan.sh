@@ -118,6 +118,21 @@ test_pool_equals_intake_endpoints() {
     assert_contains "자기 입구 주소를 채널로 준다" "$a1" "--transport.matching-intake.channel=aeron:udp?endpoint=localhost:20021"
 }
 
+# --- 계좌 워커 쪽 주소 풀 인자 (ec 답: 풀은 기동 때 고정이라 증설할 주소도 처음부터, bootstrap-servers 필수) ---
+test_account_args() {
+    local a
+    assert_eq "풀이 1개면 인자가 없다(Publication 1개 경로 그대로)" "" "$(matching_account_args 1)"
+    a="$(matching_account_args 2)"
+    assert_contains "풀 0번" "$a" " --matching-shard-routing.endpoints[0]=aeron:udp?endpoint=localhost:20020"
+    assert_contains "풀 1번" "$a" " --matching-shard-routing.endpoints[1]=aeron:udp?endpoint=localhost:20021"
+    assert_not_contains "풀은 개수만큼만" "$a" "endpoints[2]"
+    assert_contains "bootstrap-servers 필수" "$a" " --spring.kafka.bootstrap-servers=localhost:9092"
+    a="$(MATCHING_KAFKA_BOOTSTRAP=broker:1 matching_account_args 2)"
+    assert_contains "bootstrap 주소는 바꿀 수 있다" "$a" "--spring.kafka.bootstrap-servers=broker:1"
+    a="$(matching_account_args "$(MATCHING_EXPAND_AT_SEC=30 matching_pool_count 2)")"
+    assert_contains "증설 주소도 시작 때부터 넣는다" "$a" "endpoints[2]=aeron:udp?endpoint=localhost:20022"
+}
+
 # --- H2: Archive 폴더는 절대경로(bootRun의 작업 디렉터리가 모듈 폴더라 상대경로가 틀어진다) ---
 test_archive_dir_absolute() {
     local a1
@@ -402,6 +417,7 @@ test_two_shards_args
 test_values_are_distinct
 test_pool_equals_intake_endpoints
 test_archive_dir_absolute
+test_account_args
 test_await_assigned
 test_parse_map_dump
 test_reset_map_topic
