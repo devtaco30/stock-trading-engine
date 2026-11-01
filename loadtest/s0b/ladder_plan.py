@@ -20,12 +20,12 @@ import sys
 STOCKS = 3
 HOLD_MARGIN = 5
 DEFAULT_PROBE_SECONDS = 15
-DEFAULT_MAX_TOTAL_PROBE = 2_000_000
+DEFAULT_MAX_TOTAL_PROBE = 4_000_000
 
 
 def default_rate_estimate(accounts, c):
     """거부 속도의 거친 추정(건/초). 기존 접수 속도 x C가 약 2.5천만~5.8천만이었던 것을 쓰고 위아래를 막는다. 틀리면 사후 창 길이로 확인한다."""
-    return max(3000.0, min(150000.0, 2.0 * 4.0e7 / max(c, 1)))
+    return max(3000.0, min(300000.0, 2.0 * 4.0e7 / max(c, 1)))
 
 
 def plan(accounts, ladder_c, accept_probes, probe_seconds=DEFAULT_PROBE_SECONDS, rate_estimate=default_rate_estimate,
