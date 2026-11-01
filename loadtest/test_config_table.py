@@ -56,6 +56,25 @@ class RenderTest(unittest.TestCase):
         rows[1]["completed_rps"] = 0
         self.assertIn("| 1×2 | 8000 | 0 | 정할 조건 | 0.500 | 0.000 |", ct.render(rows, baseline_config="1×1"))
 
+    def test_미체결_상한이_행에_있으면_구성_옆에_열이_생긴다(self):
+        rows = self.rows()
+        rows[0]["max_open_orders"] = 1000000
+        rows[1]["max_open_orders"] = 500
+        lines = ct.render(rows, baseline_config="1×1").splitlines()
+        self.assertEqual("| 구성 | 미체결 상한 | 목표 속도 | 실제 완료 RPS | 포화 여부 | 가장 바쁜 매칭 shard의 비율 | 이론 상한 대비 달성률 |", lines[0])
+        self.assertEqual("|---|---|---|---|---|---|---|", lines[1])
+        self.assertEqual("| 1×1 | 1000000 | 4000 | 4000 | 정할 조건 | 1.000 | 1.000 |", lines[2])
+        self.assertEqual("| 1×2 | 500 | 8000 | 6000 | 정할 조건 | 0.500 | 0.750 |", lines[3])
+
+    def test_일부_행에만_상한이_있으면_없는_행은_하이픈(self):
+        rows = self.rows()
+        rows[0]["max_open_orders"] = 500
+        lines = ct.render(rows, baseline_config="1×1").splitlines()
+        self.assertTrue(lines[3].startswith("| 1×2 | - | 8000 |"))
+
+    def test_상한이_어느_행에도_없으면_열이_없다(self):
+        self.assertNotIn("미체결 상한", ct.render(self.rows(), baseline_config="1×1"))
+
     def test_기준_구성이_없으면_달성률_칸은_비워_두고_이유를_알린다(self):
         table = ct.render(self.rows(), baseline_config="2×1")
         self.assertIn("| 1×2 | 8000 | 6000 | 정할 조건 | 0.500 | 기준 없음 |", table)

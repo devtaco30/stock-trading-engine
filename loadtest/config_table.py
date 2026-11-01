@@ -6,7 +6,9 @@
 - 달성률 = 완료 RPS ÷ (기준 구성의 완료 RPS × 이론 상한), 이론 상한 = 1 ÷ 가장 바쁜 shard의 비율(H3, matching_load_ratio.py).
   기준 구성의 완료 RPS를 어느 단계에서 읽을지는 한계 정의에 달려 있으므로 이 도구는 행에 적힌 값을 그대로 쓴다.
 
-입력 행(dict): config, target_rps, completed_rps, max_ratio, saturated(선택)
+입력 행(dict): config, target_rps, completed_rps, max_ratio, saturated(선택), max_open_orders(선택)
+- max_open_orders는 그 실행에 넘긴 MAX_OPEN_ORDERS 값이다. 이 도구는 값을 정하지 않고 받은 값을 표에 찍기만 한다.
+  행 하나라도 있으면 구성 옆에 「미체결 상한」 열이 생기고, 없는 행은 「-」로 찍는다. 어느 행에도 없으면 열이 없다.
 """
 import json
 import sys
@@ -22,9 +24,17 @@ def achievement(completed_rps, baseline_rps, max_ratio):
     return completed_rps / (baseline_rps * (1 / max_ratio))
 
 
+def _with_limit_column(line):
+    """머리줄·구분줄의 첫 열(구성) 뒤에 열 하나를 끼운다."""
+    cells = line.strip("|").split("|")
+    cells.insert(1, "---" if line == SEPARATOR else "미체결 상한")
+    return "|" + "|".join(cells if line == SEPARATOR else [f" {c.strip()} " for c in cells]) + "|"
+
+
 def render(rows, baseline_config):
     baseline = next((row for row in rows if row["config"] == baseline_config), None)
-    lines = [HEADER, SEPARATOR]
+    with_limit = any(row.get("max_open_orders") is not None for row in rows)
+    lines = [_with_limit_column(HEADER) if with_limit else HEADER, _with_limit_column(SEPARATOR) if with_limit else SEPARATOR]
     for row in rows:
         if baseline is None:
             cell = "기준 없음"
@@ -32,9 +42,12 @@ def render(rows, baseline_config):
             value = achievement(row.get("completed_rps"), baseline.get("completed_rps"), row.get("max_ratio"))
             cell = "-" if value is None else f"{value:.3f}"
         ratio = row.get("max_ratio")
-        lines.append("| {} | {} | {} | {} | {} | {} |".format(
-            row["config"], row.get("target_rps", "-"), row.get("completed_rps", "-"),
-            row.get("saturated") or UNDECIDED, "-" if ratio is None else f"{ratio:.3f}", cell))
+        cells = [row["config"], row.get("target_rps", "-"), row.get("completed_rps", "-"),
+                 row.get("saturated") or UNDECIDED, "-" if ratio is None else f"{ratio:.3f}", cell]
+        if with_limit:
+            limit = row.get("max_open_orders")
+            cells.insert(1, "-" if limit is None else limit)
+        lines.append("| " + " | ".join(str(c) for c in cells) + " |")
     return "\n".join(lines)
 
 
