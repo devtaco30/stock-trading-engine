@@ -105,6 +105,20 @@ assert_alive "포트 규칙이 없는 모듈의 남은 프로세스는 종료하
 assert_eq "남은 프로세스가 있으면 경고를 낸다" "1" "$(grep -c "$LEFTOVER" "${TMP}/out-settlement.txt")"
 assert_eq "경고에 남았다고 적는다" "1" "$(grep -c '남았' "${TMP}/out-settlement.txt")"
 
+# 6) 입구 포트에 「연결만 한」 소켓(`->`)을 가진 같은 이름 프로세스는 그 포트의 주인이 아니다.
+# 매칭 shard 는 서로의 입구 주소로 보내는 Publication 을 열어 두므로, 포트를 쥔 프로세스로 세면 다른 shard 까지 같이 종료 대상이 된다.
+BINDER="$(start_port_holder 20024 "$MAIN_CLASS")"
+python3 -I -c 'import socket,time
+s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM); s.connect(("127.0.0.1",int(__import__("sys").argv[1]))); time.sleep(300)' 20024 "$MAIN_CLASS" > /dev/null 2>&1 &
+SENDER=$!
+sleep 0.7
+echo 999999 > "${PID_DIR}/matching-worker-4.pid"
+PIDS_TO_CLEAN="$PIDS_TO_CLEAN $BINDER $SENDER"
+TARGETS_4="$(stop_targets_for_pid_file "${PID_DIR}/matching-worker-4.pid" "$MAIN_CLASS" | tr '\n' ' ')"
+assert_eq "포트를 바인딩한 프로세스는 대상이다" "1" "$(printf '%s' " $TARGETS_4" | grep -c " $BINDER ")"
+assert_eq "연결만 한 소켓의 프로세스는 대상이 아니다" "0" "$(printf '%s' " $TARGETS_4" | grep -c " $SENDER ")"
+rm -f "${PID_DIR}/matching-worker-4.pid"
+
 # 5) 이름 일괄 종료가 코드에 남아 있지 않다
 assert_eq "pkill 이 실행 코드에 없다" "0" "$(grep -v '^\s*#' loadtest/stop-v2.sh | grep -c 'pkill')"
 

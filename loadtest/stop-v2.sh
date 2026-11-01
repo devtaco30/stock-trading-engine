@@ -89,7 +89,8 @@ label_port_spec() {
 
 port_holder_pids() {
     case "${1%%:*}" in
-        udp) lsof -nP -t -iUDP:"${1##*:}" 2> /dev/null ;;
+        # `->`가 있는 줄은 그 주소로 보내려고 연결한 소켓이다(매칭 shard 가 서로의 입구 주소로 여는 Publication 등). 포트의 주인은 바인딩한 쪽이다.
+        udp) lsof -nP -iUDP:"${1##*:}" 2> /dev/null | awk 'NR > 1 && $0 !~ /->/ { print $2 }' | sort -u ;;
         tcp) lsof -nP -t -iTCP:"${1##*:}" -sTCP:LISTEN 2> /dev/null ;;
     esac
 }
