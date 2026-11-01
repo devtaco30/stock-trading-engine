@@ -68,6 +68,32 @@ class MatchingEngineRecoveryTest {
     }
 
     @Test
+    @DisplayName("저널을 재적용하며 낸 체결은 체결 수·전량 체결 주문 수 카운터에 들어가지 않는다")
+    void 복구_중_낸_체결은_카운터에_세지_않는다() throws InterruptedException {
+        List<JournaledOrder> entries = List.of(
+            new JournaledOrder(EventType.PLACE, 1L, 100L, STOCK, OrderSide.BUY, new BigDecimal("10000"), 10, Instant.now()),
+            new JournaledOrder(EventType.PLACE, 2L, 200L, STOCK, OrderSide.SELL, new BigDecimal("10000"), 10, Instant.now())
+        );
+
+        recovered = new MatchingEngine(BUFFER_SIZE, NO_OP_LISTENER);
+        recovered.recover(entries);
+        recovered.start();
+
+        // 복구가 1·2를 체결시켰다는 증거: 같은 가격의 새 SELL(3)이 맞을 상대 없이 호가창에 남는다(체결이 나면 fillCount가 오른다).
+        // 대조군: 라이브로 낸 체결(4·5)은 카운터에 들어간다. 엔진 thread가 이벤트를 순서대로 처리하므로 대조군이 셌을 때는 3도 처리가 끝났다.
+        recovered.publishPlace(3L, 300L, STOCK, OrderSide.SELL, new BigDecimal("10000"), 10, Instant.now());
+        recovered.publishPlace(4L, 400L, STOCK, OrderSide.BUY, new BigDecimal("9000"), 4, Instant.now());
+        recovered.publishPlace(5L, 500L, STOCK, OrderSide.SELL, new BigDecimal("9000"), 4, Instant.now());
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(3);
+        while (recovered.fillCount() < 1 && System.nanoTime() < deadline) {
+            Thread.sleep(2);
+        }
+
+        assertEquals(1L, recovered.fillCount(), "라이브 체결 1건만 센다. 복구가 낸 체결이 세어졌다면 2 이상이다");
+        assertEquals(2L, recovered.fullyFilledOrderCount(), "라이브로 전량 체결된 4·5만 센다");
+    }
+
+    @Test
     @DisplayName("recover 중에는 엔진에 넘긴 리스너가 한 번도 안 불린다(부수효과 없음)")
     void recover_중엔_리스너가_안_불린다() throws InterruptedException {
         List<JournaledOrder> entries = List.of(

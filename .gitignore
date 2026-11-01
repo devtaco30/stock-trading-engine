@@ -49,3 +49,6 @@ local-tokens.json
 .claude/
 CLAUDE.md
 **/CLAUDE.md
+
+# Python 바이트코드
+__pycache__/

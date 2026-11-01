@@ -48,4 +48,89 @@ class MapCatchUpWaiterTest {
 
         assertThat(waiter.awaitCaughtUp()).isFalse();
     }
+
+    @Test
+    void 따라오지_못한_판정이_연속_N번이면_읽기를_다시_시작하도록_알리고_성공하면_횟수를_처음부터_센다() {
+        AtomicLong consumed = new AtomicLong(3);
+        java.util.concurrent.atomic.AtomicInteger restarts = new java.util.concurrent.atomic.AtomicInteger();
+        MapCatchUpWaiter waiter = new MapCatchUpWaiter(() -> 10L, consumed::get, 20L);
+        waiter.onRepeatedFailure(3, restarts::incrementAndGet);
+
+        waiter.awaitCaughtUp();
+        waiter.awaitCaughtUp();
+        assertThat(restarts.get()).isZero();
+        waiter.awaitCaughtUp();
+        assertThat(restarts.get()).as("연속 세 번째 실패에서 알린다").isEqualTo(1);
+
+        consumed.set(10); // 따라왔다
+        assertThat(waiter.awaitCaughtUp()).isTrue();
+        consumed.set(3);
+        waiter.awaitCaughtUp();
+        waiter.awaitCaughtUp();
+        assertThat(restarts.get()).as("성공이 끼어 횟수가 처음부터 다시 센다").isEqualTo(1);
+        waiter.awaitCaughtUp();
+        assertThat(restarts.get()).isEqualTo(2);
+    }
+
+    @Test
+    void 기다리는_도중_읽기가_정상이_아니게_되면_바로_false로_돌아오고_실패로_세지_않는다() throws Exception {
+        // 읽기가 재시작해 새 consumer로 처음부터 다시 읽는 동안 읽은 위치는 0부터 다시 올라온다. 이 동안의 대기는 시간을 채워도 정지의 증거가 아니다.
+        java.util.concurrent.atomic.AtomicBoolean healthy = new java.util.concurrent.atomic.AtomicBoolean(true);
+        java.util.concurrent.atomic.AtomicInteger restarts = new java.util.concurrent.atomic.AtomicInteger();
+        MapCatchUpWaiter waiter = new MapCatchUpWaiter(() -> 10L, () -> 0L, 5_000L);
+        waiter.setReaderHealthy(healthy::get);
+        waiter.onRepeatedFailure(2, restarts::incrementAndGet);
+
+        for (int i = 0; i < 5; i++) {
+            Thread restartLater = new Thread(() -> {
+                try {
+                    Thread.sleep(50);
+                } catch (InterruptedException e) {
+                    return;
+                }
+                healthy.set(false);
+            });
+            healthy.set(true);
+            restartLater.start();
+            long startedAt = System.nanoTime();
+
+            assertThat(waiter.awaitCaughtUp()).isFalse();
+
+            assertThat((System.nanoTime() - startedAt) / 1_000_000L).as("한도(5초)를 채우지 않고 돌아온다").isLessThan(2_000L);
+        }
+        assertThat(restarts).as("읽기가 이미 재시작 중이라 따라오지 못한 판정으로 세지 않는다").hasValue(0);
+    }
+
+    @Test
+    void 읽기가_비정상이던_동안_앞서_쌓인_연속_실패_횟수는_이월되지_않는다() {
+        // 점검이 재시작을 요청한 뒤 복구된 읽기가 판정 한 번만 느려도, 재시작 전에 쌓인 1~2회와 합쳐 한도에 닿아 방금 끝난 재읽기를 버리면 안 된다.
+        java.util.concurrent.atomic.AtomicBoolean healthy = new java.util.concurrent.atomic.AtomicBoolean(true);
+        java.util.concurrent.atomic.AtomicInteger restarts = new java.util.concurrent.atomic.AtomicInteger();
+        MapCatchUpWaiter waiter = new MapCatchUpWaiter(() -> 10L, () -> 0L, 20L);
+        waiter.setReaderHealthy(healthy::get);
+        waiter.onRepeatedFailure(3, restarts::incrementAndGet);
+        waiter.awaitCaughtUp();
+        waiter.awaitCaughtUp();
+
+        healthy.set(false);
+        assertThat(waiter.healthy()).isFalse();
+        healthy.set(true);
+        waiter.awaitCaughtUp();
+
+        assertThat(restarts).as("복구 뒤 첫 실패는 1회로 센다").hasValue(0);
+    }
+
+    @Test
+    void 재시작을_요청받으면_연속_실패_횟수를_처음부터_센다() {
+        java.util.concurrent.atomic.AtomicInteger restarts = new java.util.concurrent.atomic.AtomicInteger();
+        MapCatchUpWaiter waiter = new MapCatchUpWaiter(() -> 10L, () -> 0L, 20L);
+        waiter.onRepeatedFailure(3, restarts::incrementAndGet);
+        waiter.awaitCaughtUp();
+        waiter.awaitCaughtUp();
+
+        waiter.resetFailures();
+        waiter.awaitCaughtUp();
+
+        assertThat(restarts).hasValue(0);
+    }
 }

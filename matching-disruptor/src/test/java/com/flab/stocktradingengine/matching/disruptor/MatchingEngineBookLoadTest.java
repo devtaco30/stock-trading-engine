@@ -196,6 +196,87 @@ class MatchingEngineBookLoadTest {
     }
 
     @Test
+    void 담당이_켜진_뒤_도착한_호가창_적재는_호가창을_바꾸지_않고_ERROR를_남긴다() throws Exception {
+        java.util.logging.Logger julLogger = java.util.logging.Logger.getLogger(
+            com.flab.stocktradingengine.matching.disruptor.handler.MatchingEventHandler.class.getName());
+        List<java.util.logging.LogRecord> errors = new CopyOnWriteArrayList<>();
+        java.util.logging.Handler handler = new java.util.logging.Handler() {
+            @Override
+            public void publish(java.util.logging.LogRecord record) {
+                if (record.getLevel().intValue() >= java.util.logging.Level.SEVERE.intValue()) {
+                    errors.add(record);
+                }
+            }
+
+            @Override
+            public void flush() {
+            }
+
+            @Override
+            public void close() {
+            }
+        };
+        julLogger.addHandler(handler);
+        try {
+            startEngine();
+            int slot = HASHER.slotFor(STOCK);
+            byte[] bookBytes = sourceBookBytes();
+            engine.publishBookLoad(TRANSFER_ID, slot, List.of(bookBytes));
+            engine.publishSlotAcquired(slot);
+            // 담당이 켜진 뒤 이 shard가 접수한 주문: 적재된 매수 1(잔량 6)과 3주 체결된다.
+            engine.publishPlace(3L, 300L, STOCK, OrderSide.SELL, new BigDecimal("10000"), 3, Instant.now());
+            awaitFillQuantity(3);
+
+            // 같은 종목 slot에 낡은 호가창(매수 1의 잔량 6)이 한 번 더 도착한다.
+            engine.publishBookLoad(TRANSFER_ID + 1, slot, List.of(bookBytes));
+            engine.publishPlace(4L, 400L, STOCK, OrderSide.SELL, new BigDecimal("10000"), 30, Instant.now());
+            awaitFillQuantity(6);
+            Thread.sleep(100);
+
+            int filledAgainstBuyOne = fills.stream().filter(fill -> fill.buyOrderId() == 1L)
+                .mapToInt(FillResult::filledQuantity).sum();
+            assertEquals(6, filledAgainstBuyOne, "낡은 호가창이 덮어썼다면 매수 1의 잔량이 6으로 돌아가 총 9가 체결된다");
+            assertFalse(errors.isEmpty(), "적용하지 않은 적재는 ERROR 로그를 남긴다");
+            assertTrue(errors.get(0).getMessage().contains("종목 slot=" + slot));
+        } finally {
+            julLogger.removeHandler(handler);
+        }
+    }
+
+    @Test
+    void 담당이었다가_넘긴_종목_slot에_호가창이_다시_이동해_오면_적재가_적용된다() throws Exception {
+        startEngine();
+        int slot = HASHER.slotFor(STOCK);
+        engine.publishSlotAcquired(slot);
+        engine.publishSlotReleased(slot); // 세션 만료로 잃은 종목 slot도 넘김이 저널에 남는다
+
+        engine.publishBookLoad(TRANSFER_ID, slot, List.of(sourceBookBytes()));
+        engine.publishPlace(3L, 300L, STOCK, OrderSide.SELL, new BigDecimal("10000"), 6, Instant.now());
+        awaitFill();
+
+        assertEquals(1L, fills.get(0).buyOrderId(), "넘긴 뒤에 도착한 적재는 막히지 않고 적용된다");
+    }
+
+    @Test
+    void 시작_전에_담당으로_표시한_종목_slot에_도착한_적재는_호가창을_바꾸지_않는다() throws Exception {
+        engine = new MatchingEngine(1024, new BlockingWaitStrategy(), (stockCode, fill) -> fills.add(fill), journal,
+            sink, true, new com.flab.stocktradingengine.time.StageLatencyRegistry(false), HASHER, new SlotEventListener() { });
+        int slot = HASHER.slotFor(STOCK);
+        engine.seedAcquiredSlots(java.util.Set.of(slot)); // 재시작 때 스냅샷과 저널에서 복원한 담당 목록
+        engine.start();
+        engine.publishPlace(1L, 100L, STOCK, OrderSide.BUY, new BigDecimal("10000"), 10, Instant.now());
+
+        engine.publishBookLoad(TRANSFER_ID, slot, List.of(sourceBookBytes()));
+        engine.publishPlace(3L, 300L, STOCK, OrderSide.SELL, new BigDecimal("10000"), 30, Instant.now());
+        awaitFill();
+        Thread.sleep(100);
+
+        int filledAgainstBuyOne = fills.stream().filter(fill -> fill.buyOrderId() == 1L)
+            .mapToInt(FillResult::filledQuantity).sum();
+        assertEquals(10, filledAgainstBuyOne, "적용되었다면 적재한 호가창의 잔량 6만 체결된다");
+    }
+
+    @Test
     void 적재는_다른_종목_slot의_호가창을_비우지_않는다() throws Exception {
         startEngine();
         String otherSlotStock = stockInOtherSlot();
@@ -330,6 +411,14 @@ class MatchingEngineBookLoadTest {
 
         assertFalse(engine.containsOrder(STOCK, 7L), "넘긴 뒤 적재 전에 온 주문은 반영되지 않았다");
         assertEquals(1L, fills.get(0).buyOrderId());
+    }
+
+    private void awaitFillQuantity(int quantity) throws InterruptedException {
+        long deadline = System.nanoTime() + 3_000_000_000L;
+        while (fills.stream().mapToInt(FillResult::filledQuantity).sum() < quantity && System.nanoTime() < deadline) {
+            Thread.sleep(5);
+        }
+        assertTrue(fills.stream().mapToInt(FillResult::filledQuantity).sum() >= quantity, "3초 안에 체결 수량이 모이지 않음");
     }
 
     private void awaitFill() throws InterruptedException {

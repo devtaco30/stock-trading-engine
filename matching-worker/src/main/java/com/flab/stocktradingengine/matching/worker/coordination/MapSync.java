@@ -9,4 +9,9 @@ public interface MapSync {
 
     /** @return 시간 안에 따라왔으면 true, 못 따라왔으면 false */
     boolean awaitCaughtUp();
+
+    /** 맵 읽기가 정상인지. 정상이 아니면 따라오기를 기다리지 않고 판정을 다음 간격으로 미룬다. */
+    default boolean healthy() {
+        return true;
+    }
 }

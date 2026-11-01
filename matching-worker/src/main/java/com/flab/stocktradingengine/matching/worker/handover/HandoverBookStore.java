@@ -13,9 +13,12 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class HandoverBookStore {
 
     private final Map<Integer, List<byte[]>> bytesBySlot = new ConcurrentHashMap<>();
+    // 보관했다가 지운 종목 slot. 지운 뒤 늦게 도착한 중복 요청과 한 번도 보관한 적 없는 종목 slot의 요청을 가르는 데 쓴다.
+    private final java.util.Set<Integer> removedSlots = ConcurrentHashMap.newKeySet();
 
     public void put(int stockSlot, List<byte[]> bookBytesPerStock) {
         bytesBySlot.put(stockSlot, List.copyOf(bookBytesPerStock));
+        removedSlots.remove(stockSlot);
     }
 
     public Optional<List<byte[]>> get(int stockSlot) {
@@ -23,6 +26,13 @@ public final class HandoverBookStore {
     }
 
     public void remove(int stockSlot) {
-        bytesBySlot.remove(stockSlot);
+        if (bytesBySlot.remove(stockSlot) != null) {
+            removedSlots.add(stockSlot);
+        }
+    }
+
+    /** 보관했던 호가창을 정리로 지운 종목 slot인지. */
+    public boolean wasRemoved(int stockSlot) {
+        return removedSlots.contains(stockSlot);
     }
 }

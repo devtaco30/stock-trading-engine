@@ -34,6 +34,26 @@ class OrderBookTest {
         return new OrderEntry(orderId, 200L, "005930", OrderSide.SELL, price, quantity, Instant.now());
     }
 
+    // ── 마지막 체결에서 전량 체결된 주문 수 (12-3절 1번 표의 「바」) ───────────────────────────
+
+    @Test
+    @DisplayName("마지막 match()에서 전량 체결된 주문 수: 한쪽만 끝나면 1, 양쪽이 끝나면 2, 체결이 없으면 0")
+    void 마지막_체결에서_전량_체결된_주문_수() {
+        book.addOrder(buy(1L, new BigDecimal("70000"), 5));
+        book.addOrder(sell(2L, new BigDecimal("70000"), 3));
+        assertThat(book.lastMatchFullyFilledCount()).as("match() 전").isZero();
+
+        assertThat(book.match()).isPresent();
+        assertThat(book.lastMatchFullyFilledCount()).as("매도 3이 전량 체결, 매수 5는 2가 남는다").isEqualTo(1);
+
+        book.addOrder(sell(3L, new BigDecimal("70000"), 2));
+        assertThat(book.match()).isPresent();
+        assertThat(book.lastMatchFullyFilledCount()).as("남은 매수 2와 매도 2가 모두 끝난다").isEqualTo(2);
+
+        assertThat(book.match()).isEmpty();
+        assertThat(book.lastMatchFullyFilledCount()).as("체결이 없으면 앞 값이 남지 않고 0").isZero();
+    }
+
     // ── 체결 조건 ────────────────────────────────────────────────────────────
 
     @Nested

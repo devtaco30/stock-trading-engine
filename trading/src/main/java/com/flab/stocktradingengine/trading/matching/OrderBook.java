@@ -48,6 +48,9 @@ import com.flab.stocktradingengine.trading.entity.OrderSide;
  * ArrayDeque(캐시 친화적) + Lazy Removal 조합으로 충분하다.</p>
  */
 public class OrderBook {
+    // 마지막 match()에서 전량 체결로 호가창을 떠난 주문 수. 매칭 소비자 thread 하나만 쓰고 읽는다.
+    private int lastMatchFullyFilled;
+
 
     // 매수 호가: 높은 가격 → 낮은 가격 (내림차순)
     private final TreeMap<BigDecimal, Deque<OrderEntry>> bids =
@@ -166,7 +169,7 @@ public class OrderBook {
      * @return 체결이 발생하면 {@link FillResult}, 체결 불가면 empty
      */
     public Optional<FillResult> match() {
-        
+        lastMatchFullyFilled = 0;
         // Lazy Removal: 매칭 전 각 호가창 앞에 쌓인 무효 엔트리를 제거
         drainInvalid(bids);
         drainInvalid(asks);
@@ -192,8 +195,12 @@ public class OrderBook {
         sellOrder.addFilled(fillQty);
 
         // 전량 체결된 주문은 인덱스 + 큐에서 즉시 제거
-        removeIfFilled(bestBidLevel, buyOrder, bids);
-        removeIfFilled(bestAskLevel, sellOrder, asks);
+        if (removeIfFilled(bestBidLevel, buyOrder, bids)) {
+            lastMatchFullyFilled++;
+        }
+        if (removeIfFilled(bestAskLevel, sellOrder, asks)) {
+            lastMatchFullyFilled++;
+        }
 
         return Optional.of(new FillResult(
             buyOrder.getOrderId(),  buyOrder.getAccountId(),
@@ -259,7 +266,7 @@ public class OrderBook {
     }
 
     /** 전량 체결된 주문을 인덱스와 큐에서 제거. filledOrderIds 에 기록해 멱등성 체크를 유지. */
-    private void removeIfFilled(Map.Entry<BigDecimal, Deque<OrderEntry>> level,
+    private boolean removeIfFilled(Map.Entry<BigDecimal, Deque<OrderEntry>> level,
                                  OrderEntry entry,
                                  TreeMap<BigDecimal, Deque<OrderEntry>> book) {
         if (entry.isFullyFilled()) {
@@ -269,6 +276,13 @@ public class OrderBook {
             if (level.getValue().isEmpty()) {
                 book.pollFirstEntry();
             }
+            return true;
         }
+        return false;
+    }
+
+    /** 마지막 {@link #match()}에서 전량 체결되어 호가창을 떠난 주문 수(0, 1, 2). 체결이 없었으면 0이다. 호출하는 thread가 match()와 같아야 한다. */
+    public int lastMatchFullyFilledCount() {
+        return lastMatchFullyFilled;
     }
 }

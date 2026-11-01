@@ -136,7 +136,11 @@ public class MatchingShardOwnershipConfig {
             SlotEventRequests slotEventRequests,
             ObjectProvider<MatchingSlotMapReader> mapReader, ObjectProvider<HandoverCoordinator> handoverCoordinator,
             ObjectProvider<MapSync> mapSync,
-            @Value("${matching-shard.rebalance.map-write-deadline-ms:30000}") long mapWriteDeadlineMillis) {
+            @Value("${matching-shard.rebalance.map-write-deadline-ms:30000}") long mapWriteDeadlineMillis,
+            // 같은 맵 쓰기가 브로커 오류로 연속 이만큼 실패하면 ERROR를 남기고 queue 뒤로 보낸다. 기본값 60번은 근거 없는 임의 값이다(미측정).
+            @Value("${matching-shard.rebalance.map-write-failure-limit:60}") int mapWriteFailureLimit,
+            // 맵 읽기가 늦어 건너뛴 판정을 다시 하는 간격. 기본값 10초는 근거 없는 임의 값이다(미측정).
+            @Value("${matching-shard.coordination.decision-retry-interval-ms:10000}") long decisionRetryMillis) {
         String instanceId = resolveInstanceId(instanceIdConfig, orderEndpoint);
         log.info("[매칭] 담당 종목 slot 소스: Kafka 컨슈머 그룹 배정({}) — 신원={} 주문 입구={} session.timeout.ms={}",
             KafkaMatchingShardAssignment.GROUP_ID, instanceId, orderEndpoint, sessionTimeoutMs);
@@ -145,13 +149,17 @@ public class MatchingShardOwnershipConfig {
         Consumer<String, String> consumer = new KafkaConsumer<>(consumerProps);
         Producer<Integer, String> mapProducer = buildMapProducer(bootstrapServers);
         Admin adminClient = Admin.create(adminProps(bootstrapServers));
+        java.util.concurrent.atomic.AtomicReference<KafkaMatchingShardAssignment> assignmentRef = new java.util.concurrent.atomic.AtomicReference<>();
         KafkaMatchingShardAssignment assignment = new KafkaMatchingShardAssignment(
             consumer, mapProducer, adminClient, stockSlotHasher.stockSlotCount(), orderEndpoint,
             KafkaMatchingShardAssignment.ASSIGNMENT_TOPIC, KafkaMatchingShardAssignment.MAP_TOPIC, slotEventRequests,
             slot -> mapReader.getObject().targetFor(slot), new MovedSlotRequests() {
                 @Override
                 public void requestHandover(int stockSlot) {
-                    handoverCoordinator.getObject().requestHandover(stockSlot);
+                    HandoverCoordinator coordinator = handoverCoordinator.getObject();
+                    // 재요청 직전에 그 종목 slot이 아직 호가창 적재를 기다리는지 확인하게 한다. 같은 값을 다시 정해도 같다.
+                    coordinator.setStillAwaitingLoad(slot -> assignmentRef.get().isAwaitingLoad(slot));
+                    coordinator.requestHandover(stockSlot);
                 }
 
                 @Override
@@ -163,7 +171,10 @@ public class MatchingShardOwnershipConfig {
                 thread.setDaemon(true);
                 return thread;
             }));
+        assignmentRef.set(assignment);
         assignment.setMapWriteDeadlineMillis(mapWriteDeadlineMillis);
+        assignment.setMapWriteFailureLimit(mapWriteFailureLimit);
+        assignment.setDecisionRetryMillis(decisionRetryMillis);
         return assignment;
     }
 

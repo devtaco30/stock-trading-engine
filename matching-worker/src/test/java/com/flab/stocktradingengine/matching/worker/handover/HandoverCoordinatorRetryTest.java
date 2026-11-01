@@ -27,6 +27,8 @@ class HandoverCoordinatorRetryTest {
         final List<String> calls = new CopyOnWriteArrayList<>();
         final AtomicInteger resendCount = new AtomicInteger();
         final AtomicBoolean mapHasMovingEntry = new AtomicBoolean(true);
+        // true인 동안 request가 예외를 던진다(이전 담당 주소가 전송 풀에 없을 때 HandoverRequester.requireInPool이 던지는 경우).
+        final AtomicBoolean requestThrows = new AtomicBoolean(false);
         final Set<Integer> inFlight = ConcurrentHashMap.newKeySet();
         final List<Integer> cancelled = new CopyOnWriteArrayList<>();
         final long transferId = 77L;
@@ -34,6 +36,9 @@ class HandoverCoordinatorRetryTest {
         @Override
         public Optional<Long> request(int stockSlot) {
             calls.add("request:" + stockSlot);
+            if (requestThrows.get()) {
+                throw new IllegalStateException("이전 담당 주소가 풀에 없음");
+            }
             if (!mapHasMovingEntry.get()) {
                 return Optional.empty();
             }
@@ -131,6 +136,60 @@ class HandoverCoordinatorRetryTest {
         awaitUntil(() -> coordinator.failures() == 1);
 
         assertThat(port.resendCount.get()).isZero();
+    }
+
+    @Test
+    void 첫_요청이_예외를_던져도_추적을_이어가_간격을_두고_다시_시도해_보낸다() throws Exception {
+        FakePort port = new FakePort();
+        port.requestThrows.set(true);
+        start(port).requestHandover(5);
+        Thread.sleep(150);
+        assertThat(port.calls.size()).as("예외가 나도 요청 시도가 간격을 두고 반복된다").isBetween(2, 5);
+
+        port.requestThrows.set(false);
+        awaitUntil(() -> port.inFlight.contains(5));
+        port.inFlight.remove(5); // 응답이 완성되어 끝난 것
+
+        Thread.sleep(TIMEOUT_MILLIS + 200); // 포기 시간이 지난 뒤에도 끝난 이동을 실패로 세지 않아야 한다
+        assertThat(coordinator.failures()).isZero();
+    }
+
+    @Test
+    void 요청이_계속_예외를_던지면_포기_시간에_실패로_세고_취소한다() throws Exception {
+        FakePort port = new FakePort();
+        port.requestThrows.set(true);
+        start(port).requestHandover(5);
+
+        awaitUntil(() -> coordinator.failures() == 1);
+
+        assertThat(port.cancelled).containsExactly(5);
+    }
+
+    @Test
+    void 요청이_아직_시작되지_않은_종목_slot이_회수되면_요청을_보내지도_상태를_남기지도_않는다() throws Exception {
+        FakePort port = new FakePort();
+        coordinator = new HandoverCoordinator(port, RETRY_MILLIS, TIMEOUT_MILLIS);
+        // 전용 thread가 돌기 전에 배정 직후 회수가 일어난 순서를 만든다.
+        coordinator.requestHandover(5);
+        coordinator.cancelHandover(5);
+
+        coordinator.start();
+        Thread.sleep(100);
+
+        assertThat(port.inFlight).as("회수 뒤에는 진행 중 요청 상태가 남지 않는다").isEmpty();
+        assertThat(port.calls).as("회수된 종목 slot의 요청은 보내지 않는다").doesNotContain("request:5");
+    }
+
+    @Test
+    void 회수한_뒤_다시_배정받아_요청하면_그_요청은_보낸다() throws Exception {
+        FakePort port = new FakePort();
+        coordinator = new HandoverCoordinator(port, RETRY_MILLIS, TIMEOUT_MILLIS);
+        coordinator.requestHandover(5);
+        coordinator.cancelHandover(5);
+        coordinator.requestHandover(5);
+
+        coordinator.start();
+        awaitUntil(() -> port.inFlight.contains(5));
     }
 
     @Test

@@ -8,6 +8,7 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.IntFunction;
+import java.util.function.LongConsumer;
 
 import org.agrona.concurrent.UnsafeBuffer;
 
@@ -43,6 +44,13 @@ public final class HandoverRequester implements AutoCloseable, HandoverRequestPo
     }
 
     private final Map<Integer, Sent> sentBySlot = new ConcurrentHashMap<>();
+    // 같은 종목 slot의 반복 로그를 10초에 한 번으로 줄인다(근거 없는 임의 간격). 연결된 채 응답하지 못하는 이전 담당에게 종목 slot마다 초당 재요청이 나간다.
+    private final RateLimitedLog resendLog = new RateLimitedLog(10_000L);
+    private final RateLimitedLog notConnectedLog = new RateLimitedLog(10_000L);
+    // 종목 slot별로 취소된 횟수. 응답을 완성해 적재를 요청하는 동안 취소가 끼었는지 앞뒤 값을 비교해 알아낸다.
+    private final Map<Integer, java.util.concurrent.atomic.AtomicInteger> cancelGenerations = new ConcurrentHashMap<>();
+    // 응답이 완성되지 않은 채 끝난 이동(취소, 새 요청으로 대체)의 이동 번호를 알린다. 응답 일부만 모아 둔 조립 상태를 지우는 데 쓴다.
+    private volatile LongConsumer abandonedTransferListener = transferId -> { };
 
     public HandoverRequester(Aeron aeron, String ownChannel, HandoverEndpointPool pool,
                              IntFunction<Optional<MatchingSlotTarget>> mapLookup, long nodeId) {
@@ -73,9 +81,21 @@ public final class HandoverRequester implements AutoCloseable, HandoverRequestPo
             // 풀에는 있으나 자기 자신인 경우다. 자기 자신에게 호가창을 요청하지 않는다.
             return Optional.empty();
         }
+        if (!publication.isConnected()) {
+            // 이전 담당이 구독하고 있지 않으면 offer를 마감까지 재시도하며 단일 coordinator thread를 붙잡는다. 바로 실패로 돌려 다음 간격에 다시 한다.
+            int suppressed = notConnectedLog.tryAcquire(stockSlot);
+            if (suppressed >= 0) {
+                log.log(Level.WARNING, "[호가창 이동] 이전 담당 " + previousOwner + "와 연결되지 않아 요청을 보내지 않음: 종목 slot=" + stockSlot
+                    + (suppressed > 0 ? " (같은 로그 " + suppressed + "건을 건너뜀)" : ""));
+            }
+            return Optional.empty();
+        }
         long transferId = (nodeId << 53) | counter.incrementAndGet();
         byte[] wire = new HandoverRequest(transferId, stockSlot, ownChannel).encode();
-        currentTransferBySlot.put(stockSlot, transferId);
+        Long replaced = currentTransferBySlot.put(stockSlot, transferId);
+        if (replaced != null) {
+            abandonedTransferListener.accept(replaced);
+        }
         long deadline = System.nanoTime() + SEND_DEADLINE_NANOS;
         if (!OfferSupport.offerWithDeadline(publication, new UnsafeBuffer(wire), wire.length, deadline)) {
             currentTransferBySlot.remove(stockSlot, transferId);
@@ -84,6 +104,27 @@ public final class HandoverRequester implements AutoCloseable, HandoverRequestPo
         sentBySlot.put(stockSlot, new Sent(transferId, wire, publication, previousOwner));
         log.log(Level.INFO, "[호가창 이동] 요청 보냄: 이동 번호=" + transferId + " 종목 slot=" + stockSlot + " 이전 담당=" + previousOwner);
         return Optional.of(transferId);
+    }
+
+    @Override
+    public MapEntryState mapEntryState(int stockSlot) {
+        Optional<MatchingSlotTarget> target = mapLookup.apply(stockSlot);
+        if (target.isEmpty()) {
+            return MapEntryState.UNKNOWN;
+        }
+        return target.get().moving() ? MapEntryState.MOVING : MapEntryState.NOT_MOVING;
+    }
+
+    /** 이 종목 slot이 지금까지 취소된 횟수. */
+    int cancelGeneration(int stockSlot) {
+        java.util.concurrent.atomic.AtomicInteger generation = cancelGenerations.get(stockSlot);
+        return generation == null ? 0 : generation.get();
+    }
+
+    /** 패키지 가시성 — 그 주소로 가는 요청 Publication이 연결되었는지. */
+    boolean peerConnected(String endpoint) {
+        Publication publication = requestPublications.get(endpoint);
+        return publication != null && publication.isConnected();
     }
 
     /** 이 종목 slot에서 지금 진행 중인 요청의 이동 번호. 없으면 빈 값. */
@@ -99,11 +140,17 @@ public final class HandoverRequester implements AutoCloseable, HandoverRequestPo
             || currentTransferBySlot.get(stockSlot) != sent.transferId()) {
             return false;
         }
+        if (!sent.publication().isConnected()) {
+            return false;
+        }
         long deadline = System.nanoTime() + SEND_DEADLINE_NANOS;
         boolean offered = OfferSupport.offerWithDeadline(sent.publication(), new UnsafeBuffer(sent.wire()), sent.wire().length, deadline);
         if (offered) {
-            log.log(Level.INFO, "[호가창 이동] 요청 다시 보냄: 이동 번호=" + sent.transferId() + " 종목 slot=" + stockSlot
-                + " 이전 담당=" + sent.previousOwner());
+            int suppressed = resendLog.tryAcquire(stockSlot);
+            if (suppressed >= 0) {
+                log.log(Level.INFO, "[호가창 이동] 요청 다시 보냄: 이동 번호=" + sent.transferId() + " 종목 slot=" + stockSlot
+                    + " 이전 담당=" + sent.previousOwner() + (suppressed > 0 ? " (같은 로그 " + suppressed + "건을 건너뜀)" : ""));
+            }
         }
         return offered;
     }
@@ -116,14 +163,26 @@ public final class HandoverRequester implements AutoCloseable, HandoverRequestPo
     /** 이 종목 slot에서 진행 중인 요청을 취소한다. 이후 도착하는 그 요청의 응답은 번호가 달라 버려진다. */
     @Override
     public void cancel(int stockSlot) {
-        currentTransferBySlot.remove(stockSlot);
+        cancelGenerations.computeIfAbsent(stockSlot, slot -> new java.util.concurrent.atomic.AtomicInteger()).incrementAndGet();
+        Long cancelled = currentTransferBySlot.remove(stockSlot);
         sentBySlot.remove(stockSlot);
+        if (cancelled != null) {
+            abandonedTransferListener.accept(cancelled);
+        }
     }
 
-    /** 적재 요청을 낸 이동을 끝난 것으로 기록한다. */
-    void finish(int stockSlot, long transferId) {
-        currentTransferBySlot.remove(stockSlot, transferId);
-        sentBySlot.remove(stockSlot);
+    /** 응답이 완성되지 않은 채 끝난 이동의 이동 번호를 받을 곳을 정한다. */
+    void onAbandonedTransfer(LongConsumer listener) {
+        this.abandonedTransferListener = listener;
+    }
+
+    /** 적재 요청을 낼 이동을 끝난 것으로 기록한다. 그 사이 취소되었거나 다른 번호로 바뀌었으면 false이고, 이때는 적재를 요청하지 않는다. */
+    boolean finish(int stockSlot, long transferId) {
+        boolean wasCurrent = currentTransferBySlot.remove(stockSlot, transferId);
+        if (wasCurrent) {
+            sentBySlot.remove(stockSlot);
+        }
+        return wasCurrent;
     }
 
     @Override

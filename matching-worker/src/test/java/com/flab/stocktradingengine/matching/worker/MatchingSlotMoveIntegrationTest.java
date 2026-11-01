@@ -57,6 +57,7 @@ import com.flab.stocktradingengine.matching.worker.coordination.KafkaMatchingSha
 import com.flab.stocktradingengine.matching.worker.coordination.MatchingSlotMapReader;
 import com.flab.stocktradingengine.matching.worker.handover.HandoverBookStore;
 import com.flab.stocktradingengine.matching.worker.messaging.RejectReplyPublisher;
+import com.flab.stocktradingengine.matching.worker.testsupport.MapTopicHistory;
 import com.flab.stocktradingengine.trading.entity.OrderSide;
 import com.flab.stocktradingengine.trading.matching.FillResult;
 import com.flab.stocktradingengine.trading.matching.OrderBook;
@@ -528,6 +529,110 @@ class MatchingSlotMoveIntegrationTest {
             .containsExactly(sellOne, sellOne + 1);
     }
 
+    /**
+     * U17a. 운영 종료 경로(Spring 컨텍스트 종료가 배정 생명주기의 stop()을 거쳐 close()를 부른다)로 컨슈머를 닫으면, 맡고 있던 종목 slot
+     * 전체에 회수 콜백이 불려 맵 토픽에 {@code 주소;moving}이 한 번씩 올라온다. close() 주석이 적은 동작이고 지금까지 시험이 없었다.
+     * 이 시험이 실패하면(맵 값이 평상시에 머물면) 운영 종료 때 맵이 이동 중으로 바뀌지 않아 다른 pod의 판정이 달라진다.
+     */
+    @Test
+    void 컨텍스트를_닫으면_맡은_종목_slot_전체의_맵에_이동_중_표시가_올라온다() {
+        podA = startPod("slotmove-0", PORT_A, 8021, dirA);
+        KafkaMatchingShardAssignment assignmentA = podA.getBean(KafkaMatchingShardAssignment.class);
+        awaitUntil(() -> assignmentA.currentSlotsSnapshot().size() == 64, "A가 종목 slot 64개를 맡지 못함");
+        Map<Integer, List<String>> before = awaitMapTopic(history -> history.size() == 64
+            && history.values().stream().allMatch(values -> values.equals(List.of(CHANNEL_A))));
+        assertThat(before).as("닫기 전에는 종목 slot마다 평상시 값 하나뿐이다").hasSize(64);
+
+        podA.close();
+        podA = null;
+
+        String moving = new MatchingSlotTarget(CHANNEL_A, true).encode();
+        Map<Integer, List<String>> after = awaitMapTopic(history -> history.size() == 64
+            && history.values().stream().allMatch(values -> values.size() >= 2 && values.get(values.size() - 1).equals(moving)));
+        for (int slot = 0; slot < 64; slot++) {
+            assertThat(after.get(slot)).as("종목 slot=" + slot).containsExactly(CHANNEL_A, moving);
+        }
+    }
+
+    /**
+     * U17b 운영 구성. 이동이 끝난 두 pod 중 첫째(X)를 Admin으로 그룹에서 빼면 X가 lost를 받고 둘째(Z)가 X의 종목 slot을 받는다. X는 곧
+     * 다시 가입해 일부를 되받을 수 있다. 어느 순서로 끝나든 맵 토픽의 각 종목 slot 마지막 값은 그 종목 slot을 지금 맡은 pod의 평상시 주소여야
+     * 한다(이동 중 표시가 최종 값으로 남지 않는다). 도착 순서에 따라 결함이 있어도 맞게 보일 수 있어서 결함을 확정하는 시험은 아니고,
+     * 운영 구성(요청 통로, 맵 읽기, 판정 실행기)에서 lost 경로가 맵을 어지럽히지 않는지의 확인이다. 결함을 재현하는 쪽은
+     * KafkaMatchingShardAssignmentIntegrationTest의 결정적 변형이다.
+     */
+    @Test
+    void 이동이_끝난_뒤_첫째가_그룹에서_빠져도_맵의_최종_값은_각_종목_slot을_맡은_pod의_평상시_주소다() throws Exception {
+        podA = startPod("slotmove-0", PORT_A, 8021, dirA);
+        KafkaMatchingShardAssignment assignmentA = podA.getBean(KafkaMatchingShardAssignment.class);
+        awaitUntil(() -> assignmentA.currentSlotsSnapshot().size() == 64, "A가 종목 slot 64개를 맡지 못함");
+        podB = startPod("slotmove-1", PORT_B, 8022, dirB);
+        KafkaMatchingShardAssignment assignmentB = podB.getBean(KafkaMatchingShardAssignment.class);
+        awaitUntil(() -> assignmentA.currentSlotsSnapshot().size() + assignmentB.currentSlotsSnapshot().size() == 64
+                && !assignmentA.currentSlotsSnapshot().isEmpty() && !assignmentB.currentSlotsSnapshot().isEmpty()
+                && assignmentA.slotsWaitingForMove().isEmpty() && assignmentB.slotsWaitingForMove().isEmpty(),
+            "이동이 끝나 두 pod가 64개를 나눠 맡지 못함");
+
+        // 제거 전의 안정된 상태에서는 아래 맵 조건이 이미 참이라, 첫째가 그룹에서 빠진 것을 알고 lost 콜백을 받은 뒤에 평가해야 한다.
+        List<String> lostLogs = new CopyOnWriteArrayList<>();
+        List<String> revokeLogs = new CopyOnWriteArrayList<>();
+        java.util.logging.Logger assignmentLogger = java.util.logging.Logger.getLogger(KafkaMatchingShardAssignment.class.getName());
+        java.util.logging.Handler lostHandler = new java.util.logging.Handler() {
+            @Override
+            public void publish(java.util.logging.LogRecord logRecord) {
+                String message = logRecord.getMessage();
+                if (message != null && message.contains("종목 slot을 잃음")) {
+                    lostLogs.add(message);
+                }
+                if (message != null && message.contains("담당 종목 slot 회수")) {
+                    revokeLogs.add(message);
+                }
+            }
+
+            @Override
+            public void flush() {
+            }
+
+            @Override
+            public void close() {
+            }
+        };
+        assignmentLogger.addHandler(lostHandler);
+        try (Admin admin = Admin.create(Map.of(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, BOOTSTRAP))) {
+            admin.removeMembersFromConsumerGroup(GROUP_ID, new RemoveMembersFromConsumerGroupOptions(
+                List.of(new org.apache.kafka.clients.admin.MemberToRemove("slotmove-0")))).all().get();
+        }
+        try {
+            awaitUntil(() -> !lostLogs.isEmpty() || !revokeLogs.isEmpty(),
+                "그룹에서 뺀 첫째가 lost 콜백도 회수 콜백도 받지 못함(두 로그 모두 없음)");
+        } finally {
+            assignmentLogger.removeHandler(lostHandler);
+        }
+        assertThat(lostLogs).as("그룹에서 뺀 정적 멤버에게 Kafka가 부른 콜백이 lost여야 한다(회수 로그=" + revokeLogs.size() + "건)").isNotEmpty();
+
+        Map<Integer, List<String>> history = awaitMapTopic(snapshot -> {
+            Set<Integer> aSlots = assignmentA.currentSlotsSnapshot();
+            Set<Integer> bSlots = assignmentB.currentSlotsSnapshot();
+            if (aSlots.size() + bSlots.size() != 64 || !assignmentA.slotsWaitingForMove().isEmpty()
+                    || !assignmentB.slotsWaitingForMove().isEmpty() || snapshot.size() != 64) {
+                return false;
+            }
+            for (int slot = 0; slot < 64; slot++) {
+                List<String> values = snapshot.get(slot);
+                String owner = aSlots.contains(slot) ? CHANNEL_A : CHANNEL_B;
+                if (!owner.equals(values.get(values.size() - 1))) {
+                    return false;
+                }
+            }
+            return true;
+        });
+        for (int slot = 0; slot < 64; slot++) {
+            List<String> values = history.get(slot);
+            assertThat(values.get(values.size() - 1)).as("종목 slot=" + slot + " 기록=" + values)
+                .doesNotEndWith(";moving");
+        }
+    }
+
     // ---- 도우미 ------------------------------------------------------------------------------------------------
 
     private ConfigurableApplicationContext startPod(String instanceId, int port, int archiveControlPort, Path archiveDir) {
@@ -572,6 +677,25 @@ class MatchingSlotMoveIntegrationTest {
         UnsafeBuffer buffer = new UnsafeBuffer(ByteBuffer.allocateDirect(256));
         int length = codec.encode(buffer, 0, order);
         awaitUntil(() -> publication.offer(buffer, 0, length) > 0, "주문 발행 실패: " + order.orderId());
+    }
+
+    /** 맵 토픽을 처음부터 다시 읽는 일을 조건이 참이 될 때까지 되풀이한다(닫힌 pod 안의 맵 읽기를 쓸 수 없어 별도 consumer로 읽는다). */
+    private Map<Integer, List<String>> awaitMapTopic(java.util.function.Predicate<Map<Integer, List<String>>> condition) {
+        long deadline = System.nanoTime() + 30_000_000_000L;
+        Map<Integer, List<String>> history = MapTopicHistory.read(BOOTSTRAP, KafkaMatchingShardAssignment.MAP_TOPIC);
+        while (!condition.test(history)) {
+            if (System.nanoTime() > deadline) {
+                throw new AssertionError("30초 안에 맵 토픽이 기대한 상태가 되지 않음: " + history);
+            }
+            try {
+                Thread.sleep(200);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new AssertionError("맵 토픽 대기 중 인터럽트됨", e);
+            }
+            history = MapTopicHistory.read(BOOTSTRAP, KafkaMatchingShardAssignment.MAP_TOPIC);
+        }
+        return history;
     }
 
     private static void awaitUntil(BooleanSupplier condition, String failureMessage) {

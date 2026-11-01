@@ -93,7 +93,7 @@ public class MatchingEngine {
     private final StockSlotHasher stockSlotHasher;
     private final SlotEventListener slotEventListener;
     private final AcquireConfirmations acquireConfirmations;
-    private RingBuffer<OrderEvent> ringBuffer;
+    private volatile RingBuffer<OrderEvent> ringBuffer;
     private final MatchingSegmentStages stages;
 
     /**
@@ -180,6 +180,54 @@ public class MatchingEngine {
         this(bufferSize, new BlockingWaitStrategy(), listener);
     }
 
+    private final java.util.concurrent.atomic.LongAdder ringFullWaitCount = new java.util.concurrent.atomic.LongAdder();
+    // 빈 칸이 없어 발행이 기다린 총 시간(나노초). 기다린 횟수는 기다린 발행 호출 수라 얼마나 오래 막혔는지는 이 값으로 본다.
+    private final java.util.concurrent.atomic.LongAdder ringFullWaitNanos = new java.util.concurrent.atomic.LongAdder();
+
+    /**
+     * 링버퍼 칸을 예약한다. 빈 칸이 없으면 기다린 호출 수를 하나 올리고 {@code next()}로 기다린다. 평상시 경로는 {@code tryNext()} 한 번이라 호출이 늘지 않는다.
+     */
+    private long claimNext() {
+        try {
+            return ringBuffer.tryNext();
+        } catch (com.lmax.disruptor.InsufficientCapacityException e) {
+            ringFullWaitCount.increment();
+            long waitStartNanos = System.nanoTime();
+            long sequence = ringBuffer.next();
+            ringFullWaitNanos.add(System.nanoTime() - waitStartNanos);
+            return sequence;
+        }
+    }
+
+    /** 이 엔진이 낸 체결 건수의 누적(8절 하네스 변경 H5). 이 프로세스가 시작한 뒤의 값이다. */
+    public long fillCount() {
+        return matchingEventHandler.fillCount();
+    }
+
+    /** 전량 체결되어 호가창을 떠난 주문 수의 누적(12-3절 1번 표의 「바」). 이 프로세스가 시작한 뒤의 값이다. */
+    public long fullyFilledOrderCount() {
+        return matchingEventHandler.fullyFilledOrderCount();
+    }
+
+    /** 빈 칸이 없어 발행 호출이 기다린 누적 횟수(발행 호출 단위, 시간이 아니다). 짧게 0에 닿았다 풀린 구간도 남는다. */
+    public long ringFullWaitCount() {
+        return ringFullWaitCount.sum();
+    }
+
+    /** 빈 칸이 없어 발행이 기다린 총 시간(나노초, 누적). {@link #ringFullWaitCount()}가 센 발행 호출마다 기다린 시간의 합이다. */
+    public long ringFullWaitNanos() {
+        return ringFullWaitNanos.sum();
+    }
+
+    /**
+     * 링버퍼에 남은 빈 칸 수(계측용, 12-3절 2번 표의 7단계). 시작 전에는 링버퍼가 없어 -1이다. 어느 thread에서 읽어도 되고 읽는 순간의 근삿값이다.
+     * 용량에 가까울수록 소비자가 따라가고 있고, 0에 닿으면 발행하는 thread가 빈 칸을 기다린다.
+     */
+    public long ringBufferRemainingCapacity() {
+        RingBuffer<OrderEvent> buffer = ringBuffer;
+        return buffer == null ? -1L : buffer.remainingCapacity();
+    }
+
     /** 소비자 스레드를 기동하고 링버퍼를 준비한다. */
     public void start() {
         this.ringBuffer = disruptor.start();
@@ -244,12 +292,14 @@ public class MatchingEngine {
         MatchingEventHandler recoveryHandler = new MatchingEventHandler(books, NO_OP_LISTENER, NO_OP_SNAPSHOT_SINK, false,
             MatchingSegmentStages.DISABLED, stockSlotHasher, SlotEventListener.NO_OP);
         recoveryHandler.seedHandedOverSlots(matchingEventHandler.handedOverSlotsSnapshot());
+        recoveryHandler.seedAcquiredSlots(matchingEventHandler.acquiredSlotsSnapshot());
         OrderEvent scratch = new OrderEvent();
         for (JournaledOrder order : entries) {
             applyToScratch(scratch, order);
             recoveryHandler.onEvent(scratch, 0L, false);
         }
         matchingEventHandler.seedHandedOverSlots(recoveryHandler.handedOverSlotsSnapshot());
+        matchingEventHandler.seedAcquiredSlots(recoveryHandler.acquiredSlotsSnapshot());
     }
 
     /**
@@ -309,6 +359,15 @@ public class MatchingEngine {
         return encoded;
     }
 
+    /**
+     * 재시작 때 스냅샷과 저널에서 복원한 담당 종목 slot을 엔진에 알린다. 이 종목 slot에 도착하는 호가창 적재는 적용하지 않는다.
+     * 시작 전 복구 단계에서만 부른다.
+     */
+    public void seedAcquiredSlots(Set<Integer> stockSlots) {
+        requireNotStarted();
+        matchingEventHandler.seedAcquiredSlots(stockSlots);
+    }
+
     /** 그 종목 slot을 넘기는 중으로 표시한다. 시작 전 복구 단계에서만 부른다. */
     public void markSlotHandedOver(int stockSlot) {
         requireNotStarted();
@@ -365,7 +424,7 @@ public class MatchingEngine {
                              OrderSide side, BigDecimal price, int quantity, Instant orderAt,
                              long sourcePosition, int sourceSessionId,
                              long originNanos, long receivedAtNanos, long acceptedAtNanos, long matchReceivedAtNanos) {
-        long sequence = ringBuffer.next();
+        long sequence = claimNext();
         try {
             OrderEvent event = ringBuffer.get(sequence);
             event.setPlace(orderId, accountId, stockCode, side, price, quantity, orderAt, sourcePosition, sourceSessionId);
@@ -384,7 +443,7 @@ public class MatchingEngine {
      * 발행자는 주문 수신 폴링 thread 하나뿐이라 단일 프로듀서 전제가 유지된다.
      */
     public void publishPositionOnly(int sourceSessionId, long sourcePosition) {
-        long sequence = ringBuffer.next();
+        long sequence = claimNext();
         try {
             OrderEvent event = ringBuffer.get(sequence);
             event.setPositionOnly(sourcePosition, sourceSessionId);
@@ -415,7 +474,7 @@ public class MatchingEngine {
      * {@link SlotEventListener#onBooksLoadedDurable}가 {@link #pollLoadCompletions}를 부른 thread에서 불린다.
      */
     public void publishBookLoad(long transferId, int stockSlot, List<byte[]> bookBytesPerStock) {
-        long sequence = ringBuffer.next();
+        long sequence = claimNext();
         try {
             OrderEvent event = ringBuffer.get(sequence);
             event.setBookLoad(transferId, stockSlot, bookBytesPerStock);
@@ -429,7 +488,7 @@ public class MatchingEngine {
      * 불러야 한다. 저널에는 기록하지 않는다.
      */
     public void publishSlotCleanup(int stockSlot) {
-        long sequence = ringBuffer.next();
+        long sequence = claimNext();
         try {
             ringBuffer.get(sequence).setSlotCleanup(stockSlot);
         } finally {
@@ -449,7 +508,7 @@ public class MatchingEngine {
             handled += acquireConfirmations.confirmRecorded(slotEventListener);
         }
         if (matchingEventHandler.claimForceSnapshotRetry()) {
-            long sequence = ringBuffer.next();
+            long sequence = claimNext();
             try {
                 ringBuffer.get(sequence).setForceSnapshot();
             } finally {
@@ -461,7 +520,7 @@ public class MatchingEngine {
     }
 
     private void publishSlotEvent(EventType slotEventType, int stockSlot) {
-        long sequence = ringBuffer.next();
+        long sequence = claimNext();
         try {
             OrderEvent event = ringBuffer.get(sequence);
             event.setSlotEvent(slotEventType, stockSlot);
@@ -477,7 +536,7 @@ public class MatchingEngine {
 
     /** 주문 취소를 링버퍼에 발행한다. */
     public void publishCancel(long orderId, String stockCode) {
-        long sequence = ringBuffer.next();
+        long sequence = claimNext();
         try {
             OrderEvent event = ringBuffer.get(sequence);
             event.setCancel(orderId, stockCode);

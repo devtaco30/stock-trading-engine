@@ -79,6 +79,12 @@ public class MatchingEventHandler implements EventHandler<OrderEvent> {
     // 저널을 재적용할 때도 같은 맵을 공유해야 라이브 매칭이 그 위에서 이어진다
     // (account-disruptor AccountEventHandler 의 accounts 맵과 같은 이유).
     private final Map<String, OrderBook> books;
+    // 전량 체결되어 호가창을 떠난 주문 수의 누적(12-3절 1번 표의 「바」). 이 핸들러 인스턴스가 처리한 이벤트만 센다.
+    // MatchingEngine.recover()는 저널을 재적용할 때 새 핸들러 인스턴스를 만들어 쓰므로(books 맵만 공유) 복구 중 낸 체결은
+    // 이 카운터에 들어가지 않는다. 프로세스를 다시 띄우면 0에서 시작하고, 복구로 되살아난 호가창은 이 값에 반영되지 않는다.
+    private final java.util.concurrent.atomic.LongAdder fullyFilledOrders = new java.util.concurrent.atomic.LongAdder();
+    // 이 핸들러 인스턴스가 낸 체결 건수의 누적(8절 하네스 변경 H5). 위와 같은 이유로 복구 중 낸 체결은 세지 않는다.
+    private final java.util.concurrent.atomic.LongAdder fills = new java.util.concurrent.atomic.LongAdder();
     private final MatchListener listener;
     private final MatchingSegmentStages stages;
     private final MatchingSnapshotSink snapshotSink;
@@ -89,6 +95,8 @@ public class MatchingEventHandler implements EventHandler<OrderEvent> {
     // 넘김 이벤트에 도달해 넘기는 중인 종목 slot. 이 slot의 종목은 이후 PLACE·CANCEL을 호가창에 반영하지 않는다(U13).
     // 이 스레드만 접근한다. 비어 있으면 주문마다 종목 slot을 계산하지 않는다.
     private final Set<Integer> handedOverSlots = new HashSet<>();
+    // 받음이 반영되고 넘김이 반영되지 않은 종목 slot. 이 종목 slot에 도착한 호가창 적재는 낡은 사본이라 적용하지 않는다.
+    private final Set<Integer> acquiredSlots = new HashSet<>();
 
     // 적재를 마치고 강제 스냅샷의 디스크 확정을 기다리는 호가창 이동(U15). 엔진 thread가 넣고 완료를 확인하는 thread가 꺼낸다.
     // appliedSeq가 -1이면 쓰기 queue가 차서 강제 스냅샷이 거부되어 아직 다시 찍어야 한다.
@@ -258,8 +266,10 @@ public class MatchingEventHandler implements EventHandler<OrderEvent> {
         int stockSlot = event.getStockSlot();
         if (event.getType() == EventType.SLOT_ACQUIRED) {
             handedOverSlots.remove(stockSlot);
+            acquiredSlots.add(stockSlot);
             return;
         }
+        acquiredSlots.remove(stockSlot);
         Map<String, OrderBook> slotBooks = new TreeMap<>();
         for (Map.Entry<String, OrderBook> entry : books.entrySet()) {
             if (stockSlotHasher.slotFor(entry.getKey()) == stockSlot) {
@@ -283,6 +293,16 @@ public class MatchingEventHandler implements EventHandler<OrderEvent> {
     /** 복구가 이미 알아낸 넘기는 중인 종목 slot을 이 핸들러에 더한다. 엔진이 시작되기 전에만 부른다. */
     public void seedHandedOverSlots(Set<Integer> stockSlots) {
         handedOverSlots.addAll(stockSlots);
+    }
+
+    /** 받음이 반영되어 담당 중인 종목 slot의 사본. 복구가 앞 단계에서 만든 목록을 다음 단계의 핸들러로 이어 줄 때 쓴다. 엔진이 시작되기 전에만 부른다. */
+    public Set<Integer> acquiredSlotsSnapshot() {
+        return Set.copyOf(acquiredSlots);
+    }
+
+    /** 복구가 이미 알아낸 담당 중인 종목 slot을 이 핸들러에 더한다. 엔진이 시작되기 전에만 부른다. */
+    public void seedAcquiredSlots(Set<Integer> stockSlots) {
+        acquiredSlots.addAll(stockSlots);
     }
 
     /** 배치 끝에서 건드린 종목마다 한 번 알린다. 호가창이 없는 종목은 건너뛰고, listener 예외는 매칭을 멈추지 않게 삼킨다. */
@@ -323,6 +343,13 @@ public class MatchingEventHandler implements EventHandler<OrderEvent> {
         // 그 종목 slot의 기존 호가창을 먼저 비운다. restoreInto는 이미 있는 호가창 위에 주문을 더하므로, 같은 종목 slot을 되받을 때
         // 비우지 않으면 주문이 두 번 쌓인다(11-14절).
         int loadedSlot = event.getStockSlot();
+        if (acquiredSlots.contains(loadedSlot)) {
+            // 담당이 켜진 뒤에는 이 종목 slot에 이 shard가 접수한 주문과 체결이 있다. 낡은 사본으로 비우고 채우면 그것들이 지워진다.
+            log.log(Level.ERROR, "[매칭] 담당 중인 종목 slot에 호가창 적재가 도착해 적용하지 않음: 종목 slot=" + loadedSlot
+                + " 이동 번호=" + event.getTransferId());
+            appliedSeq++;
+            return;
+        }
         books.keySet().removeIf(stockCode -> stockSlotHasher.slotFor(stockCode) == loadedSlot);
         for (byte[] bytes : event.getBookBytes()) {
             MatchingSnapshotRestorer.restoreInto(books, snapshotCodec.decode(bytes));
@@ -468,6 +495,8 @@ public class MatchingEventHandler implements EventHandler<OrderEvent> {
             if (result.isEmpty()) {
                 break;
             }
+            fullyFilledOrders.add(book.lastMatchFullyFilledCount());
+            fills.increment();
             if (!stages.isEnabled()) {
                 listener.onFill(stockCode, result.get());
                 continue;
@@ -493,5 +522,15 @@ public class MatchingEventHandler implements EventHandler<OrderEvent> {
             event.getQuantity(),
             event.getOrderAt()
         );
+    }
+
+    /** 이 엔진이 낸 체결 건수의 누적. 어느 thread에서 읽어도 된다. */
+    public long fillCount() {
+        return fills.sum();
+    }
+
+    /** 전량 체결되어 호가창을 떠난 주문 수의 누적. 어느 thread에서 읽어도 된다. */
+    public long fullyFilledOrderCount() {
+        return fullyFilledOrders.sum();
     }
 }

@@ -42,6 +42,9 @@ class HandoverTransportIntegrationTest {
     private HandoverRequester zRequester;
     private HandoverReceiver zReceiver;
     private final List<Assembled> assembled = new CopyOnWriteArrayList<>();
+    private final List<Integer> cleanedSlots = new CopyOnWriteArrayList<>();
+    // 적재 요청을 낸 직후 실행할 동작. 시험이 그 사이에 회수가 끼는 순서를 만든다.
+    private volatile Runnable loadHook = () -> { };
     private final AtomicReference<Optional<MatchingSlotTarget>> zMapEntry =
         new AtomicReference<>(Optional.of(new MatchingSlotTarget(X_CHANNEL, true)));
 
@@ -62,9 +65,13 @@ class HandoverTransportIntegrationTest {
         HandoverEndpointPool zPool = new HandoverEndpointPool(poolEndpoints, Z_CHANNEL);
         zRequester = new HandoverRequester(aeron, Z_CHANNEL, zPool, zMap, 6L);
         zReceiver = new HandoverReceiver(aeron, Z_CHANNEL, zRequester,
-            (transferId, stockSlot, bodies) -> assembled.add(new Assembled(transferId, stockSlot, bodies)));
+            (transferId, stockSlot, bodies) -> {
+                assembled.add(new Assembled(transferId, stockSlot, bodies));
+                loadHook.run();
+            }, cleanedSlots::add);
         xResponder.start();
         zReceiver.start();
+        awaitUntil(() -> zRequester.peerConnected(X_CHANNEL)); // 연결 확인이 있으므로 첫 요청 전에 연결을 기다린다
     }
 
     @AfterEach
@@ -118,6 +125,93 @@ class HandoverTransportIntegrationTest {
         assertThat(assembled).isEmpty();
         assertThat(zRequester.inFlight(SLOT)).isFalse();
         assertThat(zRequester.resend(SLOT)).as("취소한 요청은 다시 보내지 않는다").isFalse();
+    }
+
+    @Test
+    void 응답이_일부만_오고_끊긴_이동을_취소하면_모아_둔_조립_상태도_지운다() throws Exception {
+        long transferId = zRequester.request(SLOT).orElseThrow();
+        sendPartialResponse(transferId);
+        awaitUntil(() -> zReceiver.pendingAssemblies() == 1);
+
+        zRequester.cancel(SLOT);
+
+        assertThat(zReceiver.pendingAssemblies()).as("취소 뒤 같은 이동 번호의 메시지가 더 오지 않아도 본문이 남지 않는다").isZero();
+    }
+
+    @Test
+    void 같은_종목_slot을_새_이동_번호로_다시_요청하면_앞_이동의_조립_상태를_지운다() throws Exception {
+        long first = zRequester.request(SLOT).orElseThrow();
+        sendPartialResponse(first);
+        awaitUntil(() -> zReceiver.pendingAssemblies() == 1);
+
+        zRequester.request(SLOT).orElseThrow();
+
+        assertThat(zReceiver.pendingAssemblies()).isZero();
+    }
+
+    private void sendPartialResponse(long transferId) {
+        Publication publication = aeron.addPublication(Z_CHANNEL, AeronStreamIds.ORDER_BOOK_RESPONSE);
+        awaitUntil(publication::isConnected);
+        byte[] wire = new HandoverMessage(transferId, SLOT, 0, 2, bytes(1, 100)).encode();
+        awaitUntil(() -> publication.offer(new UnsafeBuffer(wire), 0, wire.length) > 0);
+    }
+
+    @Test
+    void 취소된_요청은_완료로_처리되지_않아_조립이_끝나도_적재를_요청하지_않는다() {
+        long transferId = zRequester.request(SLOT).orElseThrow();
+        zRequester.cancel(SLOT); // 수신 thread가 번호를 확인한 뒤 취소가 끼어든 순서
+
+        assertThat(zRequester.finish(SLOT, transferId)).as("취소된 이동은 완료로 받아들이지 않는다").isFalse();
+    }
+
+    @Test
+    void 진행_중인_요청은_한_번만_완료로_처리된다() {
+        long transferId = zRequester.request(SLOT).orElseThrow();
+
+        assertThat(zRequester.finish(SLOT, transferId)).isTrue();
+        assertThat(zRequester.finish(SLOT, transferId)).isFalse();
+    }
+
+    @Test
+    void 연결되지_않은_주소로_요청하면_마감을_기다리지_않고_바로_빈_값을_돌려준다() {
+        String deadChannel = "aeron:udp?endpoint=localhost:20732"; // 이 주소를 구독하는 프로세스가 없다
+        HandoverEndpointPool pool = new HandoverEndpointPool(List.of(X_CHANNEL, Z_CHANNEL, deadChannel), Z_CHANNEL);
+        HandoverRequester requester = new HandoverRequester(aeron, Z_CHANNEL, pool,
+            slot -> Optional.of(new MatchingSlotTarget(deadChannel, true)), 6L);
+        try {
+            long startedAt = System.nanoTime();
+            Optional<Long> result = requester.request(SLOT);
+            long elapsedMillis = (System.nanoTime() - startedAt) / 1_000_000L;
+
+            assertThat(result).isEmpty();
+            assertThat(elapsedMillis).as("연결이 없는 주소에 offer 마감(2초)까지 기다리면 단일 coordinator thread가 막힌다").isLessThan(500L);
+            assertThat(requester.inFlight(SLOT)).as("보내지 못한 요청은 진행 중으로 남기지 않는다").isFalse();
+        } finally {
+            requester.close();
+        }
+    }
+
+    @Test
+    void 적재_요청을_낸_직후_회수가_끼면_낡은_사본을_지우는_정리를_한_번_더_요청한다() {
+        xStore.put(SLOT, List.of(bytes(1, 300)));
+        loadHook = () -> zRequester.cancel(SLOT); // loadSink가 요청 queue에 넣은 뒤 정리 요청보다 먼저 일어난 회수와 같은 순서
+
+        zRequester.request(SLOT).orElseThrow();
+        awaitAssembled(1);
+        awaitUntil(() -> !cleanedSlots.isEmpty());
+
+        assertThat(cleanedSlots).as("적재 뒤에 들어가는 정리 요청이 낡은 사본을 지운다").containsExactly(SLOT);
+    }
+
+    @Test
+    void 회수가_끼지_않으면_정리를_요청하지_않는다() throws Exception {
+        xStore.put(SLOT, List.of(bytes(1, 300)));
+
+        zRequester.request(SLOT).orElseThrow();
+        awaitAssembled(1);
+        Thread.sleep(200);
+
+        assertThat(cleanedSlots).isEmpty();
     }
 
     @Test

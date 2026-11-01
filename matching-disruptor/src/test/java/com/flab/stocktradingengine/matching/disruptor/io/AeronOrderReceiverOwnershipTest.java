@@ -79,6 +79,24 @@ class AeronOrderReceiverOwnershipTest {
     }
 
     @Test
+    void 받은_주문_수와_담당이_아니라_버린_주문_수와_엔진이_낸_체결_수를_센다() throws Exception {
+        // 12-3절·8절 H5: 매칭 shard마다 받은 주문 수, 담당 밖이라 버린 주문 수, 낸 체결 수.
+        assertEquals(0L, receiver.placeAcceptedCount());
+        assertEquals(0L, receiver.notOwnedCount());
+        assertEquals(0L, engine.fillCount());
+
+        deliver(place(1L, NOT_OWNED_STOCK, OrderSide.SELL));
+        deliver(place(2L, OWNED_STOCK, OrderSide.SELL));
+        deliver(place(3L, OWNED_STOCK, OrderSide.BUY));
+        deliver(place(4L, NOT_OWNED_STOCK, OrderSide.BUY));
+        awaitFills(1);
+
+        assertEquals(2L, receiver.placeAcceptedCount(), "담당 종목 주문만 받은 것으로 센다");
+        assertEquals(2L, receiver.notOwnedCount());
+        assertEquals(1L, engine.fillCount());
+    }
+
+    @Test
     void 담당이_아닌_주문은_예외_없이_지나가고_거부_회신_요청_하나가_만들어진다() {
         JournaledOrder notOwned = place(7L, NOT_OWNED_STOCK, OrderSide.BUY);
 

@@ -27,7 +27,9 @@ import com.flab.stocktradingengine.matching.disruptor.engine.MatchingEngine;
 import com.flab.stocktradingengine.matching.disruptor.io.SlotEventRequests;
 import com.flab.stocktradingengine.matching.worker.coordination.HandoverEndpointPool;
 import com.flab.stocktradingengine.matching.worker.coordination.KafkaMatchingShardAssignment;
+import com.flab.stocktradingengine.matching.worker.coordination.StuckHandoverReporter;
 import com.flab.stocktradingengine.matching.worker.coordination.MapCatchUpWaiter;
+import com.flab.stocktradingengine.matching.worker.coordination.MapReaderHealthCheck;
 import com.flab.stocktradingengine.matching.worker.coordination.MapSync;
 import com.flab.stocktradingengine.matching.worker.coordination.MatchingSlotMapReader;
 import com.flab.stocktradingengine.matching.worker.handover.HandoverBookStore;
@@ -81,7 +83,7 @@ public class MatchingHandoverConfig {
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, IntegerDeserializer.class.getName());
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
-        return new MatchingSlotMapReader(new KafkaConsumer<>(props), stockSlotHasher.stockSlotCount(),
+        return new MatchingSlotMapReader(() -> new KafkaConsumer<Integer, String>(props), stockSlotHasher.stockSlotCount(),
             KafkaMatchingShardAssignment.MAP_TOPIC);
     }
 
@@ -102,7 +104,13 @@ public class MatchingHandoverConfig {
     @Bean(destroyMethod = "close")
     public MapSyncResources matchingMapSync(
             MatchingSlotMapReader reader, @Value("${spring.kafka.bootstrap-servers}") String bootstrapServers,
-            @Value("${matching-shard.coordination.map-decision-timeout-ms:10000}") long timeoutMillis) {
+            @Value("${matching-shard.coordination.map-decision-timeout-ms:10000}") long timeoutMillis,
+            // 따라오지 못한 판정이 연속 이만큼이면 읽기를 다시 시작한다. 기본값 3번과 읽기 재시작 간격 5초는 근거 없는 임의 값이다(미측정).
+            @Value("${matching-shard.coordination.map-catch-up-failure-limit:3}") int catchUpFailureLimit,
+            @Value("${matching-shard.coordination.map-reader-restart-ms:5000}") long readerRestartMillis,
+            // 판정이 없어도 읽기 정지를 보는 주기 점검의 간격과, 끝에 못 닿은 채 읽은 위치가 멈춰 있는 연속 점검 한도. 둘 다 근거 없는 임의 값이다(미측정).
+            @Value("${matching-shard.coordination.map-health-check-interval-ms:10000}") long healthCheckIntervalMillis,
+            @Value("${matching-shard.coordination.map-health-check-stuck-limit:3}") int healthCheckStuckLimit) {
         org.apache.kafka.clients.admin.Admin admin = org.apache.kafka.clients.admin.Admin.create(
             java.util.Map.of(org.apache.kafka.clients.admin.AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers));
         org.apache.kafka.common.TopicPartition partition = new org.apache.kafka.common.TopicPartition(
@@ -118,7 +126,28 @@ public class MatchingHandoverConfig {
                 throw new IllegalStateException("맵 토픽 끝 위치 조회 중 인터럽트됨", e);
             }
         };
-        return new MapSyncResources(new MapCatchUpWaiter(endOffset, () -> reader.consumedOffset(0), timeoutMillis), admin);
+        MapCatchUpWaiter waiter = new MapCatchUpWaiter(endOffset, () -> reader.consumedOffset(0), timeoutMillis);
+        waiter.setReaderHealthy(reader::isHealthy);
+        reader.setRestartIntervalMillis(requireValidReaderRestartMillis(readerRestartMillis));
+        waiter.onRepeatedFailure(catchUpFailureLimit, () -> reader.requestRestart("끝 위치를 따라오지 못한 판정이 연속 " + catchUpFailureLimit + "번"));
+        MapReaderHealthCheck healthCheck = new MapReaderHealthCheck(
+            endOffset, () -> reader.consumedOffset(0), reader::isHealthy, healthCheckStuckLimit,
+            () -> {
+                waiter.resetFailures();
+                reader.requestRestart("끝 위치에 못 닿은 채 읽은 위치가 주기 점검 " + healthCheckStuckLimit + "번 연속 멈춰 있음");
+            });
+        return new MapSyncResources(waiter, admin, reader::isHealthy, healthCheck, healthCheckIntervalMillis);
+    }
+
+    // 읽기가 멈췄다가 다시 시작하는 간격의 하한. 간격이 이보다 짧으면 판정이 맵 항목을 읽는 사이 멈췄다 복구되는 일이 재확인보다 먼저 끝날 수 있다. 100은 근거 없는 임의 값이다(미측정).
+    static final long MIN_READER_RESTART_MILLIS = 100L;
+
+    static long requireValidReaderRestartMillis(long millis) {
+        if (millis < MIN_READER_RESTART_MILLIS) {
+            throw new IllegalArgumentException("matching-shard.coordination.map-reader-restart-ms는 " + MIN_READER_RESTART_MILLIS
+                + " 이상이어야 합니다: " + millis);
+        }
+        return millis;
     }
 
     /** 판정 대기 장치와 그것이 쓰는 Admin을 같이 닫기 위한 묶음. */
@@ -126,9 +155,31 @@ public class MatchingHandoverConfig {
         private final MapSync delegate;
         private final org.apache.kafka.clients.admin.Admin admin;
 
-        MapSyncResources(MapSync delegate, org.apache.kafka.clients.admin.Admin admin) {
+        private final java.util.function.BooleanSupplier healthy;
+        private final MapReaderHealthCheck healthCheck;
+        private final long healthCheckIntervalMillis;
+
+        MapSyncResources(MapSync delegate, org.apache.kafka.clients.admin.Admin admin, java.util.function.BooleanSupplier healthy,
+                MapReaderHealthCheck healthCheck, long healthCheckIntervalMillis) {
             this.delegate = delegate;
             this.admin = admin;
+            this.healthy = healthy;
+            this.healthCheck = healthCheck;
+            this.healthCheckIntervalMillis = healthCheckIntervalMillis;
+        }
+
+        /** 맵 읽기가 시작되고 초기 읽기를 마친 뒤에 부른다. */
+        void startHealthCheck() {
+            healthCheck.start(healthCheckIntervalMillis);
+        }
+
+        void stopHealthCheck() {
+            healthCheck.close();
+        }
+
+        @Override
+        public boolean healthy() {
+            return delegate.healthy();
         }
 
         @Override
@@ -138,21 +189,26 @@ public class MatchingHandoverConfig {
 
         @Override
         public void close() {
+            healthCheck.close();
             admin.close();
         }
     }
 
     @Bean
     public SmartLifecycle matchingSlotMapReaderLifecycle(
-            MatchingSlotMapReader reader, ObjectProvider<KafkaMatchingShardAssignment> assignment) {
+            MatchingSlotMapReader reader, ObjectProvider<KafkaMatchingShardAssignment> assignment, MapSyncResources mapSync) {
         return new HandoverLifecycle(MAP_READER_PHASE,
             () -> {
                 // 맵 토픽이 있어야 읽을 수 있다. 토픽 만들기는 배정 생명주기의 시작(-2)에서 하므로 읽기를 시작하기 전에 먼저 한다.
                 assignment.getObject().prepareTopics();
                 reader.start();
                 reader.awaitInitialCatchUp(Duration.ofSeconds(30));
+                mapSync.startHealthCheck();
             },
-            reader::close);
+            () -> {
+                mapSync.stopHealthCheck();
+                reader.close();
+            });
     }
 
     /**
@@ -178,6 +234,8 @@ public class MatchingHandoverConfig {
                 Set<Integer> snapshotSlots = loadedSnapshot.getIfAvailable(Optional::empty)
                     .map(StoredMatchingSnapshot::ownedStockSlots).orElse(Set.of());
                 Set<Integer> ownedSlots = OwnedStockSlotRestorer.restoreFromJournal(snapshotSlots, journalEntries);
+                // 엔진도 같은 목록을 알아야 담당 중인 종목 slot에 도착한 낡은 호가창 적재를 막는다(스냅샷 이전에 받은 종목 slot 포함).
+                matchingEngine.seedAcquiredSlots(ownedSlots);
                 rule.applyWhenMapReady(() -> reader.awaitInitialCatchUp(Duration.ofMillis(timeoutMillis)), matchingEngine, ownedSlots);
             },
             () -> { });
@@ -203,16 +261,74 @@ public class MatchingHandoverConfig {
     public HandoverReceiver handoverReceiver(
             Aeron aeron, HandoverRequester requester, SlotEventRequests slotEventRequests,
             @Value("${transport.matching-intake.channel:" + MatchingOrderIntakeConfig.DEFAULT_INTAKE_CHANNEL + "}") String ownChannel) {
-        return new HandoverReceiver(aeron, ownChannel, requester, slotEventRequests::requestLoad);
+        return new HandoverReceiver(aeron, ownChannel, requester, slotEventRequests::requestLoad, slotEventRequests::requestCleanup);
     }
 
     @Bean
     public HandoverCoordinator handoverCoordinator(
             HandoverRequester requester,
             @Value("${matching-shard.handover.retry-interval-ms:1000}") long retryIntervalMillis,
-            @Value("${matching-shard.handover.response-timeout-ms:5000}") long responseTimeoutMillis) {
+            @Value("${matching-shard.handover.response-timeout-ms:5000}") long responseTimeoutMillis,
+            @Value("${matching-shard.handover.abandoned-retry-interval-ms:30000}") long abandonedRetryIntervalMillis) {
         // 기본값은 Jack이 정한 값: 응답이 오지 않으면 1초마다 같은 요청을 다시 보내고, 처음 요청부터 5초가 지나면 실패로 본다.
-        return new HandoverCoordinator(requester, retryIntervalMillis, responseTimeoutMillis);
+        // 포기 뒤 다시 요청하는 간격 기본값 30초는 근거 없는 임의 값이다(미측정). X가 일시적으로 응답하지 못하는 시간을 측정한 뒤 정한다.
+        return new HandoverCoordinator(requester, retryIntervalMillis, responseTimeoutMillis, abandonedRetryIntervalMillis);
+    }
+
+    /**
+     * 이동이 정한 시간 넘게 멈춘 종목 slot을 찾아 ERROR 신호로 남기고 조회할 수 있게 한다. 대기 상태를 가진 담당 배정이 있을 때만 만든다.
+     * 값은 모두 근거 없는 임의 값이다(미측정): 30초 넘게 머물면 멈춘 것으로 보고, 같은 종목 slot의 신호는 60초에 한 번, 5초마다 확인한다.
+     */
+    @Bean(destroyMethod = "close")
+    public StuckHandoverReporterRunner stuckHandoverReporter(
+            ObjectProvider<KafkaMatchingShardAssignment> assignment, ObjectProvider<HandoverCoordinator> coordinator,
+            @Value("${matching-shard.handover.stuck-threshold-ms:30000}") long thresholdMillis,
+            @Value("${matching-shard.handover.stuck-repeat-ms:60000}") long repeatMillis,
+            @Value("${matching-shard.handover.stuck-check-interval-ms:5000}") long checkIntervalMillis) {
+        StuckHandoverReporter reporter = new StuckHandoverReporter(
+            () -> {
+                KafkaMatchingShardAssignment current = assignment.getIfAvailable();
+                return current == null ? java.util.Set.of() : current.slotsWaitingForMove();
+            },
+            () -> {
+                HandoverCoordinator current = coordinator.getIfAvailable();
+                return current == null ? 0L : current.failures();
+            },
+            System::currentTimeMillis, thresholdMillis, repeatMillis);
+        return new StuckHandoverReporterRunner(reporter, checkIntervalMillis);
+    }
+
+    /** 멈춤 신호를 정한 간격마다 확인하는 예약 실행. 신호 조회는 {@link #stuckHandoverSlots}로 한다. */
+    public static final class StuckHandoverReporterRunner implements AutoCloseable {
+        private final StuckHandoverReporter reporter;
+        private final java.util.concurrent.ScheduledExecutorService executor =
+            java.util.concurrent.Executors.newSingleThreadScheduledExecutor(runnable -> {
+                Thread thread = new Thread(runnable, "stuck-handover-reporter");
+                thread.setDaemon(true);
+                return thread;
+            });
+
+        StuckHandoverReporterRunner(StuckHandoverReporter reporter, long checkIntervalMillis) {
+            this.reporter = reporter;
+            executor.scheduleWithFixedDelay(() -> {
+                try {
+                    reporter.check();
+                } catch (RuntimeException e) {
+                    System.getLogger(StuckHandoverReporterRunner.class.getName())
+                        .log(System.Logger.Level.ERROR, "[호가창 이동] 멈춤 확인 중 예외(계속함): " + e);
+                }
+            }, checkIntervalMillis, checkIntervalMillis, java.util.concurrent.TimeUnit.MILLISECONDS);
+        }
+
+        /** 정한 시간 넘게 이동이 멈춘 종목 slot. */
+        public java.util.Set<Integer> stuckHandoverSlots() {
+            return reporter.stuckHandoverSlots();
+        }
+
+        @Override
+        public void close() {
+            executor.shutdownNow();
+        }
     }
 
     @Bean

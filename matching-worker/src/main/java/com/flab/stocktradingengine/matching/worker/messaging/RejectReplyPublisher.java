@@ -65,6 +65,7 @@ public class RejectReplyPublisher implements NotOwnedOrderListener {
     private final AtomicLong maxQueueDepth = new AtomicLong();
     private final AtomicLong enqueueWaitCount = new AtomicLong();
     private final AtomicLong enqueueWaitNanos = new AtomicLong();
+    private final AtomicLong sentCount = new AtomicLong();
 
     private Thread senderThread;
 
@@ -150,6 +151,7 @@ public class RejectReplyPublisher implements NotOwnedOrderListener {
         int length = codec.encode(encodeBuffer, 0, order);
         long result = publication.offer(encodeBuffer, 0, length);
         if (result >= 0) {
+            sentCount.incrementAndGet();
             return true;
         }
         if (result == Publication.CLOSED || result == Publication.MAX_POSITION_EXCEEDED) {
@@ -170,6 +172,11 @@ public class RejectReplyPublisher implements NotOwnedOrderListener {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
+    }
+
+    /** Aeron offer가 성공한 거부 회신 수의 누적. queue에 넣은 수(notOwnedCount)와 차이가 나면 아직 대기 중이거나 종료 때 버려진 것이다. */
+    public long sentCount() {
+        return sentCount.get();
     }
 
     public long maxQueueDepth() {
