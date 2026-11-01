@@ -1,3 +1,4 @@
+import json
 import os
 import sys
 import tempfile
@@ -10,7 +11,7 @@ import step_rates as sr
 def lines(points):
     out = []
     for ts, total in points:
-        stamp = "2026-10-31T10:00:%06.3f+09:00" % ts
+        stamp = "2026-10-31T10:%02d:%06.3f+09:00" % (int(ts) // 60, ts % 60)
         out.append("%s  INFO 1 --- [etrics-reporter] c.f.s.a.w.l.MetricsAccountResultListener : metrics accepted=0 rejected=0 fill=0 dup=0 acceptedTotal=%d" % (stamp, total))
     return "\n".join(out) + "\n"
 
@@ -53,7 +54,17 @@ class BinStatsTest(unittest.TestCase):
         self.assertGreater(stat["window_seconds"], 0)
 
 
-class TableTest(unittest.TestCase):
+class ParseBinsTest(unittest.TestCase):
+    def test_콜론과_쉼표로_구간_목록을_읽는다(self):
+        self.assertEqual(sr.parse_bins("200:2000,2000:6000"), [(200, 2000), (2000, 6000)])
+
+    def test_잘못된_구간은_거부한다(self):
+        for bad in ("", "200", "200:", "a:b", "2000:200", "200:200", "200:2000,"):
+            with self.assertRaises(ValueError, msg=bad):
+                sr.parse_bins(bad)
+
+
+class MainTest(unittest.TestCase):
     def make_run(self, root, name, accounts, rate_per_sec, seconds):
         d = os.path.join(root, name)
         os.makedirs(os.path.join(d, "logs"))
@@ -61,17 +72,38 @@ class TableTest(unittest.TestCase):
         open(os.path.join(d, "logs", "account.log"), "w").write(lines([(float(t), rate_per_sec * t) for t in range(0, seconds + 1)]))
         return d
 
-    def test_표는_N별_열과_m_구간별_행을_채우고_못_잰_칸은_안_쟀음이라고_쓴다(self):
+    def test_구간_인자를_주면_그_구간으로_한_실행의_JSON을_낸다(self):
+        with tempfile.TemporaryDirectory() as root:
+            d = self.make_run(root, "a", 100, 10000, 80)
+            result = json.loads(sr.main(["--bins", "200:2000,2000:6000", d]))
+        self.assertEqual([(b["lo"], b["hi"]) for b in result["bins"]], [(200, 2000), (2000, 6000)])
+        self.assertEqual(result["accounts"], 100)
+
+    def test_구간_인자가_없으면_기본_구간을_쓴다(self):
+        with tempfile.TemporaryDirectory() as root:
+            d = self.make_run(root, "a", 100, 10000, 80)
+            result = json.loads(sr.main([d]))
+        self.assertEqual([(b["lo"], b["hi"]) for b in result["bins"]], sr.DEFAULT_BINS)
+
+
+class TableTest(unittest.TestCase):
+    def make_run(self, root, name, accounts, rate_per_sec, seconds):
+        return MainTest.make_run(self, root, name, accounts, rate_per_sec, seconds)
+
+    def test_표는_N별_행과_m_구간별_열을_채우고_못_잰_칸은_안_쟀음이라고_쓴다(self):
         with tempfile.TemporaryDirectory() as root:
             a = self.make_run(root, "a", 100, 10000, 40)    # m 최대 4000
             b = self.make_run(root, "b", 10, 1000, 30)      # m 최대 3000, 두 실행 모두 [2000,20000)에 닿지 못함
             text = sr.table([a, b], bins=[(20, 200), (200, 2000), (2000, 20000)])
-        self.assertIn("N=100", text)
-        self.assertIn("N=10", text)
-        self.assertIn("안 쟀음", text)
-        self.assertIn("[20,200)", text)
+        rows = text.splitlines()
+        self.assertIn("[20,200)", rows[0])
+        self.assertIn("[2000,20000)", rows[0])
+        self.assertTrue(rows[1].startswith("N=10 "), rows[1])     # N 오름차순
+        self.assertTrue(rows[2].startswith("N=100 "), rows[2])
+        self.assertIn("안 쟀음", rows[1])
+        self.assertIn("안 쟀음", rows[2])
 
-    def test_같은_N의_여러_실행은_한_칸에_모은다(self):
+    def test_같은_N의_여러_실행은_한_행에_모은다(self):
         with tempfile.TemporaryDirectory() as root:
             a = self.make_run(root, "a", 100, 10000, 40)
             b = self.make_run(root, "b", 100, 20000, 40)

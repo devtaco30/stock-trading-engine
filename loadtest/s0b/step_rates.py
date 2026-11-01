@@ -10,8 +10,9 @@
 - 구간 끝(hi)에 닿지 못한 실행은 「안 쟀음」이다.
 
 사용:
-  step_rates.py <결과 폴더>                     한 실행을 JSON으로
-  step_rates.py --table <결과 폴더>...           여러 실행을 N별 열, m 구간별 행의 표로
+  step_rates.py [--bins lo:hi,lo:hi] <결과 폴더>              한 실행을 JSON으로
+  step_rates.py [--bins lo:hi,lo:hi] --table <결과 폴더>...   여러 실행을 N별 행, m 구간별 열의 표로
+  --bins 기본값은 20:200,200:2000,2000:20000
 """
 import datetime
 import json
@@ -81,37 +82,57 @@ def report(result_dir, bins=DEFAULT_BINS):
     return {"accounts": accounts, "bins": [bin_stats(series, accounts, lo, hi) or {"lo": lo, "hi": hi, "측정": "안 쟀음"} for lo, hi in bins]}
 
 
+def parse_bins(text):
+    """「200:2000,2000:6000」 형태의 구간 목록. lo < hi인 양의 정수 쌍만 받는다."""
+    bins = []
+    for part in text.split(","):
+        pieces = part.split(":")
+        if len(pieces) != 2 or not pieces[0].isdigit() or not pieces[1].isdigit():
+            raise ValueError("구간은 lo:hi 형태의 정수여야 한다: " + repr(part))
+        lo, hi = int(pieces[0]), int(pieces[1])
+        if lo >= hi:
+            raise ValueError("구간은 lo < hi여야 한다: " + repr(part))
+        bins.append((lo, hi))
+    return bins
+
+
 def table(result_dirs, bins=DEFAULT_BINS):
+    """행 = N(오름차순), 열 = m 구간. 칸 = 창 속도 / 창 길이 / 1초 중앙(표본 수) / 실행 횟수. 실행별 값은 / 로 잇는다."""
     by_n = {}
     for d in result_dirs:
         accounts, series = read_run(d)
         by_n.setdefault(accounts, []).append(series)
-    ns = sorted(by_n, reverse=True)
-    out = ["m 구간(계좌당 미체결) | " + " | ".join("N=%d" % n for n in ns)]
-    for lo, hi in bins:
+    out = ["N | " + " | ".join("[%d,%d)" % (lo, hi) for lo, hi in bins)]
+    for n in sorted(by_n):
         cells = []
-        for n in ns:
+        for lo, hi in bins:
             stats = [bin_stats(s, n, lo, hi) for s in by_n[n]]
-            got = [s for s in stats if s]
+            got = [g for g in stats if g]
             if not got:
                 cells.append("안 쟀음")
                 continue
-            windows = [g["window_rate"] for g in got]
             secs = [g["sec_rate_median"] for g in got if "sec_rate_median" in g]
             cells.append("창 %s 건/초 (창 %s초), 1초 중앙 %s (표본 %s개), 실행 %d/%d회"
-                         % ("/".join("%.0f" % w for w in windows), "/".join("%.1f" % g["window_seconds"] for g in got),
+                         % ("/".join("%.0f" % g["window_rate"] for g in got), "/".join("%.1f" % g["window_seconds"] for g in got),
                             "/".join("%.0f" % v for v in secs) if secs else "없음", "/".join(str(g["samples"]) for g in got),
                             len(got), len(stats)))
-        out.append("[%d,%d) | " % (lo, hi) + " | ".join(cells))
+        out.append("N=%d | " % n + " | ".join(cells))
     return "\n".join(out)
 
 
-if __name__ == "__main__":
-    args = sys.argv[1:]
+def main(argv):
+    args = list(argv)
+    bins = DEFAULT_BINS
+    if "--bins" in args:
+        i = args.index("--bins")
+        bins = parse_bins(args[i + 1])
+        del args[i:i + 2]
     if args and args[0] == "--table":
-        print(table(args[1:]))
-    elif len(args) == 1:
-        print(json.dumps(report(args[0]), ensure_ascii=False))
-    else:
-        print(__doc__)
-        sys.exit(2)
+        return table(args[1:], bins)
+    if len(args) == 1:
+        return json.dumps(report(args[0], bins), ensure_ascii=False)
+    raise SystemExit(__doc__)
+
+
+if __name__ == "__main__":
+    print(main(sys.argv[1:]))
