@@ -128,31 +128,22 @@ else
     start_worker account-projection-worker account-projection-worker "$(stage_args v2 account-projection-worker)"
 fi
 
-await_udp_port() {
-    local port="$1"
-    local name="$2"
-    echo -n "포트 ${port}(${name}) 바인딩 대기 중"
-    for _ in $(seq 1 120); do
-        if lsof -nP -iUDP:"${port}" > /dev/null 2>&1; then
-            echo " OK"
-            return 0
-        fi
-        echo -n "."
-        sleep 1
-    done
-    echo " TIMEOUT"
-    echo "${name}(포트 ${port})이 120초 안에 안 열렸다 — ${LOG_DIR}/*.log 확인" >&2
-    exit 1
-}
-
-await_udp_port 20040 "account-worker(A) account-intake"
-for matching_port in $(matching_intake_ports "$MATCHING_COUNT"); do
-    await_udp_port "$matching_port" "matching-worker matching-intake"
-done
-await_udp_port 20060 "account-worker(A) fill"
 if [ "$WORKER_COUNT" = "2" ]; then
-    await_udp_port 20041 "account-worker(B) account-intake"
-    await_udp_port 20061 "account-worker(B) fill"
+    ACCOUNT_LOG_A="${LOG_DIR}/account-worker-a.log"
+    ACCOUNT_LOG_B="${LOG_DIR}/account-worker-b.log"
+else
+    ACCOUNT_LOG_A="${LOG_DIR}/account-worker.log"
+fi
+
+# 포트 대기는 포트를 바인딩한 소켓만 인정하고, 그 프로세스의 로그에 Application run failed가 있으면 바로 실패한다(matching-plan.sh).
+await_udp_port 20040 "account-worker(A) account-intake" "$ACCOUNT_LOG_A" || exit 1
+for index in $(seq 0 $((MATCHING_COUNT - 1))); do
+    await_udp_port "$(matching_intake_port "$index")" "matching-worker matching-intake" "${LOG_DIR}/$(matching_label "$MATCHING_COUNT" "$index" "$MATCHING_POOL_COUNT").log" || exit 1
+done
+await_udp_port 20060 "account-worker(A) fill" "$ACCOUNT_LOG_A" || exit 1
+if [ "$WORKER_COUNT" = "2" ]; then
+    await_udp_port 20041 "account-worker(B) account-intake" "$ACCOUNT_LOG_B" || exit 1
+    await_udp_port 20061 "account-worker(B) fill" "$ACCOUNT_LOG_B" || exit 1
 fi
 
 # 매칭 shard 가 둘 이상이면 종목 slot 64개의 주소가 맵 토픽에 모두 올라온 뒤에 READY 를 낸다(부하는 READY 뒤에 시작한다).

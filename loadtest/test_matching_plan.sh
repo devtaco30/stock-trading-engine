@@ -289,7 +289,7 @@ test_run_script_uses_plan() {
     start_line="$(grep -n '^if \[ "\$WORKER_COUNT" = "2" \]' loadtest/run-e2e-v2.sh | head -n 1 | cut -d: -f1)"
     assert_eq "맵 토픽 초기화 호출이 있다" "1" "$([ -n "$reset_line" ] && echo 1 || echo 0)"
     assert_eq "맵 토픽 초기화가 앱 기동보다 앞이다" "1" "$([ -n "$reset_line" ] && [ -n "$start_line" ] && [ "$reset_line" -lt "$start_line" ] && echo 1 || echo 0)"
-    assert_contains "모든 입구 포트를 기다린다" "$script" "matching_intake_ports"
+    assert_contains "모든 입구 포트를 기다린다" "$script" "matching_intake_port \"\$index\""
 }
 
 # --- 계좌 워커 세 기동 줄(a·b·단일)이 모두 주소 풀 인자를 받는다. 풀 1개면 인자가 비어 기존 기동과 같다 ---
@@ -307,6 +307,51 @@ test_run_script_passes_account_args() {
     done <<< "$lines"
     assert_eq "세 줄 모두 matching_account_args를 붙인다" "0" "$missing"
     assert_contains "상한 인자도 그대로 있다" "$lines" '${MAX_OPEN_ORDERS_ARG}'
+}
+
+# --- UDP 포트 대기: 포트를 바인딩한 쪽만 인정한다(연결된 소켓 `->`은 상대가 그 주소로 보내는 Publication일 뿐이다) ---
+test_udp_port_bound() {
+    local header="COMMAND PID USER FD TYPE DEVICE SIZE/OFF NODE NAME"
+    udp_port_listing() { printf '%s\n%s\n' "$header" "java 1 jack 5u IPv4 0x1 0t0 UDP *:20040"; }
+    udp_port_bound 20040; assert_eq "바인딩한 소켓이 있으면 열린 것" "0" "$?"
+    udp_port_listing() { printf '%s\n%s\n' "$header" "java 1 jack 5u IPv4 0x1 0t0 UDP 127.0.0.1:50000->127.0.0.1:20040"; }
+    udp_port_bound 20040; assert_eq "연결된 소켓만 있으면 열린 것이 아니다" "1" "$?"
+    udp_port_listing() { printf '%s\n' "$header"; }
+    udp_port_bound 20040; assert_eq "머리줄만 있으면 열린 것이 아니다" "1" "$?"
+    udp_port_listing() { :; }
+    udp_port_bound 20040; assert_eq "출력이 없으면 열린 것이 아니다" "1" "$?"
+    unset -f udp_port_listing
+    udp_port_listing() { lsof -nP -iUDP:"$1" 2> /dev/null; }
+}
+
+test_await_udp_port() {
+    local out dir header="COMMAND PID USER FD TYPE DEVICE SIZE/OFF NODE NAME"
+    dir="$(mktemp -d)"
+    export UDP_WAIT_SEC=3 UDP_WAIT_POLL=1
+    udp_port_listing() { printf '%s\n%s\n' "$header" "java 1 jack 5u IPv4 0x1 0t0 UDP *:20040"; }
+    out="$(await_udp_port 20040 "계좌" "$dir/none.log" 2>&1)"; assert_eq "바인딩되면 0" "0" "$?"
+    assert_contains "열리면 OK" "$out" "OK"
+    udp_port_listing() { printf '%s\n%s\n' "$header" "java 1 jack 5u IPv4 0x1 0t0 UDP 127.0.0.1:50000->127.0.0.1:20040"; }
+    out="$(await_udp_port 20040 "계좌" "$dir/none.log" 2>&1)"; assert_eq "연결 소켓만 있으면 제한 시간 뒤 1" "1" "$?"
+    assert_contains "시간 초과 메시지에 이름" "$out" "계좌"
+    printf 'Application run failed\n' > "$dir/account.log"
+    local start=$SECONDS
+    out="$(await_udp_port 20040 "계좌" "$dir/account.log" 2>&1)"; assert_eq "로그에 Application run failed가 있으면 1" "1" "$?"
+    assert_contains "실패 원인을 알린다" "$out" "Application run failed"
+    assert_eq "제한 시간을 기다리지 않고 바로 끝난다" "1" "$([ $((SECONDS - start)) -lt 2 ] && echo 1 || echo 0)"
+    unset UDP_WAIT_SEC UDP_WAIT_POLL
+    rm -rf "$dir"
+    udp_port_listing() { lsof -nP -iUDP:"$1" 2> /dev/null; }
+}
+
+test_run_script_uses_shared_udp_wait() {
+    local script calls bare
+    script="$(cat loadtest/run-e2e-v2.sh)"
+    assert_not_contains "스크립트가 자기 await_udp_port를 따로 갖지 않는다" "$script" "await_udp_port() {"
+    calls="$(grep -E '^[[:space:]]*await_udp_port ' loadtest/run-e2e-v2.sh)"
+    bare="$(printf '%s\n' "$calls" | grep -vcE 'LOG_DIR|ACCOUNT_LOG' || true)"
+    assert_eq "모든 호출이 로그 파일을 넘긴다" "0" "$bare"
+    assert_contains "실패하면 스크립트도 끝낸다" "$calls" "|| exit 1"
 }
 
 # --- H9: 실행 중 증설. 시작 shard는 증설할 shard의 입구 주소까지 포함한 풀로 떠야 한다 ---
@@ -441,6 +486,9 @@ test_reset_map_topic
 test_stop_includes_matching_shard_pids
 test_run_script_uses_plan
 test_run_script_passes_account_args
+test_udp_port_bound
+test_await_udp_port
+test_run_script_uses_shared_udp_wait
 test_expansion_pool
 test_expansion_validation
 test_dump_timeout_configurable

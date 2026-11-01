@@ -257,3 +257,39 @@ await_matching_shard_address() {
         sleep "$poll"
     done
 }
+
+# --- UDP 포트 대기 ---
+# 포트를 「바인딩한」 소켓이 있는지 본다. `lsof -iUDP:<포트>`에는 그 주소로 보내는 쪽의 연결된 소켓(`로컬->원격`)도 나오는데,
+# 이것은 상대 프로세스가 살아 있다는 뜻이 아니다(api·매칭이 계좌 워커의 입구 주소로 연 Publication). 그래서 `->`가 없는 줄만 센다.
+# 테스트가 udp_port_listing 을 바꿔 lsof 없이 확인한다.
+udp_port_listing() { lsof -nP -iUDP:"$1" 2> /dev/null; }
+
+udp_port_bound() {
+    udp_port_listing "$1" | awk 'NR > 1 && $0 !~ /->/ { found = 1 } END { exit !found }'
+}
+
+# $1=포트, $2=이름, $3=그 포트를 여는 프로세스의 로그 파일(선택). 열리면 0.
+# 로그에 `Application run failed`가 있으면 제한 시간을 기다리지 않고 1. 제한 시간은 UDP_WAIT_SEC(기본 120초), 확인 간격은 UDP_WAIT_POLL(기본 1초).
+await_udp_port() {
+    local port="$1" name="$2" log="${3:-}" waited=0 limit="${UDP_WAIT_SEC:-120}" poll="${UDP_WAIT_POLL:-1}"
+    echo -n "포트 ${port}(${name}) 바인딩 대기 중"
+    while :; do
+        if udp_port_bound "$port"; then
+            echo " OK"
+            return 0
+        fi
+        if [ -n "$log" ] && [ -f "$log" ] && grep -q "Application run failed" "$log"; then
+            echo " FAILED"
+            echo "${name}(포트 ${port})을 여는 프로세스가 시작에 실패했다(Application run failed) — ${log} 확인" >&2
+            return 1
+        fi
+        if [ "$waited" -ge "$limit" ]; then
+            echo " TIMEOUT"
+            echo "${name}(포트 ${port})이 ${limit}초 안에 안 열렸다 — ${log:-로그} 확인" >&2
+            return 1
+        fi
+        echo -n "."
+        sleep "$poll"
+        waited=$((waited + poll))
+    done
+}
