@@ -199,8 +199,11 @@ public final class U10Tool {
         System.out.println("HIGH=" + String.join(",", picked));
     }
 
-    /** send-bulk의 종목 코드 목록과 선택 옵션 {@code --sentinel-buy=<계좌>:<가격>}(종목마다 매도 N건 뒤에 같은 Publication으로 보낼 표지 매수)와 {@code --price-step=<n>}(매도 가격을 건마다 올리는 폭, 기본 1). */
-    record BulkTargets(List<String> stockCodes, long sentinelAccountId, long sentinelPrice, long priceStep) {
+    /** send-bulk의 종목 코드 목록과 선택 옵션 {@code --sentinel-buy=<계좌>:<가격>}(종목마다 매도 N건 뒤에 같은 Publication으로 보낼 표지 매수)와 {@code --price-step=<n>}(매도 가격을 건마다 올리는 폭, 기본 1)와 {@code --quantity=<n>}(주문 한 건의 수량, 기본 1. 가용 보유보다 큰 수량으로 보내 거부를 일부러 내는 데 쓴다). */
+    record BulkTargets(List<String> stockCodes, long sentinelAccountId, long sentinelPrice, long priceStep, int quantity) {
+        BulkTargets(List<String> stockCodes, long sentinelAccountId, long sentinelPrice, long priceStep) {
+            this(stockCodes, sentinelAccountId, sentinelPrice, priceStep, 1);
+        }
     }
 
     static BulkTargets parseBulkTargets(String[] args, int firstStockIndex) {
@@ -208,6 +211,7 @@ public final class U10Tool {
         long sentinelAccountId = 0L;
         long sentinelPrice = 0L;
         long priceStep = 1L;
+        int quantity = 1;
         for (int index = firstStockIndex; index < args.length; index++) {
             if (args[index].startsWith("--sentinel-buy=")) {
                 String[] parts = args[index].substring("--sentinel-buy=".length()).split(":");
@@ -215,11 +219,26 @@ public final class U10Tool {
                 sentinelPrice = Long.parseLong(parts[1]);
             } else if (args[index].startsWith("--price-step=")) {
                 priceStep = Long.parseLong(args[index].substring("--price-step=".length()));
+            } else if (args[index].startsWith("--quantity=")) {
+                quantity = parseBulkQuantity(args[index].substring("--quantity=".length()));
             } else {
                 stockCodes.add(args[index]);
             }
         }
-        return new BulkTargets(stockCodes, sentinelAccountId, sentinelPrice, priceStep);
+        return new BulkTargets(stockCodes, sentinelAccountId, sentinelPrice, priceStep, quantity);
+    }
+
+    private static int parseBulkQuantity(String value) {
+        int quantity;
+        try {
+            quantity = Integer.parseInt(value);
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("--quantity는 양의 정수여야 한다: " + value, e);
+        }
+        if (quantity < 1) {
+            throw new IllegalArgumentException("--quantity는 양의 정수여야 한다: " + value);
+        }
+        return quantity;
     }
 
     /** 주문 한 건을 어디로 보낼지의 추상. 실제 발신은 Aeron Publication, 시험은 기록하는 목록으로 바꾼다. */
@@ -277,7 +296,7 @@ public final class U10Tool {
         for (String stockCode : targets.stockCodes()) {
             for (int i = 0; i < perStock; i++) {
                 sink.accept(new DecodedAccountOrder(side, accountId + (i % accounts), stockCode,
-                    BigDecimal.valueOf(firstPrice + i * targets.priceStep()), 1,
+                    BigDecimal.valueOf(firstPrice + i * targets.priceStep()), targets.quantity(),
                     prefix + "-" + stockCode + "-" + i, EpochNanos.now()));
                 sent++;
             }

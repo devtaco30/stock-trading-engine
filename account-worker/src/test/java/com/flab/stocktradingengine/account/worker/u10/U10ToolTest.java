@@ -103,6 +103,34 @@ class U10ToolTest {
     }
 
     @Test
+    void send_bulk_수량_옵션은_없으면_1이고_양의_정수가_아니면_거부한다() {
+        U10Tool.BulkTargets none = U10Tool.parseBulkTargets(new String[] {
+            "send-bulk", "ch", "90002", "SELL", "20000", "200", "p", "000001"}, 7);
+        assertEquals(1, none.quantity());
+        U10Tool.BulkTargets seven = U10Tool.parseBulkTargets(new String[] {
+            "send-bulk", "ch", "90002", "SELL", "20000", "200", "p", "--quantity=7", "000001"}, 7);
+        assertEquals(7, seven.quantity());
+        assertEquals(List.of("000001"), seven.stockCodes());
+        for (String bad : new String[] {"--quantity=0", "--quantity=-3", "--quantity=abc"}) {
+            org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> U10Tool.parseBulkTargets(new String[] {
+                "send-bulk", "ch", "90002", "SELL", "20000", "200", "p", bad, "000001"}, 7), bad);
+        }
+    }
+
+    @Test
+    void send_bulk는_수량_옵션의_수량으로_매도를_보내고_수량이_없으면_1이다() {
+        List<com.flab.stocktradingengine.codec.DecodedAccountOrder> sent = new ArrayList<>();
+        U10Tool.BulkTargets targets = new U10Tool.BulkTargets(List.of("000001"), 0L, 0L, 1L, 9);
+        U10Tool.bulkOrders(90002L, com.flab.stocktradingengine.trading.entity.OrderSide.SELL, 20000L, 4, 2, "p", targets, sent::add);
+        assertEquals(4, sent.size());
+        assertTrue(sent.stream().allMatch(order -> order.quantity() == 9));
+        List<com.flab.stocktradingengine.codec.DecodedAccountOrder> defaults = new ArrayList<>();
+        U10Tool.bulkOrders(90002L, com.flab.stocktradingengine.trading.entity.OrderSide.SELL, 20000L, 2, 1, "q",
+            new U10Tool.BulkTargets(List.of("000001"), 0L, 0L, 1L), defaults::add);
+        assertTrue(defaults.stream().allMatch(order -> order.quantity() == 1));
+    }
+
+    @Test
     void 맵_토픽이_없으면_MAP_TOPIC_MISSING을_남기고_부분_읽기_경고와_구별한다() {
         MockConsumer<Integer, String> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
         consumer.updatePartitions(MAP_TOPIC, List.of());
