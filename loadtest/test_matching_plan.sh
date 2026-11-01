@@ -292,6 +292,23 @@ test_run_script_uses_plan() {
     assert_contains "모든 입구 포트를 기다린다" "$script" "matching_intake_ports"
 }
 
+# --- 계좌 워커 세 기동 줄(a·b·단일)이 모두 주소 풀 인자를 받는다. 풀 1개면 인자가 비어 기존 기동과 같다 ---
+test_run_script_passes_account_args() {
+    local lines count missing line
+    lines="$(grep -E '^[[:space:]]*start_app account-worker' loadtest/run-e2e-v2.sh)"
+    count="$(printf '%s\n' "$lines" | grep -c .)"
+    assert_eq "계좌 워커 기동 줄은 세 개다" "3" "$count"
+    missing=0
+    while IFS= read -r line; do
+        case "$line" in
+            *'$(matching_account_args "$MATCHING_POOL_COUNT")'*) ;;
+            *) missing=$((missing + 1)) ;;
+        esac
+    done <<< "$lines"
+    assert_eq "세 줄 모두 matching_account_args를 붙인다" "0" "$missing"
+    assert_contains "상한 인자도 그대로 있다" "$lines" '${MAX_OPEN_ORDERS_ARG}'
+}
+
 # --- H9: 실행 중 증설. 시작 shard는 증설할 shard의 입구 주소까지 포함한 풀로 떠야 한다 ---
 test_expansion_pool() {
     local a b new
@@ -423,6 +440,7 @@ test_parse_map_dump
 test_reset_map_topic
 test_stop_includes_matching_shard_pids
 test_run_script_uses_plan
+test_run_script_passes_account_args
 test_expansion_pool
 test_expansion_validation
 test_dump_timeout_configurable
