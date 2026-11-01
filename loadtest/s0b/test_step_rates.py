@@ -113,5 +113,35 @@ class TableTest(unittest.TestCase):
         self.assertIn("20000", text)
 
 
+class ByTotalTest(unittest.TestCase):
+    def make_run(self, root, name, accounts, rate_per_sec, seconds):
+        return MainTest.make_run(self, root, name, accounts, rate_per_sec, seconds)
+
+    def test_전체_합_기준_구간은_계좌_수와_무관하게_전체_접수_수로_경계를_잡는다(self):
+        with tempfile.TemporaryDirectory() as root:
+            a = self.make_run(root, "a", 100, 10000, 40)   # 전체 합이 초당 10,000씩 늘어 20,000에서 60,000까지 4초
+            text = sr.table([a], bins=[(20000, 60000)], by_total=True)
+        self.assertIn("창 10000", text)
+        self.assertIn("창 4.0초", text)
+        self.assertIn("m 200~600", text)          # 같은 구간의 계좌당 미체결 범위(N=100)
+
+    def test_전체_합_기준에서도_닿지_못한_칸은_안_쟀음이다(self):
+        with tempfile.TemporaryDirectory() as root:
+            a = self.make_run(root, "a", 100, 10000, 10)   # 전체 합 최대 100,000
+            text = sr.table([a], bins=[(20000, 60000), (100000, 600000)], by_total=True)
+        self.assertIn("안 쟀음", text)
+
+    def test_N이_다른_실행도_같은_전체_합_구간에서_한_표에_놓인다(self):
+        with tempfile.TemporaryDirectory() as root:
+            a = self.make_run(root, "a", 30, 5000, 60)
+            b = self.make_run(root, "b", 300, 20000, 60)
+            text = sr.table([a, b], bins=[(40000, 120000)], by_total=True)
+        rows = text.splitlines()
+        self.assertTrue(rows[1].startswith("N=30 "), rows[1])
+        self.assertTrue(rows[2].startswith("N=300 "), rows[2])
+        self.assertIn("m 1333~4000", rows[1])
+        self.assertIn("m 133~400", rows[2])
+
+
 if __name__ == "__main__":
     unittest.main()
