@@ -354,6 +354,32 @@ test_run_script_uses_shared_udp_wait() {
     assert_contains "실패하면 스크립트도 끝낸다" "$calls" "|| exit 1"
 }
 
+# --- 기동 순서: 매칭 shard가 둘 이상이면 계좌 워커·api는 맵 배정 완료 뒤에 띄운다(계좌 쪽 resolver가 맵 토픽의 파티션을 기동 때 찾는다) ---
+# run-e2e-v2.sh 의 launch_apps 함수를 꺼내 기동 함수를 기록용으로 바꿔 순서만 본다. 앱은 띄우지 않는다.
+launch_order() {
+    local body calls=""
+    body="$(sed -n '/^launch_apps() {/,/^}/p' loadtest/run-e2e-v2.sh)"
+    [ -n "$body" ] || { echo "launch_apps 없음"; return 1; }
+    (
+        MATCHING_POOL_COUNT="$1"; MATCHING_COUNT="$1"; MATCHING_ASSIGN_TIMEOUT=300
+        record() { echo "$1"; }
+        start_account_workers() { record account; }
+        start_matching_workers() { record matching; }
+        start_other_apps() { record others; }
+        matching_common_args() { :; }
+        await_matching_intake_ports() { record wait-ports; }
+        await_matching_slots_assigned() { record wait-assigned; }
+        eval "$body"
+        launch_apps
+    ) | tr '\n' ' '
+}
+
+test_launch_order() {
+    assert_eq "매칭 1개면 기존 순서(계좌, 매칭, 나머지)" "account matching others " "$(launch_order 1)"
+    assert_eq "매칭 2개면 매칭, 포트, 배정 완료 뒤에 계좌와 나머지" "matching wait-ports wait-assigned account others " "$(launch_order 2)"
+    assert_eq "풀이 3개여도(증설 포함) 같은 순서" "matching wait-ports wait-assigned account others " "$(launch_order 3)"
+}
+
 # --- H9: 실행 중 증설. 시작 shard는 증설할 shard의 입구 주소까지 포함한 풀로 떠야 한다 ---
 test_expansion_pool() {
     local a b new
@@ -489,6 +515,7 @@ test_run_script_passes_account_args
 test_udp_port_bound
 test_await_udp_port
 test_run_script_uses_shared_udp_wait
+test_launch_order
 test_expansion_pool
 test_expansion_validation
 test_dump_timeout_configurable

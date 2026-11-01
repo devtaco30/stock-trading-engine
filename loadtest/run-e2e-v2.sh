@@ -115,18 +115,59 @@ if [ "$MATCHING_POOL_COUNT" != "1" ]; then
     reset_matching_map_topic || exit 1
 fi
 
-if [ "$WORKER_COUNT" = "2" ]; then
-    start_app account-worker-a " --transport.account-intake.channel=aeron:udp?endpoint=localhost:20040 --transport.fill.channel=aeron:udp?endpoint=localhost:20060 --account.worker.archive.control-channel=aeron:udp?endpoint=localhost:8010$(shard_args_intake) --measure.latency.enabled=true --measure.latency.snapshot-trigger-path=${E2E_RESULTS_ABS}/latency-trigger-v2-a --measure.latency.output-path=${E2E_RESULTS_ABS}/latency-v2-account-worker-a.json${MAX_OPEN_ORDERS_ARG}$(matching_account_args "$MATCHING_POOL_COUNT")" account-worker
-    start_app account-worker-b " --transport.account-intake.channel=aeron:udp?endpoint=localhost:20041 --transport.fill.channel=aeron:udp?endpoint=localhost:20061 --account.worker.archive.control-channel=aeron:udp?endpoint=localhost:8012$(shard_args_intake) --measure.latency.enabled=true --measure.latency.snapshot-trigger-path=${E2E_RESULTS_ABS}/latency-trigger-v2-b --measure.latency.output-path=${E2E_RESULTS_ABS}/latency-v2-account-worker-b.json${MAX_OPEN_ORDERS_ARG}$(matching_account_args "$MATCHING_POOL_COUNT")" account-worker
-    start_matching_workers "$(shard_args_fill)"
-    start_app api "$(shard_args_intake)" api
-else
-    start_app account-worker " --measure.latency.enabled=true --measure.latency.snapshot-trigger-path=${E2E_RESULTS_ABS}/latency-trigger-v2 --measure.latency.output-path=${E2E_RESULTS_ABS}/latency-v2-account-worker.json$(stage_args v2 account-worker)${MAX_OPEN_ORDERS_ARG}$(matching_account_args "$MATCHING_POOL_COUNT")" account-worker
-    start_matching_workers "$(stage_args v2 matching-worker)"
-    start_app api "$(stage_args v2 api)" api
-    start_worker settlement-worker settlement-worker ""
-    start_worker account-projection-worker account-projection-worker "$(stage_args v2 account-projection-worker)"
-fi
+# 계좌 워커. 매칭 shard 가 하나뿐이면 매칭보다 먼저, 둘 이상이면 맵 배정 완료 뒤에 띄운다(launch_apps).
+start_account_workers() {
+    if [ "$WORKER_COUNT" = "2" ]; then
+        start_app account-worker-a " --transport.account-intake.channel=aeron:udp?endpoint=localhost:20040 --transport.fill.channel=aeron:udp?endpoint=localhost:20060 --account.worker.archive.control-channel=aeron:udp?endpoint=localhost:8010$(shard_args_intake) --measure.latency.enabled=true --measure.latency.snapshot-trigger-path=${E2E_RESULTS_ABS}/latency-trigger-v2-a --measure.latency.output-path=${E2E_RESULTS_ABS}/latency-v2-account-worker-a.json${MAX_OPEN_ORDERS_ARG}$(matching_account_args "$MATCHING_POOL_COUNT")" account-worker
+        start_app account-worker-b " --transport.account-intake.channel=aeron:udp?endpoint=localhost:20041 --transport.fill.channel=aeron:udp?endpoint=localhost:20061 --account.worker.archive.control-channel=aeron:udp?endpoint=localhost:8012$(shard_args_intake) --measure.latency.enabled=true --measure.latency.snapshot-trigger-path=${E2E_RESULTS_ABS}/latency-trigger-v2-b --measure.latency.output-path=${E2E_RESULTS_ABS}/latency-v2-account-worker-b.json${MAX_OPEN_ORDERS_ARG}$(matching_account_args "$MATCHING_POOL_COUNT")" account-worker
+    else
+        start_app account-worker " --measure.latency.enabled=true --measure.latency.snapshot-trigger-path=${E2E_RESULTS_ABS}/latency-trigger-v2 --measure.latency.output-path=${E2E_RESULTS_ABS}/latency-v2-account-worker.json$(stage_args v2 account-worker)${MAX_OPEN_ORDERS_ARG}$(matching_account_args "$MATCHING_POOL_COUNT")" account-worker
+    fi
+}
+
+matching_common_args() {
+    if [ "$WORKER_COUNT" = "2" ]; then
+        shard_args_fill
+    else
+        stage_args v2 matching-worker
+    fi
+}
+
+start_other_apps() {
+    if [ "$WORKER_COUNT" = "2" ]; then
+        start_app api "$(shard_args_intake)" api
+    else
+        start_app api "$(stage_args v2 api)" api
+        start_worker settlement-worker settlement-worker ""
+        start_worker account-projection-worker account-projection-worker "$(stage_args v2 account-projection-worker)"
+    fi
+}
+
+# 매칭 shard 의 입구 포트(바인딩한 쪽)를 모두 기다린다.
+await_matching_intake_ports() {
+    local index
+    for index in $(seq 0 $((MATCHING_COUNT - 1))); do
+        await_udp_port "$(matching_intake_port "$index")" "matching-worker matching-intake" "${LOG_DIR}/$(matching_label "$MATCHING_COUNT" "$index" "$MATCHING_POOL_COUNT").log" || return 1
+    done
+}
+
+# 매칭 shard 가 하나뿐이면 기존 순서(계좌 워커, 매칭, 나머지). 둘 이상이면 계좌 쪽 resolver 가 기동 때 맵 토픽의 파티션을 찾으므로
+# 매칭 shard 를 먼저 띄우고 종목 slot 64개의 배정이 끝난 뒤에 계좌 워커와 나머지를 띄운다. 제한 시간을 넘기면 주인 없는 종목 slot 번호를 출력하고 끝낸다.
+launch_apps() {
+    if [ "$MATCHING_POOL_COUNT" = "1" ]; then
+        start_account_workers
+        start_matching_workers "$(matching_common_args)"
+        start_other_apps
+        return 0
+    fi
+    start_matching_workers "$(matching_common_args)"
+    await_matching_intake_ports || return 1
+    await_matching_slots_assigned "${MATCHING_STOCK_SLOT_COUNT:-64}" "$MATCHING_ASSIGN_TIMEOUT" "$MATCHING_COUNT" || return 1
+    start_account_workers
+    start_other_apps
+}
+
+launch_apps || exit 1
 
 if [ "$WORKER_COUNT" = "2" ]; then
     ACCOUNT_LOG_A="${LOG_DIR}/account-worker-a.log"
@@ -137,19 +178,11 @@ fi
 
 # 포트 대기는 포트를 바인딩한 소켓만 인정하고, 그 프로세스의 로그에 Application run failed가 있으면 바로 실패한다(matching-plan.sh).
 await_udp_port 20040 "account-worker(A) account-intake" "$ACCOUNT_LOG_A" || exit 1
-for index in $(seq 0 $((MATCHING_COUNT - 1))); do
-    await_udp_port "$(matching_intake_port "$index")" "matching-worker matching-intake" "${LOG_DIR}/$(matching_label "$MATCHING_COUNT" "$index" "$MATCHING_POOL_COUNT").log" || exit 1
-done
+await_matching_intake_ports || exit 1
 await_udp_port 20060 "account-worker(A) fill" "$ACCOUNT_LOG_A" || exit 1
 if [ "$WORKER_COUNT" = "2" ]; then
     await_udp_port 20041 "account-worker(B) account-intake" "$ACCOUNT_LOG_B" || exit 1
     await_udp_port 20061 "account-worker(B) fill" "$ACCOUNT_LOG_B" || exit 1
-fi
-
-# 매칭 shard 가 둘 이상이면 종목 slot 64개의 주소가 맵 토픽에 모두 올라온 뒤에 READY 를 낸다(부하는 READY 뒤에 시작한다).
-# 제한 시간을 넘기면 주인 없는 종목 slot 번호를 출력하고 끝낸다.
-if [ "$MATCHING_POOL_COUNT" != "1" ]; then
-    await_matching_slots_assigned "${MATCHING_STOCK_SLOT_COUNT:-64}" "$MATCHING_ASSIGN_TIMEOUT" "$MATCHING_COUNT" || exit 1
 fi
 
 echo -n "api HTTP(8080) 대기 중"
