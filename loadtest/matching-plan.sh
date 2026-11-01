@@ -299,3 +299,28 @@ await_udp_port() {
         waited=$((waited + poll))
     done
 }
+
+# --- 계좌 워커가 실제로 받은 미체결 상한 인자 확인 ---
+# 로그에 상한 값이 찍히지 않으므로, 계좌 워커 입구 포트를 바인딩한 프로세스의 명령행에서 인자를 읽어 한 줄로 기록한다.
+# 값이 실행에 넘긴 MAX_OPEN_ORDERS 와 다르거나 인자가 없으면 1. $1=계좌 워커 입구 UDP 포트(기본 20040). 테스트가 process_command_line 을 바꾼다.
+process_command_line() { ps -o command= -p "$1" 2> /dev/null; }
+
+report_account_limit_arg() {
+    local port="${1:-20040}" pid command arg expected="--account-worker.max-open-orders-per-account=${MAX_OPEN_ORDERS}"
+    pid="$(udp_port_listing "$port" | awk 'NR > 1 && $0 !~ /->/ { print $2; exit }')"
+    if [ -z "$pid" ]; then
+        echo "계좌 워커 입구 포트 ${port}를 바인딩한 프로세스를 찾지 못해 상한 인자를 확인하지 못했다" >&2
+        return 1
+    fi
+    command="$(process_command_line "$pid")"
+    arg="$(printf '%s\n' "$command" | tr ' ' '\n' | grep -F -- '--account-worker.max-open-orders-per-account=' | head -n 1)"
+    if [ -z "$arg" ]; then
+        echo "계좌 워커(pid ${pid}) 명령행에 상한 인자가 없다" >&2
+        return 1
+    fi
+    if [ "$arg" != "$expected" ]; then
+        echo "계좌 워커(pid ${pid})의 상한 인자가 기대와 다르다: 기대 ${expected}, 실제 ${arg}" >&2
+        return 1
+    fi
+    echo "계좌 워커 상한 인자 확인(pid ${pid}): ${arg}"
+}

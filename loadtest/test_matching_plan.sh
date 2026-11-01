@@ -398,6 +398,35 @@ test_launch_order() {
     assert_eq "풀이 3개여도(증설 포함) 같은 순서" "matching wait-ports wait-assigned account others " "$(launch_order 3)"
 }
 
+# --- 계좌 워커가 받은 미체결 상한 인자를 실제 프로세스의 명령행에서 읽어 기록한다 ---
+test_report_account_limit_arg() {
+    local header="COMMAND PID USER FD TYPE DEVICE SIZE/OFF NODE NAME" out
+    udp_port_listing() { printf '%s\n%s\n%s\n' "$header" "java 111 jack 5u IPv4 0x1 0t0 UDP 127.0.0.1:50000->127.0.0.1:20040" "java 222 jack 6u IPv4 0x2 0t0 UDP *:20040"; }
+    process_command_line() { [ "$1" = "222" ] && echo "java -cp x com.flab.AccountWorkerApplication --spring.profiles.active=udp,e2e --account-worker.max-open-orders-per-account=1000000 --measure.latency.enabled=true"; }
+    out="$(MAX_OPEN_ORDERS=1000000 report_account_limit_arg 2>&1)"; assert_eq "기대한 값이면 0" "0" "$?"
+    assert_contains "바인딩한 프로세스(222)의 명령행을 읽는다" "$out" "pid 222"
+    assert_contains "읽은 인자를 그대로 적는다" "$out" "--account-worker.max-open-orders-per-account=1000000"
+    out="$(MAX_OPEN_ORDERS=500 report_account_limit_arg 2>&1)"; assert_eq "기대한 값과 다르면 1" "1" "$?"
+    assert_contains "다르다고 알린다" "$out" "기대"
+    process_command_line() { echo "java -cp x com.flab.AccountWorkerApplication --measure.latency.enabled=true"; }
+    out="$(MAX_OPEN_ORDERS=1000000 report_account_limit_arg 2>&1)"; assert_eq "인자가 없으면 1" "1" "$?"
+    assert_contains "없다고 알린다" "$out" "없"
+    udp_port_listing() { printf '%s\n' "$header"; }
+    out="$(MAX_OPEN_ORDERS=1000000 report_account_limit_arg 2>&1)"; assert_eq "20040을 바인딩한 프로세스가 없으면 1" "1" "$?"
+    udp_port_listing() { lsof -nP -iUDP:"$1" 2> /dev/null; }
+    unset -f process_command_line
+}
+
+test_run_script_reports_account_limit() {
+    local script
+    script="$(cat loadtest/run-e2e-v2.sh)"
+    assert_contains "READY 전에 상한 인자를 확인한다" "$script" "report_account_limit_arg || exit 1"
+    local report_line ready_line
+    report_line="$(grep -n 'report_account_limit_arg || exit 1' loadtest/run-e2e-v2.sh | head -n 1 | cut -d: -f1)"
+    ready_line="$(grep -n 'echo "READY"' loadtest/run-e2e-v2.sh | head -n 1 | cut -d: -f1)"
+    assert_eq "READY 출력보다 앞이다" "1" "$([ -n "$report_line" ] && [ -n "$ready_line" ] && [ "$report_line" -lt "$ready_line" ] && echo 1 || echo 0)"
+}
+
 # --- H9: 실행 중 증설. 시작 shard는 증설할 shard의 입구 주소까지 포함한 풀로 떠야 한다 ---
 test_expansion_pool() {
     local a b new
@@ -534,6 +563,8 @@ test_udp_port_bound
 test_await_udp_port
 test_run_script_uses_shared_udp_wait
 test_launch_order
+test_report_account_limit_arg
+test_run_script_reports_account_limit
 test_expansion_pool
 test_expansion_validation
 test_dump_timeout_configurable

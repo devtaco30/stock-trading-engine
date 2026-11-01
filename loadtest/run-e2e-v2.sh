@@ -185,6 +185,12 @@ if [ "$WORKER_COUNT" = "2" ]; then
     await_udp_port 20061 "account-worker(B) fill" "$ACCOUNT_LOG_B" || exit 1
 fi
 
+# 계좌 워커 명령행에서 미체결 상한 인자를 읽어 실행에 넘긴 MAX_OPEN_ORDERS 와 같은지 기록한다(로그에는 값이 찍히지 않는다).
+report_account_limit_arg || exit 1
+if [ "$WORKER_COUNT" = "2" ]; then
+    report_account_limit_arg 20041 || exit 1
+fi
+
 echo -n "api HTTP(8080) 대기 중"
 for _ in $(seq 1 120); do
     if lsof -nP -iTCP:8080 -sTCP:LISTEN > /dev/null 2>&1; then
