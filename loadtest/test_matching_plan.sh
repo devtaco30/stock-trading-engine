@@ -242,9 +242,27 @@ test_reset_map_topic() {
 
     # broker 조회 자체가 실패하면(컨테이너가 없거나 연결 실패) 초기화했다고 말하지 않고 실패한다.
     matching_kafka_topics() { echo "Error: No such container" >&2; return 1; }
-    out="$(MATCHING_TOPIC_GONE_POLL_SEC=0 reset_matching_map_topic 2>&1)"
-    assert_eq "broker 조회가 실패하면 실패" "1" "$?"
+    out="$(MATCHING_BROKER_READY_SEC=1 MATCHING_BROKER_READY_POLL_SEC=1 MATCHING_TOPIC_GONE_POLL_SEC=0 reset_matching_map_topic 2>&1)"
+    assert_eq "broker 조회가 제한 시간 안에 계속 실패하면 실패" "1" "$?"
     assert_not_contains "실패했는데 완료라고 하지 않는다" "$out" "초기화 완료"
+
+    # broker 가 늦게 뜨는 경우: 조회가 처음 두 번 실패하고 세 번째에 성공하면 기다렸다가 성공한다.
+    local tries_file
+    tries_file="$(mktemp)"; echo 0 > "$tries_file"
+    matching_kafka_topics() {
+        case "$*" in
+            *--list*)
+                local n=$(( $(cat "$tries_file") + 1 )); echo "$n" > "$tries_file"
+                if [ "$n" -lt 3 ]; then echo "Timed out waiting for a node assignment" >&2; return 1; fi
+                echo "other-topic"
+                ;;
+        esac
+        return 0
+    }
+    out="$(MATCHING_BROKER_READY_SEC=10 MATCHING_BROKER_READY_POLL_SEC=0 MATCHING_TOPIC_GONE_POLL_SEC=0 reset_matching_map_topic 2>&1)"
+    assert_eq "broker 가 늦게 뜨면 재시도 끝에 성공" "0" "$?"
+    assert_eq "조회를 세 번 시도했다" "3" "$(cat "$tries_file")"
+    rm -f "$tries_file"
 
     # 삭제 명령이 실패하면 실패한다.
     matching_kafka_topics() {

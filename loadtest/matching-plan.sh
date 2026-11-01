@@ -160,10 +160,16 @@ matching_kafka_topics() {
 # 조정 토픽(ASSIGNMENT_TOPIC)과 컨슈머 그룹의 정적 멤버는 지우지 않는다.
 reset_matching_map_topic() {
     local timeout="${MATCHING_TOPIC_GONE_TIMEOUT_SEC:-30}" poll="${MATCHING_TOPIC_GONE_POLL_SEC:-1}" start=$SECONDS topics
-    topics="$(matching_kafka_topics --list 2>&1)" || {
-        echo "broker에서 토픽 목록을 읽지 못했다(컨테이너 stock-trading-kafka 상태 확인): ${topics}" >&2
-        return 1
-    }
+    # 컨테이너가 떠도 broker 가 요청을 받기까지는 시간이 걸린다. 목록 조회가 성공할 때까지 MATCHING_BROKER_READY_SEC(기본 60초) 동안
+    # MATCHING_BROKER_READY_POLL_SEC(기본 2초) 간격으로 다시 시도한다. 60초는 측정한 값이 아니라 임시값이다(조회 한 번이 실패하는 데에도 수십 초가 걸릴 수 있다).
+    local ready_limit="${MATCHING_BROKER_READY_SEC:-60}" ready_poll="${MATCHING_BROKER_READY_POLL_SEC:-2}" ready_start=$SECONDS
+    until topics="$(matching_kafka_topics --list 2>&1)"; do
+        if [ $((SECONDS - ready_start)) -ge "$ready_limit" ]; then
+            echo "broker에서 토픽 목록을 ${ready_limit}초 안에 읽지 못했다(컨테이너 stock-trading-kafka 상태 확인): ${topics}" >&2
+            return 1
+        fi
+        sleep "$ready_poll"
+    done
     if printf '%s\n' "$topics" | grep -qx -- "$MATCHING_MAP_TOPIC"; then
         matching_kafka_topics --delete --topic "$MATCHING_MAP_TOPIC" > /dev/null 2>&1 || {
             echo "맵 토픽 ${MATCHING_MAP_TOPIC} 삭제 명령이 실패했다" >&2
