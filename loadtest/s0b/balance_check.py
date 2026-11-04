@@ -84,7 +84,7 @@ def _slope(points):
     return sum((t - mean_t) * (v - mean_v) for t, v in points) / denom
 
 
-def analyze(rows, accounts, c, rate, window_start, window_end, rejected_warn=0, heap_peak_ratio=None, fills_per_trade=FILLS_PER_TRADE):
+def analyze(rows, accounts, c, rate, window_start, window_end, rejected_warn=0, heap_peak_ratio=None, fills_per_trade=FILLS_PER_TRADE, not_owned=0):
     series = open_series(rows, fills_per_trade)
     window = [(t, v) for t, v in series if window_start <= t <= window_end]
     target = accounts * c
@@ -94,7 +94,8 @@ def analyze(rows, accounts, c, rate, window_start, window_end, rejected_warn=0, 
     first = before[-1] if before else rows[0]
     last = inside[-1] if inside else rows[-1]
     accept_rate = (last[4] - first[4]) / (last[0] - first[0]) if last[0] > first[0] else 0.0
-    rejected_total = sum(r[2] for r in rows)
+    rejected_raw = sum(r[2] for r in rows)
+    rejected_total = rejected_raw - not_owned   # 다른 shard 계좌의 체결 fan-out(NOT_OWNED)은 정상 경로라 뺀다
     checks = {
         "slope": abs(drift) <= SLOPE_LIMIT * target,
         "accept_ratio": accept_rate / rate >= ACCEPT_RATIO_LIMIT,
@@ -110,6 +111,8 @@ def analyze(rows, accounts, c, rate, window_start, window_end, rejected_warn=0, 
         "accept_rate": accept_rate,
         "accept_ratio": accept_rate / rate,
         "rejected_total": rejected_total,
+        "rejected_raw": rejected_raw,
+        "not_owned_fanout": not_owned,
         "snapshot_warn": rejected_warn,
         "heap_peak_ratio": heap_peak_ratio,
         "final_open": series[-1][1] if series else None,
@@ -162,7 +165,13 @@ def report(result_dir, skip=30, heap_max_bytes=8 * 1024 ** 3):
     warn = sum(sum(1 for line in open(path, errors="replace") if "스냅샷 쓰기 큐가 가득 차" in line) for path in log_paths)
     heap_paths = [path for path in (os.path.join(result_dir, "heap.jstat"), os.path.join(result_dir, "heap-w1.jstat")) if os.path.exists(path)]
     ratio = max(heap_peak_ratio(path, heap_max_bytes) for path in heap_paths) if heap_paths else None
-    result = analyze(rows, int(params["ACCTS"]), int(params["C"]), int(params["RATE"]), start + skip, window_end, warn, ratio)
+    not_owned = sum(sum(1 for line in open(path, errors="replace") if "담당 슬롯이 아닌 계좌로 이벤트가 왔습니다" in line) for path in log_paths)
+    result = analyze(rows, int(params["ACCTS"]), int(params["C"]), int(params["RATE"]), start + skip, window_end, warn, ratio, not_owned=not_owned)
+    trades = int(params.get("TOTAL_TRADES", "0"))
+    if len(log_paths) > 1 and trades:
+        # 교차 체결 1건은 두 워커에 한 번씩 NOT_OWNED를 낸다.
+        result["cross_shard_trades"] = not_owned // 2
+        result["cross_shard_ratio"] = (not_owned / 2) / trades
     if done:
         result["sender"] = {"sent": int(done.group(1)), "elapsed_ms": int(done.group(2)), "max_lateness_ms": int(done.group(3)),
                             "avg_lateness_ms": int(done.group(4)), "over_1s_count": int(done.group(5))}

@@ -43,6 +43,20 @@ class MakeSeedTest(unittest.TestCase):
         with self.assertRaises(subprocess.CalledProcessError):
             run_seed(2, 5, ["000001"], {"BUYER_ACCOUNTS": "3"})
 
+    def test_보유_파일이_있으면_매도_계좌는_파일에_적힌_종목과_수량만_갖는다(self):
+        with tempfile.TemporaryDirectory() as d:
+            holdings = os.path.join(d, "holdings.txt")
+            with open(holdings, "w", encoding="utf-8") as handle:
+                handle.write("HOLD 90002 000001 7\nHOLD 90002 000003 7\nHOLD 90003 000002 9\n")
+            text = run_seed(2, 5, ["000001", "000002", "000003"], {"HOLDINGS_FILE": holdings})
+        blocks = text.split("    - account-id: ")[1:]
+        by_id = {int(b.split("\n")[0]): b for b in blocks}
+        self.assertIn('"000001": 7', by_id[90002])
+        self.assertIn('"000003": 7', by_id[90002])
+        self.assertNotIn('"000002"', by_id[90002])
+        self.assertIn('"000002": 9', by_id[90003])
+        self.assertNotIn('"000001"', by_id[90003])
+
 
 if __name__ == "__main__":
     unittest.main()

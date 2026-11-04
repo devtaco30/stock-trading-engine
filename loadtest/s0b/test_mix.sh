@@ -55,5 +55,16 @@ check_not "워커 1이면 채널이 하나" "20041" "$OUT"
 OUT9=$(DRY_RUN=1 ACCOUNT_WORKERS=3 ACCTS=300 BUYERS=30 C=2001 RATE=4000 SECONDS_STEADY=180 OUT=/tmp/mix-test-out bash loadtest/s0b/mix.sh 2>&1); RC9=$?
 check "계좌 워커 수가 1,2가 아니면 실패" "rc=1" "rc=$RC9"
 
+OUT10=$(DRY_RUN=1 GROUP_BY_SHARD=1 ACCOUNT_WORKERS=2 STOCK_COUNT=30 ACCTS=300 BUYERS=30 C=2010 RATE=8000 SECONDS_STEADY=180 OUT=/tmp/mix-test-out bash loadtest/s0b/mix.sh 2>&1); RC10=$?
+check "묶음 모드 실행" "rc=0" "rc=$RC10"
+check "묶음 모드 params" "GROUP_BY_SHARD=1" "$OUT10"
+check "계좌당 종목당 쌓은 수는 C / 묶음당 종목 수" "PER_ACCOUNT_PER_STOCK=134" "$OUT10"
+check "묶음 모드 총 주문 수" "TOTAL_ORDERS=2043000" "$OUT10"
+check "묶음 쌓기 명령" "send-group-bulk aeron:udp?endpoint=localhost:20040,aeron:udp?endpoint=localhost:20041 90002 300 2 20000 134 pre" "$OUT10"
+check "묶음 유지 명령" "send-group-paced aeron:udp?endpoint=localhost:20040,aeron:udp?endpoint=localhost:20041 90002 300 2 90302 30 20000 134 24000 8000 mix" "$OUT10"
+check "묶음 모드 없으면 params 0" "GROUP_BY_SHARD=0" "$OUT"
+OUT11=$(DRY_RUN=1 GROUP_BY_SHARD=1 STOCK_COUNT=30 ACCTS=300 BUYERS=30 C=2001 RATE=8000 SECONDS_STEADY=180 OUT=/tmp/mix-test-out bash loadtest/s0b/mix.sh 2>&1); RC11=$?
+check "묶음 모드에서 C가 15의 배수가 아니면 실패" "rc=1" "rc=$RC11"
+
 echo "통과 ${PASS}, 실패 ${FAIL}"
 [ "$FAIL" -eq 0 ]

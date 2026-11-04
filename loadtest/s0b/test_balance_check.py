@@ -83,6 +83,18 @@ class AnalyzeTest(unittest.TestCase):
         result = self.run_case(rejected_per_second=1)
         self.assertFalse(result["checks"]["no_rejects"])
 
+    def test_다른_shard_계좌의_체결_fan_out_거부는_진짜_거부에서_빼고_따로_센다(self):
+        text, steady_start = synthetic(self.N, self.C, self.R, 5, 120, rejected_per_second=3)
+        rows = bc.parse_metrics(write(text))
+        raw = sum(r[2] for r in rows)
+        result = bc.analyze(rows, self.N, self.C, self.R, epoch(steady_start), epoch(steady_start) + 120, rejected_warn=0, heap_peak_ratio=None, not_owned=raw)
+        self.assertEqual(result["rejected_total"], 0)
+        self.assertEqual(result["not_owned_fanout"], raw)
+        self.assertTrue(result["checks"]["no_rejects"])
+        partly = bc.analyze(rows, self.N, self.C, self.R, epoch(steady_start), epoch(steady_start) + 120, rejected_warn=0, heap_peak_ratio=None, not_owned=raw - 1)
+        self.assertEqual(partly["rejected_total"], 1)
+        self.assertFalse(partly["checks"]["no_rejects"])
+
     def test_힙_사용_비율이_80퍼센트_이상이면_실패한다(self):
         text, steady_start = synthetic(self.N, self.C, self.R, 5, 120)
         rows = bc.parse_metrics(write(text))

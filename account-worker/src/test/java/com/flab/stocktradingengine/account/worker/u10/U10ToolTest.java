@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.MockConsumer;
@@ -504,5 +505,139 @@ class U10ToolTest {
         long[] counts = U10Tool.shardCounts(2, 90_002L, 300);
         assertEquals(2, counts.length);
         assertEquals(300, counts[0] + counts[1]);
+    }
+
+    // ---- 종목-매도계좌 묶음(GROUP_BY_SHARD): 종목 k의 매도는 계좌 shard(k % 묶음 수)의 계좌만 낸다 ----
+
+    private static final List<String> SIX_STOCKS = List.of("000001", "000002", "000003", "000004", "000005", "000006");
+
+    private static U10Tool.GroupMixSpec groupSpec(int sellAccounts, int perAccountPerStock, int pairsPerStock) {
+        return new U10Tool.GroupMixSpec(90002L, sellAccounts, 2, 90002L + sellAccounts, 3, 20_000L, perAccountPerStock, pairsPerStock, SIX_STOCKS, "g");
+    }
+
+    private static List<com.flab.stocktradingengine.codec.DecodedAccountOrder> collectGroupPrefill(U10Tool.GroupMixSpec spec) {
+        List<com.flab.stocktradingengine.codec.DecodedAccountOrder> orders = new ArrayList<>();
+        U10Tool.groupPrefillOrders(spec, orders::add);
+        return orders;
+    }
+
+    private static List<MixedOrder> collectGroupMix(U10Tool.GroupMixSpec spec) {
+        List<MixedOrder> orders = new ArrayList<>();
+        U10Tool.groupMixOrders(spec, (sequence, order) -> orders.add(new MixedOrder(sequence, order)));
+        return orders;
+    }
+
+    @Test
+    void sellerGroups_계좌를_shard별로_나누고_빠지거나_겹치는_계좌가_없다() {
+        List<List<Long>> groups = U10Tool.sellerGroups(90_002L, 300, 2);
+        assertEquals(2, groups.size());
+        assertEquals(300, groups.get(0).size() + groups.get(1).size());
+        for (int g = 0; g < 2; g++) {
+            assertFalse(groups.get(g).isEmpty());
+            for (long account : groups.get(g)) {
+                assertEquals(g, U10Tool.shardOf(account, 2), "계좌 " + account + "는 묶음 " + g);
+            }
+        }
+        assertEquals(java.util.stream.LongStream.range(90_002L, 90_302L).boxed().collect(java.util.stream.Collectors.toSet()),
+            new java.util.HashSet<>(java.util.stream.Stream.concat(groups.get(0).stream(), groups.get(1).stream()).toList()));
+    }
+
+    @Test
+    void 묶음_쌓기_한_종목의_매도는_한_shard의_계좌만_내고_계좌마다_같은_수를_쌓는다() {
+        U10Tool.GroupMixSpec spec = groupSpec(40, 5, 12);
+        List<List<Long>> groups = U10Tool.sellerGroups(90_002L, 40, 2);
+        Map<String, Map<Long, Integer>> perStockAccount = new HashMap<>();
+        for (com.flab.stocktradingengine.codec.DecodedAccountOrder order : collectGroupPrefill(spec)) {
+            assertEquals(com.flab.stocktradingengine.trading.entity.OrderSide.SELL, order.type());
+            perStockAccount.computeIfAbsent(order.stockCode(), k -> new HashMap<>()).merge(order.accountId(), 1, Integer::sum);
+        }
+        for (int k = 0; k < SIX_STOCKS.size(); k++) {
+            Map<Long, Integer> counts = perStockAccount.get(SIX_STOCKS.get(k));
+            int group = k % 2;
+            assertEquals(new java.util.HashSet<>(groups.get(group)), counts.keySet(), "종목 " + SIX_STOCKS.get(k) + "의 매도 계좌는 묶음 " + group + "의 전부");
+            assertTrue(counts.values().stream().allMatch(c -> c == 5), "계좌마다 종목당 5건");
+            Set<Integer> shards = counts.keySet().stream().map(a -> U10Tool.shardOf(a, 2)).collect(java.util.stream.Collectors.toSet());
+            assertEquals(Set.of(group), shards, "한 종목의 매도는 한 shard로만 간다");
+        }
+    }
+
+    @Test
+    void 묶음_유지_쌍은_매도_바로_뒤_매수이고_같은_종목_가격_수량이며_매도는_종목의_묶음_계좌만_쓴다() {
+        U10Tool.GroupMixSpec spec = groupSpec(40, 5, 12);
+        List<MixedOrder> orders = collectGroupMix(spec);
+        assertEquals(12 * 6 * 2, orders.size());
+        List<List<Long>> groups = U10Tool.sellerGroups(90_002L, 40, 2);
+        for (int n = 0; n < orders.size(); n += 2) {
+            com.flab.stocktradingengine.codec.DecodedAccountOrder sell = orders.get(n).order();
+            com.flab.stocktradingengine.codec.DecodedAccountOrder buy = orders.get(n + 1).order();
+            assertEquals(n, orders.get(n).sequence());
+            assertEquals(com.flab.stocktradingengine.trading.entity.OrderSide.SELL, sell.type());
+            assertEquals(com.flab.stocktradingengine.trading.entity.OrderSide.BUY, buy.type());
+            assertEquals(sell.stockCode(), buy.stockCode());
+            assertEquals(0, sell.price().compareTo(buy.price()));
+            assertEquals(1, sell.quantity());
+            assertEquals(1, buy.quantity());
+            int stockIndex = SIX_STOCKS.indexOf(sell.stockCode());
+            assertTrue(groups.get(stockIndex % 2).contains(sell.accountId()), "매도 계좌는 종목의 묶음 안");
+            assertTrue(buy.accountId() >= 90_042L && buy.accountId() < 90_045L, "매수 계좌는 매수 전용 계좌");
+        }
+    }
+
+    @Test
+    void 묶음_쌓은_뒤_모든_쌍을_체결_순서대로_적용하면_쌍이_끝날_때마다_계좌별_종목별_미체결이_처음과_같다() {
+        U10Tool.GroupMixSpec spec = groupSpec(40, 5, 37);
+        Map<String, java.util.ArrayDeque<Long>> asks = new HashMap<>();
+        Map<String, Map<Long, Integer>> open = new HashMap<>();
+        for (com.flab.stocktradingengine.codec.DecodedAccountOrder order : collectGroupPrefill(spec)) {
+            asks.computeIfAbsent(order.stockCode(), k -> new java.util.ArrayDeque<>()).addLast(order.accountId());
+            open.computeIfAbsent(order.stockCode(), k -> new HashMap<>()).merge(order.accountId(), 1, Integer::sum);
+        }
+        Map<String, Map<Long, Integer>> initial = new HashMap<>();
+        open.forEach((stock, counts) -> initial.put(stock, new HashMap<>(counts)));
+        List<MixedOrder> orders = collectGroupMix(spec);
+        for (int n = 0; n < orders.size(); n++) {
+            com.flab.stocktradingengine.codec.DecodedAccountOrder order = orders.get(n).order();
+            if (order.type() == com.flab.stocktradingengine.trading.entity.OrderSide.SELL) {
+                asks.get(order.stockCode()).addLast(order.accountId());
+                open.get(order.stockCode()).merge(order.accountId(), 1, Integer::sum);
+            } else {
+                open.get(order.stockCode()).merge(asks.get(order.stockCode()).pollFirst(), -1, Integer::sum);
+            }
+            if (n % 2 == 1) {
+                assertEquals(initial.get(order.stockCode()), open.get(order.stockCode()), "쌍 " + (n / 2) + " 뒤 " + order.stockCode());
+            }
+        }
+    }
+
+    @Test
+    void 묶음_보유_수량은_자기_묶음_종목에만_쌓은_몫과_유지_몫과_5를_더한_값이다() {
+        U10Tool.GroupMixSpec spec = groupSpec(40, 5, 12);
+        List<List<Long>> groups = U10Tool.sellerGroups(90_002L, 40, 2);
+        List<String> lines = U10Tool.groupHoldings(spec);
+        Map<Long, Map<String, Integer>> held = new HashMap<>();
+        for (String line : lines) {
+            String[] f = line.split(" ");
+            held.computeIfAbsent(Long.parseLong(f[1]), k -> new HashMap<>()).put(f[2], Integer.parseInt(f[3]));
+        }
+        assertEquals(40, held.size());
+        for (int g = 0; g < 2; g++) {
+            int expected = 5 + (12 + groups.get(g).size() - 1) / groups.get(g).size() + 5;
+            for (long account : groups.get(g)) {
+                assertEquals(3, held.get(account).size(), "계좌는 자기 묶음의 종목 3개만 보유");
+                assertTrue(held.get(account).values().stream().allMatch(q -> q == expected));
+                for (String stock : held.get(account).keySet()) {
+                    assertEquals(g, SIX_STOCKS.indexOf(stock) % 2);
+                }
+            }
+        }
+    }
+
+    @Test
+    void 묶음_인자가_양수가_아니거나_종목이_묶음보다_적으면_거부한다() {
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> collectGroupPrefill(groupSpec(0, 5, 12)));
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> collectGroupMix(groupSpec(40, 0, 12)));
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> collectGroupMix(groupSpec(40, 5, 0)));
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> collectGroupPrefill(
+            new U10Tool.GroupMixSpec(90002L, 40, 2, 90042L, 3, 20_000L, 5, 12, List.of("000001"), "g")));
     }
 }

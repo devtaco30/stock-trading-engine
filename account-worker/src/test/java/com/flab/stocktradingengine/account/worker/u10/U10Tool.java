@@ -63,6 +63,9 @@ import io.aeron.driver.ThreadingMode;
  *       체결 섞기: 종목마다 쌍(j)별로 「매도 1건 → 매수 1건」(수량 1, 모두 같은 가격)을 초당 주문 수(둘을 합친 건수)로 보낸다. 매수 1건이 그 종목에서 가장 오래된
  *       매도 1건을 체결시켜 계좌별 미체결이 일정하다(쌓은 수는 send-bulk에 {@code --price-step=0}으로 먼저 보내고 매도 계좌 수의 배수여야 한다).
  *       끝에 「PACED_DONE」으로 보낸 수와 목표 시각보다 늦은 정도(ms)를 출력한다.</li>
+ *   <li>{@code send-group-bulk <channel[,channel…]> <매도 계좌 시작> <매도 계좌 수> <묶음 수> <가격> <계좌당 종목당 쌓은 수> <접두사> <종목...>} — 종목-매도계좌 묶음(GroupMixSpec)으로 쌓는다.</li>
+ *   <li>{@code send-group-paced <channel[,channel…]> <매도 계좌 시작> <매도 계좌 수> <묶음 수> <매수 계좌 시작> <매수 계좌 수> <가격> <계좌당 종목당 쌓은 수> <종목당 쌍 수> <초당 주문 수> <접두사> <종목...>} — 같은 묶음으로 매도·매수 쌍을 속도 지정으로 보낸다.</li>
+ *   <li>{@code group-holdings <매도 계좌 시작> <매도 계좌 수> <묶음 수> <계좌당 종목당 쌓은 수> <종목당 쌍 수> <종목...>} — 묶음 계획의 계좌 시드 보유 수량을 「HOLD 계좌 종목 수량」 줄로 출력한다.</li>
  *   <li>{@code shard-counts <shard 수> <첫 계좌> <개수> [<첫 계좌> <개수>…]} — 연속한 계좌가 계좌 shard(슬롯 256칸을 앞에서부터 균등 분할)마다 몇 개씩 놓이는지 {@code SHARD_COUNTS} 줄로 출력한다.</li>
  *   <li>{@code assigned <kafkaBootstrap> <stockSlotCount>} — 맵 토픽의 종목 slot별 마지막 값을 읽어
  *       {@code ASSIGNED 배정된 수/전체 MOVING 이동 중인 수 ENDPOINTS 주소=개수,...}를 출력한다.</li>
@@ -89,6 +92,9 @@ public final class U10Tool {
             case "send-bulk" -> sendBulk(args);
             case "send-paced" -> sendPaced(args);
             case "shard-counts" -> shardCountsCommand(args);
+            case "send-group-bulk" -> sendGroupBulk(args);
+            case "send-group-paced" -> sendGroupPaced(args);
+            case "group-holdings" -> groupHoldingsCommand(args);
             case "stream" -> stream(args);
             case "assigned" -> assigned(args[1], Integer.parseInt(args[2]));
             case "map-history" -> mapHistory(args[1]);
@@ -353,6 +359,154 @@ public final class U10Tool {
             }
         }
         return sequence;
+    }
+
+    /**
+     * 종목-매도계좌 묶음 계획(GROUP_BY_SHARD). 매도 계좌를 계좌 shard(groupCount개)별 묶음으로 나누고 k번째 종목의 매도는 묶음 k % groupCount의 계좌만 낸다.
+     * 계좌 워커가 둘이어도 한 종목의 매도가 한 워커만 지나 매칭에 들어오는 순서가 계좌 순환 순서 그대로라 계좌별 미체결이 일정하다. 워커가 하나여도 같은 입력을 쓴다.
+     * 계좌는 자기 묶음의 종목에만 perAccountPerStock건씩 쌓는다(종목당 쌓은 수는 묶음 계좌 수 x perAccountPerStock). 매수 계좌는 매도와 따로이고 전체를 돌려 쓴다.
+     */
+    record GroupMixSpec(long sellAccountBase, int sellAccounts, int groupCount, long buyAccountBase, int buyAccounts, long price,
+                        int perAccountPerStock, int pairsPerStock, List<String> stockCodes, String prefix) {
+    }
+
+    /** 연속한 매도 계좌를 shard(shardOf)별 묶음으로 나눈다. 묶음 안은 계좌 번호 순서. */
+    static List<List<Long>> sellerGroups(long base, int count, int groupCount) {
+        List<List<Long>> groups = new ArrayList<>();
+        for (int g = 0; g < groupCount; g++) {
+            groups.add(new ArrayList<>());
+        }
+        for (int k = 0; k < count; k++) {
+            groups.get(shardOf(base + k, groupCount)).add(base + k);
+        }
+        return groups;
+    }
+
+    private static List<List<Long>> validatedGroups(GroupMixSpec spec) {
+        if (spec.sellAccounts() < 1 || spec.groupCount() < 1 || spec.buyAccounts() < 1 || spec.perAccountPerStock() < 1 || spec.pairsPerStock() < 1) {
+            throw new IllegalArgumentException("묶음 mix 인자는 양수여야 한다: " + spec);
+        }
+        if (spec.stockCodes().size() < spec.groupCount()) {
+            throw new IllegalArgumentException("종목 수 " + spec.stockCodes().size() + "가 묶음 수 " + spec.groupCount() + "보다 적다");
+        }
+        List<List<Long>> groups = sellerGroups(spec.sellAccountBase(), spec.sellAccounts(), spec.groupCount());
+        for (int g = 0; g < groups.size(); g++) {
+            if (groups.get(g).isEmpty()) {
+                throw new IllegalArgumentException("묶음 " + g + "에 매도 계좌가 없다: " + spec);
+            }
+        }
+        return groups;
+    }
+
+    /** 종목마다 그 묶음의 계좌가 perAccountPerStock건씩 돌아가며 매도를 쌓는다(종목의 i번째 매도는 묶음의 i % 크기 번째 계좌). 보낸 주문 수를 돌려준다. */
+    static long groupPrefillOrders(GroupMixSpec spec, OrderSink sink) {
+        List<List<Long>> groups = validatedGroups(spec);
+        BigDecimal price = BigDecimal.valueOf(spec.price());
+        long sent = 0;
+        for (int k = 0; k < spec.stockCodes().size(); k++) {
+            String stockCode = spec.stockCodes().get(k);
+            List<Long> group = groups.get(k % spec.groupCount());
+            long total = (long) group.size() * spec.perAccountPerStock();
+            for (long i = 0; i < total; i++) {
+                sink.accept(new DecodedAccountOrder(OrderSide.SELL, group.get((int) (i % group.size())), stockCode, price, 1,
+                    spec.prefix() + "-" + stockCode + "-" + i, EpochNanos.now()));
+                sent++;
+            }
+        }
+        return sent;
+    }
+
+    /** 쌍(j)마다 종목 순서대로 「매도 → 매수」. 매도는 종목 묶음의 (쌓은 수 + j) % 크기 번째 계좌라 체결되는 매도의 주인과 새 매도의 주인이 같다. */
+    static long groupMixOrders(GroupMixSpec spec, SequencedOrderSink sink) {
+        List<List<Long>> groups = validatedGroups(spec);
+        BigDecimal price = BigDecimal.valueOf(spec.price());
+        long sequence = 0;
+        long buyCounter = 0;
+        for (int j = 0; j < spec.pairsPerStock(); j++) {
+            for (int k = 0; k < spec.stockCodes().size(); k++) {
+                String stockCode = spec.stockCodes().get(k);
+                List<Long> group = groups.get(k % spec.groupCount());
+                long prefill = (long) group.size() * spec.perAccountPerStock();
+                long sellAccount = group.get((int) ((prefill + j) % group.size()));
+                sink.accept(sequence++, new DecodedAccountOrder(OrderSide.SELL, sellAccount, stockCode, price, 1,
+                    spec.prefix() + "-s-" + stockCode + "-" + j, EpochNanos.now()));
+                long buyAccount = spec.buyAccountBase() + (buyCounter++ % spec.buyAccounts());
+                sink.accept(sequence++, new DecodedAccountOrder(OrderSide.BUY, buyAccount, stockCode, price, 1,
+                    spec.prefix() + "-b-" + stockCode + "-" + j, EpochNanos.now()));
+            }
+        }
+        return sequence;
+    }
+
+    /** 계좌 시드용 보유 수량: 「HOLD 계좌 종목 수량」 줄. 계좌는 자기 묶음의 종목만 갖고 수량은 쌓은 몫 + 계좌의 유지 몫(올림) + 5. */
+    static List<String> groupHoldings(GroupMixSpec spec) {
+        List<List<Long>> groups = validatedGroups(spec);
+        List<String> lines = new ArrayList<>();
+        for (int g = 0; g < groups.size(); g++) {
+            List<Long> group = groups.get(g);
+            long quantity = spec.perAccountPerStock() + (spec.pairsPerStock() + group.size() - 1L) / group.size() + 5;
+            for (long account : group) {
+                for (int k = g; k < spec.stockCodes().size(); k += spec.groupCount()) {
+                    lines.add("HOLD " + account + " " + spec.stockCodes().get(k) + " " + quantity);
+                }
+            }
+        }
+        return lines;
+    }
+
+    private static GroupMixSpec parseGroupSpec(String[] a, int from, boolean paced) {
+        // 쌓기: <sellBase> <sellCount> <groupCount> <price> <perAccountPerStock> <prefix> <stocks...>
+        // 유지: <sellBase> <sellCount> <groupCount> <buyBase> <buyCount> <price> <perAccountPerStock> <pairsPerStock> <rate> <prefix> <stocks...>
+        long sellBase = Long.parseLong(a[from]);
+        int sellCount = Integer.parseInt(a[from + 1]);
+        int groupCount = Integer.parseInt(a[from + 2]);
+        if (paced) {
+            return new GroupMixSpec(sellBase, sellCount, groupCount, Long.parseLong(a[from + 3]), Integer.parseInt(a[from + 4]), Long.parseLong(a[from + 5]),
+                Integer.parseInt(a[from + 6]), Integer.parseInt(a[from + 7]), List.of(java.util.Arrays.copyOfRange(a, from + 10, a.length)), a[from + 9]);
+        }
+        return new GroupMixSpec(sellBase, sellCount, groupCount, 0L, 1, Long.parseLong(a[from + 3]), Integer.parseInt(a[from + 4]), 1,
+            List.of(java.util.Arrays.copyOfRange(a, from + 6, a.length)), a[from + 5]);
+    }
+
+    private static void sendGroupBulk(String[] args) throws Exception {
+        GroupMixSpec spec = parseGroupSpec(args, 2, false);
+        MediaDriver driver = MediaDriver.launchEmbedded(new MediaDriver.Context()
+            .aeronDirectoryName(CommonContext.generateRandomDirName())
+            .dirDeleteOnStart(true)
+            .threadingMode(ThreadingMode.SHARED));
+        Aeron aeron = Aeron.connect(new Aeron.Context().aeronDirectoryName(driver.aeronDirectoryName()));
+        try {
+            List<Publication> publications = openPublications(aeron, parseChannels(args[1]));
+            AccountOrderCodec codec = new AccountOrderCodec();
+            UnsafeBuffer buffer = new UnsafeBuffer(new byte[256]);
+            long started = System.currentTimeMillis();
+            long sent = groupPrefillOrders(spec,
+                order -> offerBlocking(publications.get(shardOf(order.accountId(), publications.size())), codec, buffer, order, 30_000L));
+            System.out.println("SENT_BULK " + sent + " elapsedMs=" + (System.currentTimeMillis() - started));
+            for (Publication publication : publications) {
+                flushOrFail(aeron, publication);
+            }
+            Thread.sleep(500);
+        } finally {
+            CloseHelper.quietClose(aeron);
+            CloseHelper.quietClose(driver);
+        }
+    }
+
+    private static void sendGroupPaced(String[] args) throws Exception {
+        GroupMixSpec spec = parseGroupSpec(args, 2, true);
+        long ordersPerSecond = Long.parseLong(args[2 + 8]);
+        if (ordersPerSecond < 1) {
+            throw new IllegalArgumentException("초당 주문 수는 양의 정수여야 한다: " + args[10]);
+        }
+        pacedSend(args[1], ordersPerSecond, sink -> groupMixOrders(spec, sink));
+    }
+
+    private static void groupHoldingsCommand(String[] args) {
+        // <sellBase> <sellCount> <groupCount> <perAccountPerStock> <pairsPerStock> <stocks...>
+        GroupMixSpec spec = new GroupMixSpec(Long.parseLong(args[1]), Integer.parseInt(args[2]), Integer.parseInt(args[3]), 0L, 1, 0L,
+            Integer.parseInt(args[4]), Integer.parseInt(args[5]), List.of(java.util.Arrays.copyOfRange(args, 6, args.length)), "g");
+        groupHoldings(spec).forEach(System.out::println);
     }
 
     /** send-paced 인자: 발신 채널, 계획, 초당 주문 수(매도와 매수를 합친 건수). */
@@ -639,13 +793,18 @@ public final class U10Tool {
 
     private static void sendPaced(String[] args) throws Exception {
         PacedArgs paced = parsePacedArgs(args);
+        pacedSend(paced.channel(), paced.ordersPerSecond(), sink -> mixOrders(paced.spec(), sink));
+    }
+
+    /** 주문 생성기가 주는 번호 순서대로 초당 ordersPerSecond건 속도로 보낸다. 채널이 여럿이면 계좌 슬롯으로 나눠 보낸다. */
+    private static void pacedSend(String channel, long ordersPerSecond, java.util.function.Function<SequencedOrderSink, Long> generator) throws Exception {
         MediaDriver driver = MediaDriver.launchEmbedded(new MediaDriver.Context()
             .aeronDirectoryName(CommonContext.generateRandomDirName())
             .dirDeleteOnStart(true)
             .threadingMode(ThreadingMode.SHARED));
         Aeron aeron = Aeron.connect(new Aeron.Context().aeronDirectoryName(driver.aeronDirectoryName()));
         try {
-            List<Publication> publications = openPublications(aeron, parseChannels(paced.channel()));
+            List<Publication> publications = openPublications(aeron, parseChannels(channel));
             AccountOrderCodec codec = new AccountOrderCodec();
             UnsafeBuffer buffer = new UnsafeBuffer(new byte[256]);
             long senderWaitMillis = parseSenderWaitMillis(System.getenv("U10_SENDER_WAIT_MS"));
@@ -653,8 +812,8 @@ public final class U10Tool {
             long startNanos = System.nanoTime();
             long startEpochMillis = System.currentTimeMillis();
             System.out.println("PACED_START " + startEpochMillis);
-            long sent = mixOrders(paced.spec(), (sequence, order) -> {
-                long targetNanos = startNanos + targetOffsetNanos(sequence, paced.ordersPerSecond());
+            long sent = generator.apply((sequence, order) -> {
+                long targetNanos = startNanos + targetOffsetNanos(sequence, ordersPerSecond);
                 while (System.nanoTime() < targetNanos) {
                     if (targetNanos - System.nanoTime() > 2_000_000L) {
                         try {
