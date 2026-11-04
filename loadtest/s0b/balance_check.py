@@ -14,7 +14,7 @@
   heap         계좌 JVM 힙 사용 최대 / 최대 힙 < 80% (heap.jstat가 있을 때만)
 
 사용: balance_check.py [--skip 30] [--heap-max-bytes 8589934592] <결과 폴더>
-  결과 폴더에서 params.txt(ACCTS, C, RATE), paced.out(PACED_START, PACED_DONE), logs/account.log, heap.jstat(있으면)를 읽는다.
+  결과 폴더에서 params.txt(ACCTS, C, RATE), paced.out(PACED_START, PACED_DONE), logs/account.log(계좌 워커가 둘이면 logs/account-1.log도 초별로 합산), heap.jstat(있으면, 둘째는 heap-w1.jstat)를 읽는다.
 """
 import datetime
 import json
@@ -40,6 +40,27 @@ def parse_metrics(path):
         rows.append((ts, int(m.group(1)), int(m.group(2)), int(m.group(3)), int(m.group(4))))
     rows.sort()
     return rows
+
+
+def merge_rows(rows_per_worker):
+    """계좌 워커별 초 보고를 초 단위로 합친다. 접수·거부·체결은 더하고, 접수 합계는 워커마다 마지막으로 본 값을 이어서 더한다(그 초에 보고가 빠져도 줄지 않는다)."""
+    if len(rows_per_worker) == 1:
+        return list(rows_per_worker[0])
+    buckets = {}
+    for worker, rows in enumerate(rows_per_worker):
+        for ts, accepted, rejected, fill, accepted_total in rows:
+            buckets.setdefault(int(ts // 1), {})[worker] = (ts, accepted, rejected, fill, accepted_total)
+    merged = []
+    last_total = [0] * len(rows_per_worker)
+    for second in sorted(buckets):
+        accepted = rejected = fill = 0
+        for worker, (ts, a, r, f, total) in buckets[second].items():
+            accepted += a
+            rejected += r
+            fill += f
+            last_total[worker] = total
+        merged.append((float(second), accepted, rejected, fill, sum(last_total)))
+    return merged
 
 
 def open_series(rows, fills_per_trade=FILLS_PER_TRADE):
@@ -133,11 +154,14 @@ def report(result_dir, skip=30, heap_max_bytes=8 * 1024 ** 3):
     params = _read_params(result_dir)
     start, done = _read_paced(result_dir)
     window_end = start + int(done.group(2)) / 1000.0 if done else start
-    log_path = os.path.join(result_dir, "logs", "account.log")
-    rows = parse_metrics(log_path)
-    warn = sum(1 for line in open(log_path, errors="replace") if "스냅샷 쓰기 큐가 가득 차" in line)
-    heap_path = os.path.join(result_dir, "heap.jstat")
-    ratio = heap_peak_ratio(heap_path, heap_max_bytes) if os.path.exists(heap_path) else None
+    log_paths = [os.path.join(result_dir, "logs", "account.log")]
+    second_log = os.path.join(result_dir, "logs", "account-1.log")
+    if os.path.exists(second_log):
+        log_paths.append(second_log)
+    rows = merge_rows([parse_metrics(path) for path in log_paths])
+    warn = sum(sum(1 for line in open(path, errors="replace") if "스냅샷 쓰기 큐가 가득 차" in line) for path in log_paths)
+    heap_paths = [path for path in (os.path.join(result_dir, "heap.jstat"), os.path.join(result_dir, "heap-w1.jstat")) if os.path.exists(path)]
+    ratio = max(heap_peak_ratio(path, heap_max_bytes) for path in heap_paths) if heap_paths else None
     result = analyze(rows, int(params["ACCTS"]), int(params["C"]), int(params["RATE"]), start + skip, window_end, warn, ratio)
     if done:
         result["sender"] = {"sent": int(done.group(1)), "elapsed_ms": int(done.group(2)), "max_lateness_ms": int(done.group(3)),

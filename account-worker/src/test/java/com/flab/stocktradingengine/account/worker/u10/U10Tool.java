@@ -53,7 +53,7 @@ import io.aeron.driver.ThreadingMode;
  *       (Kafka 없이 계산만 한다).</li>
  *   <li>{@code codes-many <stockSlotCount> <splitSlot> <count>} — 종목 slot이 splitSlot 이상인 종목코드 count개를
  *       {@code HIGH=a,b,c}로 출력한다.</li>
- *   <li>{@code send-bulk <channel> <accountId> <BUY|SELL> <firstPrice> <perStock> <requestIdPrefix> <stockCode...>} —
+ *   <li>{@code send-bulk <channel[,channel…]> <accountId> <BUY|SELL> <firstPrice> <perStock> <requestIdPrefix> <stockCode...>} —
  *       종목마다 perStock건을 가격 firstPrice, firstPrice+1, …로 한 연결에서 보낸다(수량 1). 환경변수 {@code BULK_ACCOUNTS=<계좌 수>}(기본 1)를 주면
  *       종목의 i번째 주문(0부터)을 계좌 {@code accountId + (i % 계좌 수)}로 나눠 보낸다(표지 매수는 표지 계좌 그대로).
  *       이 도구는 그 계좌들이 계좌 워커에 시드되어 있는지 확인하지 않는다: 시드되지 않은 계좌의 주문은 계좌 워커가 ACCOUNT_NOT_FOUND로 거부한다.
@@ -63,6 +63,7 @@ import io.aeron.driver.ThreadingMode;
  *       체결 섞기: 종목마다 쌍(j)별로 「매도 1건 → 매수 1건」(수량 1, 모두 같은 가격)을 초당 주문 수(둘을 합친 건수)로 보낸다. 매수 1건이 그 종목에서 가장 오래된
  *       매도 1건을 체결시켜 계좌별 미체결이 일정하다(쌓은 수는 send-bulk에 {@code --price-step=0}으로 먼저 보내고 매도 계좌 수의 배수여야 한다).
  *       끝에 「PACED_DONE」으로 보낸 수와 목표 시각보다 늦은 정도(ms)를 출력한다.</li>
+ *   <li>{@code shard-counts <shard 수> <첫 계좌> <개수> [<첫 계좌> <개수>…]} — 연속한 계좌가 계좌 shard(슬롯 256칸을 앞에서부터 균등 분할)마다 몇 개씩 놓이는지 {@code SHARD_COUNTS} 줄로 출력한다.</li>
  *   <li>{@code assigned <kafkaBootstrap> <stockSlotCount>} — 맵 토픽의 종목 slot별 마지막 값을 읽어
  *       {@code ASSIGNED 배정된 수/전체 MOVING 이동 중인 수 ENDPOINTS 주소=개수,...}를 출력한다.</li>
  *   <li>{@code map-history <kafkaBootstrap>} — 맵 토픽의 모든 기록을 {@code slot<TAB>CreateTime(ms)<TAB>값} 줄로 출력한다.</li>
@@ -87,6 +88,7 @@ public final class U10Tool {
             case "codes-many" -> codesMany(Integer.parseInt(args[1]), Integer.parseInt(args[2]), Integer.parseInt(args[3]));
             case "send-bulk" -> sendBulk(args);
             case "send-paced" -> sendPaced(args);
+            case "shard-counts" -> shardCountsCommand(args);
             case "stream" -> stream(args);
             case "assigned" -> assigned(args[1], Integer.parseInt(args[2]));
             case "map-history" -> mapHistory(args[1]);
@@ -433,6 +435,79 @@ public final class U10Tool {
         }
     }
 
+    /** 계좌 슬롯 칸 수. 제품의 계좌 shard 배정(account.shard-routing.slot-count)과 같은 256칸이다. */
+    static final int ACCOUNT_SLOT_COUNT = 256;
+    private static final com.flab.stocktradingengine.aeron.SlotHasher ACCOUNT_SLOT_HASHER =
+        new com.flab.stocktradingengine.aeron.SlotHasher(ACCOUNT_SLOT_COUNT);
+
+    /** 쉼표로 이은 발신 채널 목록을 나눈다. 계좌 shard마다 채널이 하나이고, 순서가 shard 번호다. 빈 항목은 거부한다. */
+    static List<String> parseChannels(String csv) {
+        if (csv == null || csv.isBlank()) {
+            throw new IllegalArgumentException("채널이 비어 있다");
+        }
+        List<String> channels = new ArrayList<>();
+        for (String part : csv.split(",", -1)) {
+            String channel = part.trim();
+            if (channel.isEmpty()) {
+                throw new IllegalArgumentException("빈 채널 항목이 있다: " + csv);
+            }
+            channels.add(channel);
+        }
+        return channels;
+    }
+
+    /** 계좌를 맡은 shard 번호. 슬롯 = floorMod(fmix64(계좌), 256)이고 shard i는 슬롯 [i x 256 / n, (i+1) x 256 / n)을 맡는다(둘이면 0~127, 128~255). */
+    static int shardOf(long accountId, int shardCount) {
+        if (shardCount < 1 || shardCount > ACCOUNT_SLOT_COUNT) {
+            throw new IllegalArgumentException("shard 수는 1 이상 " + ACCOUNT_SLOT_COUNT + " 이하여야 한다: " + shardCount);
+        }
+        int slot = ACCOUNT_SLOT_HASHER.slotFor(accountId);
+        return slot * shardCount / ACCOUNT_SLOT_COUNT;
+    }
+
+    /** 연속한 계좌 count개(firstAccount부터)가 shard마다 몇 개씩 놓이는지. */
+    static long[] shardCounts(int shardCount, long firstAccount, int count) {
+        long[] counts = new long[shardCount];
+        for (int k = 0; k < count; k++) {
+            counts[shardOf(firstAccount + k, shardCount)]++;
+        }
+        return counts;
+    }
+
+    private static void shardCountsCommand(String[] args) {
+        int shardCount = Integer.parseInt(args[1]);
+        for (int g = 2; g + 1 < args.length; g += 2) {
+            long first = Long.parseLong(args[g]);
+            int count = Integer.parseInt(args[g + 1]);
+            long[] counts = shardCounts(shardCount, first, count);
+            StringBuilder line = new StringBuilder("SHARD_COUNTS first=" + first + " count=" + count);
+            for (int i = 0; i < counts.length; i++) {
+                line.append(" shard").append(i).append('=').append(counts[i]);
+            }
+            System.out.println(line);
+        }
+    }
+
+    /** 채널마다 Publication 하나를 열어 연결을 기다린다. 계좌 shard 번호가 목록 위치다. 연결 못 하면 NOT_CONNECTED 출력 후 종료 코드 3. */
+    private static List<Publication> openPublications(Aeron aeron, List<String> channels) throws InterruptedException {
+        List<Publication> publications = new ArrayList<>();
+        for (String channel : channels) {
+            publications.add(aeron.addPublication(channel, AeronStreamIds.ACCOUNT_INTAKE));
+        }
+        long connectDeadline = System.currentTimeMillis() + CONNECT_TIMEOUT_MILLIS;
+        for (int i = 0; i < publications.size(); i++) {
+            Publication publication = publications.get(i);
+            while (!publication.isConnected() && System.currentTimeMillis() < connectDeadline) {
+                Thread.sleep(20);
+            }
+            if (!publication.isConnected()) {
+                System.out.println("NOT_CONNECTED " + channels.get(i));
+                System.exit(3);
+            }
+        }
+        return publications;
+    }
+
     private static void offerBlocking(Publication publication, AccountOrderCodec codec, UnsafeBuffer buffer, DecodedAccountOrder order,
                                       long timeoutMillis) {
         int length = codec.encode(buffer, 0, order);
@@ -570,15 +645,7 @@ public final class U10Tool {
             .threadingMode(ThreadingMode.SHARED));
         Aeron aeron = Aeron.connect(new Aeron.Context().aeronDirectoryName(driver.aeronDirectoryName()));
         try {
-            Publication publication = aeron.addPublication(paced.channel(), AeronStreamIds.ACCOUNT_INTAKE);
-            long connectDeadline = System.currentTimeMillis() + CONNECT_TIMEOUT_MILLIS;
-            while (!publication.isConnected() && System.currentTimeMillis() < connectDeadline) {
-                Thread.sleep(20);
-            }
-            if (!publication.isConnected()) {
-                System.out.println("NOT_CONNECTED " + paced.channel());
-                System.exit(3);
-            }
+            List<Publication> publications = openPublications(aeron, parseChannels(paced.channel()));
             AccountOrderCodec codec = new AccountOrderCodec();
             UnsafeBuffer buffer = new UnsafeBuffer(new byte[256]);
             long senderWaitMillis = parseSenderWaitMillis(System.getenv("U10_SENDER_WAIT_MS"));
@@ -600,7 +667,7 @@ public final class U10Tool {
                         Thread.onSpinWait();
                     }
                 }
-                offerBlocking(publication, codec, buffer, order, senderWaitMillis);
+                offerBlocking(publications.get(shardOf(order.accountId(), publications.size())), codec, buffer, order, senderWaitMillis);
                 long late = (System.nanoTime() - targetNanos) / 1_000_000L;
                 lateness[0] = Math.max(lateness[0], late);
                 lateness[1] += late;
@@ -610,7 +677,9 @@ public final class U10Tool {
             });
             System.out.println("PACED_DONE sent=" + sent + " elapsedMs=" + (System.currentTimeMillis() - startEpochMillis)
                 + " maxLatenessMs=" + lateness[0] + " avgLatenessMs=" + (sent == 0 ? 0 : lateness[1] / sent) + " over1sCount=" + lateness[2]);
-            flushOrFail(aeron, publication);
+            for (Publication publication : publications) {
+                flushOrFail(aeron, publication);
+            }
             Thread.sleep(500);
         } finally {
             CloseHelper.quietClose(aeron);
@@ -631,29 +700,23 @@ public final class U10Tool {
             .threadingMode(ThreadingMode.SHARED));
         Aeron aeron = Aeron.connect(new Aeron.Context().aeronDirectoryName(driver.aeronDirectoryName()));
         try {
-            Publication publication = aeron.addPublication(channel, AeronStreamIds.ACCOUNT_INTAKE);
-            long connectDeadline = System.currentTimeMillis() + CONNECT_TIMEOUT_MILLIS;
-            while (!publication.isConnected() && System.currentTimeMillis() < connectDeadline) {
-                Thread.sleep(20);
-            }
-            if (!publication.isConnected()) {
-                System.out.println("NOT_CONNECTED " + channel);
-                System.exit(3);
-            }
+            List<Publication> publications = openPublications(aeron, parseChannels(channel));
             AccountOrderCodec codec = new AccountOrderCodec();
             UnsafeBuffer buffer = new UnsafeBuffer(new byte[256]);
             long started = System.currentTimeMillis();
             BulkTargets targets = parseBulkTargets(args, 7);
             int bulkAccounts = parseBulkAccounts(System.getenv("BULK_ACCOUNTS"));
             int sent = bulkOrders(accountId, side, firstPrice, perStock, bulkAccounts, prefix, targets,
-                order -> offerBlocking(publication, codec, buffer, order, 30_000L));
+                order -> offerBlocking(publications.get(shardOf(order.accountId(), publications.size())), codec, buffer, order, 30_000L));
             for (String stockCode : targets.stockCodes()) {
                 if (targets.sentinelAccountId() != 0L) {
                     System.out.println("SENTINEL " + stockCode);
                 }
             }
             System.out.println("SENT_BULK " + sent + " elapsedMs=" + (System.currentTimeMillis() - started));
-            flushOrFail(aeron, publication);
+            for (Publication publication : publications) {
+                flushOrFail(aeron, publication);
+            }
             Thread.sleep(500);
         } finally {
             CloseHelper.quietClose(aeron);

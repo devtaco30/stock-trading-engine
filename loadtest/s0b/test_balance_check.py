@@ -103,5 +103,21 @@ class HeapPeakTest(unittest.TestCase):
         self.assertAlmostEqual(bc.heap_peak_ratio(path, 8 * 1024 ** 3), peak_bytes / (8 * 1024 ** 3), places=9)
 
 
+
+class MergeRowsTest(unittest.TestCase):
+    def test_두_워커의_초별_값은_합치고_접수_합계는_마지막으로_본_값을_이어_더한다(self):
+        a = [(100.2, 10, 0, 4, 10), (101.2, 20, 0, 8, 30), (102.2, 5, 1, 2, 35)]
+        b = [(100.7, 6, 0, 2, 6), (102.7, 4, 0, 2, 10)]   # 101초 구간 보고가 빠졌다
+        merged = bc.merge_rows([a, b])
+        self.assertEqual([round(row[0]) for row in merged], [100, 101, 102])
+        self.assertEqual(merged[0][1:], (16, 0, 6, 16))
+        self.assertEqual(merged[1][1:], (20, 0, 8, 36))     # b의 접수 합계는 앞의 6을 이어서 쓴다
+        self.assertEqual(merged[2][1:], (9, 1, 4, 45))
+
+    def test_워커가_하나면_입력과_같다(self):
+        a = [(100.2, 10, 0, 4, 10), (101.2, 20, 0, 8, 30)]
+        merged = bc.merge_rows([a])
+        self.assertEqual([row[1:] for row in merged], [row[1:] for row in a])
+
 if __name__ == "__main__":
     unittest.main()

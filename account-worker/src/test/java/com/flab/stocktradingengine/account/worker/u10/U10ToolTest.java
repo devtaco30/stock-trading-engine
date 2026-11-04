@@ -419,4 +419,90 @@ class U10ToolTest {
         assertEquals(1_000_000_000L, U10Tool.targetOffsetNanos(4_000, 4_000L));
         assertEquals(1_200_000_000_000L, U10Tool.targetOffsetNanos(4_800_000L, 4_000L), "480만 번째 주문은 1200초 지점");
     }
+
+    // ---- 계좌 shard 둘로 나눠 보내기: 계좌 슬롯(256칸)의 앞 절반은 첫 채널, 뒤 절반은 둘째 채널 ----
+
+    private static long firstAccountInSlotRange(int from, int to) {
+        com.flab.stocktradingengine.aeron.SlotHasher hasher = new com.flab.stocktradingengine.aeron.SlotHasher(256);
+        for (long accountId = 90_001L; ; accountId++) {
+            int slot = hasher.slotFor(accountId);
+            if (slot >= from && slot <= to) {
+                return accountId;
+            }
+        }
+    }
+
+    @Test
+    void shardOf_슬롯_0부터_127은_첫_채널_128부터_255는_둘째_채널이다() {
+        long low = firstAccountInSlotRange(0, 127);
+        long high = firstAccountInSlotRange(128, 255);
+        assertEquals(0, U10Tool.shardOf(low, 2));
+        assertEquals(1, U10Tool.shardOf(high, 2));
+    }
+
+    @Test
+    void shardOf_채널이_하나면_어떤_계좌든_첫_채널이다() {
+        for (long accountId = 90_001L; accountId < 90_400L; accountId++) {
+            assertEquals(0, U10Tool.shardOf(accountId, 1));
+        }
+    }
+
+    @Test
+    void shardOf_채널_수가_양수가_아니거나_256을_넘으면_거부한다() {
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> U10Tool.shardOf(90_001L, 0));
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> U10Tool.shardOf(90_001L, 257));
+    }
+
+    @Test
+    void parseChannels_쉼표로_나누고_빈_항목이나_빈_문자열은_거부한다() {
+        assertEquals(List.of("aeron:udp?endpoint=localhost:20040"), U10Tool.parseChannels("aeron:udp?endpoint=localhost:20040"));
+        assertEquals(List.of("aeron:udp?endpoint=localhost:20040", "aeron:udp?endpoint=localhost:20041"),
+            U10Tool.parseChannels("aeron:udp?endpoint=localhost:20040, aeron:udp?endpoint=localhost:20041"));
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> U10Tool.parseChannels(""));
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> U10Tool.parseChannels("a,,b"));
+    }
+
+    @Test
+    void 나눠_보내도_주문은_하나도_빠지지_않고_계좌마다_한_채널로만_가며_채널_안_계좌별_순서는_원래대로다() {
+        U10Tool.MixSpec spec = mixSpec(300, 30, 300, 40);
+        List<MixedOrder> all = collectMix(spec);
+        List<List<com.flab.stocktradingengine.codec.DecodedAccountOrder>> channels = List.of(new ArrayList<>(), new ArrayList<>());
+        Map<Long, Integer> channelOfAccount = new HashMap<>();
+        for (MixedOrder mixed : all) {
+            int channel = U10Tool.shardOf(mixed.order().accountId(), 2);
+            channels.get(channel).add(mixed.order());
+            Integer seen = channelOfAccount.put(mixed.order().accountId(), channel);
+            assertTrue(seen == null || seen == channel, "계좌 " + mixed.order().accountId() + "의 주문이 두 채널로 갔다");
+        }
+        assertEquals(all.size(), channels.get(0).size() + channels.get(1).size());
+        assertFalse(channels.get(0).isEmpty());
+        assertFalse(channels.get(1).isEmpty());
+        for (long accountId : channelOfAccount.keySet()) {
+            List<String> globalOrder = all.stream().filter(m -> m.order().accountId() == accountId).map(m -> m.order().requestId()).toList();
+            List<String> channelOrder = channels.get(channelOfAccount.get(accountId)).stream()
+                .filter(o -> o.accountId() == accountId).map(o -> o.requestId()).toList();
+            assertEquals(globalOrder, channelOrder, "계좌 " + accountId + "의 채널 안 순서");
+        }
+    }
+
+    @Test
+    void 쌓기_뒤_채널로_나눈_주문도_계좌별_종목별_쌓은_수는_계좌_수로_나눈_몫과_같다() {
+        U10Tool.MixSpec spec = mixSpec(300, 30, 300, 1);
+        Map<String, Integer> prefilled = new HashMap<>();
+        List<com.flab.stocktradingengine.codec.DecodedAccountOrder> bulk = new ArrayList<>();
+        U10Tool.bulkOrders(90_002L, com.flab.stocktradingengine.trading.entity.OrderSide.SELL, 20_000L, 600, 300, "pre",
+            new U10Tool.BulkTargets(spec.stockCodes(), 0L, 0L, 0L, 1), bulk::add);
+        for (com.flab.stocktradingengine.codec.DecodedAccountOrder order : bulk) {
+            prefilled.merge(order.accountId() + "/" + order.stockCode(), 1, Integer::sum);
+        }
+        assertEquals(300 * 3, prefilled.size());
+        assertTrue(prefilled.values().stream().allMatch(count -> count == 2), "쌓은 수 600을 계좌 300개로 나눈 몫 2");
+    }
+
+    @Test
+    void 계좌_분포는_채널별_개수를_세고_합이_전체와_같다() {
+        long[] counts = U10Tool.shardCounts(2, 90_002L, 300);
+        assertEquals(2, counts.length);
+        assertEquals(300, counts[0] + counts[1]);
+    }
 }
