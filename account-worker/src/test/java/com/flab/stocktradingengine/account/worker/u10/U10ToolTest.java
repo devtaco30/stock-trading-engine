@@ -691,6 +691,41 @@ class U10ToolTest {
         org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> U10Tool.parseSpinNanos("abc"));
     }
 
+    // ---- 분 단위 발신 지연: 장시간 시험에서 지연 추세를 창별로 보려고 PACED_DONE 합계 대신 분마다 한 줄 ----
+
+    @Test
+    void 분이_바뀔_때마다_그_분의_최대_지연과_1초_초과_수를_한_줄로_낸다() {
+        List<String> lines = new ArrayList<>();
+        U10Tool.MinuteLateness minuteLateness = new U10Tool.MinuteLateness();
+
+        minuteLateness.record(0L, 5L, lines::add);
+        minuteLateness.record(30_000_000_000L, 12L, lines::add);
+        minuteLateness.record(59_900_000_000L, 3L, lines::add);
+        assertTrue(lines.isEmpty(), "같은 분 안에서는 아직 내지 않는다");
+        minuteLateness.record(60_000_000_000L, 1_500L, lines::add);
+        minuteLateness.record(125_000_000_000L, 2L, lines::add);
+        minuteLateness.flush(lines::add);
+
+        assertEquals(List.of(
+            "LATENESS_MINUTE minute=0 maxLatenessMs=12 over1sCount=0",
+            "LATENESS_MINUTE minute=1 maxLatenessMs=1500 over1sCount=1",
+            "LATENESS_MINUTE minute=2 maxLatenessMs=2 over1sCount=0"), lines);
+    }
+
+    @Test
+    void 주문이_없었으면_flush는_아무것도_내지_않고_두_번_불러도_한_번만_낸다() {
+        List<String> lines = new ArrayList<>();
+        U10Tool.MinuteLateness minuteLateness = new U10Tool.MinuteLateness();
+
+        minuteLateness.flush(lines::add);
+        assertTrue(lines.isEmpty());
+        minuteLateness.record(1_000_000_000L, 7L, lines::add);
+        minuteLateness.flush(lines::add);
+        minuteLateness.flush(lines::add);
+
+        assertEquals(List.of("LATENESS_MINUTE minute=0 maxLatenessMs=7 over1sCount=0"), lines);
+    }
+
     /** 주문 orders건의 목표 시각을 ordersPerSecond 속도로 차례로 기다린다. 반환: [걸린 나노초, 이 스레드가 쓴 CPU 나노초]. */
     private static long[] measureWait(long orders, long ordersPerSecond, long spinNanos) {
         java.lang.management.ThreadMXBean threads = java.lang.management.ManagementFactory.getThreadMXBean();

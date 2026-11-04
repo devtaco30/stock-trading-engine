@@ -568,6 +568,38 @@ public final class U10Tool {
         }
     }
 
+    /**
+     * 분 단위 발신 지연 집계. 주문의 목표 시각(발신 시작 기준 나노초)이 속한 분이 바뀔 때마다 그 분의 최대 지연(ms)과 1초를 넘게 늦은 주문 수를
+     * 「LATENESS_MINUTE minute=N maxLatenessMs=M over1sCount=K」 한 줄로 낸다(PACED_DONE은 전체 합계뿐이라 추세를 못 본다). 마지막 분은 flush로 낸다.
+     */
+    static final class MinuteLateness {
+        private long minute = -1;
+        private long maxLatenessMs;
+        private long over1sCount;
+
+        void record(long targetOffsetNanos, long latenessMs, java.util.function.Consumer<String> out) {
+            long targetMinute = targetOffsetNanos / 60_000_000_000L;
+            if (minute >= 0 && targetMinute != minute) {
+                flush(out);
+            }
+            minute = targetMinute;
+            maxLatenessMs = Math.max(maxLatenessMs, latenessMs);
+            if (latenessMs > 1_000L) {
+                over1sCount++;
+            }
+        }
+
+        void flush(java.util.function.Consumer<String> out) {
+            if (minute < 0) {
+                return;
+            }
+            out.accept("LATENESS_MINUTE minute=" + minute + " maxLatenessMs=" + maxLatenessMs + " over1sCount=" + over1sCount);
+            minute = -1;
+            maxLatenessMs = 0;
+            over1sCount = 0;
+        }
+    }
+
     /** 순서 번호가 {@code sequence}인 주문을 보낼 목표 시각(발신 시작 기준 나노초). */
     static long targetOffsetNanos(long sequence, long ordersPerSecond) {
         return sequence * 1_000_000_000L / ordersPerSecond;
@@ -851,6 +883,7 @@ public final class U10Tool {
             long senderWaitMillis = parseSenderWaitMillis(System.getenv("U10_SENDER_WAIT_MS"));
             long spinNanos = parseSpinNanos(System.getenv("U10_SPIN_NANOS"));
             long[] lateness = new long[3]; // 0: 최대(ms), 1: 합(ms), 2: 1초 넘게 늦은 주문 수
+            MinuteLateness minuteLateness = new MinuteLateness();
             long startNanos = System.nanoTime();
             long startEpochMillis = System.currentTimeMillis();
             System.out.println("PACED_START " + startEpochMillis);
@@ -864,7 +897,9 @@ public final class U10Tool {
                 if (late > 1_000L) {
                     lateness[2]++;
                 }
+                minuteLateness.record(targetOffsetNanos(sequence, ordersPerSecond), late, System.out::println);
             });
+            minuteLateness.flush(System.out::println);
             System.out.println("PACED_DONE sent=" + sent + " elapsedMs=" + (System.currentTimeMillis() - startEpochMillis)
                 + " maxLatenessMs=" + lateness[0] + " avgLatenessMs=" + (sent == 0 ? 0 : lateness[1] / sent) + " over1sCount=" + lateness[2]);
             for (Publication publication : publications) {
