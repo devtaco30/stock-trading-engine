@@ -38,8 +38,48 @@ def parse_metrics(path):
             continue
         ts = datetime.datetime.fromisoformat(line.split(" ")[0]).timestamp()
         rows.append((ts, int(m.group(1)), int(m.group(2)), int(m.group(3)), int(m.group(4))))
-    rows.sort()
-    return rows
+    return rows   # 정렬하지 않는다: 파일에 찍힌 순서가 보고기가 낸 순서이고, 시각만으로 다시 줄 세우면 종료 직전 마지막 줄이 중간으로 끼어든다.
+
+
+def classify_rows(rows):
+    """파일 순서의 보고 줄이 믿을 만한지 본다. ok, final_flush_row(마지막 줄만 시각이 거꾸로 — 종료 때 마지막 보고를 뒤늦게 찍은 줄), invalid 중 하나와 설명 목록."""
+    notes = []
+    reversals = []
+    for i in range(1, len(rows)):
+        if rows[i][4] < rows[i - 1][4]:
+            notes.append("acceptedTotal이 줄었다: 줄 %d (%d -> %d)" % (i, rows[i - 1][4], rows[i][4]))
+        if rows[i][0] < rows[i - 1][0]:
+            reversals.append(i)
+            notes.append("시각이 거꾸로 갔다: 줄 %d" % i)
+    if any("acceptedTotal" in n for n in notes) or any(i != len(rows) - 1 for i in reversals):
+        return "invalid", notes
+    if reversals:
+        return "final_flush_row", notes
+    return "ok", notes
+
+
+def monotone_rows(rows):
+    """시각이 거꾸로 간 줄의 시각을 그때까지의 최댓값으로 올린다(값은 그대로, 파일 순서 유지)."""
+    fixed = []
+    latest = None
+    for row in rows:
+        ts = row[0] if latest is None else max(row[0], latest)
+        latest = ts
+        fixed.append((ts,) + tuple(row[1:]))
+    return fixed
+
+
+def fills_complete(rows, trades):
+    """누계 체결 반영 수가 총 체결 수의 2배(체결 1건 = 매수·매도 두 쪽)와 같은지."""
+    return sum(r[3] for r in rows) == FILLS_PER_TRADE * trades
+
+
+def not_owned_ok(per_worker_counts, trades):
+    """다른 shard 계좌의 체결 fan-out 거부(NOT_OWNED) 수가 정상 범위인지. 워커 1개면 0, 둘이면 서버마다 같은 수이고 총 체결 수 이하
+    (교차 체결 1건이 서버마다 NOT_OWNED 1건씩이므로 서버마다 교차 체결 수와 같고, 교차 체결은 체결 수를 넘을 수 없다). 합이 총 체결 수의 2배를 넘지 않는 것과 같다."""
+    if len(per_worker_counts) == 1:
+        return per_worker_counts[0] == 0
+    return len(set(per_worker_counts)) == 1 and sum(per_worker_counts) <= FILLS_PER_TRADE * trades
 
 
 def merge_rows(rows_per_worker):
@@ -49,7 +89,12 @@ def merge_rows(rows_per_worker):
     buckets = {}
     for worker, rows in enumerate(rows_per_worker):
         for ts, accepted, rejected, fill, accepted_total in rows:
-            buckets.setdefault(int(ts // 1), {})[worker] = (ts, accepted, rejected, fill, accepted_total)
+            slot = buckets.setdefault(int(ts // 1), {})
+            if worker in slot:
+                _ts, a, r, f, _total = slot[worker]
+                slot[worker] = (ts, a + accepted, r + rejected, f + fill, accepted_total)
+            else:
+                slot[worker] = (ts, accepted, rejected, fill, accepted_total)
     merged = []
     last_total = [0] * len(rows_per_worker)
     for second in sorted(buckets):
@@ -161,17 +206,37 @@ def report(result_dir, skip=30, heap_max_bytes=8 * 1024 ** 3):
     second_log = os.path.join(result_dir, "logs", "account-1.log")
     if os.path.exists(second_log):
         log_paths.append(second_log)
-    rows = merge_rows([parse_metrics(path) for path in log_paths])
+    raw_rows = [parse_metrics(path) for path in log_paths]
+    reasons = []
+    for path, rows in zip(log_paths, raw_rows):
+        status, notes = classify_rows(rows)
+        if status == "invalid":
+            reasons.append("%s: %s" % (os.path.basename(path), "; ".join(notes)))
+    rows = merge_rows([monotone_rows(r) for r in raw_rows])
     warn = sum(sum(1 for line in open(path, errors="replace") if "스냅샷 쓰기 큐가 가득 차" in line) for path in log_paths)
     heap_paths = [path for path in (os.path.join(result_dir, "heap.jstat"), os.path.join(result_dir, "heap-w1.jstat")) if os.path.exists(path)]
     ratio = max(heap_peak_ratio(path, heap_max_bytes) for path in heap_paths) if heap_paths else None
-    not_owned = sum(sum(1 for line in open(path, errors="replace") if "담당 슬롯이 아닌 계좌로 이벤트가 왔습니다" in line) for path in log_paths)
+    per_worker_not_owned = [sum(1 for line in open(path, errors="replace") if "담당 슬롯이 아닌 계좌로 이벤트가 왔습니다" in line) for path in log_paths]
+    not_owned = sum(per_worker_not_owned)
     result = analyze(rows, int(params["ACCTS"]), int(params["C"]), int(params["RATE"]), start + skip, window_end, warn, ratio, not_owned=not_owned)
     trades = int(params.get("TOTAL_TRADES", "0"))
+    result["not_owned_per_worker"] = per_worker_not_owned
     if len(log_paths) > 1 and trades:
         # 교차 체결 1건은 두 워커에 한 번씩 NOT_OWNED를 낸다.
         result["cross_shard_trades"] = not_owned // 2
         result["cross_shard_ratio"] = (not_owned / 2) / trades
+    if trades:
+        result["checks"]["not_owned_range"] = not_owned_ok(per_worker_not_owned, trades)
+        result["fills_complete"] = fills_complete(rows, trades)
+        if not result["fills_complete"]:
+            reasons.append("체결 반영이 끝나지 않았다: 누계 fill %d != 2 x 총 체결 %d" % (sum(r[3] for r in rows), trades))
+    first_ts = rows[0][0] if rows else None
+    last_ts = rows[-1][0] if rows else None
+    if first_ts is None or start + skip < first_ts or window_end > last_ts + 2 or result["window_points"] < 0.5 * result["window_seconds"]:
+        reasons.append("판정 구간이 보고 줄 범위를 벗어나거나 줄이 너무 적다(구간 줄 %d, 구간 %.0f초)" % (result["window_points"], result["window_seconds"]))
+    result["status"] = "invalid" if reasons else "ok"
+    result["invalid_reasons"] = reasons
+    result["balanced"] = all(result["checks"].values()) and not reasons
     if done:
         result["sender"] = {"sent": int(done.group(1)), "elapsed_ms": int(done.group(2)), "max_lateness_ms": int(done.group(3)),
                             "avg_lateness_ms": int(done.group(4)), "over_1s_count": int(done.group(5))}

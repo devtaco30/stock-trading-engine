@@ -41,6 +41,7 @@ if [ "$GROUP_BY_SHARD" = 1 ]; then
 fi
 NEED=$(( (3 * TOTAL_TRADES + BUYERS - 1) / BUYERS * PRICE * 4 / 10 ))
 if [ "$BUYER_BALANCE" -lt "$NEED" ]; then echo "BUYER_BALANCE $BUYER_BALANCE 가 필요량 $NEED 보다 작다" >&2; exit 1; fi
+NCHAN=$ACCOUNT_WORKERS   # 발신 채널 수 = 계좌 워커 수. SENDER_POSITION_REACHED가 채널마다 하나씩 나와야 한다.
 CHANNEL="aeron:udp?endpoint=localhost:20040"
 [ "$ACCOUNT_WORKERS" = 2 ] && CHANNEL="$CHANNEL,aeron:udp?endpoint=localhost:20041"
 BULK_CMD="send-bulk $CHANNEL 90002 SELL $PRICE $PREFILL pre --price-step=0"
@@ -62,10 +63,14 @@ if [ "${DRY_RUN:-0}" = 1 ]; then
   exit 0
 fi
 
+docker rm -f s0b-kafka >/dev/null 2>&1   # 이전 실행이 중간에 끊겨 남긴 컨테이너가 19092를 잡고 있으면 PORT_BUSY가 되므로 점검 전에 치운다
 PORTS="20020 20040 20060 8010 8011 8012"; [ "$ACCOUNT_WORKERS" = 2 ] && PORTS="20020 20040 20041 20060 20061 8011 8100 8101"
 for p in $PORTS; do lsof -nP -iUDP:$p >/dev/null 2>&1 && { echo "PORT_BUSY UDP $p"; exit 5; }; done
 lsof -nP -iTCP:19092 -sTCP:LISTEN >/dev/null 2>&1 && { echo "PORT_BUSY TCP 19092"; exit 5; }
 W=/tmp/s0b; LOG=$W/logs; rm -rf $W; mkdir -p $LOG; : > $W/pids
+cleanup(){ while read -r p; do kill $p 2>/dev/null; done < $W/pids; sleep 3; while read -r p; do kill -9 $p 2>/dev/null; done < $W/pids; docker rm -f s0b-kafka >/dev/null 2>&1
+  rm -rf "$OUT/logs"; cp -R $LOG "$OUT/logs" 2>/dev/null; cp $W/steps.log $W/paced.out "$OUT/" 2>/dev/null; }
+trap cleanup EXIT
 JO=(--add-opens java.base/jdk.internal.misc=ALL-UNNAMED --add-opens java.base/sun.nio.ch=ALL-UNNAMED)
 KB=--spring.kafka.bootstrap-servers=localhost:19092
 docker rm -f s0b-kafka >/dev/null 2>&1
@@ -77,9 +82,6 @@ docker run -d --name s0b-kafka -p 19092:19092 \
  -e KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1 -e KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1 \
  -e KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0 apache/kafka@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837 >/dev/null
 for _ in $(seq 1 60); do docker exec s0b-kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:19092 --list >/dev/null 2>&1 && break; sleep 1; done
-cleanup(){ while read -r p; do kill $p 2>/dev/null; done < $W/pids; sleep 3; while read -r p; do kill -9 $p 2>/dev/null; done < $W/pids; docker rm -f s0b-kafka >/dev/null 2>&1
-  rm -rf "$OUT/logs"; cp -R $LOG "$OUT/logs" 2>/dev/null; cp $W/steps.log $W/paced.out "$OUT/" 2>/dev/null; }
-trap cleanup EXIT
 if [ "${SKIP_BUILD:-0}" != 1 ]; then
   ./gradlew --offline -q :matching-worker:bootJar :account-worker:bootJar > $LOG/build.log 2>&1 || { echo BUILD_FAIL; tail -20 $LOG/build.log; exit 1; }
 fi
@@ -146,7 +148,7 @@ wait_accepted() { for _ in $(seq 1 "${ACCEPT_WAIT_SECS:-180}"); do [ "$(accepted
 echo "$(date +%s.%N) START PREFILL per_stock=$PREFILL" >> $W/steps.log
 OUT1=$(./gradlew --offline -q :account-worker:u10Tool -Pu10Args="$BULK_CMD $STOCKS" 2>&1)
 echo "$OUT1" | grep -E "SENT_BULK|OFFER_FAILED|NOT_CONNECTED|SENDER_POSITION"
-grep -q SENDER_POSITION_REACHED <<<"$OUT1" || { echo SEND_NOT_CONFIRMED; exit 3; }
+[ "$(grep -c SENDER_POSITION_REACHED <<<"$OUT1")" = "$NCHAN" ] || { echo "SEND_NOT_CONFIRMED 송신 위치 확인 $(grep -c SENDER_POSITION_REACHED <<<"$OUT1")/$NCHAN"; exit 3; }
 EXPECT=$((PREFILL * STOCK_COUNT))
 [ "$GROUP_BY_SHARD" = 1 ] && EXPECT=$((N * C))
 wait_accepted $EXPECT || { echo "ACCEPTED_MISMATCH 쌓기 기대 $EXPECT 실제 $(accepted_total)"; exit 4; }
@@ -159,14 +161,27 @@ fi
 OUT2=$(./gradlew --offline -q :account-worker:u10Tool -Pu10Args="$PACED_CMD $STOCKS" 2>&1)
 echo "$OUT2" > $W/paced.out
 echo "$OUT2" | grep -E "PACED_START|PACED_DONE|OFFER_FAILED|NOT_CONNECTED|SENDER_POSITION"
-grep -q SENDER_POSITION_REACHED <<<"$OUT2" || { echo SEND_NOT_CONFIRMED; exit 3; }
+[ "$(grep -c SENDER_POSITION_REACHED <<<"$OUT2")" = "$NCHAN" ] || { echo "SEND_NOT_CONFIRMED 송신 위치 확인 $(grep -c SENDER_POSITION_REACHED <<<"$OUT2")/$NCHAN"; exit 3; }
 EXPECT=$((EXPECT + PAIRS * STOCK_COUNT * 2))
 wait_accepted $EXPECT || { echo "ACCEPTED_MISMATCH 유지 기대 $EXPECT 실제 $(accepted_total)"; exit 4; }
 echo "$(date +%s.%N) END STEADY" >> $W/steps.log
+# 접수가 끝난 뒤에도 매칭의 체결이 아직 계좌 워커에 도착하는 중일 수 있다. 누계 체결 반영 수가 총 체결 수의 2배(체결 1건 = 매수·매도 두 쪽)가 될 때까지 기다린 뒤
+# (한도 FILL_WAIT_SECS, 기본 300초) 보고기가 마지막 줄을 찍을 시간을 주고 거부·NOT_OWNED 수를 확정한다. 한도를 넘으면 그 사실을 OUT/fill-wait.txt에 남긴다.
+fills_total() { cat $LOG/account.log $( [ -f $LOG/account-1.log ] && echo $LOG/account-1.log ) | grep "metrics accepted=" | sed 's/.*fill=\([0-9]*\) dup.*/\1/' | awk '{s+=$1} END{print s+0}'; }
+FILL_EXPECT=$((2 * TOTAL_TRADES)); FILLS_OK=0; waited=0
+for _ in $(seq 1 "${FILL_WAIT_SECS:-300}"); do
+  [ "$(fills_total)" = "$FILL_EXPECT" ] && { FILLS_OK=1; break; }
+  sleep 1; waited=$((waited + 1))
+done
+sleep 3
+if [ "$FILLS_OK" = 1 ]; then echo "FILLS_COMPLETE fills=$FILL_EXPECT waited=${waited}s" | tee "$OUT/fill-wait.txt"
+else echo "FILLS_INCOMPLETE have=$(fills_total) expect=$FILL_EXPECT after=${waited}s" | tee "$OUT/fill-wait.txt"; fi
 REJ=$(rejected_total)
 # 다른 shard 계좌의 체결 fan-out(NOT_OWNED)은 정상 경로라 거부에서 뺀다(결정: 조정 세션). 건수는 항상 남긴다.
 NOT_OWNED=$(cat $LOG/account.log $( [ -f $LOG/account-1.log ] && echo $LOG/account-1.log ) | grep -c "담당 슬롯이 아닌 계좌로 이벤트가 왔습니다")
 echo "NOT_OWNED_FANOUT $NOT_OWNED" | tee "$OUT/not-owned.txt"
 REJ=$((REJ - NOT_OWNED))
+[ "$REJ" -ge 0 ] || { echo "REJECTED_NEGATIVE rejected_minus_not_owned=$REJ (보고된 거부보다 NOT_OWNED 로그가 많다: 보고 시차 또는 계산 오류, 무효)"; exit 4; }
 [ "$REJ" = 0 ] || { echo "REJECTED_NONZERO rejected=$REJ"; exit 4; }
+[ "$FILLS_OK" = 1 ] || { echo "FILLS_INCOMPLETE 체결 반영이 한도 안에 끝나지 않았다 (무효)"; exit 4; }
 echo "VALID accepted=$EXPECT rejected=$REJ"

@@ -66,5 +66,16 @@ check "묶음 모드 없으면 params 0" "GROUP_BY_SHARD=0" "$OUT"
 OUT11=$(DRY_RUN=1 GROUP_BY_SHARD=1 STOCK_COUNT=30 ACCTS=300 BUYERS=30 C=2001 RATE=8000 SECONDS_STEADY=180 OUT=/tmp/mix-test-out bash loadtest/s0b/mix.sh 2>&1); RC11=$?
 check "묶음 모드에서 C가 15의 배수가 아니면 실패" "rc=1" "rc=$RC11"
 
+# 소스 순서 시험: 정리(trap)가 Kafka 컨테이너 기동보다 앞에 있고, 남은 컨테이너 제거가 포트 점검보다 앞에 있다
+TRAP_LINE=$(grep -n '^trap cleanup EXIT' loadtest/s0b/mix.sh | head -1 | cut -d: -f1)
+RUN_LINE=$(grep -n '^docker run -d --name s0b-kafka' loadtest/s0b/mix.sh | head -1 | cut -d: -f1)
+RM_LINE=$(grep -n '^docker rm -f s0b-kafka' loadtest/s0b/mix.sh | head -1 | cut -d: -f1)
+PORT_LINE=$(grep -n 'PORT_BUSY TCP 19092' loadtest/s0b/mix.sh | head -1 | cut -d: -f1)
+[ "$TRAP_LINE" -lt "$RUN_LINE" ] && check "trap이 docker run보다 앞" "ok" "ok" || check "trap이 docker run보다 앞" "ok" "no"
+[ "$RM_LINE" -lt "$PORT_LINE" ] && check "남은 컨테이너 제거가 포트 점검보다 앞" "ok" "ok" || check "남은 컨테이너 제거가 포트 점검보다 앞" "ok" "no"
+check "송신 위치 확인은 채널 수만큼 센다" 'grep -c SENDER_POSITION_REACHED <<<"$OUT1")" = "$NCHAN"' "$(cat loadtest/s0b/mix.sh)"
+check "체결 반영 대기 한도" 'FILL_WAIT_SECS:-300' "$(cat loadtest/s0b/mix.sh)"
+check "거부가 음수면 별도 경고" 'REJECTED_NEGATIVE' "$(cat loadtest/s0b/mix.sh)"
+
 echo "통과 ${PASS}, 실패 ${FAIL}"
 [ "$FAIL" -eq 0 ]

@@ -131,5 +131,57 @@ class MergeRowsTest(unittest.TestCase):
         merged = bc.merge_rows([a])
         self.assertEqual([row[1:] for row in merged], [row[1:] for row in a])
 
+
+class OrderAndAnomalyTest(unittest.TestCase):
+    def test_파일_순서를_그대로_쓰고_정렬하지_않는다(self):
+        path = write("\n".join([metric_line(12.0, 5, 0, 4, 10), metric_line(11.0, 6, 0, 5, 16)]) + "\n")
+        rows = bc.parse_metrics(path)
+        self.assertEqual([r[4] for r in rows], [10, 16])
+
+    def test_종료_직전_마지막_줄만_시각이_거꾸로면_그_줄은_마지막_보고로_쓰고_표시만_한다(self):
+        rows = [(100.0, 5, 0, 4, 10), (101.0, 5, 0, 4, 20), (100.4, 1, 0, 0, 25)]
+        status, notes = bc.classify_rows(rows)
+        self.assertEqual(status, "final_flush_row")
+        fixed = bc.monotone_rows(rows)
+        self.assertEqual([r[0] for r in fixed], [100.0, 101.0, 101.0])
+        self.assertEqual(fixed[-1][4], 25)
+
+    def test_접수_합계가_줄어들면_무효이다(self):
+        status, notes = bc.classify_rows([(100.0, 5, 0, 4, 10), (101.0, 5, 0, 4, 9)])
+        self.assertEqual(status, "invalid")
+        self.assertTrue(any("acceptedTotal" in n for n in notes))
+
+    def test_중간에서_시각이_거꾸로_가면_무효이다(self):
+        status, notes = bc.classify_rows([(100.0, 5, 0, 4, 10), (102.0, 5, 0, 4, 20), (101.0, 5, 0, 4, 30), (103.0, 5, 0, 4, 40)])
+        self.assertEqual(status, "invalid")
+
+    def test_정상_로그는_ok이다(self):
+        self.assertEqual(bc.classify_rows([(100.0, 5, 0, 4, 10), (101.0, 5, 0, 4, 20)])[0], "ok")
+
+    def test_같은_초에_찍힌_두_줄은_워커_안에서_더하고_접수_합계는_뒤_값을_쓴다(self):
+        a = [(100.1, 10, 0, 4, 10), (100.9, 5, 0, 2, 15)]
+        b = [(100.5, 6, 0, 2, 6)]
+        merged = bc.merge_rows([a, b])
+        self.assertEqual(merged[0][1:], (21, 0, 8, 21))
+
+
+class NotOwnedRangeTest(unittest.TestCase):
+    def test_워커_하나면_NOT_OWNED는_정확히_0이어야_한다(self):
+        self.assertTrue(bc.not_owned_ok([0], trades=100))
+        self.assertFalse(bc.not_owned_ok([1], trades=100))
+
+    def test_워커_둘이면_서버마다_같은_수이고_총_체결의_2배_이하여야_한다(self):
+        self.assertTrue(bc.not_owned_ok([54, 54], trades=100))
+        self.assertTrue(bc.not_owned_ok([0, 0], trades=100))
+        self.assertFalse(bc.not_owned_ok([54, 53], trades=100), "서버마다 수가 다르면 주문 오라우팅 가능성")
+        self.assertFalse(bc.not_owned_ok([101, 101], trades=100), "교차 체결은 체결 수를 넘을 수 없다")
+
+
+class FillCompleteTest(unittest.TestCase):
+    def test_누계_체결이_총_체결의_2배면_완전이다(self):
+        rows = [(100.0, 1, 0, 6, 10), (101.0, 1, 0, 4, 11)]
+        self.assertTrue(bc.fills_complete(rows, trades=5))
+        self.assertFalse(bc.fills_complete(rows, trades=6))
+
 if __name__ == "__main__":
     unittest.main()
