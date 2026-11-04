@@ -527,6 +527,47 @@ public final class U10Tool {
         return new PacedArgs(args[1], spec, ordersPerSecond);
     }
 
+    /** 목표 시각 전 마지막 이 시간(나노초)만 회전 대기하고, 그보다 먼저는 스레드를 재운다. */
+    static final long DEFAULT_SPIN_NANOS = 50_000L;
+
+    /** 환경변수 U10_SPIN_NANOS 값을 읽는다. 없거나 비면 기본값(DEFAULT_SPIN_NANOS)이고, 0 이상의 정수가 아니면 거부한다. 0이면 목표 시각 직전까지 재운다. */
+    static long parseSpinNanos(String value) {
+        if (value == null || value.isEmpty()) {
+            return DEFAULT_SPIN_NANOS;
+        }
+        long nanos;
+        try {
+            nanos = Long.parseLong(value);
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("U10_SPIN_NANOS는 0 이상의 정수여야 한다: " + value, e);
+        }
+        if (nanos < 0) {
+            throw new IllegalArgumentException("U10_SPIN_NANOS는 0 이상의 정수여야 한다: " + value);
+        }
+        return nanos;
+    }
+
+    /**
+     * System.nanoTime()이 targetNanos에 닿을 때까지 기다린다. 남은 시간이 spinNanos보다 길면 그 차이만큼 재우고(LockSupport.parkNanos),
+     * 남은 시간이 spinNanos 이하일 때만 Thread.onSpinWait()로 돈다. 늦게 깨어 목표 시각이 이미 지났으면 기다리지 않고 바로 돌아온다.
+     * spinNanos를 Long.MAX_VALUE로 주면 재우지 않고 계속 돈다.
+     */
+    static void awaitNanos(long targetNanos, long spinNanos) {
+        long remaining = targetNanos - System.nanoTime();
+        while (remaining > 0) {
+            if (remaining > spinNanos) {
+                java.util.concurrent.locks.LockSupport.parkNanos(remaining - spinNanos);
+                if (Thread.interrupted()) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException("발신 대기 중 인터럽트");
+                }
+            } else {
+                Thread.onSpinWait();
+            }
+            remaining = targetNanos - System.nanoTime();
+        }
+    }
+
     /** 순서 번호가 {@code sequence}인 주문을 보낼 목표 시각(발신 시작 기준 나노초). */
     static long targetOffsetNanos(long sequence, long ordersPerSecond) {
         return sequence * 1_000_000_000L / ordersPerSecond;
@@ -808,24 +849,14 @@ public final class U10Tool {
             AccountOrderCodec codec = new AccountOrderCodec();
             UnsafeBuffer buffer = new UnsafeBuffer(new byte[256]);
             long senderWaitMillis = parseSenderWaitMillis(System.getenv("U10_SENDER_WAIT_MS"));
+            long spinNanos = parseSpinNanos(System.getenv("U10_SPIN_NANOS"));
             long[] lateness = new long[3]; // 0: 최대(ms), 1: 합(ms), 2: 1초 넘게 늦은 주문 수
             long startNanos = System.nanoTime();
             long startEpochMillis = System.currentTimeMillis();
             System.out.println("PACED_START " + startEpochMillis);
             long sent = generator.apply((sequence, order) -> {
                 long targetNanos = startNanos + targetOffsetNanos(sequence, ordersPerSecond);
-                while (System.nanoTime() < targetNanos) {
-                    if (targetNanos - System.nanoTime() > 2_000_000L) {
-                        try {
-                            Thread.sleep(1);
-                        } catch (InterruptedException e) {
-                            Thread.currentThread().interrupt();
-                            throw new IllegalStateException(e);
-                        }
-                    } else {
-                        Thread.onSpinWait();
-                    }
-                }
+                awaitNanos(targetNanos, spinNanos);
                 offerBlocking(publications.get(shardOf(order.accountId(), publications.size())), codec, buffer, order, senderWaitMillis);
                 long late = (System.nanoTime() - targetNanos) / 1_000_000L;
                 lateness[0] = Math.max(lateness[0], late);

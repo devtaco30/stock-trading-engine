@@ -19,6 +19,7 @@ import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
 import com.flab.stocktradingengine.account.worker.coordination.MatchingDestinationResolver;
 import com.flab.stocktradingengine.aeron.StockSlotHasher;
@@ -639,5 +640,66 @@ class U10ToolTest {
         org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> collectGroupMix(groupSpec(40, 5, 0)));
         org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> collectGroupPrefill(
             new U10Tool.GroupMixSpec(90002L, 40, 2, 90042L, 3, 20_000L, 5, 12, List.of("000001"), "g")));
+    }
+
+    // ---- 속도 지정 발신의 대기: 남은 시간이 길면 재우고 짧을 때만 돈다 ----
+
+    @Test
+    void 목표_시각까지_기다린_뒤_돌아오고_목표를_넘긴_폭은_작다() {
+        long target = System.nanoTime() + 300_000L;
+
+        U10Tool.awaitNanos(target, U10Tool.DEFAULT_SPIN_NANOS);
+        long returnedAt = System.nanoTime();
+
+        assertTrue(returnedAt >= target, "목표 시각 전에 돌아왔다");
+        assertTrue(returnedAt - target < 5_000_000L, "목표 시각을 5ms 넘게 지나 돌아왔다: " + (returnedAt - target) + "ns");
+    }
+
+    @Test
+    void 이미_지난_목표_시각이면_기다리지_않고_바로_돌아온다() {
+        long target = System.nanoTime() - 1_000_000L;
+
+        long before = System.nanoTime();
+        U10Tool.awaitNanos(target, U10Tool.DEFAULT_SPIN_NANOS);
+
+        assertTrue(System.nanoTime() - before < 1_000_000L);
+    }
+
+    /** 기계 부하에 따라 흔들리므로 기본 실행에서 뺀다. 돌리려면 환경변수 U10_WAIT_COMPARE=1을 주고 이 시험만 지정한다. */
+    @EnabledIfEnvironmentVariable(named = "U10_WAIT_COMPARE", matches = "1")
+    @Test
+    void 초당_만건_속도로_1초_기다리면_속도_오차가_작고_스레드_CPU가_회전_대기보다_크게_줄어든다() {
+        long orders = 10_000L;
+        long[] spinOnly = measureWait(orders, 10_000L, Long.MAX_VALUE);
+        long[] parked = measureWait(orders, 10_000L, U10Tool.DEFAULT_SPIN_NANOS);
+
+        System.out.println("AWAIT_COMPARE spinOnly elapsedMs=" + spinOnly[0] / 1_000_000L + " cpuPct=" + spinOnly[1] * 100L / spinOnly[0]
+            + " | parked(spinNanos=" + U10Tool.DEFAULT_SPIN_NANOS + ") elapsedMs=" + parked[0] / 1_000_000L + " cpuPct=" + parked[1] * 100L / parked[0]);
+
+        assertTrue(parked[0] >= 990_000_000L && parked[0] <= 1_050_000_000L, "1초 걸려야 하는데 " + parked[0] / 1_000_000L + "ms 걸렸다");
+        assertTrue(parked[1] * 100L / parked[0] < 70L, "스레드 CPU가 " + parked[1] * 100L / parked[0] + "%다");
+        assertTrue(parked[1] < spinOnly[1] * 7L / 10L, "회전 대기보다 CPU가 충분히 줄지 않았다");
+    }
+
+    @Test
+    void 회전_대기_시간_환경변수는_없으면_기본값이고_0_이상의_정수만_받는다() {
+        assertEquals(U10Tool.DEFAULT_SPIN_NANOS, U10Tool.parseSpinNanos(null));
+        assertEquals(U10Tool.DEFAULT_SPIN_NANOS, U10Tool.parseSpinNanos(""));
+        assertEquals(20_000L, U10Tool.parseSpinNanos("20000"));
+        assertEquals(0L, U10Tool.parseSpinNanos("0"));
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> U10Tool.parseSpinNanos("-1"));
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> U10Tool.parseSpinNanos("abc"));
+    }
+
+    /** 주문 orders건의 목표 시각을 ordersPerSecond 속도로 차례로 기다린다. 반환: [걸린 나노초, 이 스레드가 쓴 CPU 나노초]. */
+    private static long[] measureWait(long orders, long ordersPerSecond, long spinNanos) {
+        java.lang.management.ThreadMXBean threads = java.lang.management.ManagementFactory.getThreadMXBean();
+        long cpuStart = threads.getCurrentThreadCpuTime();
+        long start = System.nanoTime();
+        for (long sequence = 0; sequence < orders; sequence++) {
+            U10Tool.awaitNanos(start + U10Tool.targetOffsetNanos(sequence, ordersPerSecond), spinNanos);
+        }
+        long elapsed = System.nanoTime() - start;
+        return new long[] {elapsed, threads.getCurrentThreadCpuTime() - cpuStart};
     }
 }
