@@ -309,6 +309,46 @@ public final class U10Tool {
     }
 
     /**
+     * 체결 섞기(mix) 계획. 모든 주문이 같은 가격·수량 1이라 호가창의 같은 가격 FIFO에 따라 매수 1건이 그 종목에서 가장 오래된 매도 1건을 체결시킨다.
+     * 종목의 쌓기 매도 i번째(0부터)는 계좌 {@code sellAccountBase + (i % sellAccounts)}로 갔다고 전제하고(send-bulk의 BULK_ACCOUNTS 규칙), 유지 단계의
+     * 매도는 같은 종목의 {@code prefillPerStock + j}번째로 이어 가므로 {@code prefillPerStock}가 매도 계좌 수의 배수일 때만 체결되는 매도의 주인과
+     * 새 매도의 주인이 같아져 계좌별 미체결이 일정하다. 매수 계좌는 매도 계좌와 따로이고 매수 전체를 돌려 가며 쓴다.
+     */
+    record MixSpec(long sellAccountBase, int sellAccounts, long buyAccountBase, int buyAccounts, long price, int prefillPerStock,
+                   int pairsPerStock, List<String> stockCodes, String prefix) {
+    }
+
+    /** 순서 번호(0부터, 쌍 단위가 아니라 주문 단위)와 함께 주문을 받는 곳. 속도 지정 발신은 번호로 목표 시각을 정한다. */
+    @FunctionalInterface
+    interface SequencedOrderSink {
+        void accept(long sequence, DecodedAccountOrder order);
+    }
+
+    /** 쌍(j)마다 종목 순서대로 「매도 → 매수」를 보낸다. 보낸 주문 수를 돌려준다. */
+    static long mixOrders(MixSpec spec, SequencedOrderSink sink) {
+        if (spec.sellAccounts() < 1 || spec.buyAccounts() < 1 || spec.pairsPerStock() < 1 || spec.stockCodes().isEmpty()) {
+            throw new IllegalArgumentException("mix 인자는 양수여야 하고 종목이 하나 이상이어야 한다: " + spec);
+        }
+        if (spec.prefillPerStock() % spec.sellAccounts() != 0) {
+            throw new IllegalArgumentException("쌓은 수 " + spec.prefillPerStock() + "가 매도 계좌 수 " + spec.sellAccounts() + "의 배수가 아니면 계좌별 미체결이 일정하지 않다");
+        }
+        long sequence = 0;
+        long buyCounter = 0;
+        BigDecimal price = BigDecimal.valueOf(spec.price());
+        for (int j = 0; j < spec.pairsPerStock(); j++) {
+            for (String stockCode : spec.stockCodes()) {
+                long sellAccount = spec.sellAccountBase() + ((spec.prefillPerStock() + (long) j) % spec.sellAccounts());
+                sink.accept(sequence++, new DecodedAccountOrder(OrderSide.SELL, sellAccount, stockCode, price, 1,
+                    spec.prefix() + "-s-" + stockCode + "-" + j, EpochNanos.now()));
+                long buyAccount = spec.buyAccountBase() + (buyCounter++ % spec.buyAccounts());
+                sink.accept(sequence++, new DecodedAccountOrder(OrderSide.BUY, buyAccount, stockCode, price, 1,
+                    spec.prefix() + "-b-" + stockCode + "-" + j, EpochNanos.now()));
+            }
+        }
+        return sequence;
+    }
+
+    /**
      * 발행 위치({@code targetPosition})까지 임베디드 media driver가 UDP로 내보냈는지(송신 위치 카운터) 기다린다. Aeron의 offer는 발행 버퍼에 넣을 뿐이라
      * 바로 닫으면 아직 내보내지 못한 주문이 사라진다. 결과: REACHED, 카운터는 찾았으나 제한 시간 안에 닿지 못함(NOT_REACHED), 이 발행의 송신 위치
      * 카운터를 찾지 못함(COUNTER_NOT_FOUND — 카운터 형식이나 타입 번호가 어긋났을 수 있어 NOT_REACHED와 구별한다).

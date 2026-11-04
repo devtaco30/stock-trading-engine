@@ -278,4 +278,110 @@ class U10ToolTest {
         allocateSenderPosition(counters, 12L, 9_999L);
         assertEquals(U10Tool.SenderWait.COUNTER_NOT_FOUND, U10Tool.awaitSenderPosition(counters, 77L, 100L, 300L), "다른 발행의 카운터가 충분히 커도 이 발행으로 세지 않는다");
     }
+
+    // ---- 체결 섞기(mix) 계획: 매도 1건 직후 매수 1건, 같은 가격, 매수 1건이 가장 오래된 매도 1건을 체결시킨다 ----
+
+    private static U10Tool.MixSpec mixSpec(int sellAccounts, int buyAccounts, int prefillPerStock, int pairsPerStock) {
+        return new U10Tool.MixSpec(90002L, sellAccounts, 90002L + sellAccounts, buyAccounts, 20_000L, prefillPerStock, pairsPerStock,
+            List.of("000001", "000002", "000003"), "mix");
+    }
+
+    private record MixedOrder(long sequence, com.flab.stocktradingengine.codec.DecodedAccountOrder order) {
+    }
+
+    private static List<MixedOrder> collectMix(U10Tool.MixSpec spec) {
+        List<MixedOrder> orders = new ArrayList<>();
+        U10Tool.mixOrders(spec, (sequence, order) -> orders.add(new MixedOrder(sequence, order)));
+        return orders;
+    }
+
+    @Test
+    void mix_순서는_쌍마다_종목_순서로_매도_바로_뒤에_매수이고_번호는_0부터_하나씩_늘며_가격과_수량이_같다() {
+        U10Tool.MixSpec spec = mixSpec(4, 2, 8, 5);
+        List<MixedOrder> orders = collectMix(spec);
+
+        assertEquals(2 * 3 * 5, orders.size(), "쌍 수 x 종목 3 x 2건");
+        java.util.Set<String> requestIds = new java.util.HashSet<>();
+        for (int n = 0; n < orders.size(); n++) {
+            MixedOrder mixed = orders.get(n);
+            assertEquals(n, mixed.sequence());
+            assertEquals(n % 2 == 0 ? com.flab.stocktradingengine.trading.entity.OrderSide.SELL : com.flab.stocktradingengine.trading.entity.OrderSide.BUY,
+                mixed.order().type(), "짝수 번째는 매도, 홀수 번째는 매수");
+            assertEquals(spec.stockCodes().get((n / 2) % 3), mixed.order().stockCode(), "한 쌍은 같은 종목이고 쌍마다 종목 순서를 돈다");
+            assertEquals(0, java.math.BigDecimal.valueOf(20_000L).compareTo(mixed.order().price()));
+            assertEquals(1, mixed.order().quantity());
+            assertTrue(requestIds.add(mixed.order().requestId()), "요청번호는 겹치지 않는다: " + mixed.order().requestId());
+        }
+    }
+
+    @Test
+    void mix_매도는_쌓은_수_다음_번호부터_매도_계좌를_돌고_매수는_매수_계좌를_돈다() {
+        U10Tool.MixSpec spec = mixSpec(4, 2, 8, 5);
+        List<MixedOrder> orders = collectMix(spec);
+
+        int buyCounter = 0;
+        for (int n = 0; n < orders.size(); n++) {
+            int pair = n / 2;
+            int stockIndex = pair % 3;
+            int pairInStock = pair / 3;
+            long accountId = orders.get(n).order().accountId();
+            if (n % 2 == 0) {
+                assertEquals(90002L + ((8 + pairInStock) % 4), accountId, "종목 안 j번째 쌍의 매도는 쌓은 수 8 + j번 매도: 계좌 90002 + (8 + j) % 4");
+            } else {
+                assertEquals(90006L + (buyCounter % 2), accountId, "매수는 매수 계좌 90006, 90007을 번갈아 쓴다");
+                buyCounter++;
+            }
+        }
+    }
+
+    @Test
+    void mix_쌓은_뒤_모든_쌍을_체결_순서대로_적용하면_쌍이_끝날_때마다_계좌별_종목별_미체결이_처음과_같다() {
+        int sellAccounts = 4;
+        int prefillPerStock = 8;
+        U10Tool.MixSpec spec = mixSpec(sellAccounts, 2, prefillPerStock, 37);
+        Map<String, java.util.ArrayDeque<Long>> asksByStock = new HashMap<>();
+        for (String stock : spec.stockCodes()) {
+            java.util.ArrayDeque<Long> asks = new java.util.ArrayDeque<>();
+            for (int i = 0; i < prefillPerStock; i++) {
+                asks.addLast(90002L + (i % sellAccounts));
+            }
+            asksByStock.put(stock, asks);
+        }
+
+        Map<String, Map<Long, Integer>> openByStockAndAccount = new HashMap<>();
+        for (String stock : spec.stockCodes()) {
+            Map<Long, Integer> open = new HashMap<>();
+            for (long account : asksByStock.get(stock)) {
+                open.merge(account, 1, Integer::sum);
+            }
+            openByStockAndAccount.put(stock, open);
+        }
+        Map<String, Map<Long, Integer>> initial = new HashMap<>();
+        openByStockAndAccount.forEach((stock, open) -> initial.put(stock, new HashMap<>(open)));
+
+        List<MixedOrder> orders = collectMix(spec);
+        for (int n = 0; n < orders.size(); n++) {
+            com.flab.stocktradingengine.codec.DecodedAccountOrder order = orders.get(n).order();
+            java.util.ArrayDeque<Long> asks = asksByStock.get(order.stockCode());
+            Map<Long, Integer> open = openByStockAndAccount.get(order.stockCode());
+            if (order.type() == com.flab.stocktradingengine.trading.entity.OrderSide.SELL) {
+                asks.addLast(order.accountId());
+                open.merge(order.accountId(), 1, Integer::sum);
+            } else {
+                long filledSeller = asks.pollFirst();
+                open.merge(filledSeller, -1, Integer::sum);
+            }
+            if (n % 2 == 1) {
+                assertEquals(initial.get(order.stockCode()), open, "쌍 " + (n / 2) + " 뒤 " + order.stockCode() + "의 계좌별 미체결이 처음과 달라졌다");
+            }
+        }
+    }
+
+    @Test
+    void mix_쌓은_수가_매도_계좌_수의_배수가_아니거나_인자가_양수가_아니면_거부한다() {
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> collectMix(mixSpec(4, 2, 9, 5)), "쌓은 수 9는 매도 계좌 4의 배수가 아니다");
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> collectMix(mixSpec(0, 2, 8, 5)));
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> collectMix(mixSpec(4, 0, 8, 5)));
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> collectMix(mixSpec(4, 2, 8, 0)));
+    }
 }
