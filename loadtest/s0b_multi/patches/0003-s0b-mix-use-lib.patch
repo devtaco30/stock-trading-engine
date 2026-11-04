@@ -1,0 +1,85 @@
+--- a/loadtest/s0b/mix.sh	2026-11-04 19:03:41
++++ b/loadtest/s0b/mix.sh	2026-11-04 19:05:46
+@@ -62,45 +62,27 @@
+   exit 0
+ fi
+ 
+-PORTS="20020 20040 20060 8010 8011 8012"; [ "$ACCOUNT_WORKERS" = 2 ] && PORTS="20020 20040 20041 20060 20061 8011 8100 8101"
+-for p in $PORTS; do lsof -nP -iUDP:$p >/dev/null 2>&1 && { echo "PORT_BUSY UDP $p"; exit 5; }; done
+-lsof -nP -iTCP:19092 -sTCP:LISTEN >/dev/null 2>&1 && { echo "PORT_BUSY TCP 19092"; exit 5; }
+-W=/tmp/s0b; LOG=$W/logs; rm -rf $W; mkdir -p $LOG; : > $W/pids
+-JO=(--add-opens java.base/jdk.internal.misc=ALL-UNNAMED --add-opens java.base/sun.nio.ch=ALL-UNNAMED)
+-KB=--spring.kafka.bootstrap-servers=localhost:19092
+-docker rm -f s0b-kafka >/dev/null 2>&1
+-docker run -d --name s0b-kafka -p 19092:19092 \
+- -e KAFKA_NODE_ID=1 -e KAFKA_PROCESS_ROLES=broker,controller -e KAFKA_CONTROLLER_QUORUM_VOTERS=1@localhost:19093 \
+- -e KAFKA_LISTENERS=PLAINTEXT://:19092,CONTROLLER://:19093 -e KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://localhost:19092 \
+- -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT -e KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER \
+- -e KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 \
+- -e KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1 -e KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1 \
+- -e KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0 apache/kafka@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837 >/dev/null
+-for _ in $(seq 1 60); do docker exec s0b-kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:19092 --list >/dev/null 2>&1 && break; sleep 1; done
+-cleanup(){ while read -r p; do kill $p 2>/dev/null; done < $W/pids; sleep 3; while read -r p; do kill -9 $p 2>/dev/null; done < $W/pids; docker rm -f s0b-kafka >/dev/null 2>&1
++source loadtest/s0b/lib.sh
++s0b_matching_init || exit 1
++s0b_check_ports || exit $?
++s0b_setup_workdir
++s0b_start_kafka
++cleanup(){ s0b_kill_pids
+   rm -rf "$OUT/logs"; cp -R $LOG "$OUT/logs" 2>/dev/null; cp $W/steps.log $W/paced.out "$OUT/" 2>/dev/null; }
+ trap cleanup EXIT
+-if [ "${SKIP_BUILD:-0}" != 1 ]; then
+-  ./gradlew --offline -q :matching-worker:bootJar :account-worker:bootJar > $LOG/build.log 2>&1 || { echo BUILD_FAIL; tail -20 $LOG/build.log; exit 1; }
+-fi
+-MJ=${MATCHING_JAR:-$(ls matching-worker/build/libs/*.jar | grep -v plain | head -1)}; AJ=${ACCOUNT_JAR:-$(ls account-worker/build/libs/*.jar | grep -v plain | head -1)}
+-sed "s#/tmp/u10#$W#" loadtest/u10/u10-matching-0.yml > $W/m0.yml
+-sed "s#/tmp/u10#$W#" loadtest/u10/u10-account.yml > $W/acc.yml
++s0b_prepare_jars_and_yml || exit 1
+ # 계좌 워커가 둘이면 매칭의 체결 목적지를 정적 슬롯 표(체결 수신 주소)로 준다(loadtest/run-e2e-v2.sh의 shard_args_fill과 같다).
+ MATCH_EXTRA=(); ACC_SHARD=()
+ if [ "$ACCOUNT_WORKERS" = 2 ]; then
+   MATCH_EXTRA=("--shard-routing.slot-count=256" "--shard-routing.shards[0].endpoint=aeron:udp?endpoint=localhost:20060" "--shard-routing.shards[0].slot-from=0" "--shard-routing.shards[0].slot-to=127" "--shard-routing.shards[1].endpoint=aeron:udp?endpoint=localhost:20061" "--shard-routing.shards[1].slot-from=128" "--shard-routing.shards[1].slot-to=255")
+   ACC_SHARD=("--shard-routing.slot-count=256" "--shard-routing.shards[0].endpoint=aeron:udp?endpoint=localhost:20040" "--shard-routing.shards[0].slot-from=0" "--shard-routing.shards[0].slot-to=127" "--shard-routing.shards[1].endpoint=aeron:udp?endpoint=localhost:20041" "--shard-routing.shards[1].slot-from=128" "--shard-routing.shards[1].slot-to=255")
+ fi
+-java "${JO[@]}" -Xlog:gc*:file=$LOG/gc-matching.log:time,uptime -jar $MJ --spring.config.additional-location=file:$W/m0.yml $KB ${MATCH_EXTRA[@]+"${MATCH_EXTRA[@]}"} > $LOG/matching-0.log 2>&1 & MP=$!; echo $MP >> $W/pids
+-for _ in $(seq 1 60); do grep -q "Started MatchingWorkerApplication" $LOG/matching-0.log && break; sleep 2; done
+-grep -q "Started MatchingWorkerApplication" $LOG/matching-0.log || { echo START_FAIL matching; exit 6; }
+-sleep 8
++s0b_start_matching ${MATCH_EXTRA[@]+"${MATCH_EXTRA[@]}"} || exit $?
+ # 종목 수가 3이면 기존대로 slot 32 이상 3개. 그 밖이면 slot 전체에서 STOCK_COUNT개(샤드 확장 시험용).
+ SPLIT_SLOT=32; [ "$STOCK_COUNT" = 3 ] || SPLIT_SLOT=0
+-STOCKS=$(./gradlew --offline -q :account-worker:u10Tool -Pu10Args="codes-many 64 $SPLIT_SLOT $STOCK_COUNT" 2>&1 | grep '^HIGH=' | tail -1 | sed 's/^HIGH=//' | tr ',' ' ')
++s0b_pick_stocks $STOCK_COUNT $SPLIT_SLOT || exit 1
+ echo "종목: $STOCKS"
+-./gradlew --offline -q :account-worker:u10Tool -Pu10Args="slot-of 64 $STOCKS" 2>&1 | grep '^SLOT' > "$OUT/slots.txt"
++s0b_write_stock_report "$OUT" always
+ export BULK_ACCOUNTS=$N
+ if [ "$GROUP_BY_SHARD" = 1 ]; then
+   ./gradlew --offline -q :account-worker:u10Tool -Pu10Args="group-holdings 90002 $N $GROUP_COUNT $PER_ACCT $PAIRS $STOCKS" 2>&1 | grep '^HOLD ' > $W/holdings.txt
+@@ -109,6 +91,7 @@
+   export HOLDINGS_FILE=$W/holdings.txt
+ fi
+ BUYER_ACCOUNTS=$BUYERS BUYER_BALANCE=$BUYER_BALANCE python3 -I loadtest/s0b/make-seed.py "$W/seed.yml" "$N" "$HOLD" $STOCKS || exit 1
++ACC_POOL=(); read -ra ACC_POOL <<< "$(s0b_account_pool_args)"
+ AP_LIST=()
+ start_account() { # 번호(0부터)
+   local i=$1 suffix="" extra=()
+@@ -118,7 +101,7 @@
+     else extra=("--transport.account-intake.channel=aeron:udp?endpoint=localhost:20041" "--transport.fill.channel=aeron:udp?endpoint=localhost:20061" "--account.worker.archive.control-channel=aeron:udp?endpoint=localhost:8101" "--account.worker.archive-dir=$W/account-1" "--snowflake.node-id=5"); fi
+   fi
+   java "${JO[@]}" -Xlog:gc*:file=$LOG/gc-account$suffix.log:time,uptime -jar $AJ --spring.config.additional-location=file:$W/acc.yml,file:$W/seed.yml $KB \
+-    --account-worker.metrics.enabled=true $LOGARG ${ACC_SHARD[@]+"${ACC_SHARD[@]}"} ${extra[@]+"${extra[@]}"} > $LOG/account$suffix.log 2>&1 & AP_LIST+=($!); echo $! >> $W/pids
++    --account-worker.metrics.enabled=true $LOGARG ${ACC_SHARD[@]+"${ACC_SHARD[@]}"} ${extra[@]+"${extra[@]}"} ${ACC_POOL[@]+"${ACC_POOL[@]}"} > $LOG/account$suffix.log 2>&1 & AP_LIST+=($!); echo $! >> $W/pids
+   for _ in $(seq 1 ${START_WAIT_TRIES:-60}); do grep -q "Started AccountWorkerApplication" $LOG/account$suffix.log && break; sleep 2; done
+   grep -q "Started AccountWorkerApplication" $LOG/account$suffix.log || { echo START_FAIL account$suffix; exit 6; }
+ }
+@@ -136,7 +119,8 @@
+ fi
+ if [ "${CPU_SAMPLE:-0}" = 1 ]; then
+   : > "$OUT/cpu.log"
+-  if [ "$ACCOUNT_WORKERS" = 2 ]; then ROLES=(account-0=$AP account-1=${AP_LIST[1]} matching=$MP); else ROLES=(account=$AP matching=$MP); fi
++  read -ra MATCHING_ROLES <<< "$(s0b_matching_roles)"
++  if [ "$ACCOUNT_WORKERS" = 2 ]; then ROLES=(account-0=$AP account-1=${AP_LIST[1]} "${MATCHING_ROLES[@]}"); else ROLES=(account=$AP "${MATCHING_ROLES[@]}"); fi
+   loadtest/s0b/cpu_sample.sh "$OUT/cpu.log" "${ROLES[@]}" & echo $! >> $W/pids
+ fi
+ accepted_total() { local sum=0 f v; for f in $LOG/account.log $LOG/account-1.log; do [ -f $f ] || continue; v=$(grep -o "acceptedTotal=[0-9]*" $f | tail -1 | sed 's/acceptedTotal=//'); sum=$((sum + ${v:-0})); done; echo $sum; }
