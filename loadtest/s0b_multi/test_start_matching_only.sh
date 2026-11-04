@@ -16,6 +16,7 @@ echo "docker $*" >> "$FAKE_LOG"
 case "$*" in
   *kafka-console-consumer*)
     n=$(cat "$FAKE_LOG.cnt" 2>/dev/null || echo 0); n=$((n + 1)); echo $n > "$FAKE_LOG.cnt"
+    [ "${FAKE_WARN:-0}" = 1 ] && echo "Option --property is deprecated and will be removed in a future version. Use --formatter-property instead."
     for s in $(seq 0 63); do
       v="localhost:$((20020 + s % FAKE_N))"
       if [ "$s" = 3 ] && [ -n "${FAKE_BAD_AFTER:-}" ] && [ "$n" -ge "$FAKE_BAD_AFTER" ]; then
@@ -101,6 +102,19 @@ check "정리된 표에서 slot이 빠져도 FAIL" "FAIL" "$(cat $R_OUT/result.t
 run 2 MATCHING_COUNT=2 MATCHING_ASSIGN_TIMEOUT=5
 check "정상 입력은 raw-map-bad=0" "raw-map-bad=0" "$(cat $R_OUT/result.txt)"
 check "정상 입력 assigned-map 에 moving 없음" "bad=0" "$(awk -F'\t' '$2==""||$2=="null"||$2~/;moving$/{b++} END{print "bad=" b+0}' $R_OUT/assigned-map.txt)"
+# 1-1) Kafka 콘솔 경고 줄이 stdout 맨 앞에 섞여도 slot 줄만 본다. 숫자가 아닌 줄 수는 assigned-summary.txt 에 남긴다
+run 2 MATCHING_COUNT=2 MATCHING_ASSIGN_TIMEOUT=5 FAKE_WARN=1
+check "경고 줄이 섞인 정상 덤프 → PASS" "PASS" "$(cat $R_OUT/result.txt)"
+check "경고 줄이 섞여도 raw-map-bad=0" "raw-map-bad=0" "$(cat $R_OUT/result.txt)"
+check "경고 줄 수 기록" "raw-nonslot-lines=1" "$(cat $R_OUT/assigned-summary.txt)"
+equals "경고 줄이 섞인 원본은 65줄" "65" "$(wc -l < $R_OUT/assigned-map-raw.txt | tr -d ' ')"
+check "경고 줄이 있어도 종목 선택 성공" "pick=0" "$(cat $R_OUT/result.txt)"
+run 2 MATCHING_COUNT=2 MATCHING_ASSIGN_TIMEOUT=5 FAKE_WARN=1 FAKE_BAD_AFTER=3 FAKE_BAD=moving
+check "경고 줄 + slot 3 ;moving → FAIL" "FAIL raw-map-bad=1" "$(cat $R_OUT/result.txt)"
+run 2 MATCHING_COUNT=2 MATCHING_ASSIGN_TIMEOUT=5
+check "경고 줄이 없으면 raw-nonslot-lines=0" "raw-nonslot-lines=0" "$(cat $R_OUT/assigned-summary.txt)"
+run 1 MATCHING_COUNT=1 FAKE_WARN=1
+check "N=1 경고 줄 → PASS" "PASS slots=64 addresses=1" "$(cat $R_OUT/result.txt)"
 # 2) started-lines.txt 줄 수 == MATCHING_COUNT
 run 2 MATCHING_COUNT=2 MATCHING_ASSIGN_TIMEOUT=5 FAKE_DOUBLE_STARTED=1
 check "Started 줄이 더 많으면 FAIL" "FAIL started-lines=4 expected=2" "$(cat $R_OUT/result.txt)"

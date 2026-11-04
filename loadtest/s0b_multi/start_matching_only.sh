@@ -59,7 +59,10 @@ SLOTS=$(sed -n 's/^slots=//p' "$OUT/assigned-summary.txt"); ADDRS=$(sed -n 's/^a
 # 1) 정리된 표와 원본 덤프 모두에 ;moving·null·빈 주소가 없어야 한다.
 #    원본은 slot별 마지막 레코드만 본다(compacted 토픽이라 앞선 레코드는 옛 값이어도 정상).
 MAP_BAD=$(awk -F'\t' '$2=="" || $2=="null" || $2 ~ /;moving$/ {b++} END {print b+0}' "$OUT/assigned-map.txt")
-RAW_BAD=$(awk -F'\t' 'NF>=1 && $1!="" {last[$1]=$2} END {for (k in last) if (last[k]=="" || last[k]=="null" || last[k] ~ /;moving$/) b++; print b+0}' "$OUT/assigned-map-raw.txt")
+# Kafka 콘솔이 경고(예: Option --property is deprecated ...)를 stdout에 섞어 내므로 키가 숫자(slot)인 줄만 검사한다. 그 밖의 줄 수는 요약에 남긴다.
+RAW_BAD=$(awk -F'\t' '$1 ~ /^[0-9]+$/ {last[$1]=$2} END {for (k in last) if (last[k]=="" || last[k]=="null" || last[k] ~ /;moving$/) b++; print b+0}' "$OUT/assigned-map-raw.txt")
+RAW_NONSLOT=$(awk -F'\t' '$1 !~ /^[0-9]+$/ {n++} END {print n+0}' "$OUT/assigned-map-raw.txt")
+echo "raw-nonslot-lines=$RAW_NONSLOT" >> "$OUT/assigned-summary.txt"
 [ "$MAP_BAD" = 0 ] || fail "map-bad=$MAP_BAD (assigned-map.txt 에 ;moving·null·빈 주소)"
 [ "$RAW_BAD" = 0 ] || fail "raw-map-bad=$RAW_BAD (원본 덤프의 slot별 마지막 값에 ;moving·null·빈 주소)"
 
@@ -94,4 +97,4 @@ if [ "$PICK_RC" = 0 ]; then
     SPREAD=$(sed -n 's/^SHARD_STOCKS [^=]*=//p' "$OUT/shard-stocks.txt" | sort -n | awk 'NR==1{min=$1} {max=$1} END {print max-min}')
     [ -n "$SPREAD" ] && [ "$SPREAD" -le 1 ] || fail "shard-stocks spread=${SPREAD:-없음} (shard별 종목 수 최대-최소가 1 이하여야 한다)"
 fi
-echo "PASS slots=$SLOTS addresses=$ADDRS pick=$PICK_RC raw-map-bad=$RAW_BAD started-lines=$STARTED spread=$SPREAD" | tee -a "$OUT/result.txt"
+echo "PASS slots=$SLOTS addresses=$ADDRS pick=$PICK_RC raw-map-bad=$RAW_BAD raw-nonslot-lines=$RAW_NONSLOT started-lines=$STARTED spread=$SPREAD" | tee -a "$OUT/result.txt"
