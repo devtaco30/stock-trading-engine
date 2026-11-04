@@ -59,6 +59,10 @@ import io.aeron.driver.ThreadingMode;
  *       이 도구는 그 계좌들이 계좌 워커에 시드되어 있는지 확인하지 않는다: 시드되지 않은 계좌의 주문은 계좌 워커가 ACCOUNT_NOT_FOUND로 거부한다.
  *       {@code loadtest/u10/u10-account.yml}은 계좌 90001과 90002만 시드하므로, 계좌 수를 2 이상으로 쓰려면 호출하는 쪽이 시드를 맞춘다
  *       (c1의 {@code loadtest/s0/probe.sh}는 90002부터 계좌 수만큼 직접 시드한다).</li>
+ *   <li>{@code send-paced <channel> <매도 계좌 시작> <매도 계좌 수> <매수 계좌 시작> <매수 계좌 수> <가격> <종목당 쌓은 수> <종목당 쌍 수> <초당 주문 수> <요청번호 접두사> <종목...>} —
+ *       체결 섞기: 종목마다 쌍(j)별로 「매도 1건 → 매수 1건」(수량 1, 모두 같은 가격)을 초당 주문 수(둘을 합친 건수)로 보낸다. 매수 1건이 그 종목에서 가장 오래된
+ *       매도 1건을 체결시켜 계좌별 미체결이 일정하다(쌓은 수는 send-bulk에 {@code --price-step=0}으로 먼저 보내고 매도 계좌 수의 배수여야 한다).
+ *       끝에 「PACED_DONE」으로 보낸 수와 목표 시각보다 늦은 정도(ms)를 출력한다.</li>
  *   <li>{@code assigned <kafkaBootstrap> <stockSlotCount>} — 맵 토픽의 종목 slot별 마지막 값을 읽어
  *       {@code ASSIGNED 배정된 수/전체 MOVING 이동 중인 수 ENDPOINTS 주소=개수,...}를 출력한다.</li>
  *   <li>{@code map-history <kafkaBootstrap>} — 맵 토픽의 모든 기록을 {@code slot<TAB>CreateTime(ms)<TAB>값} 줄로 출력한다.</li>
@@ -82,6 +86,7 @@ public final class U10Tool {
             case "codes" -> codes(Integer.parseInt(args[1]), Integer.parseInt(args[2]));
             case "codes-many" -> codesMany(Integer.parseInt(args[1]), Integer.parseInt(args[2]), Integer.parseInt(args[3]));
             case "send-bulk" -> sendBulk(args);
+            case "send-paced" -> sendPaced(args);
             case "stream" -> stream(args);
             case "assigned" -> assigned(args[1], Integer.parseInt(args[2]));
             case "map-history" -> mapHistory(args[1]);
@@ -348,6 +353,29 @@ public final class U10Tool {
         return sequence;
     }
 
+    /** send-paced 인자: 발신 채널, 계획, 초당 주문 수(매도와 매수를 합친 건수). */
+    record PacedArgs(String channel, MixSpec spec, long ordersPerSecond) {
+    }
+
+    /** 사용: send-paced <channel> <매도 계좌 시작> <매도 계좌 수> <매수 계좌 시작> <매수 계좌 수> <가격> <종목당 쌓은 수> <종목당 쌍 수> <초당 주문 수> <요청번호 접두사> <종목...> */
+    static PacedArgs parsePacedArgs(String[] args) {
+        if (args.length < 12) {
+            throw new IllegalArgumentException("send-paced 인자가 모자란다(종목이 하나 이상 필요): " + String.join(" ", args));
+        }
+        long ordersPerSecond = Long.parseLong(args[9]);
+        if (ordersPerSecond < 1) {
+            throw new IllegalArgumentException("초당 주문 수는 양의 정수여야 한다: " + args[9]);
+        }
+        MixSpec spec = new MixSpec(Long.parseLong(args[2]), Integer.parseInt(args[3]), Long.parseLong(args[4]), Integer.parseInt(args[5]),
+            Long.parseLong(args[6]), Integer.parseInt(args[7]), Integer.parseInt(args[8]), List.of(java.util.Arrays.copyOfRange(args, 11, args.length)), args[10]);
+        return new PacedArgs(args[1], spec, ordersPerSecond);
+    }
+
+    /** 순서 번호가 {@code sequence}인 주문을 보낼 목표 시각(발신 시작 기준 나노초). */
+    static long targetOffsetNanos(long sequence, long ordersPerSecond) {
+        return sequence * 1_000_000_000L / ordersPerSecond;
+    }
+
     /**
      * 발행 위치({@code targetPosition})까지 임베디드 media driver가 UDP로 내보냈는지(송신 위치 카운터) 기다린다. Aeron의 offer는 발행 버퍼에 넣을 뿐이라
      * 바로 닫으면 아직 내보내지 못한 주문이 사라진다. 결과: REACHED, 카운터는 찾았으나 제한 시간 안에 닿지 못함(NOT_REACHED), 이 발행의 송신 위치
@@ -526,6 +554,62 @@ public final class U10Tool {
             }
             System.out.println("STREAM_DONE xSells=" + xSells + " xBuys=" + xBuys + " ySells=" + ySells + " yBuys=" + yBuys
                 + " invalid=" + invalid + " maxLatenessMs=" + maxLateness + " avgLatenessMs=" + (plan.isEmpty() ? 0 : totalLateness / plan.size()));
+            flushOrFail(aeron, publication);
+            Thread.sleep(500);
+        } finally {
+            CloseHelper.quietClose(aeron);
+            CloseHelper.quietClose(driver);
+        }
+    }
+
+    private static void sendPaced(String[] args) throws Exception {
+        PacedArgs paced = parsePacedArgs(args);
+        MediaDriver driver = MediaDriver.launchEmbedded(new MediaDriver.Context()
+            .aeronDirectoryName(CommonContext.generateRandomDirName())
+            .dirDeleteOnStart(true)
+            .threadingMode(ThreadingMode.SHARED));
+        Aeron aeron = Aeron.connect(new Aeron.Context().aeronDirectoryName(driver.aeronDirectoryName()));
+        try {
+            Publication publication = aeron.addPublication(paced.channel(), AeronStreamIds.ACCOUNT_INTAKE);
+            long connectDeadline = System.currentTimeMillis() + CONNECT_TIMEOUT_MILLIS;
+            while (!publication.isConnected() && System.currentTimeMillis() < connectDeadline) {
+                Thread.sleep(20);
+            }
+            if (!publication.isConnected()) {
+                System.out.println("NOT_CONNECTED " + paced.channel());
+                System.exit(3);
+            }
+            AccountOrderCodec codec = new AccountOrderCodec();
+            UnsafeBuffer buffer = new UnsafeBuffer(new byte[256]);
+            long senderWaitMillis = parseSenderWaitMillis(System.getenv("U10_SENDER_WAIT_MS"));
+            long[] lateness = new long[3]; // 0: 최대(ms), 1: 합(ms), 2: 1초 넘게 늦은 주문 수
+            long startNanos = System.nanoTime();
+            long startEpochMillis = System.currentTimeMillis();
+            System.out.println("PACED_START " + startEpochMillis);
+            long sent = mixOrders(paced.spec(), (sequence, order) -> {
+                long targetNanos = startNanos + targetOffsetNanos(sequence, paced.ordersPerSecond());
+                while (System.nanoTime() < targetNanos) {
+                    if (targetNanos - System.nanoTime() > 2_000_000L) {
+                        try {
+                            Thread.sleep(1);
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                            throw new IllegalStateException(e);
+                        }
+                    } else {
+                        Thread.onSpinWait();
+                    }
+                }
+                offerBlocking(publication, codec, buffer, order, senderWaitMillis);
+                long late = (System.nanoTime() - targetNanos) / 1_000_000L;
+                lateness[0] = Math.max(lateness[0], late);
+                lateness[1] += late;
+                if (late > 1_000L) {
+                    lateness[2]++;
+                }
+            });
+            System.out.println("PACED_DONE sent=" + sent + " elapsedMs=" + (System.currentTimeMillis() - startEpochMillis)
+                + " maxLatenessMs=" + lateness[0] + " avgLatenessMs=" + (sent == 0 ? 0 : lateness[1] / sent) + " over1sCount=" + lateness[2]);
             flushOrFail(aeron, publication);
             Thread.sleep(500);
         } finally {

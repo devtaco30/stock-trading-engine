@@ -384,4 +384,39 @@ class U10ToolTest {
         org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> collectMix(mixSpec(4, 0, 8, 5)));
         org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> collectMix(mixSpec(4, 2, 8, 0)));
     }
+
+    @Test
+    void send_paced_인자에서_계획과_초당_주문_수를_읽고_종목_코드를_가른다() {
+        U10Tool.PacedArgs paced = U10Tool.parsePacedArgs(new String[] {"send-paced", "aeron:udp?endpoint=localhost:20040", "90002", "300", "90302", "30",
+            "20000", "200100", "600", "4000", "mix", "000001", "000002", "000003"});
+
+        assertEquals("aeron:udp?endpoint=localhost:20040", paced.channel());
+        assertEquals(4_000L, paced.ordersPerSecond());
+        U10Tool.MixSpec spec = paced.spec();
+        assertEquals(90002L, spec.sellAccountBase());
+        assertEquals(300, spec.sellAccounts());
+        assertEquals(90302L, spec.buyAccountBase());
+        assertEquals(30, spec.buyAccounts());
+        assertEquals(20_000L, spec.price());
+        assertEquals(200_100, spec.prefillPerStock());
+        assertEquals(600, spec.pairsPerStock());
+        assertEquals("mix", spec.prefix());
+        assertEquals(List.of("000001", "000002", "000003"), spec.stockCodes());
+    }
+
+    @Test
+    void send_paced는_초당_주문_수가_양수가_아니거나_종목이_없으면_거부한다() {
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> U10Tool.parsePacedArgs(new String[] {"send-paced", "c", "1", "2", "3", "4",
+            "20000", "8", "5", "0", "mix", "000001"}));
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> U10Tool.parsePacedArgs(new String[] {"send-paced", "c", "1", "2", "3", "4",
+            "20000", "8", "5", "100", "mix"}));
+    }
+
+    @Test
+    void 주문_번호의_목표_시각은_번호_곱하기_10억_나누기_초당_주문_수_나노초다() {
+        assertEquals(0L, U10Tool.targetOffsetNanos(0, 4_000L));
+        assertEquals(250_000L, U10Tool.targetOffsetNanos(1, 4_000L));
+        assertEquals(1_000_000_000L, U10Tool.targetOffsetNanos(4_000, 4_000L));
+        assertEquals(1_200_000_000_000L, U10Tool.targetOffsetNanos(4_800_000L, 4_000L), "480만 번째 주문은 1200초 지점");
+    }
 }
