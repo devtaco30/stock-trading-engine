@@ -63,6 +63,9 @@ if [ "${DRY_RUN:-0}" = 1 ]; then
   exit 0
 fi
 
+# u10-account.yml이 ${MAX_OPEN_ORDERS}를 읽는다. 기본값을 두지 않으므로 값이 없으면 앱을 띄우기 전에 멈춘다(u10/lib.sh start_account와 같은 검사).
+: "${MAX_OPEN_ORDERS:?MAX_OPEN_ORDERS를 지정해 주세요(계좌당 미체결 주문 수 상한, 기본값 없음. 상한 없는 비교용은 1000000)}"
+export MAX_OPEN_ORDERS
 docker rm -f s0b-kafka >/dev/null 2>&1   # 이전 실행이 중간에 끊겨 남긴 컨테이너가 19092를 잡고 있으면 PORT_BUSY가 되므로 점검 전에 치운다
 PORTS="20020 20040 20060 8010 8011 8012"; [ "$ACCOUNT_WORKERS" = 2 ] && PORTS="20020 20040 20041 20060 20061 8011 8100 8101"
 for p in $PORTS; do lsof -nP -iUDP:$p >/dev/null 2>&1 && { echo "PORT_BUSY UDP $p"; exit 5; }; done

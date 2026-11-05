@@ -34,6 +34,9 @@ lsof -nP -iTCP:19092 -sTCP:LISTEN >/dev/null 2>&1 && { echo "PORT_BUSY TCP 19092
 W=/tmp/s0b; LOG=$W/logs; rm -rf $W; mkdir -p $LOG; : > $W/pids
 JO=(--add-opens java.base/jdk.internal.misc=ALL-UNNAMED --add-opens java.base/sun.nio.ch=ALL-UNNAMED)
 KB=--spring.kafka.bootstrap-servers=localhost:19092
+# u10-account.yml이 ${MAX_OPEN_ORDERS}를 읽는다. 기본값을 두지 않으므로 값이 없으면 앱을 띄우기 전에 멈춘다(u10/lib.sh start_account와 같은 검사).
+: "${MAX_OPEN_ORDERS:?MAX_OPEN_ORDERS를 지정해 주세요(계좌당 미체결 주문 수 상한, 기본값 없음. 상한 없는 비교용은 1000000)}"
+export MAX_OPEN_ORDERS
 docker rm -f s0b-kafka >/dev/null 2>&1
 docker run -d --name s0b-kafka -p 19092:19092 \
  -e KAFKA_NODE_ID=1 -e KAFKA_PROCESS_ROLES=broker,controller -e KAFKA_CONTROLLER_QUORUM_VOTERS=1@localhost:19093 \
