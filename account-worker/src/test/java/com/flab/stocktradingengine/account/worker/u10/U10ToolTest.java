@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.MockConsumer;
@@ -18,6 +19,7 @@ import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
 import com.flab.stocktradingengine.account.worker.coordination.MatchingDestinationResolver;
 import com.flab.stocktradingengine.aeron.StockSlotHasher;
@@ -103,6 +105,34 @@ class U10ToolTest {
     }
 
     @Test
+    void send_bulk_수량_옵션은_없으면_1이고_양의_정수가_아니면_거부한다() {
+        U10Tool.BulkTargets none = U10Tool.parseBulkTargets(new String[] {
+            "send-bulk", "ch", "90002", "SELL", "20000", "200", "p", "000001"}, 7);
+        assertEquals(1, none.quantity());
+        U10Tool.BulkTargets seven = U10Tool.parseBulkTargets(new String[] {
+            "send-bulk", "ch", "90002", "SELL", "20000", "200", "p", "--quantity=7", "000001"}, 7);
+        assertEquals(7, seven.quantity());
+        assertEquals(List.of("000001"), seven.stockCodes());
+        for (String bad : new String[] {"--quantity=0", "--quantity=-3", "--quantity=abc"}) {
+            org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> U10Tool.parseBulkTargets(new String[] {
+                "send-bulk", "ch", "90002", "SELL", "20000", "200", "p", bad, "000001"}, 7), bad);
+        }
+    }
+
+    @Test
+    void send_bulk는_수량_옵션의_수량으로_매도를_보내고_수량이_없으면_1이다() {
+        List<com.flab.stocktradingengine.codec.DecodedAccountOrder> sent = new ArrayList<>();
+        U10Tool.BulkTargets targets = new U10Tool.BulkTargets(List.of("000001"), 0L, 0L, 1L, 9);
+        U10Tool.bulkOrders(90002L, com.flab.stocktradingengine.trading.entity.OrderSide.SELL, 20000L, 4, 2, "p", targets, sent::add);
+        assertEquals(4, sent.size());
+        assertTrue(sent.stream().allMatch(order -> order.quantity() == 9));
+        List<com.flab.stocktradingengine.codec.DecodedAccountOrder> defaults = new ArrayList<>();
+        U10Tool.bulkOrders(90002L, com.flab.stocktradingengine.trading.entity.OrderSide.SELL, 20000L, 2, 1, "q",
+            new U10Tool.BulkTargets(List.of("000001"), 0L, 0L, 1L), defaults::add);
+        assertTrue(defaults.stream().allMatch(order -> order.quantity() == 1));
+    }
+
+    @Test
     void 맵_토픽이_없으면_MAP_TOPIC_MISSING을_남기고_부분_읽기_경고와_구별한다() {
         MockConsumer<Integer, String> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
         consumer.updatePartitions(MAP_TOPIC, List.of());
@@ -161,6 +191,16 @@ class U10ToolTest {
         org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> U10Tool.parseBulkAccounts("0"));
         org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> U10Tool.parseBulkAccounts("-2"));
         org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> U10Tool.parseBulkAccounts("abc"));
+    }
+
+    @Test
+    void U10_SENDER_WAIT_MS_값은_없으면_30초이고_양의_정수가_아니면_거부한다() {
+        assertEquals(30_000L, U10Tool.parseSenderWaitMillis(null));
+        assertEquals(30_000L, U10Tool.parseSenderWaitMillis(""));
+        assertEquals(600_000L, U10Tool.parseSenderWaitMillis("600000"));
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> U10Tool.parseSenderWaitMillis("0"));
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> U10Tool.parseSenderWaitMillis("-5"));
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> U10Tool.parseSenderWaitMillis("abc"));
     }
 
     @Test
@@ -239,5 +279,462 @@ class U10ToolTest {
         org.agrona.concurrent.status.CountersManager counters = newCounters();
         allocateSenderPosition(counters, 12L, 9_999L);
         assertEquals(U10Tool.SenderWait.COUNTER_NOT_FOUND, U10Tool.awaitSenderPosition(counters, 77L, 100L, 300L), "다른 발행의 카운터가 충분히 커도 이 발행으로 세지 않는다");
+    }
+
+    // ---- 체결 섞기(mix) 계획: 매도 1건 직후 매수 1건, 같은 가격, 매수 1건이 가장 오래된 매도 1건을 체결시킨다 ----
+
+    private static U10Tool.MixSpec mixSpec(int sellAccounts, int buyAccounts, int prefillPerStock, int pairsPerStock) {
+        return new U10Tool.MixSpec(90002L, sellAccounts, 90002L + sellAccounts, buyAccounts, 20_000L, prefillPerStock, pairsPerStock,
+            List.of("000001", "000002", "000003"), "mix");
+    }
+
+    private record MixedOrder(long sequence, com.flab.stocktradingengine.codec.DecodedAccountOrder order) {
+    }
+
+    private static List<MixedOrder> collectMix(U10Tool.MixSpec spec) {
+        List<MixedOrder> orders = new ArrayList<>();
+        U10Tool.mixOrders(spec, (sequence, order) -> orders.add(new MixedOrder(sequence, order)));
+        return orders;
+    }
+
+    @Test
+    void mix_순서는_쌍마다_종목_순서로_매도_바로_뒤에_매수이고_번호는_0부터_하나씩_늘며_가격과_수량이_같다() {
+        U10Tool.MixSpec spec = mixSpec(4, 2, 8, 5);
+        List<MixedOrder> orders = collectMix(spec);
+
+        assertEquals(2 * 3 * 5, orders.size(), "쌍 수 x 종목 3 x 2건");
+        java.util.Set<String> requestIds = new java.util.HashSet<>();
+        for (int n = 0; n < orders.size(); n++) {
+            MixedOrder mixed = orders.get(n);
+            assertEquals(n, mixed.sequence());
+            assertEquals(n % 2 == 0 ? com.flab.stocktradingengine.trading.entity.OrderSide.SELL : com.flab.stocktradingengine.trading.entity.OrderSide.BUY,
+                mixed.order().type(), "짝수 번째는 매도, 홀수 번째는 매수");
+            assertEquals(spec.stockCodes().get((n / 2) % 3), mixed.order().stockCode(), "한 쌍은 같은 종목이고 쌍마다 종목 순서를 돈다");
+            assertEquals(0, java.math.BigDecimal.valueOf(20_000L).compareTo(mixed.order().price()));
+            assertEquals(1, mixed.order().quantity());
+            assertTrue(requestIds.add(mixed.order().requestId()), "요청번호는 겹치지 않는다: " + mixed.order().requestId());
+        }
+    }
+
+    @Test
+    void mix_매도는_쌓은_수_다음_번호부터_매도_계좌를_돌고_매수는_매수_계좌를_돈다() {
+        U10Tool.MixSpec spec = mixSpec(4, 2, 8, 5);
+        List<MixedOrder> orders = collectMix(spec);
+
+        int buyCounter = 0;
+        for (int n = 0; n < orders.size(); n++) {
+            int pair = n / 2;
+            int stockIndex = pair % 3;
+            int pairInStock = pair / 3;
+            long accountId = orders.get(n).order().accountId();
+            if (n % 2 == 0) {
+                assertEquals(90002L + ((8 + pairInStock) % 4), accountId, "종목 안 j번째 쌍의 매도는 쌓은 수 8 + j번 매도: 계좌 90002 + (8 + j) % 4");
+            } else {
+                assertEquals(90006L + (buyCounter % 2), accountId, "매수는 매수 계좌 90006, 90007을 번갈아 쓴다");
+                buyCounter++;
+            }
+        }
+    }
+
+    @Test
+    void mix_쌓은_뒤_모든_쌍을_체결_순서대로_적용하면_쌍이_끝날_때마다_계좌별_종목별_미체결이_처음과_같다() {
+        int sellAccounts = 4;
+        int prefillPerStock = 8;
+        U10Tool.MixSpec spec = mixSpec(sellAccounts, 2, prefillPerStock, 37);
+        Map<String, java.util.ArrayDeque<Long>> asksByStock = new HashMap<>();
+        for (String stock : spec.stockCodes()) {
+            java.util.ArrayDeque<Long> asks = new java.util.ArrayDeque<>();
+            for (int i = 0; i < prefillPerStock; i++) {
+                asks.addLast(90002L + (i % sellAccounts));
+            }
+            asksByStock.put(stock, asks);
+        }
+
+        Map<String, Map<Long, Integer>> openByStockAndAccount = new HashMap<>();
+        for (String stock : spec.stockCodes()) {
+            Map<Long, Integer> open = new HashMap<>();
+            for (long account : asksByStock.get(stock)) {
+                open.merge(account, 1, Integer::sum);
+            }
+            openByStockAndAccount.put(stock, open);
+        }
+        Map<String, Map<Long, Integer>> initial = new HashMap<>();
+        openByStockAndAccount.forEach((stock, open) -> initial.put(stock, new HashMap<>(open)));
+
+        List<MixedOrder> orders = collectMix(spec);
+        for (int n = 0; n < orders.size(); n++) {
+            com.flab.stocktradingengine.codec.DecodedAccountOrder order = orders.get(n).order();
+            java.util.ArrayDeque<Long> asks = asksByStock.get(order.stockCode());
+            Map<Long, Integer> open = openByStockAndAccount.get(order.stockCode());
+            if (order.type() == com.flab.stocktradingengine.trading.entity.OrderSide.SELL) {
+                asks.addLast(order.accountId());
+                open.merge(order.accountId(), 1, Integer::sum);
+            } else {
+                long filledSeller = asks.pollFirst();
+                open.merge(filledSeller, -1, Integer::sum);
+            }
+            if (n % 2 == 1) {
+                assertEquals(initial.get(order.stockCode()), open, "쌍 " + (n / 2) + " 뒤 " + order.stockCode() + "의 계좌별 미체결이 처음과 달라졌다");
+            }
+        }
+    }
+
+    @Test
+    void mix_쌓은_수가_매도_계좌_수의_배수가_아니거나_인자가_양수가_아니면_거부한다() {
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> collectMix(mixSpec(4, 2, 9, 5)), "쌓은 수 9는 매도 계좌 4의 배수가 아니다");
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> collectMix(mixSpec(0, 2, 8, 5)));
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> collectMix(mixSpec(4, 0, 8, 5)));
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> collectMix(mixSpec(4, 2, 8, 0)));
+    }
+
+    @Test
+    void send_paced_인자에서_계획과_초당_주문_수를_읽고_종목_코드를_가른다() {
+        U10Tool.PacedArgs paced = U10Tool.parsePacedArgs(new String[] {"send-paced", "aeron:udp?endpoint=localhost:20040", "90002", "300", "90302", "30",
+            "20000", "200100", "600", "4000", "mix", "000001", "000002", "000003"});
+
+        assertEquals("aeron:udp?endpoint=localhost:20040", paced.channel());
+        assertEquals(4_000L, paced.ordersPerSecond());
+        U10Tool.MixSpec spec = paced.spec();
+        assertEquals(90002L, spec.sellAccountBase());
+        assertEquals(300, spec.sellAccounts());
+        assertEquals(90302L, spec.buyAccountBase());
+        assertEquals(30, spec.buyAccounts());
+        assertEquals(20_000L, spec.price());
+        assertEquals(200_100, spec.prefillPerStock());
+        assertEquals(600, spec.pairsPerStock());
+        assertEquals("mix", spec.prefix());
+        assertEquals(List.of("000001", "000002", "000003"), spec.stockCodes());
+    }
+
+    @Test
+    void send_paced는_초당_주문_수가_양수가_아니거나_종목이_없으면_거부한다() {
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> U10Tool.parsePacedArgs(new String[] {"send-paced", "c", "1", "2", "3", "4",
+            "20000", "8", "5", "0", "mix", "000001"}));
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> U10Tool.parsePacedArgs(new String[] {"send-paced", "c", "1", "2", "3", "4",
+            "20000", "8", "5", "100", "mix"}));
+    }
+
+    @Test
+    void 주문_번호의_목표_시각은_번호_곱하기_10억_나누기_초당_주문_수_나노초다() {
+        assertEquals(0L, U10Tool.targetOffsetNanos(0, 4_000L));
+        assertEquals(250_000L, U10Tool.targetOffsetNanos(1, 4_000L));
+        assertEquals(1_000_000_000L, U10Tool.targetOffsetNanos(4_000, 4_000L));
+        assertEquals(1_200_000_000_000L, U10Tool.targetOffsetNanos(4_800_000L, 4_000L), "480만 번째 주문은 1200초 지점");
+    }
+
+    // ---- 계좌 shard 둘로 나눠 보내기: 계좌 슬롯(256칸)의 앞 절반은 첫 채널, 뒤 절반은 둘째 채널 ----
+
+    private static long firstAccountInSlotRange(int from, int to) {
+        com.flab.stocktradingengine.aeron.SlotHasher hasher = new com.flab.stocktradingengine.aeron.SlotHasher(256);
+        for (long accountId = 90_001L; ; accountId++) {
+            int slot = hasher.slotFor(accountId);
+            if (slot >= from && slot <= to) {
+                return accountId;
+            }
+        }
+    }
+
+    @Test
+    void shardOf_슬롯_0부터_127은_첫_채널_128부터_255는_둘째_채널이다() {
+        long low = firstAccountInSlotRange(0, 127);
+        long high = firstAccountInSlotRange(128, 255);
+        assertEquals(0, U10Tool.shardOf(low, 2));
+        assertEquals(1, U10Tool.shardOf(high, 2));
+    }
+
+    @Test
+    void shardOf_채널이_하나면_어떤_계좌든_첫_채널이다() {
+        for (long accountId = 90_001L; accountId < 90_400L; accountId++) {
+            assertEquals(0, U10Tool.shardOf(accountId, 1));
+        }
+    }
+
+    @Test
+    void shardOf_채널_수가_양수가_아니거나_256을_넘으면_거부한다() {
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> U10Tool.shardOf(90_001L, 0));
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> U10Tool.shardOf(90_001L, 257));
+    }
+
+    @Test
+    void parseChannels_쉼표로_나누고_빈_항목이나_빈_문자열은_거부한다() {
+        assertEquals(List.of("aeron:udp?endpoint=localhost:20040"), U10Tool.parseChannels("aeron:udp?endpoint=localhost:20040"));
+        assertEquals(List.of("aeron:udp?endpoint=localhost:20040", "aeron:udp?endpoint=localhost:20041"),
+            U10Tool.parseChannels("aeron:udp?endpoint=localhost:20040, aeron:udp?endpoint=localhost:20041"));
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> U10Tool.parseChannels(""));
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> U10Tool.parseChannels("a,,b"));
+    }
+
+    @Test
+    void 나눠_보내도_주문은_하나도_빠지지_않고_계좌마다_한_채널로만_가며_채널_안_계좌별_순서는_원래대로다() {
+        U10Tool.MixSpec spec = mixSpec(300, 30, 300, 40);
+        List<MixedOrder> all = collectMix(spec);
+        List<List<com.flab.stocktradingengine.codec.DecodedAccountOrder>> channels = List.of(new ArrayList<>(), new ArrayList<>());
+        Map<Long, Integer> channelOfAccount = new HashMap<>();
+        for (MixedOrder mixed : all) {
+            int channel = U10Tool.shardOf(mixed.order().accountId(), 2);
+            channels.get(channel).add(mixed.order());
+            Integer seen = channelOfAccount.put(mixed.order().accountId(), channel);
+            assertTrue(seen == null || seen == channel, "계좌 " + mixed.order().accountId() + "의 주문이 두 채널로 갔다");
+        }
+        assertEquals(all.size(), channels.get(0).size() + channels.get(1).size());
+        assertFalse(channels.get(0).isEmpty());
+        assertFalse(channels.get(1).isEmpty());
+        for (long accountId : channelOfAccount.keySet()) {
+            List<String> globalOrder = all.stream().filter(m -> m.order().accountId() == accountId).map(m -> m.order().requestId()).toList();
+            List<String> channelOrder = channels.get(channelOfAccount.get(accountId)).stream()
+                .filter(o -> o.accountId() == accountId).map(o -> o.requestId()).toList();
+            assertEquals(globalOrder, channelOrder, "계좌 " + accountId + "의 채널 안 순서");
+        }
+    }
+
+    @Test
+    void 쌓기_뒤_채널로_나눈_주문도_계좌별_종목별_쌓은_수는_계좌_수로_나눈_몫과_같다() {
+        U10Tool.MixSpec spec = mixSpec(300, 30, 300, 1);
+        Map<String, Integer> prefilled = new HashMap<>();
+        List<com.flab.stocktradingengine.codec.DecodedAccountOrder> bulk = new ArrayList<>();
+        U10Tool.bulkOrders(90_002L, com.flab.stocktradingengine.trading.entity.OrderSide.SELL, 20_000L, 600, 300, "pre",
+            new U10Tool.BulkTargets(spec.stockCodes(), 0L, 0L, 0L, 1), bulk::add);
+        for (com.flab.stocktradingengine.codec.DecodedAccountOrder order : bulk) {
+            prefilled.merge(order.accountId() + "/" + order.stockCode(), 1, Integer::sum);
+        }
+        assertEquals(300 * 3, prefilled.size());
+        assertTrue(prefilled.values().stream().allMatch(count -> count == 2), "쌓은 수 600을 계좌 300개로 나눈 몫 2");
+    }
+
+    @Test
+    void 계좌_분포는_채널별_개수를_세고_합이_전체와_같다() {
+        long[] counts = U10Tool.shardCounts(2, 90_002L, 300);
+        assertEquals(2, counts.length);
+        assertEquals(300, counts[0] + counts[1]);
+    }
+
+    // ---- 종목-매도계좌 묶음(GROUP_BY_SHARD): 종목 k의 매도는 계좌 shard(k % 묶음 수)의 계좌만 낸다 ----
+
+    private static final List<String> SIX_STOCKS = List.of("000001", "000002", "000003", "000004", "000005", "000006");
+
+    private static U10Tool.GroupMixSpec groupSpec(int sellAccounts, int perAccountPerStock, int pairsPerStock) {
+        return new U10Tool.GroupMixSpec(90002L, sellAccounts, 2, 90002L + sellAccounts, 3, 20_000L, perAccountPerStock, pairsPerStock, SIX_STOCKS, "g");
+    }
+
+    private static List<com.flab.stocktradingengine.codec.DecodedAccountOrder> collectGroupPrefill(U10Tool.GroupMixSpec spec) {
+        List<com.flab.stocktradingengine.codec.DecodedAccountOrder> orders = new ArrayList<>();
+        U10Tool.groupPrefillOrders(spec, orders::add);
+        return orders;
+    }
+
+    private static List<MixedOrder> collectGroupMix(U10Tool.GroupMixSpec spec) {
+        List<MixedOrder> orders = new ArrayList<>();
+        U10Tool.groupMixOrders(spec, (sequence, order) -> orders.add(new MixedOrder(sequence, order)));
+        return orders;
+    }
+
+    @Test
+    void sellerGroups_계좌를_shard별로_나누고_빠지거나_겹치는_계좌가_없다() {
+        List<List<Long>> groups = U10Tool.sellerGroups(90_002L, 300, 2);
+        assertEquals(2, groups.size());
+        assertEquals(300, groups.get(0).size() + groups.get(1).size());
+        for (int g = 0; g < 2; g++) {
+            assertFalse(groups.get(g).isEmpty());
+            for (long account : groups.get(g)) {
+                assertEquals(g, U10Tool.shardOf(account, 2), "계좌 " + account + "는 묶음 " + g);
+            }
+        }
+        assertEquals(java.util.stream.LongStream.range(90_002L, 90_302L).boxed().collect(java.util.stream.Collectors.toSet()),
+            new java.util.HashSet<>(java.util.stream.Stream.concat(groups.get(0).stream(), groups.get(1).stream()).toList()));
+    }
+
+    @Test
+    void 묶음_쌓기_한_종목의_매도는_한_shard의_계좌만_내고_계좌마다_같은_수를_쌓는다() {
+        U10Tool.GroupMixSpec spec = groupSpec(40, 5, 12);
+        List<List<Long>> groups = U10Tool.sellerGroups(90_002L, 40, 2);
+        Map<String, Map<Long, Integer>> perStockAccount = new HashMap<>();
+        for (com.flab.stocktradingengine.codec.DecodedAccountOrder order : collectGroupPrefill(spec)) {
+            assertEquals(com.flab.stocktradingengine.trading.entity.OrderSide.SELL, order.type());
+            perStockAccount.computeIfAbsent(order.stockCode(), k -> new HashMap<>()).merge(order.accountId(), 1, Integer::sum);
+        }
+        for (int k = 0; k < SIX_STOCKS.size(); k++) {
+            Map<Long, Integer> counts = perStockAccount.get(SIX_STOCKS.get(k));
+            int group = k % 2;
+            assertEquals(new java.util.HashSet<>(groups.get(group)), counts.keySet(), "종목 " + SIX_STOCKS.get(k) + "의 매도 계좌는 묶음 " + group + "의 전부");
+            assertTrue(counts.values().stream().allMatch(c -> c == 5), "계좌마다 종목당 5건");
+            Set<Integer> shards = counts.keySet().stream().map(a -> U10Tool.shardOf(a, 2)).collect(java.util.stream.Collectors.toSet());
+            assertEquals(Set.of(group), shards, "한 종목의 매도는 한 shard로만 간다");
+        }
+    }
+
+    @Test
+    void 묶음_유지_쌍은_매도_바로_뒤_매수이고_같은_종목_가격_수량이며_매도는_종목의_묶음_계좌만_쓴다() {
+        U10Tool.GroupMixSpec spec = groupSpec(40, 5, 12);
+        List<MixedOrder> orders = collectGroupMix(spec);
+        assertEquals(12 * 6 * 2, orders.size());
+        List<List<Long>> groups = U10Tool.sellerGroups(90_002L, 40, 2);
+        for (int n = 0; n < orders.size(); n += 2) {
+            com.flab.stocktradingengine.codec.DecodedAccountOrder sell = orders.get(n).order();
+            com.flab.stocktradingengine.codec.DecodedAccountOrder buy = orders.get(n + 1).order();
+            assertEquals(n, orders.get(n).sequence());
+            assertEquals(com.flab.stocktradingengine.trading.entity.OrderSide.SELL, sell.type());
+            assertEquals(com.flab.stocktradingengine.trading.entity.OrderSide.BUY, buy.type());
+            assertEquals(sell.stockCode(), buy.stockCode());
+            assertEquals(0, sell.price().compareTo(buy.price()));
+            assertEquals(1, sell.quantity());
+            assertEquals(1, buy.quantity());
+            int stockIndex = SIX_STOCKS.indexOf(sell.stockCode());
+            assertTrue(groups.get(stockIndex % 2).contains(sell.accountId()), "매도 계좌는 종목의 묶음 안");
+            assertTrue(buy.accountId() >= 90_042L && buy.accountId() < 90_045L, "매수 계좌는 매수 전용 계좌");
+        }
+    }
+
+    @Test
+    void 묶음_쌓은_뒤_모든_쌍을_체결_순서대로_적용하면_쌍이_끝날_때마다_계좌별_종목별_미체결이_처음과_같다() {
+        U10Tool.GroupMixSpec spec = groupSpec(40, 5, 37);
+        Map<String, java.util.ArrayDeque<Long>> asks = new HashMap<>();
+        Map<String, Map<Long, Integer>> open = new HashMap<>();
+        for (com.flab.stocktradingengine.codec.DecodedAccountOrder order : collectGroupPrefill(spec)) {
+            asks.computeIfAbsent(order.stockCode(), k -> new java.util.ArrayDeque<>()).addLast(order.accountId());
+            open.computeIfAbsent(order.stockCode(), k -> new HashMap<>()).merge(order.accountId(), 1, Integer::sum);
+        }
+        Map<String, Map<Long, Integer>> initial = new HashMap<>();
+        open.forEach((stock, counts) -> initial.put(stock, new HashMap<>(counts)));
+        List<MixedOrder> orders = collectGroupMix(spec);
+        for (int n = 0; n < orders.size(); n++) {
+            com.flab.stocktradingengine.codec.DecodedAccountOrder order = orders.get(n).order();
+            if (order.type() == com.flab.stocktradingengine.trading.entity.OrderSide.SELL) {
+                asks.get(order.stockCode()).addLast(order.accountId());
+                open.get(order.stockCode()).merge(order.accountId(), 1, Integer::sum);
+            } else {
+                open.get(order.stockCode()).merge(asks.get(order.stockCode()).pollFirst(), -1, Integer::sum);
+            }
+            if (n % 2 == 1) {
+                assertEquals(initial.get(order.stockCode()), open.get(order.stockCode()), "쌍 " + (n / 2) + " 뒤 " + order.stockCode());
+            }
+        }
+    }
+
+    @Test
+    void 묶음_보유_수량은_자기_묶음_종목에만_쌓은_몫과_유지_몫과_5를_더한_값이다() {
+        U10Tool.GroupMixSpec spec = groupSpec(40, 5, 12);
+        List<List<Long>> groups = U10Tool.sellerGroups(90_002L, 40, 2);
+        List<String> lines = U10Tool.groupHoldings(spec);
+        Map<Long, Map<String, Integer>> held = new HashMap<>();
+        for (String line : lines) {
+            String[] f = line.split(" ");
+            held.computeIfAbsent(Long.parseLong(f[1]), k -> new HashMap<>()).put(f[2], Integer.parseInt(f[3]));
+        }
+        assertEquals(40, held.size());
+        for (int g = 0; g < 2; g++) {
+            int expected = 5 + (12 + groups.get(g).size() - 1) / groups.get(g).size() + 5;
+            for (long account : groups.get(g)) {
+                assertEquals(3, held.get(account).size(), "계좌는 자기 묶음의 종목 3개만 보유");
+                assertTrue(held.get(account).values().stream().allMatch(q -> q == expected));
+                for (String stock : held.get(account).keySet()) {
+                    assertEquals(g, SIX_STOCKS.indexOf(stock) % 2);
+                }
+            }
+        }
+    }
+
+    @Test
+    void 묶음_인자가_양수가_아니거나_종목이_묶음보다_적으면_거부한다() {
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> collectGroupPrefill(groupSpec(0, 5, 12)));
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> collectGroupMix(groupSpec(40, 0, 12)));
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> collectGroupMix(groupSpec(40, 5, 0)));
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> collectGroupPrefill(
+            new U10Tool.GroupMixSpec(90002L, 40, 2, 90042L, 3, 20_000L, 5, 12, List.of("000001"), "g")));
+    }
+
+    // ---- 속도 지정 발신의 대기: 남은 시간이 길면 재우고 짧을 때만 돈다 ----
+
+    @Test
+    void 목표_시각까지_기다린_뒤_돌아오고_목표를_넘긴_폭은_작다() {
+        long target = System.nanoTime() + 300_000L;
+
+        U10Tool.awaitNanos(target, U10Tool.DEFAULT_SPIN_NANOS);
+        long returnedAt = System.nanoTime();
+
+        assertTrue(returnedAt >= target, "목표 시각 전에 돌아왔다");
+        assertTrue(returnedAt - target < 5_000_000L, "목표 시각을 5ms 넘게 지나 돌아왔다: " + (returnedAt - target) + "ns");
+    }
+
+    @Test
+    void 이미_지난_목표_시각이면_기다리지_않고_바로_돌아온다() {
+        long target = System.nanoTime() - 1_000_000L;
+
+        long before = System.nanoTime();
+        U10Tool.awaitNanos(target, U10Tool.DEFAULT_SPIN_NANOS);
+
+        assertTrue(System.nanoTime() - before < 1_000_000L);
+    }
+
+    /** 기계 부하에 따라 흔들리므로 기본 실행에서 뺀다. 돌리려면 환경변수 U10_WAIT_COMPARE=1을 주고 이 시험만 지정한다. */
+    @EnabledIfEnvironmentVariable(named = "U10_WAIT_COMPARE", matches = "1")
+    @Test
+    void 초당_만건_속도로_1초_기다리면_속도_오차가_작고_스레드_CPU가_회전_대기보다_크게_줄어든다() {
+        long orders = 10_000L;
+        long[] spinOnly = measureWait(orders, 10_000L, Long.MAX_VALUE);
+        long[] parked = measureWait(orders, 10_000L, U10Tool.DEFAULT_SPIN_NANOS);
+
+        System.out.println("AWAIT_COMPARE spinOnly elapsedMs=" + spinOnly[0] / 1_000_000L + " cpuPct=" + spinOnly[1] * 100L / spinOnly[0]
+            + " | parked(spinNanos=" + U10Tool.DEFAULT_SPIN_NANOS + ") elapsedMs=" + parked[0] / 1_000_000L + " cpuPct=" + parked[1] * 100L / parked[0]);
+
+        assertTrue(parked[0] >= 990_000_000L && parked[0] <= 1_050_000_000L, "1초 걸려야 하는데 " + parked[0] / 1_000_000L + "ms 걸렸다");
+        assertTrue(parked[1] * 100L / parked[0] < 70L, "스레드 CPU가 " + parked[1] * 100L / parked[0] + "%다");
+        assertTrue(parked[1] < spinOnly[1] * 7L / 10L, "회전 대기보다 CPU가 충분히 줄지 않았다");
+    }
+
+    @Test
+    void 회전_대기_시간_환경변수는_없으면_기본값이고_0_이상의_정수만_받는다() {
+        assertEquals(U10Tool.DEFAULT_SPIN_NANOS, U10Tool.parseSpinNanos(null));
+        assertEquals(U10Tool.DEFAULT_SPIN_NANOS, U10Tool.parseSpinNanos(""));
+        assertEquals(20_000L, U10Tool.parseSpinNanos("20000"));
+        assertEquals(0L, U10Tool.parseSpinNanos("0"));
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> U10Tool.parseSpinNanos("-1"));
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> U10Tool.parseSpinNanos("abc"));
+    }
+
+    // ---- 분 단위 발신 지연: 장시간 시험에서 지연 추세를 창별로 보려고 PACED_DONE 합계 대신 분마다 한 줄 ----
+
+    @Test
+    void 분이_바뀔_때마다_그_분의_최대_지연과_1초_초과_수를_한_줄로_낸다() {
+        List<String> lines = new ArrayList<>();
+        U10Tool.MinuteLateness minuteLateness = new U10Tool.MinuteLateness();
+
+        minuteLateness.record(0L, 5L, lines::add);
+        minuteLateness.record(30_000_000_000L, 12L, lines::add);
+        minuteLateness.record(59_900_000_000L, 3L, lines::add);
+        assertTrue(lines.isEmpty(), "같은 분 안에서는 아직 내지 않는다");
+        minuteLateness.record(60_000_000_000L, 1_500L, lines::add);
+        minuteLateness.record(125_000_000_000L, 2L, lines::add);
+        minuteLateness.flush(lines::add);
+
+        assertEquals(List.of(
+            "LATENESS_MINUTE minute=0 maxLatenessMs=12 over1sCount=0",
+            "LATENESS_MINUTE minute=1 maxLatenessMs=1500 over1sCount=1",
+            "LATENESS_MINUTE minute=2 maxLatenessMs=2 over1sCount=0"), lines);
+    }
+
+    @Test
+    void 주문이_없었으면_flush는_아무것도_내지_않고_두_번_불러도_한_번만_낸다() {
+        List<String> lines = new ArrayList<>();
+        U10Tool.MinuteLateness minuteLateness = new U10Tool.MinuteLateness();
+
+        minuteLateness.flush(lines::add);
+        assertTrue(lines.isEmpty());
+        minuteLateness.record(1_000_000_000L, 7L, lines::add);
+        minuteLateness.flush(lines::add);
+        minuteLateness.flush(lines::add);
+
+        assertEquals(List.of("LATENESS_MINUTE minute=0 maxLatenessMs=7 over1sCount=0"), lines);
+    }
+
+    /** 주문 orders건의 목표 시각을 ordersPerSecond 속도로 차례로 기다린다. 반환: [걸린 나노초, 이 스레드가 쓴 CPU 나노초]. */
+    private static long[] measureWait(long orders, long ordersPerSecond, long spinNanos) {
+        java.lang.management.ThreadMXBean threads = java.lang.management.ManagementFactory.getThreadMXBean();
+        long cpuStart = threads.getCurrentThreadCpuTime();
+        long start = System.nanoTime();
+        for (long sequence = 0; sequence < orders; sequence++) {
+            U10Tool.awaitNanos(start + U10Tool.targetOffsetNanos(sequence, ordersPerSecond), spinNanos);
+        }
+        long elapsed = System.nanoTime() - start;
+        return new long[] {elapsed, threads.getCurrentThreadCpuTime() - cpuStart};
     }
 }
