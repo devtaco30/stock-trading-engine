@@ -52,3 +52,7 @@ CLAUDE.md
 
 # Python 바이트코드
 __pycache__/
+
+# 계획·설계 작업 문서(로컬 전용). docs/ 안의 GitHub Pages 노출 문서는 이미 추적 중이라 영향이 없고, 새로 노출할 문서는 git add -f로 넣는다
+/openspec/
+/docs/
