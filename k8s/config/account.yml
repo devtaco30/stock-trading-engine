@@ -1,0 +1,25 @@
+# 쿠버네티스 시험용 계좌 서버 설정. loadtest/u10/u10-account.yml을 옮긴 것이고 주소만 바꿨다.
+#   localhost 주소 -> headless Service DNS 이름(account-0.account, matching-0.matching). 맥에서는 세 프로세스가 같은 호스트에 있었다.
+#   archive 폴더 -> /data/archive(파드의 emptyDir. 파드가 지워지면 녹화 파일도 함께 지워져 회수 대상에서 빠진다).
+# 시드 계좌는 실행마다 만드는 seed.yml(loadtest/s0b/make-seed.py)이 덮어쓴다. 두 파일은 ConfigMap account-config로 넣는다.
+transport:
+  account-intake:
+    channel: aeron:udp?endpoint=account-0.account:20040
+  fill:
+    channel: aeron:udp?endpoint=account-0.account:20060
+matching-shard-routing:
+  stock-slot-count: 64
+  endpoints:
+    - aeron:udp?endpoint=matching-0.matching:20020
+# 계좌당 미체결 상한(ADR-040). 기본값이 없어 값이 없으면 기동하지 않는다. 매니페스트가 MAX_OPEN_ORDERS로 넣는다.
+account-worker:
+  max-open-orders-per-account: ${MAX_OPEN_ORDERS}
+account:
+  worker:
+    archive-dir: /data/archive
+    archive:
+      control-channel: aeron:udp?endpoint=localhost:8010
+logging:
+  level:
+    # 맥 시험(u10-account.yml)과 같다. 거부 회신마다 수신 시각을 남긴다.
+    com.flab.stocktradingengine.account.worker.messaging.AeronMatchingOrderSender: DEBUG

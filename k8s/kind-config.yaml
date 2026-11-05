@@ -1,0 +1,15 @@
+# 로컬 시험 클러스터(kind, ADR-041). 만들기: kind create cluster --name ste --config k8s/kind-config.yaml
+# 노드 3개: control-plane 1개(시험 파드를 두지 않는다), worker 2개.
+# 시험 파드는 노드 레이블 ste-role로 자리를 정한다(EKS 노드 그룹에도 같은 레이블을 붙여 같은 매니페스트를 쓴다).
+#   ste-role=server : 계좌 서버, 매칭 서버
+#   ste-role=load   : 발신기, Kafka (발신기를 서버들과 다른 노드에 두려고 나눈다. 작업 3.5)
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+  - role: control-plane
+  - role: worker
+    labels:
+      ste-role: server
+  - role: worker
+    labels:
+      ste-role: load

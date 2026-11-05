@@ -1,12 +1,15 @@
 # 매칭 워커 StatefulSet. pod 이름이 matching-0, matching-1, ... 이 되고, 사람이 정하는 값은 replicas 하나다.
 # pod 이름이 매칭 shard의 신원(Kafka group.instance.id)이고, 서버 번호(nodeId)는 그 이름 끝 순번 + 6으로 앱이 계산한다.
-# 이미지는 아직 만들지 않았다(저장소에 Dockerfile이 없다). image 값은 자리표시다.
+# 이미지는 matching-worker/Dockerfile로 만든다(로컬은 kind load docker-image로 노드에 넣는다).
+# 맥 시험 설정(loadtest/u10/u10-matching-0.yml, mix.sh:97)을 환경 변수로 옮겼다. localhost 주소는 headless Service DNS 이름으로 바꿨다.
+# 자원 한도는 이번 변경에서 기능 확인용 임시 값이다(한계 측정 때 다시 정한다).
 apiVersion: v1
 kind: Service
 metadata:
   name: matching
 spec:
   clusterIP: None
+  publishNotReadyAddresses: true
   selector:
     app: matching
   ports:
@@ -29,9 +32,23 @@ spec:
       labels:
         app: matching
     spec:
+      nodeSelector:
+        ste-role: server
+      # 계좌 서버의 DNS 이름(account-0.account)이 생길 때까지 앱을 띄우지 않는다. Aeron은 Publication(체결 보낼 곳)을 만들 때
+      # 주소 이름을 풀고, 이름이 아직 없으면 기동이 실패한다(2026-11-05 첫 기동에서 UnknownHostException 확인. 맥에서는 localhost라 이 문제가 없었다).
+      # 계좌 파드는 init 컨테이너(wait-start-gate)에서 멈춰 있는 동안에도 publishNotReadyAddresses 덕에 DNS에 올라간다.
+      initContainers:
+        - name: wait-account-dns
+          image: stock-trading-engine/matching-worker:local
+          imagePullPolicy: Never
+          command: ["sh", "-c", "until getent hosts account-0.account; do sleep 1; done"]
+          resources:
+            requests: { cpu: "50m", memory: "32Mi" }
+            limits: { cpu: "100m", memory: "64Mi" }
       containers:
         - name: matching-worker
-          image: stock-trading-engine/matching-worker:latest
+          image: stock-trading-engine/matching-worker:local
+          imagePullPolicy: Never
           ports:
             - containerPort: 20020
               protocol: UDP
@@ -46,3 +63,41 @@ spec:
             # $(변수)는 위에서 먼저 정의한 환경 변수만 치환된다. 그래서 신원 변수가 이 줄보다 앞에 있어야 한다.
             - name: TRANSPORT_MATCHING_INTAKE_CHANNEL
               value: "aeron:udp?endpoint=$(MATCHING_WORKER_INSTANCE_ID).matching:20020"
+            - name: MATCHING_SHARD_COORDINATION_SESSION_TIMEOUT_MS
+              value: "30000"
+            # 주소 풀(matching-shard.handover.endpoints). 매칭 서버가 1개라 자기 주소 하나다.
+            - name: MATCHING_SHARD_HANDOVER_ENDPOINTS_0
+              value: "aeron:udp?endpoint=matching-0.matching:20020"
+            - name: TRANSPORT_FILL_CHANNEL
+              value: "aeron:udp?endpoint=account-0.account:20060"
+            - name: MATCHING_WORKER_ARCHIVE_DIR
+              value: "/data/archive"
+            - name: MATCHING_WORKER_ARCHIVE_CONTROL_CHANNEL
+              value: "aeron:udp?endpoint=localhost:8011"
+            - name: SPRING_KAFKA_BOOTSTRAP_SERVERS
+              value: "kafka-0.kafka:9092"
+            - name: JDK_JAVA_OPTIONS
+              value: "-Xms768m -Xmx768m -Xlog:gc*:file=/logs/gc-matching.log:time,uptime"
+          # 메모리 = 힙 768Mi + /dev/shm 512Mi(아래 sizeLimit) + 힙 밖 512Mi.
+          # 실측(2026-11-05, 초당 1,000건 60초): memory.current 최대 892MiB, /dev/shm 실제 사용 최대 87MB·파일 크기 합 최대 384MB(실행 3~5).
+          resources:
+            requests: { cpu: "1", memory: "1792Mi" }
+            limits: { cpu: "2", memory: "1792Mi" }
+          volumeMounts:
+            - { name: shm, mountPath: /dev/shm }
+            - { name: archive, mountPath: /data }
+            - { name: logs, mountPath: /logs }
+      volumes:
+        # Aeron 디렉터리(로그 버퍼). 메모리 기반이라 사용량이 메모리 한도에 합산된다.
+        # 크기(작업 3.1 실측): 실제 쓴 크기 최대 87MB, 로그 버퍼 파일 크기 합 384MB. 실행이 길면 파일 크기 합까지 올라가므로 그 값 + 여유로 정한다.
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 512Mi
+        # Aeron archive 녹화(매칭 저널)와 스냅샷. 파드와 함께 지워지고 회수하지 않는다.
+        - name: archive
+          emptyDir:
+            sizeLimit: 2Gi
+        - name: logs
+          emptyDir:
+            sizeLimit: 256Mi

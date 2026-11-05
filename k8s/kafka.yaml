@@ -1,0 +1,79 @@
+# 시험용 Kafka(KRaft 단일 노드). 이미지 digest와 KRaft 환경 변수는 맥 시험(loadtest/s0b/run.sh:18)과 같다.
+# 바뀐 것: 리스너 포트(19092 -> 9092), 광고 주소(localhost -> kafka-0.kafka), 보존 상한, 힙 크기.
+# 보존 상한(작업 3.2): 맥 2시간 시험(sust1)이 Kafka 디스크 문제로 추정되는 오류로 멈췄다. 기본값은 retention.ms 7일, retention.bytes 무제한이다.
+#   파티션마다 최대 「retention.bytes + segment.bytes」(삭제는 닫힌 segment 단위라서)까지 남는다. 상한 합계 = 파티션 수 x 24MiB.
+#   데이터 볼륨(emptyDir sizeLimit)은 그 합계보다 크게 잡는다. 파티션 수는 실행 뒤 results/kafka-partitions.txt로 확인한다.
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    app: kafka
+  ports:
+    - name: broker
+      port: 9092
+      protocol: TCP
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: kafka
+spec:
+  serviceName: kafka
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kafka
+  template:
+    metadata:
+      labels:
+        app: kafka
+    spec:
+      nodeSelector:
+        ste-role: load
+      containers:
+        - name: kafka
+          image: apache/kafka@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 9092
+              protocol: TCP
+          env:
+            - { name: KAFKA_NODE_ID, value: "1" }
+            - { name: KAFKA_PROCESS_ROLES, value: "broker,controller" }
+            - { name: KAFKA_CONTROLLER_QUORUM_VOTERS, value: "1@localhost:9093" }
+            - { name: KAFKA_LISTENERS, value: "PLAINTEXT://:9092,CONTROLLER://:9093" }
+            - { name: KAFKA_ADVERTISED_LISTENERS, value: "PLAINTEXT://kafka-0.kafka:9092" }
+            - { name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP, value: "PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT" }
+            - { name: KAFKA_CONTROLLER_LISTENER_NAMES, value: "CONTROLLER" }
+            - { name: KAFKA_INTER_BROKER_LISTENER_NAME, value: "PLAINTEXT" }
+            - { name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR, value: "1" }
+            - { name: KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR, value: "1" }
+            - { name: KAFKA_TRANSACTION_STATE_LOG_MIN_ISR, value: "1" }
+            - { name: KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS, value: "0" }
+            # 보존 상한(브로커 기본값이라 모든 토픽에 적용된다. compact 토픽(배정 맵, __consumer_offsets)에는 크기 삭제가 적용되지 않는다)
+            - { name: KAFKA_LOG_RETENTION_MS, value: "3600000" }        # 1시간
+            - { name: KAFKA_LOG_RETENTION_BYTES, value: "16777216" }    # 파티션당 16MiB
+            - { name: KAFKA_LOG_SEGMENT_BYTES, value: "8388608" }       # 8MiB
+            - { name: KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS, value: "60000" }
+            - { name: KAFKA_LOG_DIRS, value: "/var/lib/kafka/data" }
+            - { name: KAFKA_HEAP_OPTS, value: "-Xms512m -Xmx512m" }
+          readinessProbe:
+            exec:
+              command: ["/opt/kafka/bin/kafka-topics.sh", "--bootstrap-server", "localhost:9092", "--list"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 20
+          resources:
+            requests: { cpu: "500m", memory: "1Gi" }
+            limits: { cpu: "2", memory: "1Gi" }
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/kafka/data
+      volumes:
+        - name: data
+          emptyDir:
+            sizeLimit: 4Gi
