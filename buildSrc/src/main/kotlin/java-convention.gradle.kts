@@ -22,7 +22,13 @@ dependencies {
 }
 
 tasks.withType<Test> {
-	useJUnitPlatform()
+	useJUnitPlatform {
+		if (project.hasProperty("evidence")) {
+			includeTags("evidence")
+		} else {
+			excludeTags("evidence")
+		}
+	}
 	testLogging {
 		events("passed", "skipped", "failed")
 		exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
